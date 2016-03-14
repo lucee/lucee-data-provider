@@ -180,7 +180,7 @@
 		local.mr=new MavenRepo();
 
 		// TODO get core and not loader
-		if(arguments.allowRedirect) {
+		if(false && arguments.allowRedirect) {
 			local.src=mr.getInfo(version).jarSrc;
 			header statuscode="302" statustext="Found";
 			header name="Location" value=src;
