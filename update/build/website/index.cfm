@@ -1,5 +1,5 @@
 <cfscript>
-	refURL="#CGI.CONTEXT_PATH#/lucee/doc.cfm";
+	refURL="http://docs.lucee.org";
 	wikiURL="https://bitbucket.org/lucee/lucee/wiki/Home";
 	bbURL="https://bitbucket.org/lucee/lucee";
 	adminURL="#CGI.CONTEXT_PATH#/lucee/admin.cfm";
@@ -8,7 +8,7 @@
 	mailinglistURL="https://groups.google.com/forum/##!forum/lucee";
 	profURL="https://www.lucee.org/support.html";
 	issueURL="https://bitbucket.org/lucee/lucee/issues";
-
+	newURL="http://docs.lucee.org/guides/lucee-5.html";
 </cfscript><!DOCTYPE html>
 <html>
 	<head>
@@ -59,7 +59,7 @@
 			<div class="banner-content">
 				<cfoutput>
 				<img src="/assets/img/lucee-logo.png" alt="Lucee"> 
-				<h1>Welcome to your Lucee Installation!</h1>
+				<h1>Welcome to your Lucee #ListFirst(server.lucee.version,'.')# Installation!</h1>
 				<p class="lead-text">You are now successfully running Lucee #server.lucee.version# on your system!</p>
 				</cfoutput>
 			</div>
@@ -88,6 +88,28 @@
 
 							<cfoutput>
 							
+							<li class="listing-item thumb-large">
+								<div class="listing-thumb">
+									<a href="#refURL#">
+										<img src="/assets/img/img-new.png" alt="">
+									</a>
+								</div>
+								
+
+								<div class="listing-content">
+									<h2 class="title">
+										<a href="#newURL#">New in Lucee 5</a>
+									</h2>
+
+									<p>
+										Lucee 5 is the first major release after forking from the Railo project. Lucee 5 is not about dazzling new features but about improving the core language and providing a complete architectural overhaul of the engine.
+										This brings Lucee and CFML to a whole new level!
+									</p>
+
+								</div>
+								
+								<div class="clearfix"></div>
+							</li>
 
 							<li class="listing-item thumb-large">
 								<div class="listing-thumb">
@@ -110,6 +132,8 @@
 								<div class="clearfix"></div>
 							</li>
 
+
+
 							<li class="listing-item thumb-large">
 								<div class="listing-thumb">
 									<a href="#refURL#">
@@ -120,12 +144,11 @@
 
 								<div class="listing-content">
 									<h2 class="title">
-										<a href="#refURL#">Language Reference</a>
+										<a href="#refURL#">Documentation</a>
 									</h2>
 
-
 									<p>
-										Detailed Lucee language reference incorporating builtin functions,objects and tags.
+										Reference and guides to all things to do with the Lucee Server.
 									</p>
 
 								</div>
