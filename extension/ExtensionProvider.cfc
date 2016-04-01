@@ -6,10 +6,12 @@
 	variables.extensionDir=variables.current&"extensions/";
 	variables.ext="lex";
 	application.extensionLast=0;
+
 	variables.columnList='id,version,name,description,image,category,author,created,releaseType,minLoaderVersion,minCoreVersion'
-			&',price,currency,disableFull,trial,promotionLevel,promotionText';
+			&',price,currency,disableFull,trial,older,promotionLevel,promotionText';
 
 	private function init() {
+	
 
 		if(application.extensionLast>getTickCount()-variables.EXPIRE) return;
 				
@@ -90,11 +92,12 @@
 	* @ioid ioid of the requesting user
 	* @langauage language f the requesting user
 	*/
-	remote struct function getInfo(
+	remote struct function getInfo( 
 								string ioid="" restargsource="url",
 								required string language="en" restargsource="url",
 								required boolean withLogo=true restargsource="url")
 		httpmethod="GET" restpath="info" {
+
 
 		
 		var rtn.meta={};
@@ -106,7 +109,6 @@
 		rtn.meta.mode="develop";
 
 		init();
-
 
 		// now set the query
 		rtn.extensions= querynew(variables.columnList); // this must come from outsite the extension
@@ -146,6 +148,17 @@
 			// does also a trial version exists?
 			querySetCell(rtn.extensions,"trial",!isNull(application.extensions.trial[local.id]),row);
 
+			// older
+			var _older=application.extensions.full[local.id];
+			var arr=[];
+			loop struct=_older index="local._versionSortable" item="local._data" {
+				if(queryGetCell(rtn.extensions,"version",row)!=_data.manifest.version)
+				arrayAppend(arr,_data.manifest.version);
+			}
+			querySetCell(rtn.extensions,"older",arr,row);
+
+
+
 			//querySetCell(rtn.extensions,"trial",true);
 		}
 		
@@ -170,25 +183,61 @@
 	* @ioid ioid of the requesting user
 	* @langauage language f the requesting user
 	*/
-	remote struct function getInfoDetail(
+	remote  function getInfoDetail(
 								required string id restargsource="Path",
 								string ioid="" restargsource="url",
 								required string language="en" restargsource="url",
-								required boolean withLogo=true restargsource="url")
+								required boolean withLogo=true restargsource="url"
+								,string version="" restargsource="url")
 		httpmethod="GET" restpath="info/{id}" {
 
-		
+		local.type="full";
 		var rtn={};
 		
 		init();
 
+		// application.extensionLatest.full
+		// with version defintion
+		local.found=false;
+		if(!isNull(arguments.version) && arguments.version.len()>0) {
+			local.v=toVersionSortable(arguments.version);
+			if(!isNull(application.extensions[type][arguments.id][v])) {
+				local.found=true;
+				local.data=application.extensions[type][arguments.id][v];
+			}
+		}
+		// no version defintion
+		else {
+			local.found=true;
+			local.data=application.extensionLatest[type][arguments.id];
+		}
+
+
+		// not found
+		if(!found) {
+			var other=type=="full"?"trial":"full";
+
+			var text="extension for id ["&arguments.id&"] "&(arguments.version.len()==0?"":("in version "&arguments.version))&" not found as "&type&" version";
+			if(!isNull(application.extensionLatest[other][arguments.id]))
+				text&=", but there is a "&other&" version available";
+			else
+				text&=" and there is also no "&other&" version available";
+
+			header statuscode="404" statustext="#text#";
+			echo(text);
+			return ;
+		 }
+
+
+
+
 		// we only show full versions in the info
-		loop struct="#application.extensionLatest.full#" index="local.id" item="local.coll" {
-			if(local.id!=arguments.id) continue;
-			local.main=coll.manifest;
-			local.filename=coll.filename;
+			local.main=data.manifest;
+			local.filename=data.filename;
+			local.id=arguments.id;
 			
 			loop list="#variables.columnList#" item="local.col" {
+				if(col=="older") continue;
 				rtn[col]=structKeyExists(main,col)?main[col]:'';
 			}
 
@@ -217,13 +266,8 @@
 			}
 
 			// does also a trial version exists?
-			rtn.trial=!isNull(application.extensionLatest.trial[local.id]);
-		}
-		if(!StructCount(rtn)){	
-			text="This version is not available!";
-			header statuscode="404" statustext="#text#";
-			echo(text);
-		}
+			rtn.trial=!isNull(data.trial[local.id]);
+		
 
 		return rtn;
 	}

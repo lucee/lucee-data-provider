@@ -567,9 +567,9 @@ component {
 			if(!directoryExists(webDir))directoryCreate(webDir);
 
 			// get the jars for that release
-			local.jarsDir="#temp#jars";
-			if(!directoryExists(jarsDir))directoryCreate(jarsDir);
-			zip action="unzip" file="#getDependencies(version)#" destination=jarsDir;
+			//local.jarsDir="#temp#jars";
+			//if(!directoryExists(jarsDir))directoryCreate(jarsDir);
+			//zip action="unzip" file="#getDependencies(version)#" destination=jarsDir;
 			
 			// unpack the servers
 			zip action="unzip" file="#ExpandPath("build/servers/tomcat.zip")#" destination="#temp#tomcat";
@@ -584,7 +584,7 @@ component {
 				zipparam source=extDir filter="*.lex" prefix="lucee-server/context/deploy";
 			// jars
 				// dependencies
-				zipparam source="#temp#jars" filter="*.jar" prefix="lucee-server/bundles";
+				// zipparam source="#temp#jars" filter="*.jar" prefix="lucee-server/bundles";
 				// loader
 				zipparam source=getLoader(version) entrypath="lib/ext/lucee.jar";
 
@@ -637,9 +637,9 @@ component {
 				if(!directoryExists(warDir))directoryCreate(warDir);
 
 				// get the jars for that release
-				local.jarsDir=temp&"jars";
-				if(!directoryExists(jarsDir))directoryCreate(jarsDir);
-				zip action="unzip" file="#getDependencies(version)#" destination=jarsDir;
+				//local.jarsDir=temp&"jars";
+				//if(!directoryExists(jarsDir))directoryCreate(jarsDir);
+				//zip action="unzip" file="#getDependencies(version)#" destination=jarsDir;
 				
 				// let's zip it
 				zip action="zip" file=war overwrite=true {
@@ -648,7 +648,7 @@ component {
 					zipparam source=extDir filter="*.lex" prefix="WEB-INF/lucee-server/context/deploy";
 				// jars
 					// dependencies
-					zipparam source=jarsDir filter="*.jar" prefix="WEB-INF/lucee-server/bundles";
+					// do not add jars zipparam source=jarsDir filter="*.jar" prefix="WEB-INF/lucee-server/bundles";
 
 					// loader
 					zipparam source=getLoader(version) entrypath="WEB-INF/lib/lucee.jar";

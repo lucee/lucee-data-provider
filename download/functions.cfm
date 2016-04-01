@@ -39,6 +39,7 @@ lang.jar='Lucee jar file (and felix jar file, for older versions necessary) with
 lang.luceeAll='Lucee jar file that contains all dependencies Lucee needs to run. Simply copy this file to your servlet engine lib folder (classpath)';
 
 lang.lib="The Lucee Jar file, you can simply copy to your existing installation to update to Lucee 5. This file comes in 2 favors, the ""lucee.jar"" that only contains Lucee itself and no dependecies (Lucee will download dependencies if necessary) or the lucee-all.jar with all dependencies Lucee needs bundled (not availble for versions before 5.0.0.112).";
+lang.libNew="The Lucee Jar file, you can simply copy to your existing installation to update to Lucee 5. This file comes with all necessary dependencies Lucee needs build in, so no addional jars necessary.";
 
 
 
@@ -160,7 +161,7 @@ lang.lib="The Lucee Jar file, you can simply copy to your existing installation 
 
 	function getExtensions() localmode=true {
 		// get data from server
-		if(isNull(application.downloadExtensions.query)){
+		if(isNull(application.downloadExtensions.query) || !isNull(url.reset)){
 			application.downloadExtensions.query=local.downloads=_getExtensions();
 			application.downloadExtensions.age=now();
 		}
