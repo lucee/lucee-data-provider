@@ -71,7 +71,7 @@
 				return {"type":"info","message":"There is no update available for your version (#version.display#)."};
 
 
-
+			try{local.notes=getVersionReleaseNotes(version.display,latestVersion.display,true);}catch(local.ee){local.notes="";}
 			return {
 				"type":"info"
 				,"language":arguments.language
@@ -80,7 +80,7 @@
 				,"available":latestVersion.display
 
 				,"message":"A patch (#latestVersion.display#) is available for your current version (#version.display#)."
-				,"changelog":getVersionReleaseNotes(version.display,latestVersion.display,true)/*readChangeLog(newest.log)*/
+				,"changelog":notes/*readChangeLog(newest.log)*/
 			}; // TODO get the right version for given version
 
 			/*if(internal){
@@ -481,6 +481,17 @@
 			return {"type":"error","message":"The version #version# is not available."};
 		}
  
+	}
+
+	/**
+	* 
+	*/
+	remote function reset()
+		httpmethod="GET" restpath="reset" {
+
+
+		local.mr=new MavenRepo();
+		mr.reset();
 	}
 
 	/**

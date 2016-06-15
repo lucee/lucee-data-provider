@@ -15,7 +15,8 @@ component {
 	//variables.mavenOsgi={"apache.lucene.analyzers-2-4-1.jar":"apache.lucene.analyzers-2.4.1.jar","commons-compress-1.9.jar":"org.apache.commons.compress-1.9.0.jar","commons-net-3.3.jar":"org.apache.commons.net-3.3.0.jar","ldapbp-1.2.4.jar":"sun.jndi.ldapbp-1.2.4.jar","oro-2.0.8.jar":"org.apache.oro-2.0.8.jar","sun.activation-1-1-1.jar":"sun.activation-1.1.1.jar","apache.lucene.similarity-2-4-1.jar":"apache.lucene.similarity-2.4.1.jar","s3.extension-0-0-0-26.jar":"s3.extension-0.0.0.26.jar","activation-1.1.0.jar":"sun.activation-1.1.0.jar","dom-1.1.0.jar":"w3c.dom-1.1.0.jar","core-1.2.1.jar":"sun.jai.core-1.2.1.jar","ant-1.4.0.jar":"apache.ws.axis.ant-1.4.0.jar","org.apache.commons.codec-1-9-0.jar":"org.apache.commons.codec-1.9.0.jar","apache.lucene.spellchecker-2-4-1.jar":"apache.lucene.spellchecker-2.4.1.jar","mail-1.3.3.01.jar":"sun.mail-1.3.3.01.jar","gpl-3.51.12.jar":"jpedal.gpl-3.51.12.jar","server-1.0.20.jar":"fusiondebug.api.server-1.0.20.jar","jcifs-1.3.17.jar":"jcifs-1.3.17.jar","axis-1.4.0.L004.jar":"apache.ws.axis-1.4.0.L004.jar","java.xmlbuilder-1-1-0.jar":"java.xmlbuilder-1.1.0.jar","adapters-1.1.1.jar":"org.apache.commons.logging.adapters-1.1.1.jar","xalan-2.7.1.jar":"apache.xml.xalan-2.7.1.jar","time-2.1.0.jar":"org.joda.time-2.1.0.jar","jackson-mapper-asl-1-9-13.jar":"jackson-mapper-asl-1.9.13.jar","extractors-3.8.0.jar":"apache.poi.tm.extractors-3.8.0.jar","concurrent-2.2.0.jar":"backport.util.concurrent-2.2.0.jar","api-1.1.1.jar":"org.apache.commons.logging.api-1.1.1.jar","core-4.4.1.jar":"apache.http.components.core-4.4.1.jar","apache.lucene.misc-2-4-1.jar":"apache.lucene.misc-2.4.1.jar","log4j-1.2.17.jar":"log4j-1.2.17.jar","jacob-1.16.1.jar":"jacob-1.16.1.jar","apache.poi-3-8-0.jar":"apache.poi-3.8.0.jar","apache.lucene.highlighter-2-4-1.jar":"apache.lucene.highlighter-2.4.1.jar","jaas-1.2.4.jar":"sun.security.jaas-1.2.4.jar","xerces-2.11.0.jar":"apache.xml.xerces-2.11.0.jar","asm-all-4.2.jar":"org.objectweb.asm.all-4.2.jar","ESAPI-2.1.0.jar":"ESAPI-2.1.0.jar","hsqldb-1.8.0.jar":"hsqldb-1.8.0.jar","jcommon-1.0.10.jar":"jcommon-1.0.10.jar","com.mysql.jdbc-5-1-20.jar":"com.mysql.jdbc-5.1.20.jar","codec-1.6.0.jar":"org.apache.commons.codec-1.6.0.jar","resolver-1.2.0.jar":"resolver-1.2.0.jar","ojdbc14-0.0.0.jar":"ojdbc14-0.0.0.jar","client-4.5.0.0002L.jar":"apache.http.components.client-4.5.0.0002L.jar","slf4j-api-1.7.12.jar":"slf4j.api-1.7.12.jar","xmlparserv2-1.2.2.jar":"xmlparserv2-1.2.2.jar","ldap-1.2.4.jar":"sun.jndi.ldap-1.2.4.jar","commons-httpclient-3.1.jar":"org.lucee.commons-httpclient-3.1.jar","mime-4.5.0.jar":"apache.http.components.mime-4.5.0.jar","mx4j-3-0-2.jar":"mx4j-3.0.2.jar","apis-1.3.2.jar":"xml.apis-1.3.2.jar","sanselan-0.97-incubator.jar":"org.apache.sanselan.sanselan-0.97.0.incubator.jar","ehcache-2.10.0.jar":"net.sf.ehcache-2.10.0.jar","ldapsec-1.2.4.jar":"sun.jndi.ldapsec-1.2.4.jar","commons-discovery-0.5.jar":"org.apache.commons.discovery-0.5.jar","xdb-1.0.0.jar":"xdb-1.0.0.jar","apache.poi.ooxml-3-8-0.jar":"apache.poi.ooxml-3.8.0.jar","apache.lucene-2-4-1.jar":"apache.lucene-2.4.1.jar","PDFBox-0-7-3.jar":"PDFBox-0.7.3.jar","extractor-2.6.4.jar":"metadata.extractor-2.6.4.jar","logging-1.1.1.jar":"org.apache.commons.logging-1.1.1.jar","wsdl4j-1.5.1.jar":"sun.xml.wsdl4j-1.5.1.jar","providerutil-1.2.4.jar":"sun.jndi.providerutil-1.2.4.jar","saaj-1.2.1.jar":"sun.xml.saaj-1.2.1.jar","codec-1.1.2.jar":"sun.jai.codec-1.1.2.jar","jtds-1-2-5.jar":"jtds-1.2.5.jar","javasysmon-0.3.3.jar":"javasysmon-0.3.3.jar","jackson-core-asl-1-9-13.jar":"jackson-core-asl-1.9.13.jar","oswego-concurrent-1.3.4.jar":"org.lucee.oswego-concurrent-1.3.4.jar","serializer-2.7.1.jar":"serializer-2.7.1.jar","org.apache.commons.logging-1-2-0.jar":"org.apache.commons.logging-1.2.0.jar","microsoft.sqljdbc-4-0-0.jar":"microsoft.sqljdbc-4.0.0.jar","apache.lucene.snowball-2-4-1.jar":"apache.lucene.snowball-2.4.1.jar","schemas-3.8.0.jar":"apache.poi.ooxml.schemas-3.8.0.jar","postgresql-9-1-902.jar":"postgresql-9.1.902.jar","jets3t-0-9-4.jar":"jets3t-0.9.4.jar","tika-core-1.10.jar":"org.apache.tika.core-1.10.0.jar","bcprov-1-52-0.jar":"bcprov-1.52.jar","jaxrpc-1.2.1.jar":"sun.xml.jaxrpc-1.2.1.jar","slf4j-nop-1.7.12.jar":"slf4j.nop-1.7.12.jar","log4j-1-2-16.jar":"log4j-1.2.16.jar","javaparser-1.0.8.jar":"javaparser-1.0.8.jar","fileupload-1.2.1.jar":"org.apache.commons.fileupload-1.2.1.jar","ooxml-3.8.0.jar":"org.apache.poi.ooxml-3.8.0.jar","commons-collections4-4.0.jar":"org.apache.commons.collections4-4.0.0.jar","lucene.search.extension-1-0-0-22.jar":"lucene.search.extension-1.0.0.22.jar","api-1.0.1.jar":"stax.api-1.0.1.jar","xmlbeans-2.3.0.r540734.jar":"xmlbeans-2.3.0.r540734.jar","jencrypt-1.4.2.04.jar":"jencrypt-1.4.2.04.jar","jfreechart-1.0.12.jar":"jfreechart-1.0.12.jar","tagsoup-1.2.1.jar":"tagsoup-1.2.1.jar","sun.mail-1-4-7.jar":"sun.mail-1.4.7.jar","commons-lang-2.6.jar":"org.apache.commons.lang-2.6.jar","commons-io-2.4.jar":"org.apache.commons.io-2.4.0.jar","css2-0.9.4.jar":"ss.css2-0.9.4.jar","commons-email-1.2.jar":"org.apache.commons.email-1.2.jar","jffmpeg-1.4.2.09.jar":"jffmpeg-1.4.2.09.jar","poi-3.8.0.jar":"org.apache.poi-3.8.0.jar","patch-1.0.12.jar":"jfreechart.patch-1.0.12.jar"};
 
 	// this are version that should not be used in any case
-	variables.ignoreVersions=["5.0.0.22","5.0.0.travis-74435522-SNAPSHOT"];
+	variables.ignoreVersions=["5.0.0.22","5.0.0.travis-74435522-SNAPSHOT","5.1.0.8-SNAPSHOT"];
+	variables.ignoreMajor="5.1";
 
 	public function readDependenciesFromPOM(string pom, boolean extended=false,string specifivDep=""){
 		
@@ -88,14 +89,14 @@ component {
 	public array function getOSGiDependencies(required string version, boolean force=false) {
 		if(force || isNull(application._OSGiDependencies[version])) {
 			local.rtn=[];
-			local.info=getInfo(version); // get info for defined version
+			local.info=getInfo(version,true); // get info for defined version
 			local.dir=getArtifactDirectory();
 			local.dependencies=readDependenciesFromPOM(info.pomSrc); // get dependcies
 			local.manifest=new Manifest();
-			
+			//return dependencies;
 			loop array=dependencies item="local.dep" {
 				// first we store the file locally, if not exist locally yet
-				local.trg=dir&dep.groupId&"-"&dep.artifactId&".jar";
+				local.trg=dir&"mvn-"&dep.groupId&"-"&dep.artifactId&"-"&dep.version&".jar";
 				if(!fileExists(trg)) fileCopy(dep.jar,trg);
 
 				// now we read the manifest
@@ -184,10 +185,10 @@ component {
 	* return information about a specific version
 	* @version version to get info for
 	*/
-	public struct function getInfo(required string version){
+	public struct function getInfo(required string version, boolean force=false){
 		if(isNull(application.infoData)) application.infoData={};
 		
-		if(isNull(application.infoData[version])) {
+		if(force || isNull(application.infoData[version])) {
 			local.qry= getAvailableVersions(type:'all', extended:true, onlyLatest:false,specificVersion:version);
 			if(qry.recordcount==0) throw "no info found for version ["&version&"]";
 			application.infoData[version] = QueryRowData(qry,1);
@@ -197,6 +198,12 @@ component {
 		
 	}
 
+	publicf function reset(){
+		application.infoData={};
+		application.repoMatch={};
+		application._OSGiDependencies={};
+	}
+
 	/**
 	* return information about the latest version
 	* @version version to get info for
@@ -204,13 +211,13 @@ component {
 	public struct function getLatest(required string type){
 		if(isNull(application.infoData)) application.infoData={};
 		
-		if(isNull(application.infoData["latest:"&type])) {
+		if(isNull(application.infoData["latest::"&type])) {
 			local.qry= getAvailableVersions(type:type, extended:true, onlyLatest:true);
 			if(qry.recordcount==0) throw "no info found for type ["&type&"]";
-			application.infoData["latest:"&type] = QueryRowData(qry,1);
+			application.infoData["latest::"&type] = QueryRowData(qry,1);
 
 		}
-		return application.infoData["latest:"&type];
+		return application.infoData["latest::"&type];
 	}
 
 	/**
@@ -240,17 +247,23 @@ component {
 		if(extended) local.repos=getRepositories(raw.repoDetails);
 
 		// create the list
-		local.qry=queryNew("groupId,artifactId,version,type"&(extended?",pomSrc,pomDate,jarSrc,jarDate":""));
+		local.qry=queryNew("groupId,artifactId,version,vs,type"&(extended?",pomSrc,pomDate,jarSrc,jarDate":""));
 		loop array=raw.data item="local.entry" {
 			if(isNull(entry.artifactHits[1])) continue;
 			local.ah=entry.artifactHits[1];
 
 			// ignore list
 			if(arrayContains(variables.ignoreVersions,entry.version)) continue;
+
+			// ignore major
+			if(left(entry.version,len(variables.ignoreMajor))==variables.ignoreMajor) continue;
+			
 			// check type
 			if(type!="all" && type!=ah.repositoryId) continue;
 			// latest
-			if(onlyLatest && entry.version!=entry.latestSnapshot && entry.version!=entry.latestRelease) continue;
+			//if(onlyLatest && entry.version!=entry.latestSnapshot && entry.version!=entry.latestRelease) continue;
+			if(onlyLatest && qry.recordcount>0) break;  // TODO do better
+
 			// specific
 			if(!isNull(specificVersion) && specificVersion!=entry.version) continue;
 
@@ -261,6 +274,7 @@ component {
 			qry.setCell("groupId",entry.groupId,row);
 			qry.setCell("artifactId",entry.artifactId,row);
 			qry.setCell("version",entry.version,row);
+			qry.setCell("vs",toVersionSortable(entry.version),row);
 			qry.setCell("type",ah.repositoryId,row);
 			
 			if(extended) {
@@ -273,6 +287,10 @@ component {
 		}
 		if(extended)querySort(qry,"jarDate","asc");
 		else querySort(qry,"version","asc");
+
+
+
+
 		return qry;
 	}
 
@@ -330,6 +348,35 @@ component {
 			catch(e){}
 		}
 		return sources;
+	}
+
+	private function toVersionSortable(required string version){
+		local.arr=listToArray(arguments.version,'.');
+		
+		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
+			throw "version number ["&arguments.version&"] is invalid";
+		}
+		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
+
+		// qualifier has an appendix? (BETA,SNAPSHOT)
+		local.qArr=listToArray(arr[4],'-');
+		if(qArr.len()==1 && isNumeric(qArr[1])) local.sct.qualifier=qArr[1]+0;
+		else if(qArr.len()==2 && isNumeric(qArr[1])) {
+			sct.qualifier=qArr[1]+0;
+			sct.qualifier_appendix=qArr[2];
+			if(sct.qualifier_appendix=="SNAPSHOT")sct.qualifier_appendix_nbr=0;
+			else if(sct.qualifier_appendix=="BETA")sct.qualifier_appendix_nbr=50;
+			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
+		}
+		else throw "version number ["&arguments.version&"] is invalid";
+		
+
+
+		return 		repeatString("0",2-len(sct.major))&sct.major
+					&"."&repeatString("0",3-len(sct.minor))&sct.minor
+					&"."&repeatString("0",3-len(sct.micro))&sct.micro
+					&"."&repeatString("0",4-len(sct.qualifier))&sct.qualifier
+					&"."&repeatString("0",3-len(sct.qualifier_appendix_nbr))&sct.qualifier_appendix_nbr;
 	}
 
 

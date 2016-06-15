@@ -1,4 +1,5 @@
 <cfscript>
+	if(isNull(url.major)) url.major='5.0';
 	include "functions.cfm";
 	
 	query=getExtensions();
@@ -7,6 +8,15 @@
 	_5_0_0_70=toVersionSortable("5.0.0.70-SNAPSHOT");
 	_5_0_0_112=toVersionSortable("5.0.0.112-SNAPSHOT");
 	_5_0_0_219=toVersionSortable("5.0.0.219-SNAPSHOT");
+	_5_0_0_254=toVersionSortable("5.0.0.254-SNAPSHOT");
+	_5_0_0_255=toVersionSortable("5.0.0.255-SNAPSHOT");
+	_5_0_0_256=toVersionSortable("5.0.0.256-SNAPSHOT");
+	_5_0_0_257=toVersionSortable("5.0.0.257-SNAPSHOT");
+	_5_0_0_258=toVersionSortable("5.0.0.258-SNAPSHOT");
+	_5_0_0_259=toVersionSortable("5.0.0.259-SNAPSHOT");
+	_5_0_0_260=toVersionSortable("5.0.0.260-SNAPSHOT");
+	_5_0_0_261=toVersionSortable("5.0.0.261-SNAPSHOT");
+	_5_0_0_262=toVersionSortable("5.0.0.262-SNAPSHOT");
 
 	if(isNull(url.type))type="releases";
 	else type=url.type;
@@ -46,25 +56,46 @@ h3 {
 .grey {
 	background-color:##ccc;
 }
+.linkk {
+	font-size:15px;
+}
 </style>
 
 <h1>Downloads</h1>
 <p>
-<a href="?type=releases">Releases</a> | <a href="?type=snapshots">Snapshots</a> | <a href="?type=extensions">Extensions</a>
+<a class="linkk" href="?type=releases">Releases</a> 
+| <a class="linkk" href="?type=snapshots">Snapshots</a>
+</p>
+<p>
+<a class="linkk" href="?type=releases&major=5.1">Releases (Beta)</a> 
+| <a class="linkk" href="?type=snapshots&major=5.1">Snapshots (Beta)</a> 
+</p>
+<p>
+<a class="linkk" href="?type=extensions">Extensions</a>
 </p>
 
 
 
 <cfif type=="releases" || type=="snapshots">
 <cfscript>
-	downloads=getDownloads();
+	tmpDownloads=getDownloads();
+	// filter out not matching major version
+	downloads=queryNew(tmpDownloads.columnlist);
+	loop query=tmpDownloads {
+		if(left(tmpDownloads.version,len(url.major))==url.major) {
+			row=downloads.addRow();
+			loop array=tmpDownloads.columnArray() item="col" {
+				downloads.setCell(col,tmpDownloads[col],row);
+			}
+		}
+	}
+
 	loop query=downloads {
 		if(downloads.type==variables.type) {
 			latest=downloads.currentrow;
 			break;
 		}
 	}
-	//dump(downloads);
 </cfscript>
 	
 
@@ -106,6 +137,9 @@ h3 {
 				<a href="http://bugs.lucee.org/browse/#id#">#id#</a> #subject#<br>
 			</cfloop></p>
 		</cfif>
+
+		<cfif downloads.recordcount GT 1>
+		
 		<cfsilent>
 		<cfloop query=downloads>
 			<cfif downloads.type==variables.type && downloads.version!=downloads.version[latest]>
@@ -116,6 +150,7 @@ h3 {
 			</cfif>
 		</cfloop>
 		</cfsilent>
+		<cfif !isNUll(first)>
 		<h2>#UCFirst(type)# History (#first# - #last#)</h2>
 		<p>#historyDesc#</p>
 
@@ -125,7 +160,7 @@ h3 {
 		<table border="1" width="100%">
 		<tr>
 			<td align="center"><h3>Version</h3></td>
-			<td align="center"><h3>Birth Date</h3></td>
+			<td align="center"><h3>Date</h3></td>
 			
 			<td align="center"><h3>Express</h3></td>
 			<td align="center"><h3>Lucee library</h3><span class="comment"> with dependencies</span></td>
@@ -134,6 +169,20 @@ h3 {
 			<td align="center"><h3>Lucee WAR file</h3></td>
 		</tr>	
 		<cfloop query=downloads>
+			<cfif 
+				downloads.v == _5_0_0_254 ||
+				downloads.v == _5_0_0_255 ||
+				downloads.v == _5_0_0_256 ||
+				downloads.v == _5_0_0_257 ||
+				downloads.v == _5_0_0_258 ||
+				downloads.v == _5_0_0_259 ||
+				downloads.v == _5_0_0_260 ||
+				downloads.v == _5_0_0_261 ||
+				downloads.v == _5_0_0_262
+
+			>
+				<cfcontinue>
+			</cfif>
 			<cfset css="">
 			<cfif downloads.type==variables.type && downloads.version!=downloads.version[latest]>
 			<tr>
@@ -178,8 +227,9 @@ h3 {
 			</cfif>
 
 		</cfloop>
+</cfif>
 
-
+</cfif>
 
 
 
@@ -239,7 +289,8 @@ h3 {
 </tr>
 </cfloop>
 </table>
-<cfdump var="#query#">
 </cfoutput>	
 
 </cfif>
+
+

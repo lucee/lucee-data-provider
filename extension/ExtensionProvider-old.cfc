@@ -18,9 +18,9 @@
 		directory action="list" name="local.dir" directory="#variables.extensionDir#" filter="*.#variables.ext#" sort="asc";
 
 		// read in all extensions (full and trial)
-		var tmpLatest.trial=structNew('linked');
-		var tmpLatest.full=structNew('linked');
-		var tmpLatest.all=structNew('linked');
+		//var tmpLatest.trial=structNew('linked');
+		//var tmpLatest.full=structNew('linked');
+		//var tmpLatest.all=structNew('linked');
 
 		var tmpAll.trial=structNew('linked');
 		var tmpAll.full=structNew('linked');
@@ -46,13 +46,13 @@
 			// there is already a extension with this id (trial|full)
 			loop times="2" {
 				
-				//latest
+				/* latest
 				if(structKeyExists(tmpLatest[type],main.id)) {
 					if(toVersionSortable(main.version)>toVersionSortable(tmpLatest[type][main.id].manifest.version))
 						tmpLatest[type][main.id]={manifest:main,filename:dir.name,version:toVersionSortable(main.version)};
 				}
 				else tmpLatest[type][main.id]={manifest:main,filename:dir.name,version:toVersionSortable(main.version)};
-				
+				*/
 				// all
 				if(!structKeyExists(tmpAll[type],main.id)) 
 					tmpAll[type][main.id]=structNew('linked');
@@ -71,7 +71,7 @@
 		}
 		application.extensionLast=getTickCount();
 		application.extensions=tmpAll;
-		application.extensionLatest=tmpLatest;
+		//application.extensionLatest=tmpLatest;
 		//systemOutput(tmp,true,true);
 
 	}
@@ -95,10 +95,12 @@
 	remote struct function getInfo( 
 								string ioid="" restargsource="url",
 								required string language="en" restargsource="url",
-								required boolean withLogo=true restargsource="url")
+								required boolean withLogo=true restargsource="url",
+								required string coreVersion="" restargsource="url")
 		httpmethod="GET" restpath="info" {
 
-
+		if(len(arguments.coreVersion))
+			local.luceeVersion=toVersionSortable(arguments.coreVersion);
 		
 		var rtn.meta={};
 		
@@ -114,7 +116,10 @@
 		rtn.extensions= querynew(variables.columnList); // this must come from outsite the extension
 		
 		// we only show full versions in the list
-		loop struct="#application.extensionLatest.full#" index="local.id" item="local.coll" {
+		loop struct="#application.extensions.full#" index="local.id" item="local.all" {
+			local.coll=_getLatest(all,isNull(local.luceeVersion)?"":local.luceeVersion);
+			if(isSimpleValue(coll)) continue;
+
 			local.main=coll.manifest;
 			local.filename=coll.filename;
 			local.row=queryAddRow(rtn.extensions);
@@ -151,9 +156,12 @@
 			// older
 			var _older=application.extensions.full[local.id];
 			var arr=[];
+			var v=toVersionSortable(queryGetCell(rtn.extensions,"version",row));
 			loop struct=_older index="local._versionSortable" item="local._data" {
-				if(queryGetCell(rtn.extensions,"version",row)!=_data.manifest.version)
-				arrayAppend(arr,_data.manifest.version);
+				if(v>toVersionSortable(_data.manifest.version)) {
+					arrayAppend(arr,_data.manifest.version)
+				}
+				
 			}
 			querySetCell(rtn.extensions,"older",arr,row);
 
@@ -164,6 +172,33 @@
 		
 		//systemOutput(queryColumnData(rtn,'trial'),true,true);
 		return rtn;
+	}
+
+	private function _getLatest(struct all,string luceeVersion) {
+		//var t="";
+		loop struct=all index="local.v" item="local.data" {
+			// min core version is bigger than given core version
+			if( len(luceeVersion) &&
+				!isNull(data.manifest['lucee-core-version']) && 
+				toVersionSortable(data.manifest['lucee-core-version'])>luceeVersion) continue;
+
+			/*t&="<br>"&data.manifest.name&":"&v;
+			if(len(luceeVersion) &&
+				!isNull(data.manifest['lucee-core-version'])) {
+				t&= "<br>
+				->#data.manifest['lucee-core-version']#<-"&
+				toVersionSortable(data.manifest['lucee-core-version'])&":"&
+				luceeVersion&"="&(toVersionSortable(data.manifest['lucee-core-version'])>luceeVersion);
+			}*/
+
+			// no we pick the latest
+			if(isNull(rtnVersion) || rtnVersion<v) {
+				local.rtnVersion=v;
+				local.rtn=data;
+			}
+		}
+		//if(find("PDF",t))throw t;
+		return isNull(rtn)?"":rtn;
 	}
 
 
@@ -188,12 +223,17 @@
 								string ioid="" restargsource="url",
 								required string language="en" restargsource="url",
 								required boolean withLogo=true restargsource="url"
-								,string version="" restargsource="url")
+								,string version="" restargsource="url"
+								,string coreVersion="" restargsource="url")
 		httpmethod="GET" restpath="info/{id}" {
+
+		if(len(arguments.coreVersion))
+			local.luceeVersion=toVersionSortable(arguments.coreVersion);
+		
 
 		local.type="full";
 		var rtn={};
-		
+
 		init();
 
 		// application.extensionLatest.full
@@ -208,8 +248,8 @@
 		}
 		// no version defintion
 		else {
-			local.found=true;
-			local.data=application.extensionLatest[type][arguments.id];
+			local.data=_getLatest(application.extensions[type][arguments.id],isNull(local.luceeVersion)?"":local.luceeVersion);
+			local.found=!isSimpleValue(data);
 		}
 
 
@@ -218,11 +258,7 @@
 			var other=type=="full"?"trial":"full";
 
 			var text="extension for id ["&arguments.id&"] "&(arguments.version.len()==0?"":("in version "&arguments.version))&" not found as "&type&" version";
-			if(!isNull(application.extensionLatest[other][arguments.id]))
-				text&=", but there is a "&other&" version available";
-			else
-				text&=" and there is also no "&other&" version available";
-
+			
 			header statuscode="404" statustext="#text#";
 			echo(text);
 			return ;
@@ -279,9 +315,10 @@
 	remote function getTrial(
 		required string id restargsource="Path"
 		,string IOid="" restargsource="url"
-		,string version="" restargsource="url")
+		,string version="" restargsource="url"
+		,string coreVersion="" restargsource="url")
 		httpmethod="GET" restpath="trial/{id}" {
-		_get(arguments.id,arguments.version,"trial");
+		_get(arguments.id,arguments.version,arguments.coreVersion,"trial");
 	}
 
 	/**
@@ -290,18 +327,23 @@
 	remote function getFull(
 		required string id restargsource="Path"
 		,string IOid="" restargsource="url"
-		,string version="" restargsource="url")
+		,string version="" restargsource="url"
+		,string coreVersion="" restargsource="url")
 		httpmethod="GET" restpath="full/{id}" {
-		_get(arguments.id,arguments.version,"full");
+		_get(arguments.id,arguments.version,arguments.coreVersion,"full");
 	}
 
-	private function _get(required string id, required string version, required string type) {
+	private function _get(required string id, required string version, string coreVersion, required string type) {
+
+		if(len(arguments.coreVersion))
+			local.luceeVersion=toVersionSortable(arguments.coreVersion);
+		
 
 		// init all extensions
 		init();
 
 		local.found=false;
-		if(!isNull(application.extensionLatest[type][arguments.id])) {
+		if(!isNull(application.extensions[type][arguments.id])) {
 
 			// with version defintion
 			if(arguments.version.len()>0) {
@@ -313,8 +355,9 @@
 			}
 			// no version defintion
 			else {
-				local.found=true;
-				local.data=application.extensionLatest[type][arguments.id];
+
+				local.data=_getLatest(application.extensions[type][arguments.id],isNull(local.luceeVersion)?"":local.luceeVersion);
+				local.found=!isSimpleValue(data);
 			}
 
 
@@ -331,11 +374,7 @@
 			var other=type=="full"?"trial":"full";
 
 			var text="extension for id ["&arguments.id&"] "&(arguments.version.len()==0?"":("in version "&arguments.version))&" not found as "&type&" version";
-			if(!isNull(application.extensionLatest[other][arguments.id]))
-				text&=", but there is a "&other&" version available";
-			else
-				text&=" and there is also no "&other&" version available";
-
+			
 			header statuscode="404" statustext="#text#";
 			echo(text);
 		}
@@ -431,7 +470,7 @@
 
 	private function unwrap(String str) {
 		str = str.trim();
-		if(left(str,1)=='"' && right(str,1)=='"')
+		if((left(str,1)==chr(8220) || left(str,1)=='"') && (right(str,1)=='"' || right(str,1)==chr(8221)))
 			str=mid(str,2,len(str)-2);
 		else if(left(str,1)=="'" && right(str,1)=="'")
 			str=mid(str,2,len(str)-2);
@@ -439,12 +478,70 @@
 	}
 
 	private function toVersionSortable(required string version) localMode=true {
+		version=unwrap(version.trim());
 		arr=listToArray(arguments.version,'.');
+		
+		// OSGi compatible version
+		if(arr.len()==4 && isNumeric(arr[1]) && isNumeric(arr[2]) && isNumeric(arr[3])) {
+			try{return toOSGiVersion(version).sortable}catch(local.e){};
+		}
+
+
 		rtn="";
 		loop array=arr index="i" item="v" {
 			if(len(v)<5)
 			 rtn&="."&repeatString("0",5-len(v))&v;
+			else
+				rtn&="."&v;
 		} 
 		return 	rtn;
 	}
+
+
+	private struct function toOSGiVersion(required string version, boolean ignoreInvalidVersion=false){
+		local.arr=listToArray(arguments.version,'.');
+		
+		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
+			if(ignoreInvalidVersion) return {};
+			throw "version number ["&arguments.version&"] is invalid";
+		}
+		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
+
+		// qualifier has an appendix? (BETA,SNAPSHOT)
+		local.qArr=listToArray(arr[4],'-');
+		if(qArr.len()==1 && isNumeric(qArr[1])) local.sct.qualifier=qArr[1]+0;
+		else if(qArr.len()==2 && isNumeric(qArr[1])) {
+			sct.qualifier=qArr[1]+0;
+			sct.qualifier_appendix=qArr[2];
+			if(sct.qualifier_appendix=="SNAPSHOT")sct.qualifier_appendix_nbr=0;
+			else if(sct.qualifier_appendix=="BETA")sct.qualifier_appendix_nbr=50;
+			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
+		}
+		else throw "version number ["&arguments.version&"] is invalid";
+		sct.pure=
+					sct.major
+					&"."&sct.minor
+					&"."&sct.micro
+					&"."&sct.qualifier;
+		sct.display=
+					sct.pure
+					&(sct.qualifier_appendix==""?"":"-"&sct.qualifier_appendix);
+		
+		sct.sortable=repeatString("0",2-len(sct.major))&sct.major
+					&"."&repeatString("0",3-len(sct.minor))&sct.minor
+					&"."&repeatString("0",3-len(sct.micro))&sct.micro
+					&"."&repeatString("0",4-len(sct.qualifier))&sct.qualifier
+					&"."&repeatString("0",3-len(sct.qualifier_appendix_nbr))&sct.qualifier_appendix_nbr;
+
+
+
+		return sct;
+
+
+	}
+
+
+
+
+
 }

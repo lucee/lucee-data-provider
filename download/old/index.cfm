@@ -1,4 +1,5 @@
 <cfscript>
+	if(isNull(url.major)) url.major='5.0';
 	include "functions.cfm";
 	
 	query=getExtensions();
@@ -6,6 +7,7 @@
 
 	_5_0_0_70=toVersionSortable("5.0.0.70-SNAPSHOT");
 	_5_0_0_112=toVersionSortable("5.0.0.112-SNAPSHOT");
+	_5_0_0_219=toVersionSortable("5.0.0.219-SNAPSHOT");
 
 	if(isNull(url.type))type="releases";
 	else type=url.type;
@@ -21,20 +23,20 @@
 <style>
 td,p {
 	font-family: Arial;
-	font-size:12px;
+	font-size:11px;
 }
 
 h1 {
 	font-family: Arial;
-	font-size:22px;
+	font-size:24px;
 }
 h2 {
 	font-family: Arial;
-	font-size:18px;
+	font-size:20px;
 }
 h3 {
 	font-family: Arial;
-	font-size:15px;
+	font-size:12px;
 }
 
 
@@ -49,14 +51,25 @@ h3 {
 
 <h1>Downloads</h1>
 <p>
-<a href="?type=releases">Releases</a> | <a href="?type=snapshots">Snapshots</a> | <a href="?type=extensions">Extensions</a>
+<a href="?type=releases">Releases</a> | <a href="?type=snapshots">Snapshots</a> <!---| <a href="?type=snapshots&major=5.1">5.1 Snapshots</a> ---> | <a href="?type=extensions">Extensions</a>
 </p>
 
 
 
 <cfif type=="releases" || type=="snapshots">
 <cfscript>
-	downloads=getDownloads();
+	tmpDownloads=getDownloads();
+	// filter out not matching major version
+	downloads=queryNew(tmpDownloads.columnlist);
+	loop query=tmpDownloads {
+		if(left(tmpDownloads.version,len(url.major))==url.major) {
+			row=downloads.addRow();
+			loop array=tmpDownloads.columnArray() item="col" {
+				downloads.setCell(col,tmpDownloads[col],row);
+			}
+		}
+	}
+
 	loop query=downloads {
 		if(downloads.type==variables.type) {
 			latest=downloads.currentrow;
@@ -68,41 +81,56 @@ h3 {
 
 
 
-		<h2>Latest 	#UCFirst(type)#</h2>
+		<h2>Latest 	#UCFirst(type)# (#downloads.version[latest]#)</h2>
 		<p>#replace(replace(replace(intro,"{date}",lsDateFormat(downloads.jarDate[latest])),"{version}",downloads.version[latest]),"{type}",singular[type])# #lang.desc[type]#</p>
 
+		<!--- jar --->
+		<h3>Lucee library (.jar file)</h3>
+		<p><cfif downloads.v[latest] GTE _5_0_0_219>#lang.libNew#<cfelse>#lang.lib#</cfif><br>
+		<a href="#_url[type]#/rest/update/provider/#downloads.v[latest] GTE _5_0_0_112?"loader":"libs"#/#downloads.version[latest]#">lucee.jar<cfif downloads.v[latest] LT _5_0_0_219> (no dependecies)</cfif></a>
+		<cfif downloads.v[latest] GTE _5_0_0_112 and downloads.v[latest] LT _5_0_0_219>
+			<br><a href="#_url[type]#/rest/update/provider/loader-all/#downloads.version[latest]#">lucee-all.jar (with dependecies)</a>
+		</cfif>
+		</p>
 
-		<table border="1" width="100%">
-		<tr>
-			<td width="50%"><h3>Express</h3>
+
+		<!---  Express--->
+		<h3>Express</h3>
 		<p>#lang.express#<br>
-		<a href="#_url[type]#/rest/update/provider/express/#downloads.version[latest]#">download</a></p></td>
-			<td width="50%"><cfif downloads.v[latest] GTE _5_0_0_112>
-		<h3>Lucee library (lucee-all.jar) with dependencies</h3>
-		<p>#lang.LuceeAll#<br>
-		<a href="#_url[type]#/rest/update/provider/loader-all/#downloads.version[latest]#">download</a></p>
-		</cfif></td>
-		</tr>
-		<tr>
-			<td width="50%"><h3>Lucee library (lucee.jar) without dependencies</h3>
-		<p>#lang.jar#<br>
-		<a href="#_url[type]#/rest/update/provider/#downloads.v[latest] GTE _5_0_0_112?"loader":"libs"#/#downloads.version[latest]#">download</a></p></td>
-			<td width="50%"><h3>Lucee core file (#downloads.version[latest]#.lco)</h3>
-		<p>#lang.core#<br>
-		<a href="#_url[type]#/rest/update/provider/download/#downloads.version[latest]#">download</a></p></td>
-		</tr>
-		<tr>
-			<td width="50%"><h3>Lucee WAR file (lucee.war)</h3>
+		<a href="#_url[type]#/rest/update/provider/express/#downloads.version[latest]#">download</a></p>
+		
+		<!--- War --->
+		<h3>Lucee WAR file (lucee.war)</h3>
 		<p>#lang.war#<br>
-		<a href="#_url[type]#/rest/update/provider/war/#downloads.version[latest]#">download</a></p></td>
-			<td width="50%"></td>
-		</tr>
+		<a href="#_url[type]#/rest/update/provider/war/#downloads.version[latest]#">download</a></p>
 		
-		</table>
-
-
+		<!--- Lucee Core --->
+		<h3>Lucee core file (#downloads.version[latest]#.lco)</h3>
+		<p>#lang.core#<br>
+		<a href="#_url[type]#/rest/update/provider/download/#downloads.version[latest]#">download</a></p>
 		
-		<h2>History </h2>
+
+		<!--- changelog --->
+		<cfif !isnull(downloads.changelog[latest]) && isStruct(downloads.changelog[latest]) && structCount(downloads.changelog[latest])>
+			<h3>Changelog</h3>
+			<p><cfloop struct="#downloads.changelog[latest]#" index="id" item="subject">
+				<a href="http://bugs.lucee.org/browse/#id#">#id#</a> #subject#<br>
+			</cfloop></p>
+		</cfif>
+
+		<cfif downloads.recordcount GT 1>
+	
+		<cfsilent>
+		<cfloop query=downloads>
+			<cfif downloads.type==variables.type && downloads.version!=downloads.version[latest]>
+				<cfif isNull(last)>
+					<cfset last=downloads.version>
+				</cfif>
+				<cfset first=downloads.version>
+			</cfif>
+		</cfloop>
+		</cfsilent>
+		<h2>#UCFirst(type)# History (#first# - #last#)</h2>
 		<p>#historyDesc#</p>
 
 
@@ -110,17 +138,17 @@ h3 {
 
 		<table border="1" width="100%">
 		<tr>
-			<td align="center"><h2>Version</h2></td>
-			<td align="center"><h2>Birth Date</h2></td>
+			<td align="center"><h3>Version</h3></td>
+			<td align="center"><h3>Birth Date</h3></td>
 			
-			<td align="center"><h2>Express</h2></td>
-			<td align="center"><h2>Lucee library</h2><span class="comment"> with dependencies</span></td>
-			<td align="center"><h2>Lucee library</h2><span class="comment"> without dependencies</span></td>
-			<td align="center"><h2>Lucee core file</h2></td>
-			<td align="center"><h2>Lucee WAR file</h2></td>
+			<td align="center"><h3>Express</h3></td>
+			<td align="center"><h3>Lucee library</h3><span class="comment"> with dependencies</span></td>
+			<td align="center"><h3>Lucee library</h3><span class="comment"> without dependencies</span></td>
+			<td align="center"><h3>Lucee core file</h3></td>
+			<td align="center"><h3>Lucee WAR file</h3></td>
 		</tr>	
 		<cfloop query=downloads>
-			<cfset css=((downloads.currentrow%2)==0)?"grey":"">
+			<cfset css="">
 			<cfif downloads.type==variables.type && downloads.version!=downloads.version[latest]>
 			<tr>
 				<td class="#css#" align="center">#downloads.version#</td>
@@ -128,9 +156,20 @@ h3 {
 				
 				<td class="#css#"><a href="#_url[type]#/rest/update/provider/express/#downloads.version#">Express</a></td>
 
-				<td class="#css#" ><cfif downloads.v GTE _5_0_0_112><a href="#_url[type]#/rest/update/provider/loader-all/#downloads.version#">lucee-all.jar</a></span><cfelse>-</cfif></td>
+				<td class="#css#" >
+					<cfif downloads.v GTE _5_0_0_219>
+						<a href="#_url[type]#/rest/update/provider/loader/#downloads.version#">lucee.jar</a>
+					<cfelseif downloads.v GTE _5_0_0_112>
+						<a href="#_url[type]#/rest/update/provider/loader-all/#downloads.version#">lucee-all.jar</a></span>
+					<cfelse>
+						-
+					</cfif></td>
 
-				<td class="#css#"><a href="#_url[type]#/rest/update/provider/#downloads.v GTE _5_0_0_112?"loader":"libs"#/#downloads.version#">lucee.jar</a></td>
+				<td class="#css#">
+					<cfif downloads.v LT _5_0_0_219>
+					<a href="#_url[type]#/rest/update/provider/#downloads.v GTE _5_0_0_112?"loader":"libs"#/#downloads.version#">lucee.jar</a>
+					</cfif>
+				</td>
 
 				<td class="#css#"><a href="#_url[type]#/rest/update/provider/download/#downloads.version#">Core</a></td>
 
@@ -138,11 +177,24 @@ h3 {
 				
 
 			</tr>
+			<!--- changelog --->
+			<cfif !isNull(downloads.changelog) && isStruct(downloads.changelog) && structCount(downloads.changelog)>
+			<tr>
+				<td colspan="7" class="grey">
+					<h3>Changelog</h3>
+					<p><cfloop struct="#downloads.changelog#" index="id" item="subject">
+					<a href="http://bugs.lucee.org/browse/#id#">#id#</a> #subject#<br>
+					</cfloop></p>
+				</td>
+			</tr>
+
+			</cfif>
 			</cfif>
 
 		</cfloop>
 
 
+</cfif>
 
 
 
@@ -170,7 +222,7 @@ h3 {
 <!--- output --->
 <cfoutput>
 <h2>Extensions	#UCFirst(type)#</h2>
-<p>Lucee Extensions, simply copy them to /lucee-server/context/deploy, of a running Lucee installation, to install them.</p>
+<p>Lucee Extensions, simply copy them to /lucee-server/deploy, of a running Lucee installation, to install them.</p>
 <table border="1">
 <cfloop query="#query#">
 <tr>
@@ -179,14 +231,24 @@ h3 {
 		<h2>#query.name#</h2>
 		<p>
 			ID:#query.id#<br>
-			Version:#query.version#<br>
+			Latest Version:#query.version#<br>
 			Category:#query.category#<br>
 			Birth Date:#query.created#<br>
 			Trial:#yesNoFormat(query.trial)#
 		</p>
 		<p>#query.description#</p>
-		<p><a href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',query.trial?"trial":"full"),'{id}',query.id)#">download (#query.trial?"trial":"full"# version)</a></p>
-
+		<p><a href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',query.trial?"trial":"full"),'{id}',query.id)#?version=#query.version#">
+		download#query.trial?" trial":""# version (#query.version#)  </a></p>
+		<cfif !isNull(query.older) && isArray(query.older) && arrayLen(query.older)>
+		<p>Older Versions:
+		<ul>
+		<cfloop array="#query.older#" item="_older">
+			<li><a href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',query.trial?"trial":"full"),'{id}',query.id)#?version=#_older#">
+		download#query.trial?" trial":""# version (#_older#)  </a></li>
+		</cfloop>
+	</ul>
+		</p>
+		</cfif>
 	</td>
 
 </tr>
