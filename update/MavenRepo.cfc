@@ -89,7 +89,7 @@ component {
 	public array function getOSGiDependencies(required string version, boolean force=false) {
 		if(force || isNull(application._OSGiDependencies[version])) {
 			local.rtn=[];
-			local.info=getInfo(version,true); // get info for defined version
+			local.info=getInfo(version,true,false); // get info for defined version
 			local.dir=getArtifactDirectory();
 			local.dependencies=readDependenciesFromPOM(info.pomSrc); // get dependcies
 			local.manifest=new Manifest();
@@ -185,11 +185,11 @@ component {
 	* return information about a specific version
 	* @version version to get info for
 	*/
-	public struct function getInfo(required string version, boolean force=false){
+	public struct function getInfo(required string version, boolean force=false, boolean checkIgnoreMajor=true){
 		if(isNull(application.infoData)) application.infoData={};
 		
 		if(force || isNull(application.infoData[version])) {
-			local.qry= getAvailableVersions(type:'all', extended:true, onlyLatest:false,specificVersion:version);
+			local.qry= getAvailableVersions(type:'all', extended:true, onlyLatest:false,specificVersion:version,checkIgnoreMajor=arguments.checkIgnoreMajor);
 			if(qry.recordcount==0) throw "no info found for version ["&version&"]";
 			application.infoData[version] = QueryRowData(qry,1);
 
@@ -208,11 +208,11 @@ component {
 	* return information about the latest version
 	* @version version to get info for
 	*/
-	public struct function getLatest(required string type){
+	public struct function getLatest(required string type,boolean checkIgnoreMajor=true){
 		if(isNull(application.infoData)) application.infoData={};
 		
 		if(isNull(application.infoData["latest::"&type])) {
-			local.qry= getAvailableVersions(type:type, extended:true, onlyLatest:true);
+			local.qry= getAvailableVersions(type:type, extended:true, onlyLatest:true, checkIgnoreMajor:arguments.checkIgnoreMajor);
 			if(qry.recordcount==0) throw "no info found for type ["&type&"]";
 			application.infoData["latest::"&type] = QueryRowData(qry,1);
 
@@ -226,7 +226,7 @@ component {
 	* @extended when true also return the location of the jar and pom file, but this is slower (has to make addional http calls)
 	* @onlyLatest only return the latest version
 	*/
-	public query function getAvailableVersions(string type='all', boolean extended=false, boolean onlyLatest=false){
+	public query function getAvailableVersions(string type='all', boolean extended=false, boolean onlyLatest=false, boolean checkIgnoreMajor=true){
 		if(extended){
 			setting requesttimeout="1000";
 		}
@@ -256,7 +256,7 @@ component {
 			if(arrayContains(variables.ignoreVersions,entry.version)) continue;
 
 			// ignore major
-			if(left(entry.version,len(variables.ignoreMajor))==variables.ignoreMajor) continue;
+			if(checkIgnoreMajor && left(entry.version,len(variables.ignoreMajor))==variables.ignoreMajor) continue;
 			
 			// check type
 			if(type!="all" && type!=ah.repositoryId) continue;
@@ -405,7 +405,7 @@ component {
 		return dir
 	}
 
-	private function getTempDirectory(){
+	private function getTempDir(){
 		local.dir=getDirectoryFromPath(getCurrenttemplatePath())&"temp#getTickCount()#/";
 		if(!directoryExists(dir))directoryCreate(dir);
 		return dir
@@ -428,7 +428,7 @@ component {
 	private string function _flushAndBuild(string type) {
 		setting requesttimeout="1000";
 		
-		local.info=getAvailableVersions(type,true,true);
+		local.info=getAvailableVersions(type,true,true,false);
 		local.art=getArtifactDirectory();
 		local.diff=DateDiff("n",info.pomDate,now());
 		
@@ -470,7 +470,7 @@ component {
 	*/
 	public string function getLoader(required string version) {
 		local.jar=getArtifactDirectory()&"lucee-"&version&".jar"; // the jar
-		if(!fileExists(jar)) fileCopy(getInfo(version).jarSrc,jar); // download it to local
+		if(!fileExists(jar)) fileCopy(getInfo(version:version,checkIgnoreMajor:false).jarSrc,jar); // download it to local
 		return jar;
 	}
 	
@@ -483,7 +483,7 @@ component {
 		local.jar=getArtifactDirectory()&"lucee-all-"&version&(doPack200?"-pack":"")&".jar"; // the jar
 		
 		if(!fileExists(jar)) {
-			local.info=getInfo(version); // get info for defined version
+			local.info=getInfo(version:version,checkIgnoreMajor:false); // get info for defined version
 			local.dir=getArtifactDirectory();
 			local.dependencies=getOSGiDependencies(version); // get dependcies
 
@@ -533,7 +533,7 @@ component {
 	* @version version to get jars for
 	*/
 	public string function getLibs(required string version) {
-		local.info=getInfo(version); // get info for defined version
+		local.info=getInfo(version:version,checkIgnoreMajor:false); // get info for defined version
 		local.dir=getArtifactDirectory();
 		local.zip=dir&"lucee-libs-"&info.version&".zip";
 		if(!fileExists(zip)) {
@@ -585,7 +585,7 @@ component {
 	* @version version to get the express for 
 	*/
 	public string function getExpress(required string version) {
-		local.info=getInfo(version); // get info for defined version
+		local.info=getInfo(version:version,checkIgnoreMajor:false); // get info for defined version
 		local.dir=getArtifactDirectory();
 		local.zip=dir&"lucee-express-"&info.version&".zip";
 		
@@ -599,27 +599,31 @@ component {
 		// Ccreate the express zip
 		try {
 			// temp directory
-			local.temp=getTempDirectory();
+			local.temp=getTempDir();
+
+			local.curr=getDirectoryFromPath(getCurrenttemplatePath());
 
 			// extension directory
-			local.extDir=ExpandPath("build/extensions/");
+			local.extDir=local.curr&("build/extensions/");
 			if(!directoryExists(extDir))directoryCreate(extDir);
 
 			// common directory
-			local.commonDir=ExpandPath("build/common/");
+			local.commonDir=local.curr&("build/common/");
 			if(!directoryExists(commonDir))directoryCreate(commonDir);
 
 			// website directory
-			local.webDir=ExpandPath("build/website/");
+			local.webDir=local.curr&("build/website/");
 			if(!directoryExists(webDir))directoryCreate(webDir);
 
 			// get the jars for that release
 			//local.jarsDir="#temp#jars";
 			//if(!directoryExists(jarsDir))directoryCreate(jarsDir);
 			//zip action="unzip" file="#getDependencies(version)#" destination=jarsDir;
-			
+			//throw getTempDirectory();
+
 			// unpack the servers
-			zip action="unzip" file="#ExpandPath("build/servers/tomcat.zip")#" destination="#temp#tomcat";
+			if(!isNull(url.test)) throw temp;
+			zip action="unzip" file="#getDirectoryFromPath(getCurrenttemplatePath())&("build/servers/tomcat.zip")#" destination="#temp#tomcat";
 			
 			// let's zip it
 			zip action="zip" file=zip overwrite=true {
@@ -647,7 +651,7 @@ component {
 			}
 		}
 		finally {
-			if(directoryExists(temp))directoryDelete(temp,true);
+			if(!isNull(temp) && directoryExists(temp))directoryDelete(temp,true);
 		}
 		storeToS3(zip);
 		return zip;
@@ -658,17 +662,17 @@ component {
 	* @version version to get the express for 
 	*/
 	public string function getWar(required string version) {
-		local.info=getInfo(version); // get info for defined version
+		local.info=getInfo(version:version,checkIgnoreMajor=false); // get info for defined version
 		local.dir=getArtifactDirectory();
 		local.war=dir&"lucee-"&info.version&".war";
 		
 		if(!fileExists(war)) {
 			try {
 				// temp directory
-				local.temp=getTempDirectory();
+				local.temp=getTempDir();
 
 				// extension directory
-				local.extDir=ExpandPath("build/extensions/");
+				local.extDir=("build/extensions/");
 				if(!directoryExists(extDir))directoryCreate(extDir);
 
 				// common directory
