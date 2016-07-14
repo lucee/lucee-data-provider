@@ -1,4 +1,4 @@
-﻿component restpath="/provider"  rest="true" {
+component restpath="/provider"  rest="true" {
 
 	jiraListURL="https://luceeserver.atlassian.net/rest/api/2/project/LDEV/versions";
 	jiraNotesURL="https://luceeserver.atlassian.net/secure/ReleaseNote.jspa?version={version-id}&styleName=Text&projectId=10000";
@@ -80,7 +80,7 @@
 				,"available":latestVersion.display
 
 				,"message":"A patch (#latestVersion.display#) is available for your current version (#version.display#)."
-				,"changelog":notes/*readChangeLog(newest.log)*/
+				,"changelog":isSimpleValue(notes)?{}:notes/*readChangeLog(newest.log)*/
 			}; // TODO get the right version for given version
 
 			/*if(internal){
@@ -106,7 +106,7 @@
 		
 		if(arguments.allowRedirect) {
 			//return mr.getInfo(version);
-			local.src=mr.getInfo(version).jarSrc;
+			local.src=mr.getInfo(version:version,checkIgnoreMajor:false).jarSrc;
 			header statuscode="302" statustext="Found";
 			header name="Location" value=src;
 			return;
@@ -181,7 +181,7 @@
 
 		// TODO get core and not loader
 		if(false && arguments.allowRedirect) {
-			local.src=mr.getInfo(version).jarSrc;
+			local.src=mr.getInfo(version:version,checkIgnoreMajor:false).jarSrc;
 			header statuscode="302" statustext="Found";
 			header name="Location" value=src;
 			return;
@@ -299,6 +299,11 @@
 		string ioid="" restargsource="url",boolean allowRedirect=false restargsource="url")
 		httpmethod="GET" restpath="download/{bundlename}/{bundleversion}" {
 		
+		// request for a core
+		if(arguments.bundleName=='lucee.core') {
+			return downloadCore(arguments.bundleVersion,arguments.ioid,arguments.allowRedirect);
+		}
+
 		// read json 
 		var name=arguments.bundleName&"-"&arguments.bundleVersion&".json";
 		var path=variables.artDirectory&name;
@@ -307,8 +312,7 @@
 			var data=deserializeJson(fileRead(path));
 		}
 
-
-		// 302 http://snapshot.lucee.org/rest/update/provider/download/org.lucee.xalan/2.7.2/?allowRedirect=false
+		// redirect to maven repo
 		if(arguments.allowRedirect && !isNull(data.jar)) {
 			header statuscode="302" statustext="Found";
 			header name="Location" value=data.jar;
@@ -320,6 +324,7 @@
 		var path=variables.artDirectory&name;
 		var orgName=name;
 		var orgPath=path;
+
 
 		if(!FileExists(path)) {
 			// then we look at the bundles directory, here we have files uploaded manually
@@ -339,20 +344,22 @@
 			var path=variables.jarDirectory&name;
 		}
 
-		if(!FileExists(path) && !isNull(data.jar)) {
-			fileCopy(data.jar,path);
-		}
-		// http://snapshot.lucee.org/rest/update/provider/download/org.lucee.xalan/2.7.2/?allowRedirect=false
 
+		// download from Maven if we have a .json file
+		if(!FileExists(path) && !isNull(data.jar)) {
+			fileCopy(data.jar,orgPath);
+			path=orgPath;
+		}
+		
 
 		if(!FileExists(path)) {
-
 			// last try, when the pattrn of the maven name matches the pattern of the osgi name we could be lucky
+			var mvnRep="http://central.maven.org/maven2";
 			var repositories=[
-				"https://raw.githubusercontent.com/lucee/mvn/master/releases"
+				mvnRep
+				,"https://raw.githubusercontent.com/lucee/mvn/master/releases"
 				,"https://oss.sonatype.org/content/repositories/snapshots"
 				,"https://oss.sonatype.org/content/repositories/releases"
-				,"http://central.maven.org/maven2"
 			];
 
 			var uri="/"
@@ -368,19 +375,36 @@
 				}
 			}
 
+			// ok an other last try, when "org.lucee" we know more about the pattern
+			if(isNull(redirectURL) && left(arguments.bundleName,10)=='org.lucee.'){
+				var art1=mid(arguments.bundleName,11);
+				var art2=replace(art1,'.','-','all');
+				
+				var urls=[
+					 mvnRep&"/org/lucee/"&art1&"/"&arguments.bundleVersion&"/"&art1&"-"&arguments.bundleVersion&".jar?raw=true"
+					,mvnRep&"/org/lucee/"&art2&"/"&arguments.bundleVersion&"/"&art2&"-"&arguments.bundleVersion&".jar?raw=true"
+				];
+
+				loop array=urls item="local._url" {
+					if(fileExists(_url)) {
+						local.redirectURL=_url;
+						break;
+					}
+				}
+			}
+
+				
 			if(!isNull(redirectURL)){
 				if(arguments.allowRedirect) {
 					header statuscode="302" statustext="Found";
 					header name="Location" value=redirectURL;
-
-		
 					return;
 				}
 				else {
 					fileCopy(redirectURL,orgPath);
 					filewrite(jsonPath,serialize({"jar":redirectURL,"local":path}));
 					
-					file action="readBinary" file="#path#" variable="local.bin";
+					file action="readBinary" file="#orgPath#" variable="local.bin";
 					header name="Content-disposition" value="attachment;filename=#name#";
 			        content variable="#bin#" type="application/zip";
 
@@ -568,6 +592,7 @@
 			local.path=mr.getExpress(version);
 		}
 		catch(e){
+			//throw serialize(e);
 			return {"type":"error","message":"The version #version# is not available."};
 		}
 
@@ -824,7 +849,7 @@ private struct function _getVersionReleaseNotes( versionInfo ,struct fillHere=st
 			}
 			application.releaseNotesItem[versionInfo.id]={data:res,date:now()}
 
-			return {old:old,new:application.releaseNotesItem[versionInfo.id].data};
+			return application.releaseNotesItem[versionInfo.id].data;
 		}
 		catch ( ex ) {
 			rethrow;
