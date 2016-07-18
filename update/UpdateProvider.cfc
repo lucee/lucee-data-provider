@@ -178,7 +178,13 @@
 		return downloadCore(version,ioid,allowRedirect);
 	}
 
-	remote function echo() httpmethod="GET" restpath="echo" {
+	remote function echoGET() httpmethod="GET" restpath="echoGet" {return _echo();}
+	remote function echoPOST() httpmethod="POST" restpath="echoPost" {return _echo();}
+	remote function echoPUT() httpmethod="PUT" restpath="echoPut" {return _echo();}
+	remote function echoDELETE() httpmethod="DELETE" restpath="echoDelete" {return _echo();}
+
+
+	private function _echo() {
 		sct={
 			'httpRequestData':getHTTPRequestData()
 			,'form':form
@@ -186,6 +192,7 @@
 			,'cgi':cgi
 			,'session':session
 		};
+		sct.ser=serialize(sct);
 		return sct;
 	}
 
