@@ -1,9 +1,10 @@
-component restpath="/provider"  rest="true" {
+﻿component restpath="/provider"  rest="true" {
 
 	jiraListURL="https://luceeserver.atlassian.net/rest/api/2/project/LDEV/versions";
 	jiraNotesURL="https://luceeserver.atlassian.net/secure/ReleaseNote.jspa?version={version-id}&styleName=Text&projectId=10000";
 
 	MIN_UPDATE_VERSION="5.0.0.189";
+	MIN_WIN_UPDATE_VERSION="5.0.1.27";
 
 
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
@@ -72,6 +73,13 @@ component restpath="/provider"  rest="true" {
 
 
 			try{local.notes=getVersionReleaseNotes(version.display,latestVersion.display,true);}catch(local.ee){local.notes="";}
+			
+			var msgAppendix="";
+			if(!isNewer(version,toVersion(MIN_WIN_UPDATE_VERSION))) 
+				msgAppendix="
+				<div class=""error"">Warning! <br/>
+				If this Lucee install is on a Windows based computer/server, please do not use the updater for this version due to a bug.  Instead download the latest lucee.jar from <a href=""http://stable.lucee.org/download/?type=snapshots"">here</a> and replace your existing lucee.jar with it.  This is a one-time workaround.";
+			
 			return {
 				"type":"info"
 				,"language":arguments.language
@@ -79,7 +87,7 @@ component restpath="/provider"  rest="true" {
 				,"released":latest.jarDate
 				,"available":latestVersion.display
 
-				,"message":"A patch (#latestVersion.display#) is available for your current version (#version.display#)."
+				,"message":"A patch (#latestVersion.display#) is available for your current version (#version.display#)."&msgAppendix
 				,"changelog":isSimpleValue(notes)?{}:notes/*readChangeLog(newest.log)*/
 			}; // TODO get the right version for given version
 
@@ -169,7 +177,18 @@ component restpath="/provider"  rest="true" {
 		httpmethod="GET" restpath="core/{version}" {
 		return downloadCore(version,ioid,allowRedirect);
 	}
-	
+
+	remote function echo() httpmethod="GET" restpath="echo" {
+		sct={
+			'httpRequestData':getHTTPRequestData()
+			,'form':form
+			,'url':url
+			,'cgi':cgi
+			,'session':session
+		};
+		return sct;
+	}
+
 	remote function downloadCore(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url", 
