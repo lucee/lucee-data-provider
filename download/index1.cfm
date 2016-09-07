@@ -7,6 +7,7 @@
 	_5_0_0_70=toVersionSortable("5.0.0.70-SNAPSHOT");
 	_5_0_0_112=toVersionSortable("5.0.0.112-SNAPSHOT");
 	_5_0_0_219=toVersionSortable("5.0.0.219-SNAPSHOT");
+	_5_0_0_254=toVersionSortable("5.0.0.254-SNAPSHOT");
 	_5_0_0_255=toVersionSortable("5.0.0.255-SNAPSHOT");
 	_5_0_0_256=toVersionSortable("5.0.0.256-SNAPSHOT");
 	_5_0_0_257=toVersionSortable("5.0.0.257-SNAPSHOT");
@@ -78,6 +79,7 @@ h3 {
 <cfif type=="releases" || type=="snapshots">
 <cfscript>
 	tmpDownloads=getDownloads();
+
 	// filter out not matching major version
 	downloads=queryNew(tmpDownloads.columnlist);
 	loop query=tmpDownloads {
@@ -168,6 +170,7 @@ h3 {
 			<td align="center"><h3>Lucee WAR file</h3></td>
 		</tr>	
 		<cfloop query=downloads>
+
 			<cfif 
 				downloads.v == _5_0_0_255 ||
 				downloads.v == _5_0_0_256 ||

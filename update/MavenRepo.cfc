@@ -16,7 +16,7 @@ component {
 
 	// this are version that should not be used in any case
 	variables.ignoreVersions=["5.0.0.22","5.0.0.travis-74435522-SNAPSHOT","5.1.0.8-SNAPSHOT"];
-	variables.ignoreMajor="5.1";
+	variables.majorBeta="5.1";
 
 	public function readDependenciesFromPOM(string pom, boolean extended=false,string specifivDep=""){
 		
@@ -211,13 +211,33 @@ component {
 	public struct function getLatest(required string type,boolean checkIgnoreMajor=true){
 		if(isNull(application.infoData)) application.infoData={};
 		
-		if(isNull(application.infoData["latest::"&type])) {
+		if(isNull(application.infoData["latest="&type]) || !isNull(url.abc) ) {
 			local.qry= getAvailableVersions(type:type, extended:true, onlyLatest:true, checkIgnoreMajor:arguments.checkIgnoreMajor);
 			if(qry.recordcount==0) throw "no info found for type ["&type&"]";
-			application.infoData["latest::"&type] = QueryRowData(qry,1);
+			
+
+			local._result=QueryRowData(qry,1);
+			if(true) {
+				local.qry=getAvailableVersions(type:type, extended:false, onlyLatest:false, checkIgnoreMajor:false);
+				local.sct={};
+				loop query=qry {
+					local.isSnap=findNoCase('-snapshot',qry.version);
+					//if((arguments.type=='releases' && !isSnap) || (arguments.type!='releases' && isSnap) ) 
+					sct[qry.vs]=qry.version;
+				}
+
+				local.keys=sct.keyArray().sort('text');
+				local.arr=[];
+				loop array=keys index='local.i' item='local.v' {
+					arrayAppend(arr,sct[v]);
+				}
+				local._result.otherVersions=arr;
+			}
+			application.infoData["latest="&type] = local._result;
+			
 
 		}
-		return application.infoData["latest::"&type];
+		return application.infoData["latest="&type];
 	}
 
 	/**
@@ -231,8 +251,8 @@ component {
 			setting requesttimeout="1000";
 		}
 		// validate input
-		if(type!='all' && type!='snapshots' && type!='releases')
-			throw "provided type [#type#] is invalid, valid types are [all,snapshots,releases]";
+		if(type!='all' && type!='snapshots' && type!='releases' && type!='beta')
+			throw "provided type [#type#] is invalid, valid types are [all,snapshots,releases,beta]";
 
 		// create the list URL
 		local.listURL=convertPattern(listPattern,group,artifact);
@@ -254,10 +274,17 @@ component {
 
 			// ignore list
 			if(arrayContains(variables.ignoreVersions,entry.version)) continue;
-
-			// ignore major
-			if(checkIgnoreMajor && left(entry.version,len(variables.ignoreMajor))==variables.ignoreMajor) continue;
-			
+			if(checkIgnoreMajor) {
+				var isBeta=left(entry.version,len(variables.majorBeta))==variables.majorBeta;
+				if(type=='beta') {
+					if(!isBeta) continue;
+				}
+				else {
+					// ignore major
+					if(isBeta) continue;
+				}
+			}
+			if(type=='beta') type='all'; // because there is not necessary the keyword beta, in that case only the version decides
 			// check type
 			if(type!="all" && type!=ah.repositoryId) continue;
 			// latest

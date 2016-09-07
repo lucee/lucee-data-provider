@@ -7,11 +7,15 @@
 	variables.ext="lex";
 	application.extensionLast=0;
 
+	variables.isBetaChannel=false;
+
 	variables.columnList='id,version,name,description,image,category,author,created,releaseType,minLoaderVersion,minCoreVersion'
 			&',price,currency,disableFull,trial,older,promotionLevel,promotionText';
 
 	private function init() {
-	
+		
+		
+
 
 		if(application.extensionLast>getTickCount()-variables.EXPIRE) return;
 				
@@ -56,7 +60,12 @@
 				// all
 				if(!structKeyExists(tmpAll[type],main.id)) 
 					tmpAll[type][main.id]=structNew('linked');
-				tmpAll[type][main.id][toVersionSortable(main.version)]={manifest:main,filename:dir.name,version:toVersionSortable(main.version)};
+				tmpAll[type][main.id][toVersionSortable(main.version)]={
+					manifest:main,
+					filename:dir.name,
+					version:toVersionSortable(main.version),
+					beta:findNoCase('BETA',main.version)>0
+				};
 
 
 
@@ -96,8 +105,10 @@
 								string ioid="" restargsource="url",
 								required string language="en" restargsource="url",
 								required boolean withLogo=true restargsource="url",
-								required string coreVersion="" restargsource="url")
+								required string coreVersion="" restargsource="url",
+								required boolean beta=false restargsource="url")
 		httpmethod="GET" restpath="info" {
+
 
 		if(len(arguments.coreVersion))
 			local.luceeVersion=toVersionSortable(arguments.coreVersion);
@@ -117,11 +128,12 @@
 		
 		// we only show full versions in the list
 		loop struct="#application.extensions.full#" index="local.id" item="local.all" {
-			local.coll=_getLatest(all,isNull(local.luceeVersion)?"":local.luceeVersion);
+			local.coll=_getLatest(all,isNull(local.luceeVersion)?"":local.luceeVersion,arguments.beta);
 			if(isSimpleValue(coll)) continue;
 
 			local.main=coll.manifest;
 			local.filename=coll.filename;
+			if(left(filename,1)=='_') continue;
 			local.row=queryAddRow(rtn.extensions);
 
 			loop list="#rtn.extensions.columnlist()#" item="local.col" {
@@ -158,7 +170,7 @@
 			var arr=[];
 			var v=toVersionSortable(queryGetCell(rtn.extensions,"version",row));
 			loop struct=_older index="local._versionSortable" item="local._data" {
-				if(v>toVersionSortable(_data.manifest.version)) {
+				if(v>toVersionSortable(_data.manifest.version) && arguments.beta == _data.beta) {
 					arrayAppend(arr,_data.manifest.version)
 				}
 				
@@ -174,22 +186,21 @@
 		return rtn;
 	}
 
-	private function _getLatest(struct all,string luceeVersion) {
+	private function _getLatest(struct all,string luceeVersion, boolean beta=false) {
 		//var t="";
+		
+
+
+
 		loop struct=all index="local.v" item="local.data" {
 			// min core version is bigger than given core version
 			if( len(luceeVersion) &&
 				!isNull(data.manifest['lucee-core-version']) && 
 				toVersionSortable(data.manifest['lucee-core-version'])>luceeVersion) continue;
 
-			/*t&="<br>"&data.manifest.name&":"&v;
-			if(len(luceeVersion) &&
-				!isNull(data.manifest['lucee-core-version'])) {
-				t&= "<br>
-				->#data.manifest['lucee-core-version']#<-"&
-				toVersionSortable(data.manifest['lucee-core-version'])&":"&
-				luceeVersion&"="&(toVersionSortable(data.manifest['lucee-core-version'])>luceeVersion);
-			}*/
+			
+			if(arguments.beta != data.beta) continue;
+
 
 			// no we pick the latest
 			if(isNull(rtnVersion) || rtnVersion<v) {
@@ -224,7 +235,8 @@
 								required string language="en" restargsource="url",
 								required boolean withLogo=true restargsource="url"
 								,string version="" restargsource="url"
-								,string coreVersion="" restargsource="url")
+								,string coreVersion="" restargsource="url",
+								boolean beta=false restargsource="url")
 		httpmethod="GET" restpath="info/{id}" {
 
 		if(len(arguments.coreVersion))
@@ -248,7 +260,7 @@
 		}
 		// no version defintion
 		else {
-			local.data=_getLatest(application.extensions[type][arguments.id],isNull(local.luceeVersion)?"":local.luceeVersion);
+			local.data=_getLatest(application.extensions[type][arguments.id],isNull(local.luceeVersion)?"":local.luceeVersion,arguments.beta);
 			local.found=!isSimpleValue(data);
 		}
 
@@ -316,9 +328,10 @@
 		required string id restargsource="Path"
 		,string IOid="" restargsource="url"
 		,string version="" restargsource="url"
-		,string coreVersion="" restargsource="url")
+		,string coreVersion="" restargsource="url"
+		,boolean beta=false restargsource="url")
 		httpmethod="GET" restpath="trial/{id}" {
-		_get(arguments.id,arguments.version,arguments.coreVersion,"trial");
+		_get(arguments.id,arguments.version,arguments.coreVersion,"trial",arguments.beta);
 	}
 
 	/**
@@ -328,12 +341,13 @@
 		required string id restargsource="Path"
 		,string IOid="" restargsource="url"
 		,string version="" restargsource="url"
-		,string coreVersion="" restargsource="url")
+		,string coreVersion="" restargsource="url"
+		,boolean beta=false restargsource="url")
 		httpmethod="GET" restpath="full/{id}" {
-		_get(arguments.id,arguments.version,arguments.coreVersion,"full");
+		_get(arguments.id,arguments.version,arguments.coreVersion,"full",arguments.beta);
 	}
 
-	private function _get(required string id, required string version, string coreVersion, required string type) {
+	private function _get(required string id, required string version, string coreVersion, required string type,boolean beta) {
 
 		if(len(arguments.coreVersion))
 			local.luceeVersion=toVersionSortable(arguments.coreVersion);
@@ -356,7 +370,7 @@
 			// no version defintion
 			else {
 
-				local.data=_getLatest(application.extensions[type][arguments.id],isNull(local.luceeVersion)?"":local.luceeVersion);
+				local.data=_getLatest(application.extensions[type][arguments.id],isNull(local.luceeVersion)?"":local.luceeVersion,arguments.beta);
 				local.found=!isSimpleValue(data);
 			}
 

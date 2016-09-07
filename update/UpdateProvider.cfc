@@ -41,6 +41,8 @@
 			local.type="snapshots";
 		else if(findNoCase("release",cgi.SERVER_NAME) || findNoCase("stable.",cgi.SERVER_NAME) || findNoCase("www.",cgi.SERVER_NAME)) 
 			local.type="releases";
+		else if(findNoCase("beta",cgi.SERVER_NAME) || findNoCase("betasnap",cgi.SERVER_NAME)) 
+			local.type="beta";
 		else  return {
 					"type":"warning",
 					"message":"Version ["&version.display&"] is not supported for automatic updates."};
@@ -69,6 +71,93 @@
 			
 			// no update
 			if(!isNewer(latestVersion,version))
+				return {
+					"type":"info",
+					"message":"There is no update available for your version (#version.display#).",
+					"otherVersions":latest.otherVersions?:[]
+				};
+
+
+			try{local.notes=getVersionReleaseNotes(version.display,latestVersion.display,true);}catch(local.ee){local.notes="";}
+			
+			var msgAppendix="";
+			if(!isNewer(version,toVersion(MIN_WIN_UPDATE_VERSION))) 
+				msgAppendix="
+				<div class=""error"">Warning! <br/>
+				If this Lucee install is on a Windows based computer/server, please do not use the updater for this version due to a bug.  Instead download the latest lucee.jar from <a href=""http://stable.lucee.org/download/?type=snapshots"">here</a> and replace your existing lucee.jar with it.  This is a one-time workaround.";
+			
+			return {
+				"type":"info"
+				,"language":arguments.language
+				,"current":version.display
+				,"released":latest.jarDate
+				,"available":latestVersion.display
+				,"otherVersions":latest.otherVersions?:[]
+				,"message":"A patch (#latestVersion.display#) is available for your current version (#version.display#)."&msgAppendix
+				,"changelog":isSimpleValue(notes)?{}:notes/*readChangeLog(newest.log)*/
+			}; // TODO get the right version for given version
+
+			/*if(internal){
+				rtn.file=newest.core;
+			}*/
+
+			//return rtn;
+		}
+		catch(e){
+			log log="application" exception="#e#" type="error";
+			return {"type":"error","message":e.message,cfcatch:e};
+		}
+	}
+
+
+
+
+
+	remote array function getInfo2(required string version restargsource="Path",string ioid="" restargsource="url",required string language="en" restargsource="url")
+		httpmethod="GET" restpath="info2/{version}" {
+		return _getInfo2(version,ioid,language);
+	}
+
+	private array function _getInfo2(required string version ,string ioid="",required string language="en",boolean internal=false) {
+		
+
+		if(findNoCase("snapshot",cgi.SERVER_NAME) || findNoCase("dev.",cgi.SERVER_NAME) || findNoCase("preview.",cgi.SERVER_NAME)) 
+			local.type="snapshots";
+		else if(findNoCase("release",cgi.SERVER_NAME) || findNoCase("stable.",cgi.SERVER_NAME) || findNoCase("www.",cgi.SERVER_NAME)) 
+			local.type="releases";
+		else if(findNoCase("beta",cgi.SERVER_NAME) || findNoCase("betasnap",cgi.SERVER_NAME)) 
+			local.type="beta";
+		else  return {
+					"type":"warning",
+					"message":"Version ["&version.display&"] is not supported for automatic updates."};
+
+		try{
+			local.version=toVersion(arguments.version);
+
+
+			local.mr=new MavenRepo();
+			local.qry=mr.getAvailableVersions(type:type, extended:false, onlyLatest:false, checkIgnoreMajor:false);
+			local.sct={};
+			loop query=qry {
+				sct[qry.vs]=qry.version;
+			}
+
+			local.keys=sct.keyArray().sort('text');
+			local.arr=[];
+			loop array=keys index='local.i' item='local.v' {
+				arrayAppend(arr,sct[v]);
+			}
+			return arr;
+/*
+			// no updates for versions smaller than ...
+			if(!isNewer(version,toVersion(MIN_UPDATE_VERSION))) 
+				return {
+					"type":"warning",
+					"message":"Version ["&version.display&"] can not be updated from within the Lucee Administrator.  Please update Lucee by replacing the lucee.jar, which can be downloaded from [http://download.lucee.org]"};
+			
+			
+			// no update
+			if(!isNewer(latestVersion,version))
 				return {"type":"info","message":"There is no update available for your version (#version.display#)."};
 
 
@@ -88,20 +177,20 @@
 				,"available":latestVersion.display
 
 				,"message":"A patch (#latestVersion.display#) is available for your current version (#version.display#)."&msgAppendix
-				,"changelog":isSimpleValue(notes)?{}:notes/*readChangeLog(newest.log)*/
-			}; // TODO get the right version for given version
-
-			/*if(internal){
-				rtn.file=newest.core;
-			}*/
-
-			//return rtn;
+				,"changelog":isSimpleValue(notes)?{}:notes
+			};
+*/
 		}
 		catch(e){
 			log log="application" exception="#e#" type="error";
 			return {"type":"error","message":e.message,cfcatch:e};
 		}
 	}
+
+
+/*
+
+	*/
 
 
 	/**
@@ -192,7 +281,7 @@
 			,'cgi':cgi
 			,'session':session
 		};
-		sct.ser=serialize(sct);
+		//sct.ser=serialize(sct);
 		return sct;
 	}
 
@@ -392,7 +481,7 @@
 				&replace(arguments.bundleName,'.','/','all')&"/"
 				&arguments.bundleVersion&"/"
 				&listLast(arguments.bundleName,'.')&"-"
-				&arguments.bundleVersion&".jar?raw=true";
+				&arguments.bundleVersion&".jar";
 			
 			loop array=repositories item="local.rep" {
 				if(fileExists(rep&uri)) {
@@ -407,10 +496,9 @@
 				var art2=replace(art1,'.','-','all');
 				
 				var urls=[
-					 mvnRep&"/org/lucee/"&art1&"/"&arguments.bundleVersion&"/"&art1&"-"&arguments.bundleVersion&".jar?raw=true"
-					,mvnRep&"/org/lucee/"&art2&"/"&arguments.bundleVersion&"/"&art2&"-"&arguments.bundleVersion&".jar?raw=true"
+					 mvnRep&"/org/lucee/"&art1&"/"&arguments.bundleVersion&"/"&art1&"-"&arguments.bundleVersion&".jar"
+					,mvnRep&"/org/lucee/"&art2&"/"&arguments.bundleVersion&"/"&art2&"-"&arguments.bundleVersion&".jar"
 				];
-
 				loop array=urls item="local._url" {
 					if(fileExists(_url)) {
 						local.redirectURL=_url;

@@ -19,6 +19,7 @@ _url={
 
 
 EXTENSION_PROVIDER="http://extension.lucee.org/rest/extension/provider/info?withLogo=true";
+EXTENSION_PROVIDER_BETA="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&beta=true";
 EXTENSION_DOWNLOAD="http://extension.lucee.org/rest/extension/provider/{type}/{id}";
 
 // texts
@@ -152,27 +153,29 @@ lang.libNew="The Lucee Jar file, you can simply copy to your existing installati
 	}
 
 
-	function _getExtensions() localmode=true {
-		http url=EXTENSION_PROVIDER result="http";
-		if(http.status_code!=200) throw "could not connect to extension provider (#EXTENSION_PROVIDER#)";
+	function _getExtensions(boolean beta=false) localmode=true {
+		
+		local.ep=arguments.beta?EXTENSION_PROVIDER_BETA:EXTENSION_PROVIDER;
+		http url=ep result="http";
+		if(http.status_code!=200) throw "could not connect to extension provider (#ep#)";
 		data=deSerializeJson(http.fileContent,false);
 		return data.extensions;
 	}
 
-	function getExtensions() localmode=true {
+	function getExtensions(boolean beta=false) localmode=true {
 		// get data from server
-		if(isNull(application.downloadExtensions.query) || !isNull(url.reset)){
-			application.downloadExtensions.query=local.downloads=_getExtensions();
-			application.downloadExtensions.age=now();
+		if(isNull(application['downloadExtensions_'&beta].query) || !isNull(url.reset)){
+			application['downloadExtensions_'&beta].query=local.downloads=_getExtensions(arguments.beta);
+			application['downloadExtensions_'&beta].age=now();
 		}
 		// get data from cache (application scope)
 		else {
-			local.downloads=application.downloadExtensions.query;
+			local.downloads=application['downloadExtensions_'&beta].query;
 			// update for the next user when older than 5 minutes
-			if(dateDiff("n",application.downloadExtensions.age,now())>=cacheLiveSpanInMinutes) {
-				application.downloadExtensions.age=now();
+			if(dateDiff("n",application['downloadExtensions_'&beta].age,now())>=cacheLiveSpanInMinutes) {
+				application['downloadExtensions_'&beta].age=now();
 				thread {
-					application.downloadExtensions.query=_getExtensions();
+					application['downloadExtensions_'&beta].query=_getExtensions(arguments.beta);
 					systemOutput("done");
 				}
 			}
