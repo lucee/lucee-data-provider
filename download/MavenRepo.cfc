@@ -7,7 +7,7 @@ component {
 	variables.NL="
 ";
 	// this are version that should not be used in any case
-	variables.ignoreVersions=["5.0.0.22","5.0.0.travis-74435522-SNAPSHOT"];
+	variables.ignoreVersions=["5.0.0.22","5.0.0.travis-74435522-SNAPSHOT","5.1.0.31"];
 
 	public function readDependenciesFromPOM(string pom, boolean extended=false,string specifivDep=""){
 		
