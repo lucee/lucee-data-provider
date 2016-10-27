@@ -1,8 +1,10 @@
 <cfscript>
-	if(isNull(url.major)) url.major='5.0';
+	if(isNull(url.major)) url.major='5.1';
 	include "functions.cfm";
 	
 	query=getExtensions(!isNull(url.beta) && url.beta);
+
+	STABLE_MAJOR='5.1';
 
 	_5_0_0_70=toVersionSortable("5.0.0.70-SNAPSHOT");
 	_5_0_0_112=toVersionSortable("5.0.0.112-SNAPSHOT");
@@ -15,6 +17,8 @@
 	_5_0_0_260=toVersionSortable("5.0.0.260-SNAPSHOT");
 	_5_0_0_261=toVersionSortable("5.0.0.261-SNAPSHOT");
 	_5_0_0_262=toVersionSortable("5.0.0.262-SNAPSHOT");
+	_5_1_0_31=toVersionSortable("5.1.0.31");
+	_5_1_0_008=toVersionSortable("5.1.0.008-SNAPSHOT");
 
 	if(isNull(url.type))type="releases";
 	else type=url.type;
@@ -64,10 +68,10 @@ h3 {
 <a class="linkk" href="?type=releases">Releases</a> 
 | <a class="linkk" href="?type=snapshots">Snapshots</a>
 </p>
-<p>
-<a class="linkk" href="?type=releases&major=5.1">Releases (Beta)</a> 
-| <a class="linkk" href="?type=snapshots&major=5.1">Snapshots (Beta)</a> 
-</p>
+<!--- <p>
+<a class="linkk" href="?type=releases&major=5.2">Releases (Beta)</a> 
+| <a class="linkk" href="?type=snapshots&major=5.2">Snapshots (Beta)</a> 
+</p> --->
 <p>
 <a class="linkk" href="?type=extensions">Extensions</a>
 | <a class="linkk" href="?type=extensions&beta=true">Extensions (Beta)</a>
@@ -81,7 +85,8 @@ h3 {
 	// filter out not matching major version
 	downloads=queryNew(tmpDownloads.columnlist);
 	loop query=tmpDownloads {
-		if(left(tmpDownloads.version,len(url.major))==url.major) {
+		tmp=left(tmpDownloads.version,len(url.major));
+		if(tmp==url.major || (url.major==STABLE_MAJOR && tmp<url.major)) {
 			row=downloads.addRow();
 			loop array=tmpDownloads.columnArray() item="col" {
 				downloads.setCell(col,tmpDownloads[col],row);
@@ -176,7 +181,9 @@ h3 {
 				downloads.v == _5_0_0_259 ||
 				downloads.v == _5_0_0_260 ||
 				downloads.v == _5_0_0_261 ||
-				downloads.v == _5_0_0_262
+				downloads.v == _5_0_0_262 ||
+				downloads.v == _5_1_0_31 ||
+				downloads.v == _5_1_0_008
 
 			>
 				<cfcontinue>
