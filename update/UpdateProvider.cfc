@@ -3,7 +3,7 @@
 	jiraListURL="https://luceeserver.atlassian.net/rest/api/2/project/LDEV/versions";
 	jiraNotesURL="https://luceeserver.atlassian.net/secure/ReleaseNote.jspa?version={version-id}&styleName=Text&projectId=10000";
 
-	MIN_UPDATE_VERSION="5.0.0.189";
+	MIN_UPDATE_VERSION="5.0.0.254";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
 
 
