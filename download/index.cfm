@@ -68,10 +68,10 @@ h3 {
 <a class="linkk" href="?type=releases">Releases</a> 
 | <a class="linkk" href="?type=snapshots">Snapshots</a>
 </p>
-<!--- <p>
+<p>
 <a class="linkk" href="?type=releases&major=5.2">Releases (Beta)</a> 
 | <a class="linkk" href="?type=snapshots&major=5.2">Snapshots (Beta)</a> 
-</p> --->
+</p>
 <p>
 <a class="linkk" href="?type=extensions">Extensions</a>
 | <a class="linkk" href="?type=extensions&beta=true">Extensions (Beta)</a>
@@ -101,10 +101,8 @@ h3 {
 		}
 	}
 </cfscript>
-	
 
-
-
+<cfif !isNull(latest)>
 		<h2>Latest 	#UCFirst(type)# (#downloads.version[latest]#)</h2>
 		<p>#replace(replace(replace(intro,"{date}",lsDateFormat(downloads.jarDate[latest])),"{version}",downloads.version[latest]),"{type}",singular[type])# #lang.desc[type]#</p>
 
@@ -249,7 +247,7 @@ h3 {
 		
 
 </cfif>
-
+</cfif>
 
 
 </cfoutput>	
