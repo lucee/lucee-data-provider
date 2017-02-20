@@ -28,7 +28,7 @@ EXTENSION_DOWNLOAD="http://extension.lucee.org/rest/extension/provider/{type}/{i
 
 jarInfo='(Java ARchive, read more about <a target="_blank" href="https://en.wikipedia.org/wiki/JAR_(file_format)">here</a>)';
 lang.desc={
-	releases:"Lucee 5 is currently in beta and is not ready for production environments. These beta release are however considered more stable then the snapshots."
+	releases:"Lucee 5 is ready for production environments."
 	,snapshots:"Snapshots are generated automatically with every push to the repository. Snapshots can be unstable are NOT recommended for production environments."
 };
 lang.express="The Express version is an easy to setup version which does not need to be installed. Just extract the zip file onto your computer and without further installation you can start by executing the corresponding start file. This is especially useful if you would like to get to know Lucee or want to test your applications under Lucee. It is also useful for use as a development environment.";
