@@ -115,7 +115,7 @@
 		
 		var rtn.meta={};
 		
-		rtn.meta.title="Lucee Assosication Switzerland Extension Store ("&cgi.HTTP_HOST&")";
+		rtn.meta.title="Lucee Association Switzerland Extension Store ("&cgi.HTTP_HOST&")";
 		rtn.meta.description="";
 		rtn.meta.image="http://extension.lucee.org/extension5/extension-provider.png";
 		rtn.meta.url="http://"&cgi.HTTP_HOST;
