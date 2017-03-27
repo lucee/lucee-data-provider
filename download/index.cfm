@@ -69,12 +69,12 @@ h3 {
 | <a class="linkk" href="?type=snapshots">Snapshots</a>
 </p>
 <p>
-<a class="linkk" href="?type=releases&major=5.2">Releases (Beta)</a> 
-| <a class="linkk" href="?type=snapshots&major=5.2">Snapshots (Beta)</a> 
+<a class="linkk" href="?type=releases&major=5.2">Releases (Alpha/Beta)</a> 
+| <a class="linkk" href="?type=snapshots&major=5.2">Snapshots (Alpha/Beta)</a> 
 </p>
 <p>
 <a class="linkk" href="?type=extensions">Extensions</a>
-| <a class="linkk" href="?type=extensions&beta=true">Extensions (Beta)</a>
+| <a class="linkk" href="?type=extensions&beta=true">Extensions (Alpha/Beta)</a>
 </p>
 
 
