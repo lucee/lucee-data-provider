@@ -137,7 +137,7 @@ lang.libNew="The Lucee Jar file, you can simply copy to your existing installati
 			local.from=downloads.version[downloads.recordcount];
 			local.uri=snapshots&"/rest/update/provider/changelog/"&from&"/"&to;
 			http url=uri result="local.http";
-			if(http.status_code==200) {
+			if(!isNull(http.status_code) && http.status_code==200) {
 				queryAddColumn(downloads,"changelog");
 				data=deSerializeJson(http.fileContent,false);
 				if(!isNull(url.susi)) dump(data);
@@ -157,7 +157,7 @@ lang.libNew="The Lucee Jar file, you can simply copy to your existing installati
 		
 		local.ep=arguments.beta?EXTENSION_PROVIDER_BETA:EXTENSION_PROVIDER;
 		http url=ep result="http";
-		if(http.status_code!=200) throw "could not connect to extension provider (#ep#)";
+		if(isNull(http.status_code) || http.status_code!=200) throw "could not connect to extension provider (#ep#)";
 		data=deSerializeJson(http.fileContent,false);
 		return data.extensions;
 	}

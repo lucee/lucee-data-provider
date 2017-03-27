@@ -184,7 +184,7 @@ component {
 		}
 
 		// read the files names from xml
-		if(!simply && content.status_code==200) {
+		if(!simply && !isNull(content.status_code) && content.status_code==200) {
 			local.xml=xmlParse(content.fileContent);
 			loop array=xml.XMLRoot.versioning.snapshotVersions.xmlChildren item="node" {
 				local.date=toDate(node.updated.xmlText,"GMT");
@@ -197,7 +197,7 @@ component {
 			// date jar
 			try{
 				http method="head" url=base&"/"&artifactId&"-"&version&".jar" result="local.t";
-				if(t.status_code==200) {
+				if(!isNull(t.status_code) && t.status_code==200) {
 					local.sources.jar.src=base&"/"&artifactId&"-"&version&".jar";
 					local.sources.jar.date=parseDateTime(t.responseheader['Last-Modified']);
 				}
@@ -206,7 +206,7 @@ component {
 			// date pom
 			try{
 				http method="head" url=base&"/"&artifactId&"-"&version&".pom" result="local.t";
-				if(t.status_code==200) {
+				if(!isNull(t.status_code) && t.status_code==200) {
 					local.sources.pom.src=base&"/"&artifactId&"-"&version&".pom";
 					local.sources.pom.date=parseDateTime(t.responseheader['Last-Modified']);
 				}
