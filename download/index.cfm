@@ -1,7 +1,7 @@
 <cfscript>
 	if(isNull(url.major)) url.major='5.1';
 	include "functions.cfm";
-	
+
 	query=getExtensions(!isNull(url.beta) && url.beta);
 
 	STABLE_MAJOR='5.1';
@@ -50,7 +50,7 @@
     font-size: 0.875rem;
     font-weight: 400;
     line-height: 1.428572;
-    margin: 0;
+    margin: 0 15px;
   }
 
   html {
@@ -333,12 +333,12 @@
 
 <h1>Downloads</h1>
 <p>
-<a class="linkk" href="?type=releases">Releases</a> 
+<a class="linkk" href="?type=releases">Releases</a>
 | <a class="linkk" href="?type=snapshots">Snapshots</a>
 </p>
 <p>
-<a class="linkk" href="?type=releases&major=5.2">Releases (Alpha/Beta)</a> 
-| <a class="linkk" href="?type=snapshots&major=5.2">Snapshots (Alpha/Beta)</a> 
+<a class="linkk" href="?type=releases&major=5.2">Releases (Alpha/Beta)</a>
+| <a class="linkk" href="?type=snapshots&major=5.2">Snapshots (Alpha/Beta)</a>
 </p>
 <p>
 <a class="linkk" href="?type=extensions">Extensions</a>
@@ -388,17 +388,17 @@
 		<h3>Express</h3>
 		<p>#lang.express#<br>
 		<a href="#_url[type]#/rest/update/provider/express/#downloads.version[latest]#">download</a></p>
-		
+
 		<!--- War --->
 		<h3>Lucee WAR file (lucee.war)</h3>
 		<p>#lang.war#<br>
 		<a href="#_url[type]#/rest/update/provider/war/#downloads.version[latest]#">download</a></p>
-		
+
 		<!--- Lucee Core --->
 		<h3>Lucee core file (#downloads.version[latest]#.lco)</h3>
 		<p>#lang.core#<br>
 		<a href="#_url[type]#/rest/update/provider/download/#downloads.version[latest]#">download</a></p>
-		
+
 
 		<!--- changelog --->
 		<cfif !isnull(downloads.changelog[latest]) && isStruct(downloads.changelog[latest]) && structCount(downloads.changelog[latest])>
@@ -409,7 +409,7 @@
 		</cfif>
 
 		<cfif downloads.recordcount GT 1>
-		
+
 		<cfsilent>
 		<cfloop query=downloads>
 			<cfif downloads.type==variables.type && downloads.version!=downloads.version[latest]>
@@ -431,15 +431,15 @@
 		<tr>
 			<td align="center"><h3>Version</h3></td>
 			<td align="center"><h3>Date</h3></td>
-			
+
 			<td align="center"><h3>Express</h3></td>
 			<td align="center"><h3>Lucee library</h3><span class="comment"> with dependencies</span></td>
 			<td align="center"><h3>Lucee library</h3><span class="comment"> without dependencies</span></td>
 			<td align="center"><h3>Lucee core file</h3></td>
 			<td align="center"><h3>Lucee WAR file</h3></td>
-		</tr>	
+		</tr>
 		<cfloop query=downloads>
-			<cfif 
+			<cfif
 				downloads.v == _5_0_0_255 ||
 				downloads.v == _5_0_0_256 ||
 				downloads.v == _5_0_0_257 ||
@@ -459,7 +459,7 @@
 			<tr>
 				<td class="#css#" align="center">#downloads.version#</td>
 				<td class="#css#" align="center">#lsDateFormat(downloads.jarDate)#</td>
-				
+
 				<td class="#css#"><a href="#_url[type]#/rest/update/provider/express/#downloads.version#">Express</a></td>
 
 				<td class="#css#" >
@@ -480,7 +480,7 @@
 				<td class="#css#"><a href="#_url[type]#/rest/update/provider/download/#downloads.version#">Core</a></td>
 
 				<td class="#css#"><a href="#_url[type]#/rest/update/provider/war/#downloads.version#">WAR</a></td>
-				
+
 
 			</tr>
 			<!--- changelog --->
@@ -512,13 +512,13 @@
 		<cfelse>
 			<a href="?showAll=true&type=#type#">Show all</a>
 		</cfif>--->
-		
+
 
 </cfif>
 </cfif>
 
 
-</cfoutput>	
+</cfoutput>
 
 
 
@@ -560,8 +560,6 @@
 </tr>
 </cfloop>
 </table>
-</cfoutput>	
+</cfoutput>
 
 </cfif>
-
-
