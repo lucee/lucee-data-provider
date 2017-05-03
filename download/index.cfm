@@ -1,10 +1,10 @@
 <cfscript>
-	if(isNull(url.major)) url.major='5.1';
+	if(isNull(url.major)) url.major='5.2';
 	include "functions.cfm";
 
 	query=getExtensions(!isNull(url.beta) && url.beta);
 
-	STABLE_MAJOR='5.1';
+	STABLE_MAJOR='5.2';
 
 	_5_0_0_70=toVersionSortable("5.0.0.70-SNAPSHOT");
 	_5_0_0_112=toVersionSortable("5.0.0.112-SNAPSHOT");
@@ -18,7 +18,8 @@
 	_5_0_0_261=toVersionSortable("5.0.0.261-SNAPSHOT");
 	_5_0_0_262=toVersionSortable("5.0.0.262-SNAPSHOT");
 	_5_1_0_31=toVersionSortable("5.1.0.31");
-	_5_1_0_008=toVersionSortable("5.1.0.008-SNAPSHOT");
+  _5_1_0_008=toVersionSortable("5.1.0.008-SNAPSHOT");
+  _5_2_0_11_ALPHA=toVersionSortable("5.2.0.11-ALPHA");
 
 	if(isNull(url.type))type="releases";
 	else type=url.type;
@@ -26,6 +27,8 @@
 	intro="The latest {type} is version <b>{version}</b> released at <b>{date}</b>.";
 	historyDesc="Get older Versions.";
 	singular={releases:"release",snapshots:"snapshot"};
+
+  noVersion="There are currently no downloads available in this category.";
 </cfscript>
 
 <!--- output --->
@@ -332,14 +335,19 @@
 </style>
 
 <h1>Downloads</h1>
+
 <p>
 <a class="linkk" href="?type=releases">Releases</a>
 | <a class="linkk" href="?type=snapshots">Snapshots</a>
+| <a class="linkk" href="?type=releases&major=5.3">Alphas/Betas</a>
 </p>
+<!---
 <p>
-<a class="linkk" href="?type=releases&major=5.2">Releases (Alpha/Beta)</a>
-| <a class="linkk" href="?type=snapshots&major=5.2">Snapshots (Alpha/Beta)</a>
+<a class="linkk" href="?type=releases&major=5.3">Releases (Alpha/Beta)</a>
+| <a class="linkk" href="?type=snapshots&major=5.3">Snapshots (Alpha/Beta)</a>
 </p>
+--->
+
 <p>
 <a class="linkk" href="?type=extensions">Extensions</a>
 | <a class="linkk" href="?type=extensions&beta=true">Extensions (Alpha/Beta)</a>
@@ -369,8 +377,9 @@
 		}
 	}
 </cfscript>
-
-<cfif !isNull(latest)>
+<cfif isNull(latest)>
+  <p>#noVersion#</p>
+<cfelse>
 		<h2>Latest 	#UCFirst(type)# (#downloads.version[latest]#)</h2>
 		<p>#replace(replace(replace(intro,"{date}",lsDateFormat(downloads.jarDate[latest])),"{version}",downloads.version[latest]),"{type}",singular[type])# #lang.desc[type]#</p>
 
@@ -448,9 +457,10 @@
 				downloads.v == _5_0_0_260 ||
 				downloads.v == _5_0_0_261 ||
 				downloads.v == _5_0_0_262 ||
-				downloads.v == _5_1_0_31 ||
-				downloads.v == _5_1_0_008
-
+				downloads.v == _5_1_0_31  ||
+        downloads.v == _5_1_0_008 ||
+        downloads.v == _5_2_0_11_ALPHA
+        
 			>
 				<cfcontinue>
 			</cfif>
