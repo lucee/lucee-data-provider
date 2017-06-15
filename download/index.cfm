@@ -1,10 +1,9 @@
 <cfscript>
-	if(isNull(url.major)) url.major='5.2';
+
+  MAX=1000;
 	include "functions.cfm";
-
-	query=getExtensions(!isNull(url.beta) && url.beta);
-
-	STABLE_MAJOR='5.2';
+  isBeta=!isNull(url.beta) && url.beta;
+	query=getExtensions(isBeta);
 
 	_5_0_0_70=toVersionSortable("5.0.0.70-SNAPSHOT");
 	_5_0_0_112=toVersionSortable("5.0.0.112-SNAPSHOT");
@@ -19,16 +18,22 @@
 	_5_0_0_262=toVersionSortable("5.0.0.262-SNAPSHOT");
 	_5_1_0_31=toVersionSortable("5.1.0.31");
   _5_1_0_008=toVersionSortable("5.1.0.008-SNAPSHOT");
-  _5_2_0_11_ALPHA=toVersionSortable("5.2.0.11-ALPHA");
+  _5_2_1_7=toVersionSortable("5.2.1.7");
+  _5_2_1_8=toVersionSortable("5.2.1.8");
 
-	if(isNull(url.type))type="releases";
+
+
+	if(isNull(url.type))url.type="releases";
 	else type=url.type;
 
 	intro="The latest {type} is version <b>{version}</b> released at <b>{date}</b>.";
 	historyDesc="Get older Versions.";
-	singular={releases:"release",snapshots:"snapshot"};
+  singular={releases:"Release",snapshots:"Snapshot",abc:'Alpha / Beta / RC'};
+  multi={releases:"Releases",snapshots:"Snapshots",abc:'Alphas / Betas / RCs'};
 
   noVersion="There are currently no downloads available in this category.";
+
+  
 </cfscript>
 
 <!--- output --->
@@ -339,14 +344,9 @@
 <p>
 <a class="linkk" href="?type=releases">Releases</a>
 | <a class="linkk" href="?type=snapshots">Snapshots</a>
-| <a class="linkk" href="?type=releases&major=5.3">Alphas/Betas</a>
+| <a class="linkk" href="?type=abc">Alphas/Betas/Release Candidates</a>
 </p>
-<!---
-<p>
-<a class="linkk" href="?type=releases&major=5.3">Releases (Alpha/Beta)</a>
-| <a class="linkk" href="?type=snapshots&major=5.3">Snapshots (Alpha/Beta)</a>
-</p>
---->
+
 
 <p>
 <a class="linkk" href="?type=extensions">Extensions</a>
@@ -355,32 +355,43 @@
 
 
 
-<cfif type=="releases" || type=="snapshots">
+<cfif type=="releases" || type=="snapshots" || type=="abc">
 <cfscript>
 	tmpDownloads=getDownloads();
-	// filter out not matching major version
-	downloads=queryNew(tmpDownloads.columnlist);
+  if(!queryColumnExists(tmpDownloads,"state"))queryAddColumn(tmpDownloads,"state");
+  loop query=tmpDownloads {
+    if(findNoCase("alpha",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="alpha";
+    else if(findNoCase("beta",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="beta";
+    else if(findNoCase("rc",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="rc";
+    else if(findNoCase("ReleaseCandidate",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="rc";
+  }
+
+
+  // filter out not matching major version
+	downloads=queryNew("test,"&tmpDownloads.columnlist);
+  arrColumns=tmpDownloads.columnArray();
 	loop query=tmpDownloads {
-		tmp=left(tmpDownloads.version,len(url.major));
-		if(tmp==url.major || (url.major==STABLE_MAJOR && tmp<url.major)) {
+		if(
+      ( url.type==tmpDownloads.type && tmpDownloads.state=="" )
+      ||
+      ( url.type=="abc" && tmpDownloads.state!="" ) // has -ALPAH for example
+      ) {
 			row=downloads.addRow();
-			loop array=tmpDownloads.columnArray() item="col" {
+			loop array=arrColumns item="col" {
 				downloads.setCell(col,tmpDownloads[col],row);
 			}
-		}
-	}
+      downloads.setCell('test',listLen(tmpDownloads.version,'-'),row);
 
-	loop query=downloads {
-		if(downloads.type==variables.type) {
-			latest=downloads.currentrow;
-			break;
+      if(downloads.recordcount>=MAX) break;
 		}
 	}
+  if(downloads.recordcount) latest=1;
+  
 </cfscript>
 <cfif isNull(latest)>
   <p>#noVersion#</p>
 <cfelse>
-		<h2>Latest 	#UCFirst(type)# (#downloads.version[latest]#)</h2>
+		<h2>Latest 	#singular[type]# (#downloads.version[latest]#)</h2>
 		<p>#replace(replace(replace(intro,"{date}",lsDateFormat(downloads.jarDate[latest])),"{version}",downloads.version[latest]),"{type}",singular[type])# #lang.desc[type]#</p>
 
 		<!--- jar --->
@@ -416,12 +427,12 @@
 				<a href="http://bugs.lucee.org/browse/#id#">#id#</a> #subject#<br>
 			</cfloop></p>
 		</cfif>
-
+    
 		<cfif downloads.recordcount GT 1>
 
 		<cfsilent>
 		<cfloop query=downloads>
-			<cfif downloads.type==variables.type && downloads.version!=downloads.version[latest]>
+			<cfif true> <!--- downloads.version!=downloads.version[latest] --->
 				<cfif isNull(last)>
 					<cfset last=downloads.version>
 				</cfif>
@@ -430,7 +441,7 @@
 		</cfloop>
 		</cfsilent>
 		<cfif !isNUll(first)>
-		<h2>#UCFirst(type)# History (#first# - #last#)</h2>
+		<h2>#singular[type]# History (#last# - #first#)</h2>
 		<p>#historyDesc#</p>
 
 
@@ -459,13 +470,14 @@
 				downloads.v == _5_0_0_262 ||
 				downloads.v == _5_1_0_31  ||
         downloads.v == _5_1_0_008 ||
-        downloads.v == _5_2_0_11_ALPHA
+        downloads.v == _5_2_1_7 ||
+        downloads.v == _5_2_1_8 
         
 			>
 				<cfcontinue>
 			</cfif>
 			<cfset css="">
-			<cfif downloads.type==variables.type && downloads.version!=downloads.version[latest]>
+			<cfif true><!--- downloads.version!=downloads.version[latest] --->
 			<tr>
 				<td class="#css#" align="center">#downloads.version#</td>
 				<td class="#css#" align="center">#lsDateFormat(downloads.jarDate)#</td>
@@ -539,6 +551,14 @@
 <cfoutput>
 <h2>#UCFirst(type)#</h2>
 <p>Lucee Extensions, simply copy them to /lucee-server/deploy, of a running Lucee installation, to install them.</p>
+
+<cfif isBeta>
+<p>To install this Extensions from within your Lucee Administrator, you need to add "http://beta.lucee.org" under "Extension/Provider" as a new Provider, after that you can install this Extensions under "Extension/Application" in the Administartor.</p>
+<cfelse>
+<p>You can also install this Extensions from within your Lucee Administrator under "Extension/Application".</p>
+</cfif>
+
+
 <table border="1">
 <cfloop query="#query#">
 <tr>

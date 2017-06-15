@@ -13,6 +13,7 @@ cacheLiveSpanInMinutes=5;
 snapshots="http://snapshot.lucee.org";
 _url={
 	releases:"http://release.lucee.org"
+	,abc:"http://release.lucee.org"
 	,snapshots:snapshots
 };
 
@@ -28,9 +29,12 @@ EXTENSION_DOWNLOAD="http://extension.lucee.org/rest/extension/provider/{type}/{i
 
 jarInfo='(Java ARchive, read more about <a target="_blank" href="https://en.wikipedia.org/wiki/JAR_(file_format)">here</a>)';
 lang.desc={
-	releases:"Lucee 5 is ready for production environments."
-	,snapshots:"Snapshots are generated automatically with every push to the repository. Snapshots can be unstable are NOT recommended for production environments."
+	abc:"Alpha, Beta and Release Candidates are a preview for upcoming versions and not ready for production environments."
+	,releases:"Releases are ready for production environments."
+	,snapshots:"Snapshots are generated automatically with every push to the repository. 
+	Snapshots can be unstable are NOT recommended for production environments."
 };
+
 lang.express="The Express version is an easy to setup version which does not need to be installed. Just extract the zip file onto your computer and without further installation you can start by executing the corresponding start file. This is especially useful if you would like to get to know Lucee or want to test your applications under Lucee. It is also useful for use as a development environment.";
 lang.war='Java Servlet engine Web ARchive, read more about <a target="_blank" href="https://en.wikipedia.org/wiki/WAR_(file_format)">here</a>';
 lang.core='The Lucee Core file, you can simply copy this to the "patches" folder of your existing Lucee installation.';
@@ -55,12 +59,14 @@ lang.libNew="The Lucee Jar file, you can simply copy to your existing installati
 		// qualifier has an appendix? (BETA,SNAPSHOT)
 		local.qArr=listToArray(arr[4],'-');
 		if(qArr.len()==1 && isNumeric(qArr[1])) local.sct.qualifier=qArr[1]+0;
-		else if(qArr.len()==2 && isNumeric(qArr[1])) {
+		else if(qArr.len()>1 && isNumeric(qArr[1])) {
 			sct.qualifier=qArr[1]+0;
-			sct.qualifier_appendix=qArr[2];
+			sct.qualifier_appendix=qArr[qArr.len()];
 			if(sct.qualifier_appendix=="SNAPSHOT")sct.qualifier_appendix_nbr=0;
 			else if(sct.qualifier_appendix=="BETA")sct.qualifier_appendix_nbr=50;
 			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
+
+			sct.qualifier_appendix=listRest(arr[4],'-');
 		}
 		else throw "version number ["&arguments.version&"] is invalid";
 		
