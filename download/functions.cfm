@@ -97,67 +97,75 @@ lang.libNew="The Lucee Jar file, you can simply copy to your existing installati
 
 
 	query function getDownloads() {
-		local.mr=new MavenRepo();
-
-
+		setting requesttimeout="1000";
 		// get data from server
-		if(isNull(application.downloads) || !isNull(url.reset)){
-			application.downloads.query=local.downloads=mr.getAvailableVersions("all",true,false);
-			application.downloads.age=now();
-			structDelete(application,"changelog");
-			application.changelog={};
+		var path=getDirectoryFromPath(getCurrentTemplatePath())&"downloads.ser";
+		if(isNull(application.download)) {
+			if(fileExists(path)) {
+				var c=fileRead(path);
+				application.download.query=evaluate(c);
+				application.download.age=dateAdd("n",-cacheLiveSpanInMinutes,now());
+			}
+			else {
+				application.download.query=_download();
+				application.download.age=now();
+			}
+
 		}
 		// get data from cache (application scope)
 		else {
-			local.downloads=application.downloads.query;
 			// update for the next user when older than 5 minutes
-			if(dateDiff("n",application.downloads.age,now())>=cacheLiveSpanInMinutes ||  !isNull(url.resetAsync)) {
-				application.downloads.age=now();
-				structDelete(application,"changelog");
+			if(dateDiff("n",application.download.age,now())>=cacheLiveSpanInMinutes ||  !isNull(url.reset)) {
+				application.download.age=now();
 				thread {
-					mr=new MavenRepo();
-					application.downloads.query=mr.getAvailableVersions("all",true,false);
-					systemOutput("done");
+					application.download.query=_download();
 				}
 			}
 		}
+		fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"downloads.ser",serialize(application.download.query));
 
+		return application.download.query;
+	}
+
+	query function _download() {
+		local.mr=new MavenRepo();
+		flush;
+		local.start=getTickCount();
+		local.qry=mr.getAvailableVersions("all",true,false);
+		dump(qry);
+		dump(getTickCount()-start);
+		abort;
+		flush;
 		// add version that can be sorted right (5.0.0.1-SNAPSHOT -> 5.000.000.0001-SNAPSHOT)
-		local.hasV=queryColumnExists(downloads,"v");
-		if(!hasV || !queryColumnExists(downloads,"versionNoAppendix")) {
-			
-			if(!hasV)queryAddColumn(downloads,"v");
-			queryAddColumn(downloads,"versionNoAppendix");
-			loop query=downloads {
-				if(!hasV)downloads.v[downloads.currentrow]=toVersionSortable(downloads.version);
-				downloads.versionNoAppendix[downloads.currentrow]=toVersionWithoutAppendix(downloads.version);
-			}
-			// sort
-			querySort(downloads,"v","desc");
-			
+		queryAddColumn(qry,"v");
+		queryAddColumn(qry,"versionNoAppendix");
+		loop query=qry {
+			qry.v[qry.currentrow]=toVersionSortable(qry.version);
+			qry.versionNoAppendix[qry.currentrow]=toVersionWithoutAppendix(qry.version);
 		}
+		// sort
+		querySort(qry,"v","desc");
 
 		// get changelog
-		if(downloads.recordcount>0 && !queryColumnExists(downloads,"changelog")) {
-			local.to=downloads.version[1];
-			local.from=downloads.version[downloads.recordcount];
+		if(qry.recordcount>0) {
+			local.to=qry.version[1];
+			local.from=qry.version[qry.recordcount];
 			local.uri=snapshots&"/rest/update/provider/changelog/"&from&"/"&to;
 			http url=uri result="local.http";
 			if(!isNull(http.status_code) && http.status_code==200) {
-				queryAddColumn(downloads,"changelog");
+				queryAddColumn(qry,"changelog");
 				data=deSerializeJson(http.fileContent,false);
-				if(!isNull(url.susi)) dump(data);
-				loop query=downloads {
-					if(!isNull(data[downloads.versionNoAppendix]))
-						downloads.changelog[downloads.currentrow]=data[downloads.versionNoAppendix];
+				loop query=qry {
+					if(!isNull(data[qry.versionNoAppendix]))
+						qry.changelog[qry.currentrow]=data[qry.versionNoAppendix];
 				}
 			}
 		}
+		// store as file
+		fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"downloads.ser",serialize(qry));
 
-
-		return downloads;
+		return qry;
 	}
-
 
 	function _getExtensions(boolean beta=false) localmode=true {
 		
