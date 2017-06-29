@@ -378,15 +378,27 @@
       ) {
 			row=downloads.addRow();
 			loop array=arrColumns item="col" {
-				downloads.setCell(col,tmpDownloads[col],row);
+        if(col=="changelog") {
+          _changelog=tmpDownloads[col];
+          if(!isStruct(_changelog))_changelog={};
+          downloads.setCell(col,_changelog,row);
+        }
+				else downloads.setCell(col,tmpDownloads[col],row);
 			}
       downloads.setCell('test',listLen(tmpDownloads.version,'-'),row);
 
       if(downloads.recordcount>=MAX) break;
 		}
+    else if(!isNull(_changelog) && isStruct(tmpDownloads.changelog)) {
+      loop struct=tmpDownloads.changelog index="key" item="ver" {
+        _changelog[key]=ver;
+      }
+    }
 	}
   if(downloads.recordcount) latest=1;
-  
+ 
+
+
 </cfscript>
 <cfif isNull(latest)>
   <p>#noVersion#</p>
