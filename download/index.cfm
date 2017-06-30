@@ -1,5 +1,5 @@
 <cfscript>
-
+if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org" addtoken=false;
   MAX=1000;
 	include "functions.cfm";
   isBeta=!isNull(url.beta) && url.beta;
@@ -101,6 +101,13 @@
 
 <cfif type=="releases" || type=="snapshots" || type=="abc">
 <cfscript>
+  function toKeySortable(key) {
+      var arr=listToArray(key,'-');
+      while(len(arr[2])<5) {
+          arr[2]="0"&arr[2];
+      }
+      return arr[1]&"-"&arr[2];
+  }
 	tmpDownloads=getDownloads();
   if(!queryColumnExists(tmpDownloads,"state"))queryAddColumn(tmpDownloads,"state");
   loop query=tmpDownloads {
@@ -109,7 +116,6 @@
     else if(findNoCase("rc",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="rc";
     else if(findNoCase("ReleaseCandidate",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="rc";
   }
-
 
   // filter out not matching major version
 	downloads=queryNew("test,"&tmpDownloads.columnlist);
@@ -125,6 +131,7 @@
         if(col=="changelog") {
           _changelog=tmpDownloads[col];
           if(!isStruct(_changelog))_changelog={};
+          else _changelog=duplicate(_changelog);
           downloads.setCell(col,_changelog,row);
         }
 				else downloads.setCell(col,tmpDownloads[col],row);
@@ -140,7 +147,30 @@
     }
 	}
   if(downloads.recordcount) latest=1;
- 
+  
+  // sort changelog
+  loop query=downloads {
+    cl=downloads.changelog;
+    if(isStruct(cl) && structCount(cl)>1) {
+      q=queryNew('k,ks,v');
+      loop struct=cl index="key" item="val" {
+        r=queryAddRow(q);
+        querySetCell(q,"k",key,r);
+        querySetCell(q,"ks",toKeySortable(key),r);
+        querySetCell(q,"v",val,r);
+      }
+      querySort(q,"ks","desc");
+      sct=structNew("linked");
+      loop query=q {
+        sct[q.k]=q.v;
+      }
+      downloads.changelog=sct;
+    }
+    
+
+  } 
+//dump(downloads);
+
 
 
 </cfscript>
@@ -354,7 +384,6 @@
 </cfoutput>
 
 </cfif>
-
 
     <cfhtmlbody action="flush">
   </body>

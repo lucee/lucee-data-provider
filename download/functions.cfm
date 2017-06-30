@@ -122,48 +122,49 @@ lang.libNew="The Lucee Jar file, you can simply copy to your existing installati
 				}
 			}
 		}
-		fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"downloads.ser",serialize(application.download.query));
+		//fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"downloads.ser",serialize(application.download.query));
 
 		return application.download.query;
 	}
 
 	query function _download() {
-		local.mr=new MavenRepo();
-		flush;
-		local.start=getTickCount();
-		local.qry=mr.getAvailableVersions("all",true,false);
-		dump(qry);
-		dump(getTickCount()-start);
-		abort;
-		flush;
-		// add version that can be sorted right (5.0.0.1-SNAPSHOT -> 5.000.000.0001-SNAPSHOT)
-		queryAddColumn(qry,"v");
-		queryAddColumn(qry,"versionNoAppendix");
-		loop query=qry {
-			qry.v[qry.currentrow]=toVersionSortable(qry.version);
-			qry.versionNoAppendix[qry.currentrow]=toVersionWithoutAppendix(qry.version);
-		}
-		// sort
-		querySort(qry,"v","desc");
+		try{
+			local.mr=new MavenRepo();
+			flush;
+			local.start=getTickCount();
+			local.qry=mr.getAvailableVersions("all",true,false);
+			
+			// add version that can be sorted right (5.0.0.1-SNAPSHOT -> 5.000.000.0001-SNAPSHOT)
+			queryAddColumn(qry,"v");
+			queryAddColumn(qry,"versionNoAppendix");
+			loop query=qry {
+				qry.v[qry.currentrow]=toVersionSortable(qry.version);
+				qry.versionNoAppendix[qry.currentrow]=toVersionWithoutAppendix(qry.version);
+			}
+			// sort
+			querySort(qry,"v","desc");
 
-		// get changelog
-		if(qry.recordcount>0) {
-			local.to=qry.version[1];
-			local.from=qry.version[qry.recordcount];
-			local.uri=snapshots&"/rest/update/provider/changelog/"&from&"/"&to;
-			http url=uri result="local.http";
-			if(!isNull(http.status_code) && http.status_code==200) {
-				queryAddColumn(qry,"changelog");
-				data=deSerializeJson(http.fileContent,false);
-				loop query=qry {
-					if(!isNull(data[qry.versionNoAppendix]))
-						qry.changelog[qry.currentrow]=data[qry.versionNoAppendix];
+			// get changelog
+			if(qry.recordcount>0) {
+				local.to=qry.version[1];
+				local.from=qry.version[qry.recordcount];
+				local.uri=snapshots&"/rest/update/provider/changelog/"&from&"/"&to;
+				http url=uri result="local.http";
+				if(!isNull(http.status_code) && http.status_code==200) {
+					queryAddColumn(qry,"changelog");
+					data=deSerializeJson(http.fileContent,false);
+					loop query=qry {
+						if(!isNull(data[qry.versionNoAppendix]))
+							qry.changelog[qry.currentrow]=data[qry.versionNoAppendix];
+					}
 				}
 			}
+			// store as file
+			fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"downloads.ser",serialize(qry));
 		}
-		// store as file
-		fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"downloads.ser",serialize(qry));
-
+		catch(ex) {
+			fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"err.txt",serialize(ex));
+		}
 		return qry;
 	}
 
