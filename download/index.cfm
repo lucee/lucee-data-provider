@@ -39,13 +39,6 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 <cfhtmlhead>
 
   <link rel="stylesheet" href="/res/download.css">
-  <style>
-  	.clog-toggle-all {
-        margin-left: 1em;
-        font-size: 1.5rem;
-        cursor: pointer;
-  	}
-  </style>
 
 </cfhtmlhead>
 
@@ -223,7 +216,7 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 		<!--- changelog --->
 		<cfif !isnull(downloads.changelog[latest]) && isStruct(downloads.changelog[latest]) && structCount(downloads.changelog[latest])>
                   <div class="clog-wrapper">
-			<h3 class="clog-toggle-first pointer">Changelog <i class="icon icon-collapse"></i></h3>
+			<h3 class="clog-toggle-first">Changelog <i class="icon icon-collapse"></i></h3>
 			<div class="clog-detail"><cfloop struct="#downloads.changelog[latest]#" index="id" item="subject">
 				<a href="http://bugs.lucee.org/browse/#id#">#id#</a> #subject#<br>
 			     </cfloop>
@@ -313,7 +306,7 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 			<tr>
 				<td colspan="7" class="grey">
                                   <div class="clog-wrapper">
-					<h3 class="clog-toggle pointer">Changelog <i class="icon icon-collapse"></i></h3>
+					<h3 class="clog-toggle">Changelog <i class="icon icon-collapse"></i></h3>
 					<div class="clog-detail"><cfloop struct="#downloads.changelog#" index="id" item="subject">
 					<a href="http://bugs.lucee.org/browse/#id#">#id#</a> #subject#<br>
 					</cfloop></div>

@@ -324,3 +324,13 @@ ul {
 
 
 
+/* index page */
+.clog-toggle, .clog-toggle-first, .clog-toggle-all {
+  cursor: pointer;
+}
+
+.clog-toggle-all {
+  margin-left: 1em;
+  font-size: 1.5rem;
+}
+
