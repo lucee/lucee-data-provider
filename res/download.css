@@ -334,3 +334,7 @@ ul {
   font-size: 1.5rem;
 }
 
+.clog-detail a {
+  display: inline-block;
+  min-width: 6em;
+}
