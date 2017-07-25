@@ -27,7 +27,7 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 	else type=url.type;
 
 	intro="The latest {type} is version <b>{version}</b> released at <b>{date}</b>.";
-	historyDesc="Get older Versions.";
+	historyDesc="Older Versions:";
   singular={releases:"Release",snapshots:"Snapshot",abc:'Alpha / Beta / RC'};
   multi={releases:"Releases",snapshots:"Snapshots",abc:'Alphas / Betas / RCs'};
 
