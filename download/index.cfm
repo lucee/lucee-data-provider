@@ -33,12 +33,19 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 
   noVersion="There are currently no downloads available in this category.";
 
-  
+
 </cfscript>
 
 <cfhtmlhead>
 
   <link rel="stylesheet" href="/res/download.css">
+  <style>
+  	.clog-toggle-all {
+        margin-left: 1em;
+        font-size: 1.5rem;
+        cursor: pointer;
+  	}
+  </style>
 
 </cfhtmlhead>
 
@@ -60,6 +67,13 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
             $parent.find(".icon-collapse")
               .toggleClass("collapsed");
           } );
+      });
+
+      $(".clog-toggle-all").click(function(){
+
+        $(".clog-toggle").trigger("click");
+        $(this).find(".icon-collapse")
+            .toggleClass("collapsed");
       });
 
       $(".clog-toggle").click();
@@ -147,7 +161,7 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
     }
 	}
   if(downloads.recordcount) latest=1;
-  
+
   // sort changelog
   loop query=downloads {
     cl=downloads.changelog;
@@ -166,9 +180,9 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
       }
       downloads.changelog=sct;
     }
-    
 
-  } 
+
+  }
 //dump(downloads);
 
 
@@ -216,7 +230,7 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
                         </div>
                   </div><!-- .clog-wrapper !-->
 		</cfif>
-    
+
 		<cfif downloads.recordcount GT 1>
 
 		<cfsilent>
@@ -230,11 +244,11 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 		</cfloop>
 		</cfsilent>
 		<cfif !isNUll(first)>
-		<h2>#singular[type]# History (#last# - #first#)</h2>
+		<h2>
+			#singular[type]# History (#last# - #first#)
+			<span class="clog-toggle-all">Changelogs <i class="icon icon-collapse collapsed"></i></span>
+		</h2>
 		<p>#historyDesc#</p>
-
-
-
 
 		<table border="1" width="100%">
 		<tr>
@@ -260,8 +274,8 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 				downloads.v == _5_1_0_31  ||
         downloads.v == _5_1_0_008 ||
         downloads.v == _5_2_1_7 ||
-        downloads.v == _5_2_1_8 
-        
+        downloads.v == _5_2_1_8
+
 			>
 				<cfcontinue>
 			</cfif>
