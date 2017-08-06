@@ -1,10 +1,9 @@
 <cfscript>
-	if(isNull(url.major)) url.major='5.1';
+if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org" addtoken=false;
+  MAX=1000;
 	include "functions.cfm";
-	
-	query=getExtensions(!isNull(url.beta) && url.beta);
-
-	STABLE_MAJOR='5.1';
+  isBeta=!isNull(url.beta) && url.beta;
+	query=getExtensions(isBeta);
 
 	_5_0_0_70=toVersionSortable("5.0.0.70-SNAPSHOT");
 	_5_0_0_112=toVersionSortable("5.0.0.112-SNAPSHOT");
@@ -18,360 +17,174 @@
 	_5_0_0_261=toVersionSortable("5.0.0.261-SNAPSHOT");
 	_5_0_0_262=toVersionSortable("5.0.0.262-SNAPSHOT");
 	_5_1_0_31=toVersionSortable("5.1.0.31");
-	_5_1_0_008=toVersionSortable("5.1.0.008-SNAPSHOT");
+  _5_1_0_008=toVersionSortable("5.1.0.008-SNAPSHOT");
+  _5_2_1_7=toVersionSortable("5.2.1.7");
+  _5_2_1_8=toVersionSortable("5.2.1.8");
 
-	if(isNull(url.type))type="releases";
+
+
+	if(isNull(url.type))url.type="releases";
 	else type=url.type;
 
 	intro="The latest {type} is version <b>{version}</b> released at <b>{date}</b>.";
-	historyDesc="Get older Versions.";
-	singular={releases:"release",snapshots:"snapshot"};
+	historyDesc="Older Versions:";
+  singular={releases:"Release",snapshots:"Snapshot",abc:'Alpha / Beta / RC'};
+  multi={releases:"Releases",snapshots:"Snapshots",abc:'Alphas / Betas / RCs'};
+
+  noVersion="There are currently no downloads available in this category.";
+
+
 </cfscript>
+
+<cfhtmlhead>
+
+  <link rel="stylesheet" href="/res/download.css">
+
+</cfhtmlhead>
+
+
+<cfhtmlbody>
+
+  <script src="/res/jquery-3.2.1.min.js"></script>
+
+  <script>
+
+    $(function(){
+
+      $(".clog-toggle, .clog-toggle-first").click(function(){
+
+        var $parent = $(this).parent(".clog-wrapper");
+
+        $parent.find(".clog-detail")
+          .slideToggle( function(){
+            $parent.find(".icon-collapse")
+              .toggleClass("collapsed");
+          } );
+      });
+
+      $(".clog-toggle-all").click(function(){
+
+        $(".clog-toggle").trigger("click");
+        $(this).find(".icon-collapse")
+            .toggleClass("collapsed");
+      });
+
+      $(".clog-toggle").click();
+    }); // jquery ready
+  </script>
+
+</cfhtmlbody>
+
+
+
+<html>
+  <head>
+    <title></title>
+
+    <cfhtmlhead action="flush">
+  </head>
+  <body>
 
 <!--- output --->
 <cfoutput>
 
-<style type="text/css">
-  *,
-  *::after,
-  *::before {
-    -webkit-box-sizing: inherit;
-            box-sizing: inherit;
-  }
 
-  @-ms-viewport {
-    width: device-width;
-  }
-
-  body {
-    background-color: white;
-    color: ##212121;
-    font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    font-size: 0.875rem;
-    font-weight: 400;
-    line-height: 1.428572;
-    margin: 0;
-  }
-
-  html {
-    -webkit-box-sizing: border-box;
-            box-sizing: border-box;
-    font-family: sans-serif;
-    line-height: 1.15;
-    -ms-overflow-style: scrollbar;
-    -webkit-tap-highlight-color: transparent;
-    -webkit-text-size-adjust: 100%;
-            text-size-adjust: 100%;
-  }
-
-  [tabindex="-1"]:focus {
-    outline: 0 !important;
-  }
-
-  a {
-    background-color: transparent;
-    color: ##01798a;
-    text-decoration: none;
-    -webkit-text-decoration-skip: objects;
-    -ms-touch-action: manipulation;
-        touch-action: manipulation;
-  }
-  a:active, a:focus, a:hover {
-    color: ##3f51b5;
-    text-decoration: none;
-  }
-
-  b,
-  strong {
-    font-weight: bolder;
-  }
-
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    color: inherit;
-    font-family: inherit;
-    margin-top: 0;
-    margin-bottom: .5rem;
-  }
-
-  h1 {
-    font-size: 2.8125rem;
-    font-weight: 400;
-    letter-spacing: 0;
-    line-height: 3rem;
-  }
-  @media (min-width: 768px) {
-    h1 {
-      font-size: 7rem;
-      font-weight: 300;
-      letter-spacing: -.04em;
-      line-height: 7rem;
-    }
-  }
-
-  h2 {
-    font-size: 2.125rem;
-    font-weight: 400;
-    letter-spacing: 0;
-    line-height: 2.5rem;
-  }
-
-  h3 {
-    font-size: 1.5rem;
-    font-weight: 400;
-    letter-spacing: 0;
-    line-height: 2rem;
-  }
-
-  h4 {
-    font-size: 1.25rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    line-height: 1.75rem;
-  }
-
-  h5 {
-    font-size: 1rem;
-    font-weight: 400;
-    letter-spacing: 0.04em;
-    line-height: 1.5rem;
-  }
-
-  h6 {
-    font-size: 0.875rem;
-    font-weight: 700;
-    letter-spacing: 0;
-    line-height: 1.25rem;
-  }
-
-  img {
-    border-style: none;
-    height: auto;
-    max-width: 100px;
-    vertical-align: middle;
-  }
-
-  p {
-    margin-top: 0;
-    margin-bottom: 1rem;
-  }
-
-  small {
-    font-size: 80%;
-    font-weight: 400;
-  }
-
-  table {
-    background-color: ##ffffff;
-    border: 0;
-    border-collapse: collapse;
-    -webkit-box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 1px 5px 0 rgba(0, 0, 0, 0.12), 0 3px 1px -2px rgba(0, 0, 0, 0.4);
-            box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 1px 5px 0 rgba(0, 0, 0, 0.12), 0 3px 1px -2px rgba(0, 0, 0, 0.4);
-    margin-bottom: 1rem;
-    max-width: 100%;
-    width: 100%;
-  }
-
-  table td,
-  table th {
-    padding-right: 1rem;
-    padding-left: 1rem;
-    text-align: left;
-    text-align: start;
-    vertical-align: top;
-  }
-
-  table td > :last-child,
-  table th > :last-child {
-    margin-bottom: 0;
-  }
-
-  table tbody td,
-  table tbody th {
-    border-top: 1px solid ##e1e1e1;
-    color: ##212121;
-    font-size: 0.8125rem;
-    font-weight: 400;
-    height: 3rem;
-    padding-top: 0.919643rem;
-    padding-bottom: 0.919643rem;
-  }
-
-  table tbody tr:hover {
-    background-color: ##eeeeee;
-  }
-
-  table tbody tr td.grey {
-    background-color: ##f5f5f5;
-  }
-
-  table tbody tr td.grey strong {
-    display: inline-block;
-    margin-bottom: .5rem;
-  }
-
-  table thead td,
-  table thead th {
-    color: ##9e9e9e;
-    font-size: 0.75rem;
-    font-weight: 700;
-    height: 3.5rem;
-    padding-top: 1.214286rem;
-    padding-bottom: 1.214286rem;
-  }
-
-  table thead {
-    background-color: ##ffffff;
-    position: sticky;
-    top: 0;
-  }
-
-  table[title="Extensions"] br + strong {
-    display: inline-block;
-    margin-top: .25rem;
-  }
-
-  table[title="Extensions"] strong + ul {
-    margin-top: .25rem;
-  }
-
-  ul {
-    margin-top: 0;
-    margin-bottom: 1rem;
-    padding-left: 1rem;
-  }
-
-  .btn {
-    border-radius: 2px;
-    -webkit-transition-duration: 0.3s;
-         -o-transition-duration: 0.3s;
-            transition-duration: 0.3s;
-    -webkit-transition-property: background-color, color, -webkit-box-shadow;
-            transition-property: background-color, color, -webkit-box-shadow;
-         -o-transition-property: background-color, box-shadow, color;
-            transition-property: background-color, box-shadow, color;
-            transition-property: background-color, box-shadow, color, -webkit-box-shadow;
-    -webkit-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-         -o-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    background-color: ##f5f5f5;
-    background-image: none;
-    border: 0;
-    -webkit-box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 1px 5px 0 rgba(0, 0, 0, 0.12), 0 3px 1px -2px rgba(0, 0, 0, 0.4);
-            box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 1px 5px 0 rgba(0, 0, 0, 0.12), 0 3px 1px -2px rgba(0, 0, 0, 0.4);
-    color: ##212121;
-    display: inline-block;
-    font-size: 0.875rem;
-    font-weight: 700;
-    line-height: 1;
-    margin: 0 0 .5rem;
-    max-width: 100%;
-    min-width: 5.5rem;
-    padding: 0.6875rem 1rem;
-    position: relative;
-    text-align: center;
-    text-transform: uppercase;
-    -webkit-user-select: none;
-       -moz-user-select: none;
-        -ms-user-select: none;
-            user-select: none;
-    vertical-align: middle;
-    white-space: nowrap;
-  }
-  .btn:active, .btn:focus, .btn:hover {
-    background-color: ##eeeeee;
-    color: ##212121;
-    text-decoration: none;
-  }
-  .btn:active {
-    -webkit-box-shadow: 0 8px 10px 1px rgba(0, 0, 0, 0.14), 0 3px 14px 2px rgba(0, 0, 0, 0.12), 0 5px 5px -3px rgba(0, 0, 0, 0.4);
-            box-shadow: 0 8px 10px 1px rgba(0, 0, 0, 0.14), 0 3px 14px 2px rgba(0, 0, 0, 0.12), 0 5px 5px -3px rgba(0, 0, 0, 0.4);
-  }
-
-  .container {
-    margin-right: auto;
-    margin-left: auto;
-    max-width: 100%;
-    padding-right: 16px;
-    padding-left: 16px;
-    width: 960px;
-  }
-
-  .card {
-    border-radius: 2px;
-    background-color: ##ffffff;
-    -webkit-box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 1px 5px 0 rgba(0, 0, 0, 0.12), 0 3px 1px -2px rgba(0, 0, 0, 0.4);
-            box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 1px 5px 0 rgba(0, 0, 0, 0.12), 0 3px 1px -2px rgba(0, 0, 0, 0.4);
-    margin-bottom: 3rem;
-    position: relative;
-  }
-
-  .card-block {
-    padding: 1rem;
-  }
-
-  .card-block > :last-child {
-    margin-bottom: 0;
-  }
-
-  .page-body {
-    margin-bottom: 3rem;
-  }
-
-  .page-header {
-    background-color: ##01798a;
-    color: ##ffffff;
-    margin-bottom: 3rem;
-    padding-top: 3rem;
-    padding-bottom: 2.5rem;
-  }
-</style>
 
 <h1>Downloads</h1>
+
 <p>
-<a class="linkk" href="?type=releases">Releases</a> 
+<a class="linkk" href="?type=releases">Releases</a>
 | <a class="linkk" href="?type=snapshots">Snapshots</a>
+| <a class="linkk" href="?type=abc">Alphas/Betas/Release Candidates</a>
 </p>
-<p>
-<a class="linkk" href="?type=releases&major=5.2">Releases (Beta)</a> 
-| <a class="linkk" href="?type=snapshots&major=5.2">Snapshots (Beta)</a> 
-</p>
+
+
 <p>
 <a class="linkk" href="?type=extensions">Extensions</a>
-| <a class="linkk" href="?type=extensions&beta=true">Extensions (Beta)</a>
+| <a class="linkk" href="?type=extensions&beta=true">Extensions (Alpha/Beta)</a>
 </p>
 
 
 
-<cfif type=="releases" || type=="snapshots">
+<cfif type=="releases" || type=="snapshots" || type=="abc">
 <cfscript>
+  function toKeySortable(key) {
+      var arr=listToArray(key,'-');
+      while(len(arr[2])<5) {
+          arr[2]="0"&arr[2];
+      }
+      return arr[1]&"-"&arr[2];
+  }
 	tmpDownloads=getDownloads();
-	// filter out not matching major version
-	downloads=queryNew(tmpDownloads.columnlist);
+  if(!queryColumnExists(tmpDownloads,"state"))queryAddColumn(tmpDownloads,"state");
+  loop query=tmpDownloads {
+    if(findNoCase("alpha",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="alpha";
+    else if(findNoCase("beta",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="beta";
+    else if(findNoCase("rc",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="rc";
+    else if(findNoCase("ReleaseCandidate",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="rc";
+  }
+
+  // filter out not matching major version
+	downloads=queryNew("test,"&tmpDownloads.columnlist);
+  arrColumns=tmpDownloads.columnArray();
 	loop query=tmpDownloads {
-		tmp=left(tmpDownloads.version,len(url.major));
-		if(tmp==url.major || (url.major==STABLE_MAJOR && tmp<url.major)) {
+		if(
+      ( url.type==tmpDownloads.type && tmpDownloads.state=="" )
+      ||
+      ( url.type=="abc" && tmpDownloads.state!="" ) // has -ALPAH for example
+      ) {
 			row=downloads.addRow();
-			loop array=tmpDownloads.columnArray() item="col" {
-				downloads.setCell(col,tmpDownloads[col],row);
+			loop array=arrColumns item="col" {
+        if(col=="changelog") {
+          _changelog=tmpDownloads[col];
+          if(!isStruct(_changelog))_changelog={};
+          else _changelog=duplicate(_changelog);
+          downloads.setCell(col,_changelog,row);
+        }
+				else downloads.setCell(col,tmpDownloads[col],row);
 			}
-		}
-	}
+      downloads.setCell('test',listLen(tmpDownloads.version,'-'),row);
 
-	loop query=downloads {
-		if(downloads.type==variables.type) {
-			latest=downloads.currentrow;
-			break;
+      if(downloads.recordcount>=MAX) break;
 		}
+    else if(!isNull(_changelog) && isStruct(tmpDownloads.changelog)) {
+      loop struct=tmpDownloads.changelog index="key" item="ver" {
+        _changelog[key]=ver;
+      }
+    }
 	}
+  if(downloads.recordcount) latest=1;
+
+  // sort changelog
+  loop query=downloads {
+    cl=downloads.changelog;
+    if(isStruct(cl) && structCount(cl)>1) {
+      q=queryNew('k,ks,v');
+      loop struct=cl index="key" item="val" {
+        r=queryAddRow(q);
+        querySetCell(q,"k",key,r);
+        querySetCell(q,"ks",toKeySortable(key),r);
+        querySetCell(q,"v",val,r);
+      }
+      querySort(q,"ks","desc");
+      sct=structNew("linked");
+      loop query=q {
+        sct[q.k]=q.v;
+      }
+      downloads.changelog=sct;
+    }
+
+
+  }
+//dump(downloads);
+
+
+
 </cfscript>
-
-<cfif !isNull(latest)>
-		<h2>Latest 	#UCFirst(type)# (#downloads.version[latest]#)</h2>
+<cfif isNull(latest)>
+  <p>#noVersion#</p>
+<cfelse>
+		<h2>Latest 	#singular[type]# (#downloads.version[latest]#)</h2>
 		<p>#replace(replace(replace(intro,"{date}",lsDateFormat(downloads.jarDate[latest])),"{version}",downloads.version[latest]),"{type}",singular[type])# #lang.desc[type]#</p>
 
 		<!--- jar --->
@@ -388,31 +201,34 @@
 		<h3>Express</h3>
 		<p>#lang.express#<br>
 		<a href="#_url[type]#/rest/update/provider/express/#downloads.version[latest]#">download</a></p>
-		
+
 		<!--- War --->
 		<h3>Lucee WAR file (lucee.war)</h3>
 		<p>#lang.war#<br>
 		<a href="#_url[type]#/rest/update/provider/war/#downloads.version[latest]#">download</a></p>
-		
+
 		<!--- Lucee Core --->
 		<h3>Lucee core file (#downloads.version[latest]#.lco)</h3>
 		<p>#lang.core#<br>
 		<a href="#_url[type]#/rest/update/provider/download/#downloads.version[latest]#">download</a></p>
-		
+
 
 		<!--- changelog --->
 		<cfif !isnull(downloads.changelog[latest]) && isStruct(downloads.changelog[latest]) && structCount(downloads.changelog[latest])>
-			<h3>Changelog</h3>
-			<p><cfloop struct="#downloads.changelog[latest]#" index="id" item="subject">
+                  <div class="clog-wrapper">
+			<h3 class="clog-toggle-first">Changelog <i class="icon icon-collapse"></i></h3>
+			<div class="clog-detail"><cfloop struct="#downloads.changelog[latest]#" index="id" item="subject">
 				<a href="http://bugs.lucee.org/browse/#id#">#id#</a> #subject#<br>
-			</cfloop></p>
+			     </cfloop>
+                        </div>
+                  </div><!-- .clog-wrapper !-->
 		</cfif>
 
 		<cfif downloads.recordcount GT 1>
-		
+
 		<cfsilent>
 		<cfloop query=downloads>
-			<cfif downloads.type==variables.type && downloads.version!=downloads.version[latest]>
+			<cfif true> <!--- downloads.version!=downloads.version[latest] --->
 				<cfif isNull(last)>
 					<cfset last=downloads.version>
 				</cfif>
@@ -421,25 +237,25 @@
 		</cfloop>
 		</cfsilent>
 		<cfif !isNUll(first)>
-		<h2>#UCFirst(type)# History (#first# - #last#)</h2>
+		<h2>
+			#singular[type]# History (#last# - #first#)
+			<span class="clog-toggle-all">Changelogs <i class="icon icon-collapse collapsed"></i></span>
+		</h2>
 		<p>#historyDesc#</p>
-
-
-
 
 		<table border="1" width="100%">
 		<tr>
 			<td align="center"><h3>Version</h3></td>
 			<td align="center"><h3>Date</h3></td>
-			
+
 			<td align="center"><h3>Express</h3></td>
 			<td align="center"><h3>Lucee library</h3><span class="comment"> with dependencies</span></td>
 			<td align="center"><h3>Lucee library</h3><span class="comment"> without dependencies</span></td>
 			<td align="center"><h3>Lucee core file</h3></td>
 			<td align="center"><h3>Lucee WAR file</h3></td>
-		</tr>	
+		</tr>
 		<cfloop query=downloads>
-			<cfif 
+			<cfif
 				downloads.v == _5_0_0_255 ||
 				downloads.v == _5_0_0_256 ||
 				downloads.v == _5_0_0_257 ||
@@ -448,18 +264,20 @@
 				downloads.v == _5_0_0_260 ||
 				downloads.v == _5_0_0_261 ||
 				downloads.v == _5_0_0_262 ||
-				downloads.v == _5_1_0_31 ||
-				downloads.v == _5_1_0_008
+				downloads.v == _5_1_0_31  ||
+        downloads.v == _5_1_0_008 ||
+        downloads.v == _5_2_1_7 ||
+        downloads.v == _5_2_1_8
 
 			>
 				<cfcontinue>
 			</cfif>
 			<cfset css="">
-			<cfif downloads.type==variables.type && downloads.version!=downloads.version[latest]>
+			<cfif true><!--- downloads.version!=downloads.version[latest] --->
 			<tr>
 				<td class="#css#" align="center">#downloads.version#</td>
 				<td class="#css#" align="center">#lsDateFormat(downloads.jarDate)#</td>
-				
+
 				<td class="#css#"><a href="#_url[type]#/rest/update/provider/express/#downloads.version#">Express</a></td>
 
 				<td class="#css#" >
@@ -480,17 +298,19 @@
 				<td class="#css#"><a href="#_url[type]#/rest/update/provider/download/#downloads.version#">Core</a></td>
 
 				<td class="#css#"><a href="#_url[type]#/rest/update/provider/war/#downloads.version#">WAR</a></td>
-				
+
 
 			</tr>
 			<!--- changelog --->
 			<cfif !isNull(downloads.changelog) && isStruct(downloads.changelog) && structCount(downloads.changelog)>
 			<tr>
 				<td colspan="7" class="grey">
-					<h3>Changelog</h3>
-					<p><cfloop struct="#downloads.changelog#" index="id" item="subject">
+                                  <div class="clog-wrapper">
+					<h3 class="clog-toggle">Changelog <i class="icon icon-collapse"></i></h3>
+					<div class="clog-detail"><cfloop struct="#downloads.changelog#" index="id" item="subject">
 					<a href="http://bugs.lucee.org/browse/#id#">#id#</a> #subject#<br>
-					</cfloop></p>
+					</cfloop></div>
+                                   </div><!-- .clog-wrapper !-->
 				</td>
 			</tr>
 
@@ -512,13 +332,13 @@
 		<cfelse>
 			<a href="?showAll=true&type=#type#">Show all</a>
 		</cfif>--->
-		
+
 
 </cfif>
 </cfif>
 
 
-</cfoutput>	
+</cfoutput>
 
 
 
@@ -529,6 +349,14 @@
 <cfoutput>
 <h2>#UCFirst(type)#</h2>
 <p>Lucee Extensions, simply copy them to /lucee-server/deploy, of a running Lucee installation, to install them.</p>
+
+<cfif isBeta>
+<p>To install this Extensions from within your Lucee Administrator, you need to add "http://beta.lucee.org" under "Extension/Provider" as a new Provider, after that you can install this Extensions under "Extension/Application" in the Administartor.</p>
+<cfelse>
+<p>You can also install this Extensions from within your Lucee Administrator under "Extension/Application".</p>
+</cfif>
+
+
 <table border="1">
 <cfloop query="#query#">
 <tr>
@@ -560,8 +388,10 @@
 </tr>
 </cfloop>
 </table>
-</cfoutput>	
+</cfoutput>
 
 </cfif>
 
-
+    <cfhtmlbody action="flush">
+  </body>
+</html>

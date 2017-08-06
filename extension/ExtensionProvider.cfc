@@ -106,8 +106,12 @@
 								required string language="en" restargsource="url",
 								required boolean withLogo=true restargsource="url",
 								required string coreVersion="" restargsource="url",
-								required boolean beta=false restargsource="url")
+								required beta='' restargsource="url")
 		httpmethod="GET" restpath="info" {
+
+		if(!isBoolean(arguments.beta)) {
+			arguments.beta=findNoCase("beta.",cgi.SERVER_NAME);
+		}
 
 
 		if(len(arguments.coreVersion))

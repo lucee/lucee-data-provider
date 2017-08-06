@@ -52,7 +52,7 @@
 
 
 			local.mr=new MavenRepo();
-			local.latest=mr.getLatest(type);
+			local.latest=mr.getLatest(type:type,checkIgnoreMajor:local.type!="beta");
 			latestVersion=toVersion(latest.version);
 			
 			/* maintenance

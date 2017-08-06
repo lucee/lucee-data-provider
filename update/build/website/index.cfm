@@ -9,14 +9,14 @@
 	profURL="https://www.lucee.org/support.html";
 	issueURL="https://bitbucket.org/lucee/lucee/issues";
 	newURL="http://docs.lucee.org/guides/lucee-5.html";
-</cfscript><!DOCTYPE html>
+</cfscript><cfoutput><!DOCTYPE html>
 <html>
 	<head>
 		<title>Rapid web development with Lucee!</title>
-		<link rel="stylesheet" type="text/css" href="/assets/css/lib/bootstrap.min.css">
+		<link rel="stylesheet" type="text/css" href="#cgi.context_path#/assets/css/lib/bootstrap.min.css">
 		<link rel="stylesheet" type="text/css" href="http://fonts.googleapis.com/css?family=Open+Sans:400,300,600,700,800">
-		<!--[if lte IE 8]><link rel="stylesheet" type="text/css" href="/assets/css/lib/ie8.css"><![endif]-->
-		<link rel="stylesheet" type="text/css" href="/assets/css/core/_ed07b761.core.min.css">
+		<!--[if lte IE 8]><link rel="stylesheet" type="text/css" href="#cgi.context_path#/assets/css/lib/ie8.css"><![endif]-->
+		<link rel="stylesheet" type="text/css" href="#cgi.context_path#/assets/css/core/_ed07b761.core.min.css">
 		<!--[if lt IE 9]>
 			<script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
 		<![endif]-->
@@ -27,7 +27,7 @@
 				<div class="container top-header">
 		            <h1 class="site-logo">
 		                <a href="/">
-		                    <img src="/assets/img/lucee-logo.png" alt="Lucee">
+		                    <img src="#cgi.context_path#/assets/img/lucee-logo.png" alt="Lucee">
 		                </a>
 		            </h1>
 
@@ -58,7 +58,7 @@
 		<div class="container">
 			<div class="banner-content">
 				<cfoutput>
-				<img src="/assets/img/lucee-logo.png" alt="Lucee"> 
+				<img src="#cgi.context_path#/assets/img/lucee-logo.png" alt="Lucee"> 
 				<h1>Welcome to your Lucee #ListFirst(server.lucee.version,'.')# Installation!</h1>
 				<p class="lead-text">You are now successfully running Lucee #server.lucee.version# on your system!</p>
 				</cfoutput>
@@ -91,7 +91,7 @@
 							<li class="listing-item thumb-large">
 								<div class="listing-thumb">
 									<a href="#refURL#">
-										<img src="/assets/img/img-new.png" alt="">
+										<img src="#cgi.context_path#/assets/img/img-new.png" alt="">
 									</a>
 								</div>
 								
@@ -114,7 +114,7 @@
 							<li class="listing-item thumb-large">
 								<div class="listing-thumb">
 									<a href="#wikiURL#">
-										<img src="/assets/img/img-first-steps.png" alt="">
+										<img src="#cgi.context_path#/assets/img/img-first-steps.png" alt="">
 									</a>
 								</div>
 								
@@ -137,7 +137,7 @@
 							<li class="listing-item thumb-large">
 								<div class="listing-thumb">
 									<a href="#refURL#">
-										<img src="/assets/img/img-code.png" alt="">
+										<img src="#cgi.context_path#/assets/img/img-code.png" alt="">
 									</a>
 								</div>
 								
@@ -159,7 +159,7 @@
 							<li class="listing-item thumb-large">
 								<div class="listing-thumb">
 									<a href="#adminURL#">
-										<img src="/assets/img/img-exclamation-mark.png" alt="">
+										<img src="#cgi.context_path#/assets/img/img-exclamation-mark.png" alt="">
 									</a>
 								</div>
 								
@@ -250,7 +250,7 @@ In addition you should set a default password in the Server admin for all web ad
 		                <div class="row">
 		                    <div class="col-md-2 col-sm-4">
 		                        <a href="/" class="footer-logo">
-		                            <img src="/assets/img/lucee-logo.png" alt="Lucee">
+		                            <img src="#cgi.context_path#/assets/img/lucee-logo.png" alt="Lucee">
 		                        </a>
 		                        
 
@@ -284,11 +284,11 @@ In addition you should set a default password in the Server admin for all web ad
 	
 		
 
-<script src="/assets/js/lib/jquery-1.10.1.min.js"></script>
-<script src="/assets/js/lib/bootstrap.min.js"></script>
-<script src="/assets/js/core/_38444bee.core.min.js"></script>
-<script src="/assets/js/lib/SmoothScroll.js"></script>
+<script src="#cgi.context_path#/assets/js/lib/jquery-1.10.1.min.js"></script>
+<script src="#cgi.context_path#/assets/js/lib/bootstrap.min.js"></script>
+<script src="#cgi.context_path#/assets/js/core/_38444bee.core.min.js"></script>
+<script src="#cgi.context_path#/assets/js/lib/SmoothScroll.js"></script>
 
 	</body>
 	
-</html>
+</html></cfoutput>
