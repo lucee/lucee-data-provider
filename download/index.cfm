@@ -28,7 +28,7 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 	else type=url.type;
 
 	intro="The latest {type} is version <b>{version}</b> released at <b>{date}</b>.";
-	historyDesc="Get older Versions.";
+	historyDesc="Older Versions:";
   singular={releases:"Release",snapshots:"Snapshot",abc:'Alpha / Beta / RC'};
   multi={releases:"Releases",snapshots:"Snapshots",abc:'Alphas / Betas / RCs'};
 
@@ -296,6 +296,13 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
           } );
       });
 
+      $(".clog-toggle-all").click(function(){
+
+        $(".clog-toggle").trigger("click");
+        $(this).find(".icon-collapse")
+            .toggleClass("collapsed");
+      });
+
       $(".clog-toggle").click();
     }); // jquery ready
   </script>
@@ -382,7 +389,7 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
     }
 	}
   if(downloads.recordcount) latest=1;
-  
+
   // sort changelog
   if(queryColumnExists(downloads,"changelog")) {
     loop query=downloads {
@@ -402,9 +409,8 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
         }
         downloads.changelog=sct;
       }
-      
-
-    } 
+      downloads.changelog=sct;
+    }
   }
 //dump(downloads);
 
@@ -475,14 +481,14 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 		<!--- changelog --->
 		<cfif !isnull(downloads.changelog[latest]) && isStruct(downloads.changelog[latest]) && structCount(downloads.changelog[latest])>
                   <div class="clog-wrapper">
-			<h3 class="clog-toggle-first pointer">Changelog <i class="icon icon-collapse"></i></h3>
+			<h3 class="clog-toggle-first">Changelog <i class="icon icon-collapse"></i></h3>
 			<div class="clog-detail"><cfloop struct="#downloads.changelog[latest]#" index="id" item="subject">
 				<a href="http://bugs.lucee.org/browse/#id#">#id#</a> #subject#<br>
 			     </cfloop>
                         </div>
                   </div><!-- .clog-wrapper !-->
 		</cfif>
-    
+
 		<cfif downloads.recordcount GT 1>
 
 		<cfsilent>
@@ -496,10 +502,11 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 		</cfloop>
 		</cfsilent>
 		<cfif !isNUll(first)>
-		<h2>#singular[type]# History (#last# - #first#)</h2>
+		<h2>
+			#singular[type]# History (#last# - #first#)
+			<span class="clog-toggle-all">Changelogs <i class="icon icon-collapse collapsed"></i></span>
+		</h2>
 		<p>#historyDesc#</p>
-
-
 
 		<table border="1" width="100%">
 		<tr>
@@ -579,7 +586,7 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 			<tr>
 				<td colspan="#(type == "releases")?8:7#" class="grey">
                                   <div class="clog-wrapper">
-					<h3 class="clog-toggle pointer">Changelog <i class="icon icon-collapse"></i></h3>
+					<h3 class="clog-toggle">Changelog <i class="icon icon-collapse"></i></h3>
 					<div class="clog-detail"><cfloop struct="#downloads.changelog#" index="id" item="subject">
 					<a href="http://bugs.lucee.org/browse/#id#">#id#</a> #subject#<br>
 					</cfloop></div>
