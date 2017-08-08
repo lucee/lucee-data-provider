@@ -123,7 +123,7 @@
 		rtn.meta.description="";
 		rtn.meta.image="http://extension.lucee.org/extension5/extension-provider.png";
 		rtn.meta.url="http://"&cgi.HTTP_HOST;
-		rtn.meta.mode="develop";
+		rtn.meta.mode="production";
 
 		init();
 
