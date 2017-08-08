@@ -46,7 +46,9 @@ lang.luceeAll='Lucee jar file that contains all dependencies Lucee needs to run.
 lang.lib="The Lucee Jar file, you can simply copy to your existing installation to update to Lucee 5. This file comes in 2 favors, the ""lucee.jar"" that only contains Lucee itself and no dependecies (Lucee will download dependencies if necessary) or the lucee-all.jar with all dependencies Lucee needs bundled (not availble for versions before 5.0.0.112).";
 lang.libNew="The Lucee Jar file, you can simply copy to your existing installation to update to Lucee 5. This file comes with all necessary dependencies Lucee needs build in, so no addional jars necessary.";
 
-
+lang.installer.win="Windows";
+lang.installer.lin64="Linux (64b)";
+lang.installer.lin32="Linux (32b)";
 
 	function toVersionSortable(required string version){
 		local.arr=listToArray(arguments.version,'.');
@@ -100,6 +102,7 @@ lang.libNew="The Lucee Jar file, you can simply copy to your existing installati
 		setting requesttimeout="1000";
 		// get data from server
 		var path=getDirectoryFromPath(getCurrentTemplatePath())&"downloads.ser";
+
 		if(isNull(application.download)) {
 			if(fileExists(path)) {
 				var c=fileRead(path);
@@ -150,13 +153,25 @@ lang.libNew="The Lucee Jar file, you can simply copy to your existing installati
 				local.from=qry.version[qry.recordcount];
 				local.uri=snapshots&"/rest/update/provider/changelog/"&from&"/"&to;
 				http url=uri result="local.http";
+				_http=getDirectoryFromPath(getCurrentTemplatePath())&"http.ser";
 				if(!isNull(http.status_code) && http.status_code==200) {
+					local._fileContent=http.fileContent;
+					fileWrite(_http,http.fileContent);
+				}
+				else if(fileExists(_http)) {
+					local._fileContent=fileRead(_http);
+				}
+
+				if(!isNull(local._fileContent)) {
 					queryAddColumn(qry,"changelog");
-					data=deSerializeJson(http.fileContent,false);
+					data=deSerializeJson(local._fileContent,false);
 					loop query=qry {
 						if(!isNull(data[qry.versionNoAppendix]))
 							qry.changelog[qry.currentrow]=data[qry.versionNoAppendix];
 					}
+				}
+				else {
+					fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"http.txt",local.uri&":"&serialize(http));
 				}
 			}
 			// store as file
@@ -196,6 +211,58 @@ lang.libNew="The Lucee Jar file, you can simply copy to your existing installati
 			}
 		}
 		return downloads;
+	}
+
+	struct function getInstaller(required string version) {
+		var arr=listToArray(version,'.');
+		if(arr.len()!=4 || find('-',arr[4])) return {};
+		
+		// set the right version pattern
+		while(arr[4].len()<3) arr[4]="0"&arr[4];
+		version=arr[1]&"."&arr[2]&"."&arr[3]&"."&arr[4];
+		
+		// has already the link
+		if(!isnull(application.installers[version])) {
+			// if null it was not found, we only search for it every 5 minutes
+			if(structCount(application.installers[version])==0) {
+				if(!isNull(application.installerCheck[version]) && dateAdd('n',5,application.installerCheck[version])>now())
+					return application.installers[version];
+			}
+			else return application.installers[version];
+		}
+
+		// look for the version
+		var host="http://lucee.viviotech.net";
+		var uriWin="/downloader.cfm/id/200/file/lucee-"&version&"-pl0-windows-installer.exe";
+		var uriLin64="/downloader.cfm/id/199/file/lucee-"&version&"-pl0-linux-x64-installer.run";
+		var uriLin32="/downloader.cfm/id/198/file/lucee-"&version&"-pl0-linux-installer.run";
+		var sct={};
+		application.installers[version]=sct;
+
+		if(fileExists(host&uriWin)) sct.win = host&uriWin;
+		if(fileExists(host&uriLin64)) sct.lin64 = host&uriLin64;
+		if(fileExists(host&uriLin32)) sct.lin32 = host&uriLin32;
+
+		application.installerCheck[version]=now();
+		return sct;
+	}
+	function toCDN(_url) {
+		_url=replace(_url,'lucee.viviotech.net','cdn.lucee.org');
+		_url=replace(_url,'release.lucee.org','cdn.lucee.org');
+		_url=replace(_url,'snapshot.lucee.org','cdn.lucee.org');
+		return _url;
+
+	}
+
+	function makeComparable(str) {
+		if(left(str,5)=="LDEV-") {
+			var s=listLast(str,'-');
+			while(len(s)<5)s="0"&s;
+			return s;
+		}
+		var s=mid(str,2);
+		while(len(s)<10)s="0"&s;
+		return s;
 	}
 
 
