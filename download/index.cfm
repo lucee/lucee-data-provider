@@ -409,7 +409,6 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
         }
         downloads.changelog=sct;
       }
-      downloads.changelog=sct;
     }
   }
 //dump(downloads);

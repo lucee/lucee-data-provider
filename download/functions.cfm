@@ -10,6 +10,7 @@ if(isNull(cookie.showAll_snapshots))cookie.showAll_snapshots=false;
 if(isNull(cookie.showAll_releases))cookie.showAll_releases=false;
 
 cacheLiveSpanInMinutes=5;
+extcacheLiveSpanInMinutes=1000;
 snapshots="http://snapshot.lucee.org";
 _url={
 	releases:"http://release.lucee.org"
@@ -107,7 +108,9 @@ lang.installer.lin32="Linux (32b)";
 			if(fileExists(path)) {
 				var c=fileRead(path);
 				application.download.query=evaluate(c);
-				application.download.age=dateAdd("n",-cacheLiveSpanInMinutes,now());
+				local.tmp=-cacheLiveSpanInMinutes;
+				tmp++;	
+				application.download.age=dateAdd("n",tmp,now());
 			}
 			else {
 				application.download.query=_download();
@@ -118,9 +121,10 @@ lang.installer.lin32="Linux (32b)";
 		// get data from cache (application scope)
 		else {
 			// update for the next user when older than 5 minutes
-			if(dateDiff("n",application.download.age,now())>=cacheLiveSpanInMinutes ||  !isNull(url.reset)) {
+			if(!isNull(url.reset)) {
 				application.download.age=now();
 				thread {
+					setting requesttimeout=1000000;
 					application.download.query=_download();
 				}
 			}
@@ -131,56 +135,58 @@ lang.installer.lin32="Linux (32b)";
 	}
 
 	query function _download() {
-		try{
-			local.mr=new MavenRepo();
-			flush;
-			local.start=getTickCount();
-			local.qry=mr.getAvailableVersions("all",true,false);
-			
-			// add version that can be sorted right (5.0.0.1-SNAPSHOT -> 5.000.000.0001-SNAPSHOT)
-			queryAddColumn(qry,"v");
-			queryAddColumn(qry,"versionNoAppendix");
-			loop query=qry {
-				qry.v[qry.currentrow]=toVersionSortable(qry.version);
-				qry.versionNoAppendix[qry.currentrow]=toVersionWithoutAppendix(qry.version);
-			}
-			// sort
-			querySort(qry,"v","desc");
-
-			// get changelog
-			if(qry.recordcount>0) {
-				local.to=qry.version[1];
-				local.from=qry.version[qry.recordcount];
-				local.uri=snapshots&"/rest/update/provider/changelog/"&from&"/"&to;
-				http url=uri result="local.http";
-				_http=getDirectoryFromPath(getCurrentTemplatePath())&"http.ser";
-				if(!isNull(http.status_code) && http.status_code==200) {
-					local._fileContent=http.fileContent;
-					fileWrite(_http,http.fileContent);
+		lock timeout=1 {
+			try{
+				local.mr=new MavenRepo();
+				flush;
+				local.start=getTickCount();
+				local.qry=mr.getAvailableVersions("all",true,false);
+				
+				// add version that can be sorted right (5.0.0.1-SNAPSHOT -> 5.000.000.0001-SNAPSHOT)
+				queryAddColumn(qry,"v");
+				queryAddColumn(qry,"versionNoAppendix");
+				loop query=qry {
+					qry.v[qry.currentrow]=toVersionSortable(qry.version);
+					qry.versionNoAppendix[qry.currentrow]=toVersionWithoutAppendix(qry.version);
 				}
-				else if(fileExists(_http)) {
-					local._fileContent=fileRead(_http);
-				}
+				// sort
+				querySort(qry,"v","desc");
 
-				if(!isNull(local._fileContent)) {
-					queryAddColumn(qry,"changelog");
-					data=deSerializeJson(local._fileContent,false);
-					loop query=qry {
-						if(!isNull(data[qry.versionNoAppendix]))
-							qry.changelog[qry.currentrow]=data[qry.versionNoAppendix];
+				// get changelog
+				if(qry.recordcount>0) {
+					local.to=qry.version[1];
+					local.from=qry.version[qry.recordcount];
+					local.uri=snapshots&"/rest/update/provider/changelog/"&from&"/"&to;
+					http url=uri result="local.http";
+					_http=getDirectoryFromPath(getCurrentTemplatePath())&"http.ser";
+					if(!isNull(http.status_code) && http.status_code==200) {
+						local._fileContent=http.fileContent;
+						fileWrite(_http,http.fileContent);
+					}
+					else if(fileExists(_http)) {
+						local._fileContent=fileRead(_http);
+					}
+
+					if(!isNull(local._fileContent)) {
+						queryAddColumn(qry,"changelog");
+						data=deSerializeJson(local._fileContent,false);
+						loop query=qry {
+							if(!isNull(data[qry.versionNoAppendix]))
+								qry.changelog[qry.currentrow]=data[qry.versionNoAppendix];
+						}
+					}
+					else {
+						fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"http.txt",local.uri&":"&serialize(http));
 					}
 				}
-				else {
-					fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"http.txt",local.uri&":"&serialize(http));
-				}
+				// store as file
+				fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"downloads.ser",serialize(qry));
 			}
-			// store as file
-			fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"downloads.ser",serialize(qry));
+			catch(ex) {
+				fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"err.txt",serialize(ex));
+			}
+			return qry;
 		}
-		catch(ex) {
-			fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"err.txt",serialize(ex));
-		}
-		return qry;
 	}
 
 	function _getExtensions(boolean beta=false) localmode=true {
@@ -202,7 +208,7 @@ lang.installer.lin32="Linux (32b)";
 		else {
 			local.downloads=application['downloadExtensions_'&beta].query;
 			// update for the next user when older than 5 minutes
-			if(dateDiff("n",application['downloadExtensions_'&beta].age,now())>=cacheLiveSpanInMinutes) {
+			if(dateDiff("n",application['downloadExtensions_'&beta].age,now())>=extcacheLiveSpanInMinutes) {
 				application['downloadExtensions_'&beta].age=now();
 				thread {
 					application['downloadExtensions_'&beta].query=_getExtensions(arguments.beta);
