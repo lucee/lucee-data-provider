@@ -103,9 +103,11 @@ lang.installer.lin32="Linux (32b)";
 		setting requesttimeout="1000";
 		// get data from server
 		var path=getDirectoryFromPath(getCurrentTemplatePath())&"downloads.ser";
+		var force=!isNull(url.reset) && url.reset=='force';
 
-		if(isNull(application.download)) {
-			if(fileExists(path)) {
+
+		if(isNull(application.download) || force) {
+			if(fileExists(path) && !force) {
 				var c=fileRead(path);
 				application.download.query=evaluate(c);
 				local.tmp=-cacheLiveSpanInMinutes;
@@ -134,6 +136,37 @@ lang.installer.lin32="Linux (32b)";
 		return application.download.query;
 	}
 
+
+	query function merge(qry) {
+		var dir=getDirectoryFromPath(getCurrentTemplatePath());
+		var file=dir&"downloads.ser";
+		if(!fileExists(file)) return qry;
+		
+		// existing
+		var c=fileRead(file);
+		var qryEx=evaluate(c);
+		var sct={};
+		loop query=qryEx {
+			sct[qryEx.version]=querySlice(qryEx,qryEx.currentrow,1);
+		}
+
+		// new
+		loop query=qry {
+			sct[qry.version]=querySlice(qry,qry.currentrow,1);
+		}
+
+		// now convert back to a query
+		var colNames=qry.columnlist;
+		var qryNew=queryNew(colNames);
+		loop struct=sct index="local.k" item="local.q" {
+			var row=queryAddRow(qryNew);
+			loop list=colNames item="local.colName" {
+				querySetCell(qryNew,colName,q[colName],row);
+			}
+		}
+		return qryNew;
+	}
+
 	query function _download() {
 		lock timeout=1 {
 			try{
@@ -149,6 +182,8 @@ lang.installer.lin32="Linux (32b)";
 					qry.v[qry.currentrow]=toVersionSortable(qry.version);
 					qry.versionNoAppendix[qry.currentrow]=toVersionWithoutAppendix(qry.version);
 				}
+				// merge with existing data (if exist), because sometime maven does not deliver all data
+				qry=merge(qry);
 				// sort
 				querySort(qry,"v","desc");
 
