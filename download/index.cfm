@@ -52,29 +52,29 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 			]
 			,installer:[
 				{
-					win:"http://cdn.lucee.org/downloader.cfm/id/177/file/lucee-4.5.5.006-pl0-windows-installer.exe"
-					,lin64:"http://cdn.lucee.org/downloader.cfm/id/176/file/lucee-4.5.5.006-pl0-linux-x64-installer.run"
-					,lin32:"http://cdn.lucee.org/downloader.cfm/id/175/file/lucee-4.5.5.006-pl0-linux-installer.run"
+					win:"http://cdn.lucee.org/lucee-4.5.5.006-pl0-windows-installer.exe"
+					,lin64:"http://cdn.lucee.org/lucee-4.5.5.006-pl0-linux-x64-installer.run"
+					,lin32:"http://cdn.lucee.org/lucee-4.5.5.006-pl0-linux-installer.run"
 				}
 				,{
-					win:"http://cdn.lucee.org/downloader.cfm/id/177/file/lucee-4.5.4.017-pl0-windows-installer.exe"
-					,lin64:"http://cdn.lucee.org/downloader.cfm/id/176/file/lucee-4.5.4.017-pl0-linux-x64-installer.run"
-					,lin32:"http://cdn.lucee.org/downloader.cfm/id/175/file/lucee-4.5.4.017-pl0-linux-installer.run"
+					win:"http://cdn.lucee.org/lucee-4.5.4.017-pl0-windows-installer.exe"
+					,lin64:"http://cdn.lucee.org/lucee-4.5.4.017-pl0-linux-x64-installer.run"
+					,lin32:"http://cdn.lucee.org/lucee-4.5.4.017-pl0-linux-installer.run"
 				}
 				,{
-					win:"http://cdn.lucee.org/downloader.cfm/id/177/file/lucee-4.5.3.020-pl0-windows-installer.exe"
-					,lin64:"http://cdn.lucee.org/downloader.cfm/id/176/file/lucee-4.5.3.020-pl0-linux-x64-installer.run"
-					,lin32:"http://cdn.lucee.org/downloader.cfm/id/175/file/lucee-4.5.3.020-pl0-linux-installer.run"
+					win:"http://cdn.lucee.org/lucee-4.5.3.020-pl0-windows-installer.exe"
+					,lin64:"http://cdn.lucee.org/lucee-4.5.3.020-pl0-linux-x64-installer.run"
+					,lin32:"http://cdn.lucee.org/lucee-4.5.3.020-pl0-linux-installer.run"
 				}
 				,{
-					win:"http://cdn.lucee.org/downloader.cfm/id/177/file/lucee-4.5.2.018-pl0-windows-installer.exe"
-					,lin64:"http://cdn.lucee.org/downloader.cfm/id/176/file/lucee-4.5.2.018-pl0-linux-x64-installer.run"
-					,lin32:"http://cdn.lucee.org/downloader.cfm/id/175/file/lucee-4.5.2.018-pl0-linux-installer.run"
+					win:"http://cdn.lucee.org/lucee-4.5.2.018-pl0-windows-installer.exe"
+					,lin64:"http://cdn.lucee.org/lucee-4.5.2.018-pl0-linux-x64-installer.run"
+					,lin32:"http://cdn.lucee.org/lucee-4.5.2.018-pl0-linux-installer.run"
 				}
 				,{
-					win:"http://cdn.lucee.org/downloader.cfm/id/177/file/lucee-4.5.1.024-pl0-windows-installer.exe"
-					,lin64:"http://cdn.lucee.org/downloader.cfm/id/176/file/lucee-4.5.1.024-pl0-linux-x64-installer.run"
-					,lin32:"http://cdn.lucee.org/downloader.cfm/id/175/file/lucee-4.5.1.024-pl0-linux-installer.run"
+					win:"http://cdn.lucee.org/lucee-4.5.1.024-pl0-windows-installer.exe"
+					,lin64:"http://cdn.lucee.org/lucee-4.5.1.024-pl0-linux-x64-installer.run"
+					,lin32:"http://cdn.lucee.org/lucee-4.5.1.024-pl0-linux-installer.run"
 				}
 			]
 			,express:[

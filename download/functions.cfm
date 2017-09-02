@@ -273,10 +273,10 @@ lang.installer.lin32="Linux (32b)";
 		}
 
 		// look for the version
-		var host="http://lucee.viviotech.net";
-		var uriWin="/downloader.cfm/id/200/file/lucee-"&version&"-pl0-windows-installer.exe";
-		var uriLin64="/downloader.cfm/id/199/file/lucee-"&version&"-pl0-linux-x64-installer.run";
-		var uriLin32="/downloader.cfm/id/198/file/lucee-"&version&"-pl0-linux-installer.run";
+		var host="http://cdn.lucee.org";
+		var uriWin="/lucee-"&version&"-pl0-windows-installer.exe";
+		var uriLin64="/lucee-"&version&"-pl0-linux-x64-installer.run";
+		var uriLin32="/lucee-"&version&"-pl0-linux-installer.run";
 		var sct={};
 		application.installers[version]=sct;
 
