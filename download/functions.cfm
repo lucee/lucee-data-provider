@@ -263,7 +263,7 @@ lang.installer.lin32="Linux (32b)";
 		version=arr[1]&"."&arr[2]&"."&arr[3]&"."&arr[4];
 		
 		// has already the link
-		if(!isnull(application.installers[version])) {
+		if(!isnull(application.installers[version]) || !isNull(url.reset)) {
 			// if null it was not found, we only search for it every 5 minutes
 			if(structCount(application.installers[version])==0) {
 				if(!isNull(application.installerCheck[version]) && dateAdd('n',5,application.installerCheck[version])>now())

@@ -427,7 +427,7 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 			<cfset installers=getInstaller(downloads.version[latest])>
 			<cfif structCount(installers)>
 				<h3>Installers (*.exe, *.run)</h3>
-				<p>Plattform Specific Installers for
+				<p>Platform Specific Installers for
 				<cfset count=1>
 				<cfset str="">
 				<cfset l=structCount(installers)>
