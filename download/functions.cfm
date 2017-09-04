@@ -255,8 +255,8 @@ lang.installer.lin32="Linux (32b)";
 	}
 
 	struct function getInstaller(required string version) {
-		var force=!isNull(url.resetinstaller) && url.resetinstaller=='force';
-		if (force) {
+		var reset=!isNull(url.reset);
+		if (reset) {
 			structDelete(application, "installers");
 			structDelete(application, "installerCheck");
 		}
