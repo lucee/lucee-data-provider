@@ -511,7 +511,7 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 		<tr>
 			<td align="center"><h3>Version</h3></td>
 			<td align="center"><h3>Date</h3></td>
-			<cfif  type == "releases"><td align="center"><h3>Installer</h3></td></cfif>	
+			<cfif  url.type == "releases"><td align="center"><h3>Installer</h3></td></cfif>	
 			<td align="center"><h3>Express</h3></td>
 			<td align="center"><h3>Jar</h3></td>
 			<td align="center"><h3>Core</h3></td>
@@ -541,7 +541,7 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 			<tr>
 				<td class="#css#" align="center">#downloads.version#</td>
 				<td class="#css#" align="center">#lsDateFormat(downloads.jarDate)#</td>
-				<cfif  type == "releases">
+				<cfif  url.type == "releases">
 					<td class="#css#">
 					<cfset installers=getInstaller(downloads.version)>
 					<cfset count=1>
