@@ -20,8 +20,9 @@ _url={
 
 
 
-EXTENSION_PROVIDER="http://extension.lucee.org/rest/extension/provider/info?withLogo=true";
-EXTENSION_PROVIDER_BETA="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&beta=true";
+EXTENSION_PROVIDER="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=release";
+EXTENSION_PROVIDER_ABC="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=abc";
+EXTENSION_PROVIDER_SNAPSHOT="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=snapshot";
 EXTENSION_DOWNLOAD="http://extension.lucee.org/rest/extension/provider/{type}/{id}";
 
 // texts
@@ -30,7 +31,7 @@ EXTENSION_DOWNLOAD="http://extension.lucee.org/rest/extension/provider/{type}/{i
 
 jarInfo='(Java ARchive, read more about <a target="_blank" href="https://en.wikipedia.org/wiki/JAR_(file_format)">here</a>)';
 lang.desc={
-	abc:"Alpha, Beta and Release Candidates are a preview for upcoming versions and not ready for production environments."
+	abc:"Beta and Release Candidates are a preview for upcoming versions and not ready for production environments."
 	,releases:"Releases are ready for production environments."
 	,snapshots:"Snapshots are generated automatically with every push to the repository. 
 	Snapshots can be unstable are NOT recommended for production environments."
@@ -224,29 +225,32 @@ lang.installer.lin32="Linux (32b)";
 		}
 	}
 
-	function _getExtensions(boolean beta=false) localmode=true {
-		
-		local.ep=arguments.beta?EXTENSION_PROVIDER_BETA:EXTENSION_PROVIDER;
+	function _getExtensions(required string type) localmode=true {
+		if(arguments.type=="snapshot") local.ep=EXTENSION_PROVIDER_SNAPSHOT;
+		else if(arguments.type=="abc") local.ep=EXTENSION_PROVIDER_ABC;
+		else local.ep=EXTENSION_PROVIDER;
+		//dump(type&"-"&ep);abort;
+
 		http url=ep result="http";
 		if(isNull(http.status_code) || http.status_code!=200) throw "could not connect to extension provider (#ep#)";
 		data=deSerializeJson(http.fileContent,false);
 		return data.extensions;
 	}
 
-	function getExtensions(boolean beta=false) localmode=true {
+	function getExtensions(required string type) localmode=true {
 		// get data from server
-		if(isNull(application['downloadExtensions_'&beta].query) || !isNull(url.reset)){
-			application['downloadExtensions_'&beta].query=local.downloads=_getExtensions(arguments.beta);
-			application['downloadExtensions_'&beta].age=now();
+		if(isNull(application['downloadExtensions_'&type].query) || !isNull(url.reset) || !isNull(url.resetExtension)){
+			application['downloadExtensions_'&type].query=local.downloads=_getExtensions(arguments.type);
+			application['downloadExtensions_'&type].age=now();
 		}
 		// get data from cache (application scope)
 		else {
-			local.downloads=application['downloadExtensions_'&beta].query;
+			local.downloads=application['downloadExtensions_'&type].query;
 			// update for the next user when older than 5 minutes
-			if(dateDiff("n",application['downloadExtensions_'&beta].age,now())>=extcacheLiveSpanInMinutes) {
-				application['downloadExtensions_'&beta].age=now();
+			if(dateDiff("n",application['downloadExtensions_'&type].age,now())>=extcacheLiveSpanInMinutes) {
+				application['downloadExtensions_'&type].age=now();
 				thread {
-					application['downloadExtensions_'&beta].query=_getExtensions(arguments.beta);
+					application['downloadExtensions_'&type].query=_getExtensions(arguments.type);
 					systemOutput("done");
 				}
 			}
@@ -255,7 +259,7 @@ lang.installer.lin32="Linux (32b)";
 	}
 
 	struct function getInstaller(required string version) {
-		var reset=!isNull(url.reset);
+		var reset=!isNull(url.reset) || !isNull(url.resetInstaller);
 		if (reset) {
 			structDelete(application, "installers");
 			structDelete(application, "installerCheck");
@@ -283,6 +287,15 @@ lang.installer.lin32="Linux (32b)";
 		var uriWin="/lucee-"&version&"-pl0-windows-installer.exe";
 		var uriLin64="/lucee-"&version&"-pl0-linux-x64-installer.run";
 		var uriLin32="/lucee-"&version&"-pl0-linux-installer.run";
+
+		/*
+direct links
+		var host="http://lucee.viviotech.net";
+ 		var uriWin="/downloader.cfm/id/200/file/lucee-"&version&"-pl0-windows-installer.exe";
+ 		var uriLin64="/downloader.cfm/id/199/file/lucee-"&version&"-pl0-linux-x64-installer.run";
+ 		var uriLin32="/downloader.cfm/id/198/file/lucee-"&version&"-pl0-linux-installer.run";
+		*/
+
 		var sct={};
 		application.installers[version]=sct;
 

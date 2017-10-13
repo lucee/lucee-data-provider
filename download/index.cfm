@@ -1,9 +1,14 @@
 <cfscript>
+if(isNull(url.type)) url.type="releases";
+
 if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org" addtoken=false;
   MAX=1000;
 	include "functions.cfm";
-  isBeta=!isNull(url.beta) && url.beta;
-	query=getExtensions(isBeta);
+
+if(url.type=='ext') extQry=getExtensions('release');
+else if(url.type=='extabc') extQry=getExtensions('abc');
+else if(url.type=='extsnap') extQry=getExtensions('snapshot');
+
 
 	_5_0_0_70=toVersionSortable("5.0.0.70-SNAPSHOT");
 	_5_0_0_112=toVersionSortable("5.0.0.112-SNAPSHOT");
@@ -29,8 +34,11 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 
 	intro="The latest {type} is version <b>{version}</b> released at <b>{date}</b>.";
 	historyDesc="Older Versions:";
-  singular={releases:"Release",snapshots:"Snapshot",abc:'Alpha / Beta / RC'};
-  multi={releases:"Releases",snapshots:"Snapshots",abc:'Alphas / Betas / RCs'};
+  singular={
+  	releases:"Release",snapshots:"Snapshot",abc:'Beta / RC'
+  	,ext:"Release",extsnap:"Snapshot",extabc:'Beta / RC'
+  };
+  multi={releases:"Releases",snapshots:"Snapshots",abc:'Betas / RCs'};
 
   noVersion="There are currently no downloads available in this category.";
 
@@ -326,19 +334,24 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 
 <h1>Downloads</h1>
 
+
+<h2>Lucee</h2>
 <p>
 <a class="linkk" href="?type=releases">Releases</a>
-| <a class="linkk" href="?type=abc">Alphas/Betas/Release Candidates</a>
+| <a class="linkk" href="?type=abc">Betas/Release Candidates</a>
 | <a class="linkk" href="?type=snapshots">Snapshots</a>
 </p>
 
 
+<h2>Extensions</h2>
 <p>
-<a class="linkk" href="?type=extensions">Extensions</a>
-| <a class="linkk" href="?type=extensions&beta=true">Extensions (Alpha/Beta)</a>
+<a class="linkk" href="?type=ext">Releases</a>
+| <a class="linkk" href="?type=extabc">Betas/Release Candidates</a>
+| <a class="linkk" href="?type=extsnap">Snapshots</a>
 </p>
 
-
+<br>
+<hr>
 
 <cfif type=="releases" || type=="snapshots" || type=="abc">
 <cfscript>
@@ -419,7 +432,8 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 <cfif isNull(latest)>
   <p>#noVersion#</p>
 <cfelse>
-		<h2>Latest 	#singular[type]# (#downloads.version[latest]#)</h2>
+		<h1>Lucee #singular[type]#</h1>
+		<h2>#downloads.version[latest]#</h2>
 		<p>#replace(replace(replace(intro,"{date}",lsDateFormat(downloads.jarDate[latest])),"{version}",downloads.version[latest]),"{type}",singular[type])# #lang.desc[type]#</p>
 
 		<!--- installers --->
@@ -691,43 +705,45 @@ if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org"
 
 
 
-<cfif type=="extensions">
+<cfif !isNull(extQry)>
 
 <!--- output --->
 <cfoutput>
-<h2>#UCFirst(type)#</h2>
+<h1>Extension #singular[url.type]#</h1>
 <p>Lucee Extensions, simply copy them to /lucee-server/deploy, of a running Lucee installation, to install them.</p>
 
-<cfif isBeta>
+<cfif url.type=="extabc">
 <p>To install this Extensions from within your Lucee Administrator, you need to add "http://beta.lucee.org" under "Extension/Provider" as a new Provider, after that you can install this Extensions under "Extension/Application" in the Administartor.</p>
-<cfelse>
+<cfelseif url.type=="ext">
 <p>You can also install this Extensions from within your Lucee Administrator under "Extension/Application".</p>
+<cfelseif url.type=="extsnap">
+<p>There are no Snapshot versions yet available.</p>
 </cfif>
 
 
 <table border="1">
-<cfloop query="#query#">
+<cfloop query="#extQry#">
 <tr>
-	<td><img src="data:image/png;base64,#query.image#"></td>
+	<td><img src="data:image/png;base64,#extQry.image#"></td>
 	<td>
-		<h2>#query.name#</h2>
+		<h2>#extQry.name#</h2>
 		<p>
-			ID:#query.id#<br>
-			Latest Version:#query.version#<br>
-			Category:#query.category#<br>
-			Birth Date:#query.created#<br>
-			Trial:#yesNoFormat(query.trial)#
+			ID:#extQry.id#<br>
+			Latest Version:#extQry.version#<br>
+			Category:#extQry.category#<br>
+			Birth Date:#extQry.created#<br>
+			Trial:#yesNoFormat(extQry.trial)#
 		</p>
-		<p>#query.description#</p>
-		<p><a href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',query.trial?"trial":"full"),'{id}',query.id)#?version=#query.version#">
-		download#query.trial?" trial":""# version (#query.version#)  </a></p>
-		<cfif !isNull(query.older) && isArray(query.older) && arrayLen(query.older)>
-		<cftry><cfset arraySort(query.older,function(l,r) {return compare(toVersionSortable(l),toVersionSortable(r)); })><cfcatch></cfcatch></cftry>
+		<p>#extQry.description#</p>
+		<p><a href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',extQry.trial?"trial":"full"),'{id}',extQry.id)#?version=#extQry.version#">
+		download#extQry.trial?" trial":""# version (#extQry.version#)  </a></p>
+		<cfif !isNull(extQry.older) && isArray(extQry.older) && arrayLen(extQry.older)>
+		<cftry><cfset arraySort(extQry.older,function(l,r) {return compare(toVersionSortable(l),toVersionSortable(r)); })><cfcatch></cfcatch></cftry>
 		<p>Older Versions:
 		<ul>
-		<cfloop array="#query.older#" item="_older">
-			<li><a href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',query.trial?"trial":"full"),'{id}',query.id)#?version=#_older#">
-		download#query.trial?" trial":""# version (#_older#)  </a></li>
+		<cfloop array="#extQry.older#" item="_older">
+			<li><a href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',extQry.trial?"trial":"full"),'{id}',extQry.id)#?version=#_older#">
+		download#extQry.trial?" trial":""# version (#_older#)  </a></li>
 		</cfloop>
 	</ul>
 		</p>

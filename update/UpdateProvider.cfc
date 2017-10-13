@@ -6,6 +6,11 @@
 	MIN_UPDATE_VERSION="5.0.0.254";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
 
+	variables.mavenMappings={
+		'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
+	};
+
+
 
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.jarDirectory=variables.current&"bundles/";
@@ -426,12 +431,22 @@
 				,"https://oss.sonatype.org/content/repositories/releases"
 			];
 
-			var uri="/"
-				&replace(arguments.bundleName,'.','/','all')&"/"
-				&arguments.bundleVersion&"/"
-				&listLast(arguments.bundleName,'.')&"-"
-				&arguments.bundleVersion&".jar";
-			
+			// /mysql/mysql-connector-java/5.1.44/mysql-connector-java-5.1.44.jar
+			// 'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
+
+			if(structKeyExists(variables.mavenMappings,arguments.bundleName)) {
+				var mvnId=variables.mavenMappings[arguments.bundleName];
+				var uri="/"&mvnId.group&"/"&mvnId.artifact&
+						"/"&arguments.bundleVersion&
+						"/"&mvnId.artifact&"-"&arguments.bundleVersion&".jar";
+			}
+			else {
+				var uri="/"
+					&replace(arguments.bundleName,'.','/','all')&"/"
+					&arguments.bundleVersion&"/"
+					&listLast(arguments.bundleName,'.')&"-"
+					&arguments.bundleVersion&".jar";
+			}
 			loop array=repositories item="local.rep" {
 				if(fileExists(rep&uri)) {
 					local.redirectURL=rep&uri;
