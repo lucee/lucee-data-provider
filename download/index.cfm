@@ -473,7 +473,7 @@ else if(url.type=='extsnap') extQry=getExtensions('snapshot');
 		<a href="#toCDN(uri)#">lucee.jar<cfif downloads.v[latest] LT _5_0_0_219> (no dependecies)</cfif></a>
 		<cfif downloads.v[latest] GTE _5_0_0_112 and downloads.v[latest] LT _5_0_0_219>
 			<cfset uri="#_url[type]#/rest/update/provider/loader-all/#downloads.version[latest]#">
-			<br><a href="#toCDN(uri)#">lucee-all.jar (with dependecies)</a>
+			<br><a href="#toCDN(uri)#">lucee.jar (with dependecies)</a>
 		</cfif>
 		</p>
 
@@ -582,7 +582,7 @@ else if(url.type=='extsnap') extQry=getExtensions('snapshot');
 						<a href="#toCDN(uri)#">lucee.jar</a>
 					<cfelseif downloads.v GTE _5_0_0_112>
 						<cfset uri="#_url[type]#/rest/update/provider/loader-all/#downloads.version#">
-						<a href="#toCDN(uri)#">lucee-all.jar</a></span>
+						<a href="#toCDN(uri)#">lucee.jar</a></span>
 					<cfelse>
 						-
 					</cfif></td>
@@ -717,7 +717,6 @@ else if(url.type=='extsnap') extQry=getExtensions('snapshot');
 <cfelseif url.type=="ext">
 <p>You can also install this Extensions from within your Lucee Administrator under "Extension/Application".</p>
 <cfelseif url.type=="extsnap">
-<p>There are no Snapshot versions yet available.</p>
 </cfif>
 
 
