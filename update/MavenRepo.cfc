@@ -505,6 +505,50 @@ component {
 		if(!fileExists(jar)) fileCopy(getInfo(version:version,checkIgnoreMajor:false).jarSrc,jar); // download it to local
 		return jar;
 	}
+
+
+
+	/**
+	* returns local location for the loader (lucee.jar) of a specific version (get downloaded if necessary)
+	* @version version to get jars for, can also be 
+	*/
+	public string function getLightLoader(required string version) {
+		local.jar=getArtifactDirectory()&"lucee-light-"&version&".jar"; // the jar
+		if(fileExists(jar)) return jar;
+
+		var loader=getLoader(version);
+		try {
+			// make a copy to work on
+			local.tmpLoader=getArtifactDirectory()&"lucee-tmp-"&createUniqueId()&".jar"; // the jar
+			fileCopy(loader,tmpLoader);
+
+			// remove extensions
+			var extDir="zip://"&tmpLoader&"!/extensions";
+			directoryDelete(extDir,true); // deletes directory with all files inside
+			directoryCreate(extDir); // create empty dir again (maybe Lucee expect this directory to exist)
+
+			// update Manifest from the core file
+			var lcoFile="zip://"&tmpLoader&"!/core/core.lco";
+			local.tmpCore=getArtifactDirectory()&"lucee-tmp-"&createUniqueId()&".lco"; // the jar
+			fileCopy(lcoFile,tmpCore);
+			var manifest="zip://"&tmpCore&"!/META-INF/MANIFEST.MF";
+			var content=fileRead(manifest);
+			var index=find('Require-Extension',content);
+			if(index>0) content=mid(content,1,index-1)&variables.NL;
+			fileWrite(manifest,content);
+			fileCopy(tmpCore,lcoFile);
+
+			fileMove(tmpLoader,jar);
+
+		}
+		finally {
+			if(!isNull(tmpLoader) && fileExists(tmpLoader)) fileDelete(tmpLoader);
+			if(!isNull(tmpCore) && fileExists(tmpCore)) fileDelete(tmpCore);
+		}
+
+
+		return jar;
+	}
 	
 
 	/**

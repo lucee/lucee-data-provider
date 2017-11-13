@@ -161,7 +161,7 @@
 	}*/
 
 	/**
-	* function to download Railo Loader file (lucee.jar)
+	* function to download Lucee Loader file (lucee.jar)
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
 	*/
 	remote function downLoader(required string version restargsource="Path",string ioid="" restargsource="url", boolean allowRedirect=true restargsource="url")
@@ -195,8 +195,33 @@
 
 
 	/**
-	* function to download Railo Loader file (lucee-all.jar) that bundles all dependencies
+	* function to download Light Lucee Loader file (lucee-light.jar)
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
+	*/
+	remote function downLight(required string version restargsource="Path",string ioid="" restargsource="url")
+		httpmethod="GET" restpath="light/{version}" {
+		local.mr=new MavenRepo();
+
+		try{
+			local.path=mr.getLightLoader(version);
+		}
+		catch(e){
+			return {
+				"type":"error",
+				"message":"The version #version# is not available as a light version.",
+				"detail":e.message};
+		}
+
+		file action="readBinary" file="#path#" variable="local.bin";
+		header name="Content-disposition" value="attachment;filename=lucee-light-#version#.jar";
+        content variable="#bin#" type="application/zip";
+	}
+
+	/**
+	* function to download Lucee Loader file (lucee-all.jar) that bundles all dependencies
+	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
+	* 
+	* used by old version 
 	*/
 	remote function downLoaderAll(required string version restargsource="Path",string ioid="" restargsource="url", boolean allowRedirect=true restargsource="url")
 		httpmethod="GET" restpath="loader-all/{version}" {
@@ -223,7 +248,7 @@
 
 
 	/**
-	* function to download Railo Core file
+	* function to download Lucee Core file
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
 	*/
 	remote function downloadCoreAlias(
@@ -288,7 +313,7 @@
 
 
 	/**
-	* function to download Railo Core file
+	* function to download Lucee Core file
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
 	*/
 	remote function downloadWar(required string version restargsource="Path",string ioid="" restargsource="url")
@@ -517,15 +542,20 @@
 		
 		// first we get all matching bundles
 		var file="";
+		//var str="";
 		loop list=variables.artDirectory&","&variables.jarDirectory item="local.dir" {
 			directory action="list" name="local.children" directory=dir filter="*.jar";
-			var bn=arguments.bundleName&"-";
-			var lbn=len(bn);
+			var bn1=arguments.bundleName&"-";
+			var bn2=replace(arguments.bundleName,'-','.','all')&"-";
+			var bn3=replace(arguments.bundleName,'.','-','all')&"-";
+			var lbn=len(bn1);
 			loop query=children {
-				if(left(children.name,lbn)==bn) {
+				if(left(children.name,lbn)==bn1 || left(children.name,lbn)==bn2 || left(children.name,lbn)==bn3) {
 					v=mid(children.name,lbn+1);
 					v=left(v,len(v)-4); // remove .jar
+					//str&="-"&v&isVersion(v);
 					if(isVersion(v)) {
+
 						var vs=toVersion(v);
 						if(!isStruct(file) || isNewer(vs,file.version)) {
 							file={
@@ -540,6 +570,10 @@
 
 			}
 		}
+		/*if(!isNull(url.abcd)) {
+			throw (serialize(file))&str;
+
+		}*/
 		if(isStruct(file)) {
 			file action="readBinary" file="#file.dir#/#file.filename#" variable="local.bin";
 			header name="Content-disposition" value="attachment;filename=#file.filename#";
@@ -931,7 +965,7 @@ private function getVersionInfoFromJira( string version="" ) {
 /** 
 * retruns the Release Notes from JIRA
 * 
-* @version - the Railo version, e.g. 4.0.3.005
+* @version - the Lucee version, e.g. 5.0.3.005
 */
 private struct function getVersionReleaseNotes( required string versionFrom, string versionTo="", boolean simple=false) {
 
