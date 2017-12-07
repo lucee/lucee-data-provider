@@ -5,9 +5,7 @@
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.extensionDir=variables.current&"extensions/";
 	variables.ext="lex";
-	application.extensionLast=0;
-
-	variables.isBetaChannel=false;
+	application._extensionLast=0;
 
 	variables.columnList='id,version,name,description,image,category,author,created,releaseType,minLoaderVersion,minCoreVersion'
 			&',price,currency,disableFull,trial,older,promotionLevel,promotionText';
@@ -17,7 +15,7 @@
 		
 
 
-		if(application.extensionLast>getTickCount()-variables.EXPIRE) return;
+		if(application._extensionLast>getTickCount()-variables.EXPIRE) return;
 				
 		directory action="list" name="local.dir" directory="#variables.extensionDir#" filter="*.#variables.ext#" sort="asc";
 
@@ -64,7 +62,7 @@
 					manifest:main,
 					filename:dir.name,
 					version:toVersionSortable(main.version),
-					beta:findNoCase('BETA',main.version)>0
+					rawversion:main.version
 				};
 
 
@@ -78,7 +76,7 @@
 			rethrow;
 			//throw serialize(e);
 		}
-		application.extensionLast=getTickCount();
+		application._extensionLast=getTickCount();
 		application.extensions=tmpAll;
 		//application.extensionLatest=tmpLatest;
 		//systemOutput(tmp,true,true);
@@ -106,12 +104,12 @@
 								required string language="en" restargsource="url",
 								required boolean withLogo=true restargsource="url",
 								required string coreVersion="" restargsource="url",
-								required beta='' restargsource="url")
+								required type='release' restargsource="url")
 		httpmethod="GET" restpath="info" {
 
-		if(!isBoolean(arguments.beta)) {
-			arguments.beta=findNoCase("beta.",cgi.SERVER_NAME);
-		}
+		if(findNoCase("beta.",cgi.SERVER_NAME)) arguments.type="abc";
+		
+
 
 
 		if(len(arguments.coreVersion))
@@ -123,7 +121,7 @@
 		rtn.meta.description="";
 		rtn.meta.image="http://extension.lucee.org/extension5/extension-provider.png";
 		rtn.meta.url="http://"&cgi.HTTP_HOST;
-		rtn.meta.mode="develop";
+		rtn.meta.mode="production";
 
 		init();
 
@@ -132,7 +130,7 @@
 		
 		// we only show full versions in the list
 		loop struct="#application.extensions.full#" index="local.id" item="local.all" {
-			local.coll=_getLatest(all,isNull(local.luceeVersion)?"":local.luceeVersion,arguments.beta);
+			local.coll=_getLatest(all,isNull(local.luceeVersion)?"":local.luceeVersion,arguments.type);
 			if(isSimpleValue(coll)) continue;
 
 			local.main=coll.manifest;
@@ -174,27 +172,17 @@
 			var arr=[];
 			var v=toVersionSortable(queryGetCell(rtn.extensions,"version",row));
 			loop struct=_older index="local._versionSortable" item="local._data" {
-				if(v>toVersionSortable(_data.manifest.version) && arguments.beta == _data.beta) {
+				if(v>toVersionSortable(_data.manifest.version) && typeMatch(_data.rawversion,arguments.type)) {
 					arrayAppend(arr,_data.manifest.version)
 				}
 				
 			}
 			querySetCell(rtn.extensions,"older",arr,row);
-
-
-
-			//querySetCell(rtn.extensions,"trial",true);
 		}
-		
-		//systemOutput(queryColumnData(rtn,'trial'),true,true);
 		return rtn;
 	}
 
-	private function _getLatest(struct all,string luceeVersion, boolean beta=false) {
-		//var t="";
-		
-
-
+	private function _getLatest(struct all,string luceeVersion, string type) {
 
 		loop struct=all index="local.v" item="local.data" {
 			// min core version is bigger than given core version
@@ -202,20 +190,16 @@
 				!isNull(data.manifest['lucee-core-version']) && 
 				toVersionSortable(data.manifest['lucee-core-version'])>luceeVersion) continue;
 
+			if(!typeMatch(data.rawversion,type)) continue;
 			
-			if(arguments.beta != data.beta) continue;
-
-
 			// no we pick the latest
 			if(isNull(rtnVersion) || rtnVersion<v) {
 				local.rtnVersion=v;
 				local.rtn=data;
 			}
 		}
-		//if(find("PDF",t))throw t;
 		return isNull(rtn)?"":rtn;
 	}
-
 
 	/**
 	* if there is a update the function is returning a struct like this:
@@ -240,13 +224,14 @@
 								required boolean withLogo=true restargsource="url"
 								,string version="" restargsource="url"
 								,string coreVersion="" restargsource="url",
-								boolean beta=false restargsource="url")
+								string type='release' restargsource="url")
 		httpmethod="GET" restpath="info/{id}" {
 
 		if(len(arguments.coreVersion))
 			local.luceeVersion=toVersionSortable(arguments.coreVersion);
 		
-
+		if(findNoCase("beta.",cgi.SERVER_NAME)) arguments.type="abc";
+		
 		local.type="full";
 		var rtn={};
 
@@ -264,7 +249,7 @@
 		}
 		// no version defintion
 		else {
-			local.data=_getLatest(application.extensions[type][arguments.id],isNull(local.luceeVersion)?"":local.luceeVersion,arguments.beta);
+			local.data=_getLatest(application.extensions[type][arguments.id],isNull(local.luceeVersion)?"":local.luceeVersion,arguments.type);
 			local.found=!isSimpleValue(data);
 		}
 
@@ -279,9 +264,6 @@
 			echo(text);
 			return ;
 		 }
-
-
-
 
 		// we only show full versions in the info
 			local.main=data.manifest;
@@ -333,9 +315,12 @@
 		,string IOid="" restargsource="url"
 		,string version="" restargsource="url"
 		,string coreVersion="" restargsource="url"
-		,boolean beta=false restargsource="url")
+		,string type='release' restargsource="url")
 		httpmethod="GET" restpath="trial/{id}" {
-		_get(arguments.id,arguments.version,arguments.coreVersion,"trial",arguments.beta);
+
+		if(findNoCase("beta.",cgi.SERVER_NAME)) arguments.type="abc";
+
+		_get(arguments.id,arguments.version,arguments.coreVersion,"trial",arguments.type);
 	}
 
 	/**
@@ -346,12 +331,15 @@
 		,string IOid="" restargsource="url"
 		,string version="" restargsource="url"
 		,string coreVersion="" restargsource="url"
-		,boolean beta=false restargsource="url")
+		,string type='release' restargsource="url")
 		httpmethod="GET" restpath="full/{id}" {
-		_get(arguments.id,arguments.version,arguments.coreVersion,"full",arguments.beta);
+
+		if(findNoCase("beta.",cgi.SERVER_NAME)) arguments.type="abc";
+
+		_get(arguments.id,arguments.version,arguments.coreVersion,"full",arguments.type);
 	}
 
-	private function _get(required string id, required string version, string coreVersion, required string type,boolean beta) {
+	private function _get(required string id, required string version, string coreVersion, required string type, string verType='release') {
 
 		if(len(arguments.coreVersion))
 			local.luceeVersion=toVersionSortable(arguments.coreVersion);
@@ -374,7 +362,7 @@
 			// no version defintion
 			else {
 
-				local.data=_getLatest(application.extensions[type][arguments.id],isNull(local.luceeVersion)?"":local.luceeVersion,arguments.beta);
+				local.data=_getLatest(application.extensions[type][arguments.id],isNull(local.luceeVersion)?"":local.luceeVersion,arguments.verType);
 				local.found=!isSimpleValue(data);
 			}
 
@@ -475,6 +463,20 @@
 		return sct;
 	}
 
+	private boolean function typeMatch(version,type) {
+		if(type=="all") return true;
+		
+		if(type=="snapshot") 
+			return right(version,9)=="-snapshot";
+		
+		else if(type=="abc") 
+			return right(version,5)=="-beta" || right(version,6)=="-alpha" || right(version,3)=="-rc";
+		
+		else if(type=="release") 
+			return !find("-",version);
+		
+	}
+
 	private function _set(StringUtil,Struct parent, String key, attrs) {
 		var sct={};
 		parent[key]=sct;
@@ -532,7 +534,9 @@
 			sct.qualifier=qArr[1]+0;
 			sct.qualifier_appendix=qArr[2];
 			if(sct.qualifier_appendix=="SNAPSHOT")sct.qualifier_appendix_nbr=0;
+			else if(sct.qualifier_appendix=="ALPHA")sct.qualifier_appendix_nbr=40;
 			else if(sct.qualifier_appendix=="BETA")sct.qualifier_appendix_nbr=50;
+			else if(sct.qualifier_appendix=="RC")sct.qualifier_appendix_nbr=60;
 			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
 		}
 		else throw "version number ["&arguments.version&"] is invalid";

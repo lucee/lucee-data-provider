@@ -16,8 +16,8 @@ component {
 
 	// this are version that should not be used in any case
 	variables.ignoreVersions=["5.0.0.22","5.0.0.travis-74435522-SNAPSHOT","5.1.0.8-SNAPSHOT","5.1.0.31","5.2.1.7","5.2.1.8","5.1.4.18","5.2.0.11-ALPHA"];
-	variables.majorBeta="5.3";
-
+	//variables.majorBeta="5.3";
+	variables.ignoreAlpha=true;
 	public function readDependenciesFromPOM(string pom, boolean extended=false,string specifivDep=""){
 		
 
@@ -274,7 +274,17 @@ component {
 
 			// ignore list
 			if(arrayContains(variables.ignoreVersions,entry.version)) continue;
+			
+			// ignore alpha version
+			if(variables.ignoreAlpha) {
+				var isAlpha=findNoCase('-alpha',entry.version)>0;
+				if(isAlpha) continue;
+			}
+
 			if(checkIgnoreMajor) {
+				
+				// ignore next minor version
+				/*
 				var isBeta=left(entry.version,len(variables.majorBeta))==variables.majorBeta;
 				if(type=='beta') {
 					if(!isBeta) continue;
@@ -282,7 +292,7 @@ component {
 				else {
 					// ignore major
 					if(isBeta) continue;
-				}
+				}*/
 			}
 			if(type=='beta') type='all'; // because there is not necessary the keyword beta, in that case only the version decides
 			// check type

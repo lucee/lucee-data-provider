@@ -6,11 +6,17 @@
 	MIN_UPDATE_VERSION="5.0.0.254";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
 
+	variables.mavenMappings={
+		'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
+	};
+
+
 
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.jarDirectory=variables.current&"bundles/";
 	variables.artDirectory=variables.current&"artifacts/";
 	variable.buildDirectory=variables.current&"builds/";
+	variables.extDirectory="/var/www/sites/extension/extension5/extensions/"; // TODO make more dynamic
 
 	/**
 	* if there is a update the function is returning a struct like this:
@@ -37,9 +43,11 @@
 		httpmethod="GET" restpath="info/{version}" {
 		
 
-		if(findNoCase("snapshot",cgi.SERVER_NAME) || findNoCase("dev.",cgi.SERVER_NAME) || findNoCase("preview.",cgi.SERVER_NAME)) 
+		if(findNoCase("stable.",cgi.SERVER_NAME) || findNoCase("update.",cgi.SERVER_NAME)) 
+			local.type="all";
+		else if(findNoCase("snapshot",cgi.SERVER_NAME) || findNoCase("dev.",cgi.SERVER_NAME) || findNoCase("preview.",cgi.SERVER_NAME)) 
 			local.type="snapshots";
-		else if(findNoCase("release",cgi.SERVER_NAME) || findNoCase("stable.",cgi.SERVER_NAME) || findNoCase("www.",cgi.SERVER_NAME)) 
+		else if(findNoCase("release",cgi.SERVER_NAME) || findNoCase("www.",cgi.SERVER_NAME)) 
 			local.type="releases";
 		else if(findNoCase("beta",cgi.SERVER_NAME) || findNoCase("betasnap",cgi.SERVER_NAME)) 
 			local.type="beta";
@@ -109,11 +117,7 @@
 		}
 	}
 
-
-
-
-
-	remote array function getInfo2(required string version restargsource="Path",string ioid="" restargsource="url",required string language="en" restargsource="url")
+	/*remote array function getInfo2(required string version restargsource="Path",string ioid="" restargsource="url",required string language="en" restargsource="url")
 		httpmethod="GET" restpath="info2/{version}" {
 		return _getInfo2(version,ioid,language);
 	}
@@ -148,53 +152,16 @@
 				arrayAppend(arr,sct[v]);
 			}
 			return arr;
-/*
-			// no updates for versions smaller than ...
-			if(!isNewer(version,toVersion(MIN_UPDATE_VERSION))) 
-				return {
-					"type":"warning",
-					"message":"Version ["&version.display&"] can not be updated from within the Lucee Administrator.  Please update Lucee by replacing the lucee.jar, which can be downloaded from [http://download.lucee.org]"};
-			
-			
-			// no update
-			if(!isNewer(latestVersion,version))
-				return {"type":"info","message":"There is no update available for your version (#version.display#)."};
 
-
-			try{local.notes=getVersionReleaseNotes(version.display,latestVersion.display,true);}catch(local.ee){local.notes="";}
-			
-			var msgAppendix="";
-			if(!isNewer(version,toVersion(MIN_WIN_UPDATE_VERSION))) 
-				msgAppendix="
-				<div class=""error"">Warning! <br/>
-				If this Lucee install is on a Windows based computer/server, please do not use the updater for this version due to a bug.  Instead download the latest lucee.jar from <a href=""http://stable.lucee.org/download/?type=snapshots"">here</a> and replace your existing lucee.jar with it.  This is a one-time workaround.";
-			
-			return {
-				"type":"info"
-				,"language":arguments.language
-				,"current":version.display
-				,"released":latest.jarDate
-				,"available":latestVersion.display
-
-				,"message":"A patch (#latestVersion.display#) is available for your current version (#version.display#)."&msgAppendix
-				,"changelog":isSimpleValue(notes)?{}:notes
-			};
-*/
 		}
 		catch(e){
 			log log="application" exception="#e#" type="error";
 			return {"type":"error","message":e.message,cfcatch:e};
 		}
-	}
-
-
-/*
-
-	*/
-
+	}*/
 
 	/**
-	* function to download Railo Loader file (lucee.jar)
+	* function to download Lucee Loader file (lucee.jar)
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
 	*/
 	remote function downLoader(required string version restargsource="Path",string ioid="" restargsource="url", boolean allowRedirect=true restargsource="url")
@@ -228,8 +195,33 @@
 
 
 	/**
-	* function to download Railo Loader file (lucee-all.jar) that bundles all dependencies
+	* function to download Light Lucee Loader file (lucee-light.jar)
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
+	*/
+	remote function downLight(required string version restargsource="Path",string ioid="" restargsource="url")
+		httpmethod="GET" restpath="light/{version}" {
+		local.mr=new MavenRepo();
+
+		try{
+			local.path=mr.getLightLoader(version);
+		}
+		catch(e){
+			return {
+				"type":"error",
+				"message":"The version #version# is not available as a light version.",
+				"detail":e.message};
+		}
+
+		file action="readBinary" file="#path#" variable="local.bin";
+		header name="Content-disposition" value="attachment;filename=lucee-light-#version#.jar";
+        content variable="#bin#" type="application/zip";
+	}
+
+	/**
+	* function to download Lucee Loader file (lucee-all.jar) that bundles all dependencies
+	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
+	* 
+	* used by old version 
 	*/
 	remote function downLoaderAll(required string version restargsource="Path",string ioid="" restargsource="url", boolean allowRedirect=true restargsource="url")
 		httpmethod="GET" restpath="loader-all/{version}" {
@@ -256,7 +248,7 @@
 
 
 	/**
-	* function to download Railo Core file
+	* function to download Lucee Core file
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
 	*/
 	remote function downloadCoreAlias(
@@ -321,7 +313,7 @@
 
 
 	/**
-	* function to download Railo Core file
+	* function to download Lucee Core file
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
 	*/
 	remote function downloadWar(required string version restargsource="Path",string ioid="" restargsource="url")
@@ -370,41 +362,6 @@
 	}
 
 
-	/*
-	* function to download Railo Core file
-	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
-	
-	remote function downloadUpdateX(required string version restargsource="Path",string ioid="" restargsource="url")
-		httpmethod="GET" restpath="downloadX/{version}" {
-		
-		local.version=toVersion(arguments.version);
-
-
-
-
-		directory action="list" directory="#variable.buildDirectory#" name="local.dir" type="dir";
-			
-		// find the newest version
-		var available="";
-		loop query="#dir#" {
-			local.v=toVersion(dir.name,true);
-			if(!v.isEmpty() && isEqual(v,version)) {
-				available=dir.directory&"/"&dir.name;
-			}
-		}
-
-		if(available.isEmpty())
-			return {"type":"error","message":"The version #version.display# is not available."};
-
-
-		directory action="list" directory="#available#" name="local.core" type="file" filter="*.lco";
-		if(core.recordcount!=1) 
-			return {"type":"error","message":"The Version #version.display# is not available."};
-
-		file action="readBinary" file="#core.directory#/#core.name#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=#version.display#.lco";
-	    content variable="#bin#" type="application/zip"; // in future version this should be handled with producer attribute
-	}*/
 
 	/**
 	* function to load 3 party Bundle file, for example "/antlr/2.7.6"
@@ -414,6 +371,10 @@
 		string ioid="" restargsource="url",boolean allowRedirect=false restargsource="url")
 		httpmethod="GET" restpath="download/{bundlename}/{bundleversion}" {
 		
+		if(arguments.bundleVersion=='latest') {
+			return downloadLatestBundle(arguments.bundleName);
+		}
+
 		// request for a core
 		if(arguments.bundleName=='lucee.core') {
 			return downloadCore(arguments.bundleVersion,arguments.ioid,arguments.allowRedirect);
@@ -435,39 +396,57 @@
 		}
 
 		// first of all we look at the artifacts directory (lucee dependecies download automatically)
-		var name=arguments.bundleName&"-"&arguments.bundleVersion&".jar"
-		var path=variables.artDirectory&name;
-		var orgName=name;
-		var orgPath=path;
+		var orgName=arguments.bundleName&"-"&arguments.bundleVersion&".jar";
+		var orgPath=variables.artDirectory&orgName;
 
+		var path=checkForJar(arguments.bundleName,arguments.bundleVersion);
 
-		if(!FileExists(path)) {
-			// then we look at the bundles directory, here we have files uploaded manually
-			
-			// try different name patterns
-			if(!FileExists(variables.jarDirectory&name)) // bundle-name-bundle.version
-				name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
-			if(!FileExists(variables.jarDirectory&name)) // bundle-name-bundle.version
-				name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".jar";
-			if(!FileExists(variables.jarDirectory&name)) // bundle.name-bundle-version
-				name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
-			if(!FileExists(variables.jarDirectory&name)) // bundle.name-bundle.version
-				name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".jar";
-			if(!FileExists(variables.jarDirectory&name)) // bundle.name.bundle.version
-				name=replace(arguments.bundleName,'-','.','all')&"."&replace(arguments.bundleVersion,'-','.','all')&".jar";
-			
-			var path=variables.jarDirectory&name;
-		}
 
 
 		// download from Maven if we have a .json file
-		if(!FileExists(path) && !isNull(data.jar)) {
+		if(len(path)==0 && !isNull(data.jar)) {
 			fileCopy(data.jar,orgPath);
 			path=orgPath;
 		}
-		
 
-		if(!FileExists(path)) {
+		// extension jar?
+		if(len(path)==0) {
+			// get the extension
+			var name=arguments.bundleName&"-"&arguments.bundleVersion&".lex"
+			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
+				name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".lex";
+			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
+				name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".lex";
+			if(!FileExists(variables.extDirectory&name)) // bundle.name-bundle-version
+				name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".lex";
+			if(!FileExists(variables.extDirectory&name)) // bundle.name-bundle.version
+				name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".lex";
+			if(!FileExists(variables.extDirectory&name)) // bundle.name.bundle.version
+				name=replace(arguments.bundleName,'-','.','all')&"."&replace(arguments.bundleVersion,'-','.','all')&".lex";
+
+			var found=false;
+			if(FileExists(variables.extDirectory&name)) {
+
+				// extract jars
+				var dir="zip://"&variables.extDirectory&name&"!jars/";
+				
+				if(directoryExists(dir)) {
+					var jars=directoryList(dir);
+					directory filter="*.jar" name="local.jars" action="list" directory=dir;
+					loop query=jars {
+						if(!FileExists(variables.jarDirectory&jars.name)) {
+							fileCopy(jars.directory&jars.name,variables.jarDirectory&jars.name);
+							found=true;
+						}
+					}
+				}
+				
+			}
+			var path=checkForJar(arguments.bundleName,arguments.bundleVersion);
+
+		}
+
+		if(len(path)==0 || !FileExists(path)) {
 			// last try, when the pattrn of the maven name matches the pattern of the osgi name we could be lucky
 			var mvnRep="http://central.maven.org/maven2";
 			var repositories=[
@@ -477,12 +456,22 @@
 				,"https://oss.sonatype.org/content/repositories/releases"
 			];
 
-			var uri="/"
-				&replace(arguments.bundleName,'.','/','all')&"/"
-				&arguments.bundleVersion&"/"
-				&listLast(arguments.bundleName,'.')&"-"
-				&arguments.bundleVersion&".jar";
-			
+			// /mysql/mysql-connector-java/5.1.44/mysql-connector-java-5.1.44.jar
+			// 'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
+
+			if(structKeyExists(variables.mavenMappings,arguments.bundleName)) {
+				var mvnId=variables.mavenMappings[arguments.bundleName];
+				var uri="/"&mvnId.group&"/"&mvnId.artifact&
+						"/"&arguments.bundleVersion&
+						"/"&mvnId.artifact&"-"&arguments.bundleVersion&".jar";
+			}
+			else {
+				var uri="/"
+					&replace(arguments.bundleName,'.','/','all')&"/"
+					&arguments.bundleVersion&"/"
+					&listLast(arguments.bundleName,'.')&"-"
+					&arguments.bundleVersion&".jar";
+			}
 			loop array=repositories item="local.rep" {
 				if(fileExists(rep&uri)) {
 					local.redirectURL=rep&uri;
@@ -519,7 +508,7 @@
 					filewrite(jsonPath,serialize({"jar":redirectURL,"local":path}));
 					
 					file action="readBinary" file="#orgPath#" variable="local.bin";
-					header name="Content-disposition" value="attachment;filename=#name#";
+					header name="Content-disposition" value="attachment;filename=#orgName#";
 			        content variable="#bin#" type="application/zip";
 
 			        return;
@@ -536,12 +525,103 @@
             
 		}
 		else {
-
+			
 			file action="readBinary" file="#path#" variable="local.bin";
-			header name="Content-disposition" value="attachment;filename=#name#";
+			header name="Content-disposition" value="attachment;filename=#orgName#";
 	        content variable="#bin#" type="application/zip"; // in future version this should be handled with producer attribute
 		}
 	}
+
+	private function downloadLatestBundle(required string bundleName) {
+		
+		// request for a core TODO
+		/*if(arguments.bundleName=='lucee.core') {
+			return downloadCore(arguments.bundleVersion,arguments.ioid,arguments.allowRedirect);
+		}*/
+
+		
+		// first we get all matching bundles
+		var file="";
+		//var str="";
+		loop list=variables.artDirectory&","&variables.jarDirectory item="local.dir" {
+			directory action="list" name="local.children" directory=dir filter="*.jar";
+			var bn1=arguments.bundleName&"-";
+			var bn2=replace(arguments.bundleName,'-','.','all')&"-";
+			var bn3=replace(arguments.bundleName,'.','-','all')&"-";
+			var lbn=len(bn1);
+			loop query=children {
+				if(left(children.name,lbn)==bn1 || left(children.name,lbn)==bn2 || left(children.name,lbn)==bn3) {
+					v=mid(children.name,lbn+1);
+					v=left(v,len(v)-4); // remove .jar
+					//str&="-"&v&isVersion(v);
+					if(isVersion(v)) {
+
+						var vs=toVersion(v);
+						if(!isStruct(file) || isNewer(vs,file.version)) {
+							file={
+								dir:dir
+								,filename:children.name
+								,name:left(children.name,lbn)
+								,version:vs
+							};
+						}
+					}
+				}
+
+			}
+		}
+		/*if(!isNull(url.abcd)) {
+			throw (serialize(file))&str;
+
+		}*/
+		if(isStruct(file)) {
+			file action="readBinary" file="#file.dir#/#file.filename#" variable="local.bin";
+			header name="Content-disposition" value="attachment;filename=#file.filename#";
+	        content variable="#bin#" type="application/zip"; 
+		}
+		else {
+			var text="no jar available for bundle "&arguments.bundleName;
+			header statuscode="404" statustext="#text#";
+			echo(text);
+			// TODO write to a log
+			file action="append" addnewline="yes" file="#variables.current#missing-bundles.txt"
+			output="#arguments.bundleName#-latest-version" fixnewline="no";
+		}
+	}
+
+
+
+
+	private function checkForJar(bundleName,bundleVersion, ext='jar') {
+		
+		var name=arguments.bundleName&"-"&arguments.bundleVersion&"."&ext;
+		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
+		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
+
+		// try different name patterns
+		name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
+		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
+		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
+		
+		name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".jar";
+		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
+		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
+		
+		name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
+		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
+		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
+		
+		name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".jar";
+		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
+		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
+		
+		name=replace(arguments.bundleName,'-','.','all')&"."&replace(arguments.bundleVersion,'-','.','all')&".jar";
+		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
+		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
+		
+		return "";
+	}
+
 
 	/**
 	* if there is a update the function is returning a sting with the available version, if not a empty string is returned
@@ -582,8 +662,6 @@
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="dependencies/{version}" {
 
-
-		//local.version=toVersion(arguments.version);
 		setting requesttimeout="1000";
 		local.mr=new MavenRepo();
 		try {
@@ -608,8 +686,6 @@
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="dependencies-read/{version}" {
 
-
-		//local.version=toVersion(arguments.version);
 		setting requesttimeout="1000";
 		local.mr=new MavenRepo();
 		try {
@@ -641,8 +717,6 @@
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="info-read/{version}" {
 
-
-		//local.version=toVersion(arguments.version);
 		setting requesttimeout="1000";
 		local.mr=new MavenRepo();
 		try {
@@ -698,8 +772,6 @@
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="express/{version}" {
 
-
-		//local.version=toVersion(arguments.version);
 		setting requesttimeout="1000";
 		local.mr=new MavenRepo();
 		try{
@@ -745,10 +817,22 @@
 		return "done";
 	}
 
+	private boolean function isVersion(required string version) { 
+		try{
+			toVersion(version);
+			return true;
+		}
+		catch(e) {
+			return false;
+		}
+	}
+	
 
 	private struct function toVersion(required string version, boolean ignoreInvalidVersion=false){
 		local.arr=listToArray(arguments.version,'.');
-		
+		if(arr.len()==3) {
+			arr[4]="0";
+		}
 		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
 			if(ignoreInvalidVersion) return {};
 			throw "version number ["&arguments.version&"] is invalid";
@@ -881,7 +965,7 @@ private function getVersionInfoFromJira( string version="" ) {
 /** 
 * retruns the Release Notes from JIRA
 * 
-* @version - the Railo version, e.g. 4.0.3.005
+* @version - the Lucee version, e.g. 5.0.3.005
 */
 private struct function getVersionReleaseNotes( required string versionFrom, string versionTo="", boolean simple=false) {
 
