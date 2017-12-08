@@ -273,35 +273,12 @@
 </cfscript>
 
 <cfhtmlhead>
-	<link crossorigin="anonymous" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta.2/css/bootstrap.min.css" integrity="sha384-PsH8R72JQ3SOdhVi3uxftmaW6Vc51MKb0q5P2rRUpPvrszuE4W1povHYgTpBfshb" rel="stylesheet">
 	<link href="/res/download.css" rel="stylesheet">
 </cfhtmlhead>
 
 <cfhtmlbody>
 	<script crossorigin="anonymous" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
-	<script crossorigin="anonymous" integrity="sha384-vFJXuSJphROIrBnz7yo7oB41mKfc8JzQZiCq4NCceLEaO4IHwicKwpJf9c9IpFgh" src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.3/umd/popper.min.js"></script>
-  <script crossorigin="anonymous" integrity="sha384-alpBpkh1PFOepccYVYDB4do5UnbKysX5WZXm3XxPqe5iKTfUKjNkCk9SaVuEZflJ" src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta.2/js/bootstrap.min.js"></script>
-
-	<script type="text/javascript">
-    $('.collapse-all-toggle').on('click', function (e) {
-      e.preventDefault();
-
-      if ($(this).hasClass('collapsed')) {
-        $('.table .collapse:not(.show)').collapse('show');
-      } else {
-        $('.table .collapse.show').collapse('hide');
-      }
-
-      $(this).toggleClass('collapsed');
-    });
-
-    $('.collapse-toggle').on('click', function (e) {
-      e.preventDefault();
-
-      $('+ .collapse', $(this)).collapse('toggle');
-      $(this).toggleClass('collapsed');
-    });
-  </script>
+	<script src="/res/download.js"></script>
 </cfhtmlbody>
 
 <!DOCTYPE html>
@@ -318,19 +295,19 @@
 
 		<!--- output --->
 		<cfoutput>
-			<div class="jumbotron">
+			<div class="bg-primary jumbotron text-white">
 				<h1 class="display-3">Downloads</h1>
 				<h2>Lucee</h2>
 				<p class="lead">
-					<a class="linkk" href="?type=releases">Releases</a>
-					| <a class="linkk" href="?type=abc">Betas/Release Candidates</a>
-					| <a class="linkk" href="?type=snapshots">Snapshots</a>
+					<a class="text-light" href="?type=releases">Releases</a>
+					| <a class="text-light" href="?type=abc">Betas/Release Candidates</a>
+					| <a class="text-light" href="?type=snapshots">Snapshots</a>
 				</p>
 				<h2>Extensions</h2>
 				<p class="lead">
-					<a class="linkk" href="?type=ext">Releases</a>
-					| <a class="linkk" href="?type=extabc">Betas/Release Candidates</a>
-					| <a class="linkk" href="?type=extsnap">Snapshots</a>
+					<a class="text-light" href="?type=ext">Releases</a>
+					| <a class="text-light" href="?type=extabc">Betas/Release Candidates</a>
+					| <a class="text-light" href="?type=extsnap">Snapshots</a>
 				</p>
 			</div>
 
