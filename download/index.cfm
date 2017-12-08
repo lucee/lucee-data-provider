@@ -1,3 +1,5 @@
+
+<cfoutput>
 <cfscript>
 	if(isNull(url.type)) url.type="releases";
 
@@ -281,6 +283,10 @@
 	<script src="/res/download.js"></script>
 </cfhtmlbody>
 
+
+
+
+
 <!DOCTYPE html>
 <html>
 	<head>
@@ -294,7 +300,7 @@
 	<body class="container py-3">
 
 		<!--- output --->
-		<cfoutput>
+		
 			<div class="bg-primary jumbotron text-white">
 				<h1 class="display-3">Downloads</h1>
 				<h2>Lucee</h2>
@@ -311,7 +317,7 @@
 				</p>
 			</div>
 
-			<cfif type=="releases" || type=="snapshots" || type=="abc">
+			<cfif type EQ "releases" or type EQ"snapshots" or type EQ "abc">
 				<cfscript>
 					function toKeySortable(key) {
 						var arr=listToArray(key,'-');
@@ -412,7 +418,7 @@
 								<cfset str&='<a href="#toCDN(v)#">#lang.installer[k]#</a>'>
 								<cfset count++>
 							</cfloop>
-							<cfoutput>#str#</cfoutput>
+							#str#
 						</cfif>
 					</cfif>
 	
@@ -426,12 +432,10 @@
 					<h4>Jar file (*.jar)</h4>
 					<p><cfif downloads.v[latest] GTE _5_0_0_219>#lang.libNew#<cfelse>#lang.lib#</cfif></p>
 					<cfset uri="#_url[type]#/rest/update/provider/#downloads.v[latest] GTE _5_0_0_112?"loader":"libs"#/#downloads.version[latest]#">
-					<div class="btn-group mb-3"><a class="btn btn-primary" href="#toCDN(uri)#">Lucee.jar<cfif downloads.v[latest] LT _5_0_0_219> (no dependecies)</cfif></a>
-					<cfif downloads.v[latest] GTE _5_0_0_112 and downloads.v[latest] LT _5_0_0_219>
-						<cfset uri="#_url[type]#/rest/update/provider/loader-all/#downloads.version[latest]#">
-						<a class="btn btn-primary" href="#toCDN(uri)#">Lucee.jar (with dependecies)</a>
-					</cfif>
-					</div>
+					<div class="btn-group mb-3"><a class="btn btn-primary" href="#toCDN(uri)#">Download with Extensions</a></div>
+					<cfset uri="#_url[type]#/rest/update/provider/light/#downloads.version[latest]#">
+					<div class="btn-group mb-3"><a class="btn btn-primary" href="#toCDN(uri)#">Download without Extensions</a></div>
+
 
 					<!--- War --->
 					<h4>WAR file (*.war)</h4>
@@ -482,7 +486,7 @@
 										<tr>
 											<th>Version</th>
 											<th>Date</th>
-											<cfif url.type == "releases"><th>Installer</td></th>
+											<cfif url.type == "releases"><th>Installer</td></th></cfif>
 											<th>Express</th>
 											<th>Jar</th>
 											<th>Core</th>
@@ -526,7 +530,7 @@
 																<cfset str&='<a href="#toCDN(vv)#">#lang.installer[kk]#</a>'>
 																<cfset count++>
 															</cfloop>
-															<cfoutput>#str#</cfoutput>
+															#str#
 														</td>
 													</cfif>
 													<td>
@@ -536,7 +540,13 @@
 													<td>
 														<cfif downloads.v GTE _5_0_0_219>
 															<cfset uri="#_url[type]#/rest/update/provider/loader/#downloads.version#">
-															<a href="#toCDN(uri)#">Lucee.jar</a>
+															<a href="#toCDN(uri)#">lucee.jar</a>
+															<cfif downloads.v GTE _5_1_0_008>
+															<br><cfset uri="#_url[type]#/rest/update/provider/light/#downloads.version#">
+															<a href="#toCDN(uri)#">lucee.jar (without Extension)</a>
+															</cfif>
+					
+
 														<cfelseif downloads.v GTE _5_0_0_112>
 															<cfset uri="#_url[type]#/rest/update/provider/loader-all/#downloads.version#">
 															<a href="#toCDN(uri)#">lucee.jar</a></span>
@@ -585,7 +595,7 @@
 																<cfset str&='<a href="#toCDN(vv)#">#lang.installer[kk]#</a>'>
 																<cfset count++>
 															</cfloop>
-															<cfoutput>#str#</cfoutput>
+															#str#
 														</td>
 													</cfif>
 													<td>
@@ -633,11 +643,9 @@
 					</cfif>
 				</cfif>
 			</cfif>
-		</cfoutput>
 
 		<cfif !isNull(extQry)>
 			<!--- output --->
-			<cfoutput>
 				<h2>Extension #singular[url.type]#</h2>
 				<p>Lucee Extensions, simply copy them to /lucee-server/deploy, of a running Lucee installation, to install them.</p>
 
@@ -677,9 +685,9 @@
 							</tr>
 						</cfloop>
 					</table>
-			</cfoutput>
 		</cfif>
 
 		<cfhtmlbody action="flush">
 	</body>
 </html>
+</cfoutput>
