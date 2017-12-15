@@ -8,8 +8,8 @@
 
 	variables.mavenMappings={
 		'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
+		,'aws-java-sdk-osgi':{'group':'com.amazonaws','artifact':'aws-java-sdk-osgi'}
 	};
-
 
 
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
