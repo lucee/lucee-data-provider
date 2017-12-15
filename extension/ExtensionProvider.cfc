@@ -183,7 +183,7 @@
 	}
 
 	private function _getLatest(struct all,string luceeVersion, string type) {
-
+		var str="";
 		loop struct=all index="local.v" item="local.data" {
 			// min core version is bigger than given core version
 			if( len(luceeVersion) &&
@@ -191,7 +191,7 @@
 				toVersionSortable(data.manifest['lucee-core-version'])>luceeVersion) continue;
 
 			if(!typeMatch(data.rawversion,type)) continue;
-			
+			str&=(isNull(rtnVersion)?"null":rtnVersion)&"<"&v&";";
 			// no we pick the latest
 			if(isNull(rtnVersion) || rtnVersion<v) {
 				local.rtnVersion=v;
@@ -361,7 +361,6 @@
 			}
 			// no version defintion
 			else {
-
 				local.data=_getLatest(application.extensions[type][arguments.id],isNull(local.luceeVersion)?"":local.luceeVersion,arguments.verType);
 				local.found=!isSimpleValue(data);
 			}
@@ -503,9 +502,8 @@
 		
 		// OSGi compatible version
 		if(arr.len()==4 && isNumeric(arr[1]) && isNumeric(arr[2]) && isNumeric(arr[3])) {
-			try{return toOSGiVersion(version).sortable}catch(local.e){};
+			try{ return toOSGiVersion(version).sortable; }catch(local.e){};
 		}
-
 
 		rtn="";
 		loop array=arr index="i" item="v" {
@@ -539,7 +537,10 @@
 			else if(sct.qualifier_appendix=="RC")sct.qualifier_appendix_nbr=60;
 			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
 		}
-		else throw "version number ["&arguments.version&"] is invalid";
+		else {
+			sct.qualifier=arr[4];
+			sct.qualifier_appendix_nbr=75;
+		}
 		sct.pure=
 					sct.major
 					&"."&sct.minor
@@ -549,17 +550,18 @@
 					sct.pure
 					&(sct.qualifier_appendix==""?"":"-"&sct.qualifier_appendix);
 		
-		sct.sortable=repeatString("0",2-len(sct.major))&sct.major
-					&"."&repeatString("0",3-len(sct.minor))&sct.minor
-					&"."&repeatString("0",3-len(sct.micro))&sct.micro
-					&"."&repeatString("0",4-len(sct.qualifier))&sct.qualifier
+		var l1=2-len(sct.major);
+		var l2=3-len(sct.minor);
+		var l3=3-len(sct.micro);
+		var l4=4-len(sct.qualifier);
+		if(l4<0)l4=0; 
+		sct.sortable=(l1>0?repeatString("0",l1):"")&sct.major
+					&"."&(l2>0?repeatString("0",l2):"")&sct.minor
+					&"."&(l3>0?repeatString("0",l3):"")&sct.micro
+					&"."&(!isNumeric(sct.qualifier)?"":repeatString("0",l4))&sct.qualifier
 					&"."&repeatString("0",3-len(sct.qualifier_appendix_nbr))&sct.qualifier_appendix_nbr;
 
-
-
 		return sct;
-
-
 	}
 
 
