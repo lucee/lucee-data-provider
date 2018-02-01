@@ -9,8 +9,24 @@
 	variables.mavenMappings={
 		'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
 		,'aws-java-sdk-osgi':{'group':'com.amazonaws','artifact':'aws-java-sdk-osgi'}
+		,'com.sun.jna':{'group':'net.java.dev.jna','artifact':'jna'}
+		,'org.apache.commons.pool2':{'group':'org.apache.commons','artifact':'commons-pool2'}
+		,'org.jgroups':{'group':'org.jgroups','artifact':'jgroups'}
+		,'com.microsoft.sqlserver.mssql-jdbc':{'group':'com.microsoft.sqlserver','artifact':'mssql-jdbc'}
+		,'org.apache.tika.parsers':{'group':'org.apache.tika','artifact':'tika-parsers'}
+		,'activiti-osgi':{'group':'org.activiti','artifact':'activiti-osgi'}
+		,'activiti-engine':{'group':'org.activiti','artifact':'activiti-engine'}
+		,'org.apache.tika.core':{'group':'org.apache.tika','artifact':'tika-core'}
+		,'org.apache.tika.parsers':{'group':'org.apache.tika','artifact':'tika-parsers'}
 	};
 
+	variables.extMappings={
+		'hibernate.extension':{lex:'hibernate-orm',jar:'lucee-hibernate'}
+		,'mongodb.extension':{lex:'mongodb-extension',jar:'mongodb-extension'}
+		,'s3.extension':{lex:'s3-extension',jar:'s3-extension'}
+		,'extension-memcached':{lex:'extension-memcached',jar:'lucee-extension-memcached'}
+
+	};
 
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.jarDirectory=variables.current&"bundles/";
@@ -414,6 +430,10 @@
 			// get the extension
 			var name=arguments.bundleName&"-"&arguments.bundleVersion&".lex"
 			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
+				name=replace(arguments.bundleName,'.','-','all')&"-"&arguments.bundleVersion&".lex";
+			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
+				name=arguments.bundleName&"-"&replace(arguments.bundleVersion,'.','-','all')&".lex";
+			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
 				name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".lex";
 			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
 				name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".lex";
@@ -424,28 +444,56 @@
 			if(!FileExists(variables.extDirectory&name)) // bundle.name.bundle.version
 				name=replace(arguments.bundleName,'-','.','all')&"."&replace(arguments.bundleVersion,'-','.','all')&".lex";
 
+			var useMapping=false;
+			if(structKeyExists(variables.extMappings,arguments.bundleName)) {
+				if(!FileExists(variables.extDirectory&name)) {
+					name=variables.extMappings[arguments.bundleName].lex&"-"&arguments.bundleVersion&".lex";
+					useMapping=true;
+				}	
+				if(!FileExists(variables.extDirectory&name)) {
+					name=variables.extMappings[arguments.bundleName].lex&"-"&replace(arguments.bundleVersion,'.','-','all')&".lex";
+					useMapping=true;
+				}
+			}
+			
+
 			var found=false;
+			if(isDefined("url.xc")) throw name&" "&FileExists(variables.extDirectory&name)&" "&useMapping;
 			if(FileExists(variables.extDirectory&name)) {
 
 				// extract jars
 				var dir="zip://"&variables.extDirectory&name&"!jars/";
 				
 				if(directoryExists(dir)) {
-					var jars=directoryList(dir);
 					directory filter="*.jar" name="local.jars" action="list" directory=dir;
+					local.fff="";
 					loop query=jars {
 						if(!FileExists(variables.jarDirectory&jars.name)) {
 							fileCopy(jars.directory&jars.name,variables.jarDirectory&jars.name);
 							found=true;
 						}
+						if(structKeyExists(variables.extMappings,arguments.bundleName)) {
+							if(isDefined("url.xc10")) throw "we have a mapping "&serialize(variables.extMappings[arguments.bundleName]);
+							var map=variables.extMappings[arguments.bundleName];
+							var trgName=arguments.bundleName&"-"&arguments.bundleVersion&".jar";
+							fff&=jars.name&":"&(len(jars.name)>len(map.jar))&":"&left(jars.name,len(map.jar))&" :: "&jars.name&">"&map.jar&";";
+							if(len(jars.name)>len(map.jar) && left(jars.name,len(map.jar))==map.jar && !FileExists(variables.jarDirectory&trgName)) {
+								if(isDefined("url.xc11")) throw jars.directory&jars.name&" -> "&variables.jarDirectory&trgName;
+								fileCopy(jars.directory&jars.name,variables.jarDirectory&trgName);
+								found=true;
+							}
+						}
 					}
+					if(isDefined("url.xc20")) throw "->"&fff;
+			
 				}
 				
 			}
 			var path=checkForJar(arguments.bundleName,arguments.bundleVersion);
+			if(isDefined("url.xc2")) throw path&" "&fileExists(path);
+			
 
 		}
-
 		if(len(path)==0 || !FileExists(path)) {
 			// last try, when the pattrn of the maven name matches the pattern of the osgi name we could be lucky
 			var mvnRep="http://central.maven.org/maven2";
@@ -461,7 +509,7 @@
 
 			if(structKeyExists(variables.mavenMappings,arguments.bundleName)) {
 				var mvnId=variables.mavenMappings[arguments.bundleName];
-				var uri="/"&mvnId.group&"/"&mvnId.artifact&
+				var uri="/"&replace(mvnId.group,'.','/','all')&"/"&mvnId.artifact&
 						"/"&arguments.bundleVersion&
 						"/"&mvnId.artifact&"-"&arguments.bundleVersion&".jar";
 			}
@@ -472,6 +520,7 @@
 					&listLast(arguments.bundleName,'.')&"-"
 					&arguments.bundleVersion&".jar";
 			}
+			if(isDefined('url.xc60')) throw "-->"&uri;
 			loop array=repositories item="local.rep" {
 				if(fileExists(rep&uri)) {
 					local.redirectURL=rep&uri;
@@ -516,7 +565,7 @@
 			}
 
 
-			var text="no jar available for bundle "&arguments.bundleName&" in version "&arguments.bundleVersion;
+			var text="no jar available for bundle "&arguments.bundleName&" in Version "&arguments.bundleVersion;
 			header statuscode="404" statustext="#text#";
 			echo(text);
 			// TODO write to a log
@@ -595,10 +644,20 @@
 	private function checkForJar(bundleName,bundleVersion, ext='jar') {
 		
 		var name=arguments.bundleName&"-"&arguments.bundleVersion&"."&ext;
+		if(isDefined("url.xc3"))throw name;
 		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
 		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
 
 		// try different name patterns
+		name=replace(arguments.bundleName,'.','-','all')&"-"&arguments.bundleVersion&".jar";
+		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
+		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
+		
+		name=arguments.bundleName&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
+		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
+		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
+		
+
 		name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
 		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
 		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
