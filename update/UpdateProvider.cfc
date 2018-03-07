@@ -1,5 +1,9 @@
 ﻿component restpath="/provider"  rest="true" {
 
+
+	variables.s3Root="s3:///lucee-downloads/";
+	variables.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
+
 	jiraListURL="https://luceeserver.atlassian.net/rest/api/2/project/LDEV/versions";
 	jiraNotesURL="https://luceeserver.atlassian.net/secure/ReleaseNote.jspa?version={version-id}&styleName=Text&projectId=10000";
 
@@ -79,13 +83,6 @@
 			local.latest=mr.getLatest(type:type,checkIgnoreMajor:local.type!="beta");
 			latestVersion=toVersion(latest.version);
 			
-			/* maintenance
-			return {
-					"type":"info",
-					"message":"Server is down for maintance ATM, please try again later"};
-
-			*/
-
 			// no updates for versions smaller than ...
 			if(!isNewer(version,toVersion(MIN_UPDATE_VERSION))) 
 				return {
@@ -97,7 +94,7 @@
 			if(!isNewer(latestVersion,version))
 				return {
 					"type":"info",
-					"message":"There is no update available for your version (#version.display#).",
+					"message":"There is no update available for your version (#version.display#). Latest version is [#latestVersion.display#].",
 					"otherVersions":latest.otherVersions?:[]
 				};
 
@@ -196,6 +193,9 @@
 
 		try{
 			local.path=mr.getLoader(version);
+			var name="lucee-#version#.jar";
+			if(fromS3(path,name)) return;
+
 		}
 		catch(e){
 			return {
@@ -220,6 +220,9 @@
 
 		try{
 			local.path=mr.getLightLoader(version);
+			var name="lucee-light-#version#.jar";
+			if(fromS3(path,name)) return;
+
 		}
 		catch(e){
 			return {
@@ -232,6 +235,8 @@
 		header name="Content-disposition" value="attachment;filename=lucee-light-#version#.jar";
         content variable="#bin#" type="application/zip";
 	}
+
+
 
 	/**
 	* function to download Lucee Loader file (lucee-all.jar) that bundles all dependencies
@@ -270,7 +275,7 @@
 	remote function downloadCoreAlias(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url", 
-		boolean allowRedirect=false restargsource="url")
+		boolean allowRedirect=true restargsource="url")
 		httpmethod="GET" restpath="core/{version}" {
 		return downloadCore(version,ioid,allowRedirect);
 	}
@@ -293,6 +298,8 @@
 		return sct;
 	}
 
+
+
 	remote function downloadCore(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url", 
@@ -302,17 +309,11 @@
 		//local.version=toVersion(arguments.version);
 		local.mr=new MavenRepo();
 
-		// TODO get core and not loader
-		if(false && arguments.allowRedirect) {
-			local.src=mr.getInfo(version:version,checkIgnoreMajor:false).jarSrc;
-			header statuscode="302" statustext="Found";
-			header name="Location" value=src;
-			return;
-		}
-
 
 		try{
 			local.path=mr.getCore(version);
+			var name="#version#.lco";
+			if(allowRedirect && fromS3(path,name)) return;
 		}
 		catch(e){
 			return {
@@ -339,7 +340,9 @@
 		//local.version=toVersion(arguments.version);
 		local.mr=new MavenRepo();
 		try{
-		local.path=mr.getWar(version);
+			local.path=mr.getWar(version);
+			var name="#version#.war";
+			if(fromS3(path,name)) return;
 		}
 		catch(e){
 			return {
@@ -352,6 +355,35 @@
 		header name="Content-disposition" value="attachment;filename=#version#.war";
         content variable="#bin#" type="application/zip";
 	}
+
+
+
+	/**
+	* function to download Lucee as a forgebox bundle
+	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
+	*/
+	remote function downloadForgebox(required string version restargsource="Path",string ioid="" restargsource="url")
+		httpmethod="GET" restpath="forgebox/{version}" {
+		
+		setting requesttimeout="1000";
+		//local.version=toVersion(arguments.version);
+		local.mr=new MavenRepo();
+		try{
+		local.path=mr.getForgeBox(version);
+		}
+		catch(e){
+			return {
+				"type":"error",
+				"message":"The version #version# is not available.",
+				"detail":e.message};
+		}
+
+		file action="readBinary" file="#path#" variable="local.bin";
+		header name="Content-disposition" value="attachment;filename=cf-engine-#version#.zip";
+        content variable="#bin#" type="application/zip";
+	}
+
+
 
 	/** THIS IS NO LONGER NEEDED BECAUSE THE lucee.jar NOW CONTAINS THE FELIX JAR
 	* function to download the files that need to go to the libs folder (felix and lucee jar)
@@ -773,16 +805,35 @@
 	*/
 	remote function readInfo(
 		required string version restargsource="Path",
-		string ioid="" restargsource="url")
+		string ioid="" restargsource="url",
+		boolean force=false restargsource="url")
 		httpmethod="GET" restpath="info-read/{version}" {
 
 		setting requesttimeout="1000";
 		local.mr=new MavenRepo();
 		try {
-			return mr.getInfo(version);
+			return mr.getInfo(version,force);
 		}
 		catch(e){
 			return {"type":"error","message":"The version #version# is not available."};
+		}
+ 
+	}
+
+	/**
+	* function to get all dependencies (bundles) for a specific version
+	* @version version to get bundles for
+	*/
+	remote function readList(boolean force=false restargsource="url")
+		httpmethod="GET" restpath="list" {
+
+		setting requesttimeout="1000";
+		local.mr=new MavenRepo();
+		try {
+			return mr.list();
+		}
+		catch(e){
+			return {"type":"error","message":e.getMessage()};
 		}
  
 	}
@@ -841,10 +892,42 @@
 			return {"type":"error","message":"The version #version# is not available."};
 		}
 
+		var name="lucee-express-#version#.zip";
+
+		if(fromS3(path,name)) return;
+		
 		file action="readBinary" file="#path#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=lucee-express-#version#.zip";
-        content variable="#bin#" type="application/zip"; 
+		header name="Content-disposition" value="attachment;filename=#name#";
+        content variable="#bin#" type="application/zip";
+		
 	}
+
+	/**
+	* checks if file exists on S3 and if so redirect to it, if not it copies it to S3 and the next one will have it there.
+	* So nobody has to wait that it is copied over
+	*/
+	private function fromS3(path,name) {
+		// if exist we redirect to it
+			if(!isNull(application.exists[name]) || fileExists(variables.s3Root&name)) {
+				application.exists[name]=true;
+				header statuscode="302" statustext="Found";
+				header name="Location" value=variables.s3URL&name;
+				return true;
+			}
+			// if not exist we make ready for the next
+			else {
+				thread src=path trg=variables.s3Root&name {
+					lock timeout=100 name=src {
+						if(!fileExists(trg)) // we do this because it was created by a thread blocking this thread
+							fileCopy(src,trg);
+					}
+				}
+			}
+			return false;
+	}
+
+
+
 
 	/**
 	* this functions triggers that everything is prepared/build for future requests
@@ -852,17 +935,36 @@
 	*/
 	remote function buildLatest()
 		httpmethod="GET" restpath="buildLatest" {
-		setting requesttimeout="1000";
+		
 		thread name="t#getTickCount()#" {
+			setting requesttimeout="1000";
 
+			_buildLatest("snapshots");
+			_buildLatest("releases");
 
 			local.mr=new MavenRepo();
 			mr.flushAndBuild();
+
 			application.releaseNotesItem={};
 			application.releaseNotesData={};
 		}
 		return "done";
 	}
+
+	private function _buildLatest(type) {
+		thread name="alles" type=type {
+			info=getAvailableVersions(type,true,true,false);
+			downloadExpress(info.version);
+			downloadCore(info.version);
+			downloadWar(info.version);
+			downLight(info.version);
+			downLoader(info.version);
+		}
+	}
+
+
+
+
 	remote function buildLatestsync()
 		httpmethod="GET" restpath="buildLatestSync" {
 		setting requesttimeout="1000";

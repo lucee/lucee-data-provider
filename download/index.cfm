@@ -426,7 +426,7 @@
 					<h4>Express Build (*.zip)</h4>
 					<p>#lang.express#</p>
 					<cfset uri="#_url[type]#/rest/update/provider/express/#downloads.version[latest]#">
-					<div class="btn-group mb-3"><a class="btn btn-primary" href="#toCDN(uri)#">Download</a></div>
+					<div class="btn-group mb-3"><a class="btn btn-primary" href="#uri#">Download</a></div>
 
 					<!--- jar --->
 					<h4>Jar file (*.jar)</h4>
@@ -434,20 +434,20 @@
 					<cfset uri="#_url[type]#/rest/update/provider/#downloads.v[latest] GTE _5_0_0_112?"loader":"libs"#/#downloads.version[latest]#">
 					<div class="btn-group mb-3"><a class="btn btn-primary" href="#toCDN(uri)#">Download with Extensions</a></div>
 					<cfset uri="#_url[type]#/rest/update/provider/light/#downloads.version[latest]#">
-					<div class="btn-group mb-3"><a class="btn btn-primary" href="#toCDN(uri)#">Download without Extensions</a></div>
+					<div class="btn-group mb-3"><a class="btn btn-primary" href="#(uri)#">Download without Extensions</a></div>
 
 
 					<!--- War --->
 					<h4>WAR file (*.war)</h4>
 					<p>#lang.war#</p>
 					<cfset uri="#_url[type]#/rest/update/provider/war/#downloads.version[latest]#">
-					<div class="btn-group mb-3"><a class="btn btn-primary" href="#toCDN(uri)#">Download</a></div>
+					<div class="btn-group mb-3"><a class="btn btn-primary" href="#(uri)#">Download</a></div>
 
 					<!--- Lucee Core --->
 					<h4>Core file (*.lco)</h4>
 					<p>#lang.core#</p>
-					<cfset uri="#_url[type]#/rest/update/provider/download/#downloads.version[latest]#">
-					<div class="btn-group mb-3"><a class="btn btn-primary" href="#toCDN(uri)#">download</a></div>
+					<cfset uri="#_url[type]#/rest/update/provider/core/#downloads.version[latest]#">
+					<div class="btn-group mb-3"><a class="btn btn-primary" href="#(uri)#">download</a></div>
 
 					<!--- changelog --->
 					<cfif !isnull(downloads.changelog[latest]) && isStruct(downloads.changelog[latest]) && structCount(downloads.changelog[latest])>
@@ -535,7 +535,7 @@
 													</cfif>
 													<td>
 														<cfset uri="#_url[type]#/rest/update/provider/express/#downloads.version#">
-														<a href="#toCDN(uri)#">Express</a>
+														<a href="#(uri)#">Express</a>
 													</td>
 													<td>
 														<cfif downloads.v GTE _5_0_0_219>
@@ -543,7 +543,7 @@
 															<a href="#toCDN(uri)#">lucee.jar</a>
 															<cfif downloads.v GTE _5_1_0_008>
 															<br><cfset uri="#_url[type]#/rest/update/provider/light/#downloads.version#">
-															<a href="#toCDN(uri)#">lucee.jar (without Extension)</a>
+															<a href="#(uri)#">lucee.jar (without Extension)</a>
 															</cfif>
 					
 
@@ -554,10 +554,10 @@
 															-
 														</cfif>
 													</td>
-													<cfset uri="#_url[type]#/rest/update/provider/download/#downloads.version#">
-													<td><a href="#toCDN(uri)#">Core</a></td>
+													<cfset uri="#_url[type]#/rest/update/provider/core/#downloads.version#">
+													<td><a href="#(uri)#">Core</a></td>
 													<cfset uri="#_url[type]#/rest/update/provider/war/#downloads.version#">
-													<td><a href="#toCDN(uri)#">WAR</a></td>
+													<td><a href="#(uri)#">WAR</a></td>
 												</tr>
 												<!--- changelog --->
 												<cfif !isNull(downloads.changelog) && isStruct(downloads.changelog) && structCount(downloads.changelog)>

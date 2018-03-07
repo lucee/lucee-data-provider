@@ -1,5 +1,5 @@
 component {
-	variables.listPattern=	"https://oss.sonatype.org/service/local/lucene/search?g={group}&a={artifact}";
+	variables.listPattern=	"https://oss.sonatype.org/service/local/lucene/search";
 	//defaultRepo="https://oss.sonatype.org/content/repositories/releases";
 	variables.defaultRepo="http://central.maven.org/maven2";
 	variables.group="org.lucee";
@@ -189,7 +189,7 @@ component {
 		if(isNull(application.infoData)) application.infoData={};
 		
 		if(force || isNull(application.infoData[version])) {
-			local.qry= getAvailableVersions(type:'all', extended:true, onlyLatest:false,specificVersion:version,checkIgnoreMajor=arguments.checkIgnoreMajor);
+			local.qry= getAvailableVersions(type:'all', extended:true, onlyLatest:false,checkIgnoreMajor=arguments.checkIgnoreMajor,specificVersion:version);
 			if(qry.recordcount==0) throw "no info found for version ["&version&"]";
 			application.infoData[version] = QueryRowData(qry,1);
 
@@ -199,6 +199,7 @@ component {
 	}
 
 	public function reset(){
+		application.listCached=false;
 		application.infoData={};
 		application.repoMatch={};
 		application._OSGiDependencies={};
@@ -215,6 +216,8 @@ component {
 			local.qry= getAvailableVersions(type:type, extended:true, onlyLatest:true, checkIgnoreMajor:arguments.checkIgnoreMajor);
 			if(qry.recordcount==0) throw "no info found for type ["&type&"]";
 			
+			if(!isNull(url.abcd)) throw serialize(qry);
+
 			local._result=QueryRowData(qry,1);
 			//if(!isNull(url.abc)) throw local._result.version&":"&local._result.vs;
 			if(true) {
@@ -225,6 +228,7 @@ component {
 					//if((arguments.type=='releases' && !isSnap) || (arguments.type!='releases' && isSnap) ) 
 					sct[qry.vs]=qry.version;
 				}
+
 
 				local.keys=sct.keyArray().sort('text');
 				local.arr=[];
@@ -240,42 +244,127 @@ component {
 		return application.infoData["latest="&type];
 	}
 
-	/**
+
+
+		/**
 	* return information about available versions
 	* @type one of the following (snapshots,releases or all)
 	* @extended when true also return the location of the jar and pom file, but this is slower (has to make addional http calls)
 	* @onlyLatest only return the latest version
 	*/
-	public query function getAvailableVersions(string type='all', boolean extended=false, boolean onlyLatest=false, boolean checkIgnoreMajor=true){
-		if(extended){
-			setting requesttimeout="1000";
-		}
+	public query function getAvailableVersions(string type='all', boolean extended=false, boolean onlyLatest=false, boolean checkIgnoreMajor=true,specificVersion){
+		setting requesttimeout="1000";
+
 		// validate input
 		if(type!='all' && type!='snapshots' && type!='releases' && type!='beta')
 			throw "provided type [#type#] is invalid, valid types are [all,snapshots,releases,beta]";
 
-		// create the list URL
-		local.listURL=convertPattern(listPattern,group,artifact);
-		
-		// get data
-		http url=listURL result="local.res" {
-			httpparam type="header" name="accept" value="application/json";
-		}
-		local.raw=deSerializeJson(res.fileContent);
-		
-		// repo urls
-		if(extended) local.repos=getRepositories(raw.repoDetails);
 
+		if(!isNull(url.abc)) application.listCached=false;
+
+		// local cache file
+		var curr=getDirectoryFromPath(getCurrenttemplatePath());
+		var tmp=curr&"temp/";
+		if(!directoryExists(tmp)) directoryCreate(tmp);
+		var file=tmp&"list-#group#-#artifact#.cfs";
+
+		// load data from local cache file
+		lock timeout=2 name=file {
+			if(fileExists(file)) {
+				local.data=evaluate(fileRead(file));
+				hasExisting=true;
+			}
+			else {
+				local.data=structNew("linked");
+				hasExisting=false;
+			}
+		}
+
+		// read from extern
+		if(!hasExisting || isNull(application.listCached) || application.listCached==false) {
+			// create the list URL
+			local.listURL=convertPattern(listPattern,group,artifact);
+			
+			if(hasExisting) {
+				var fileName=listLast(file,"\/");
+				if(isNull(cfthread[fileName])) {
+					thread name=fileName listURL=listURL data=data file=file cfc=this {
+						readFromExtern(listURL,data,file,cfc);
+					}
+				}
+			}
+			else 
+				readFromExtern(listURL,data,file,this);
+			
+		}
+		return toQuery(data,type,extended,onlyLatest,checkIgnoreMajor,specificVersion?:nullValue());
+	}
+
+
+	private function readFromExtern(listURL,data,file,cfc) {
+		try {
+			data=duplicate(data);
+			// get data
+			http url=listURL result="local.res" {
+				httpparam type="header" name="accept" value="application/json";
+			}
+			local.raw=deSerializeJson(res.fileContent);
+			
+			// repo urls
+			local.repos=getRepositories(raw.repoDetails);
+
+			// create the list
+			loop array=raw.data item="local.entry" {
+				if(isNull(entry.artifactHits[1])) continue;
+				local.ah=entry.artifactHits[1];
+				local.hasApendix=find('-',entry.version);
+				local._type=hasApendix?"snapshots":"releases";
+
+				
+				local.sources=getDetail(repos[ah.repositoryId],entry.groupId,entry.artifactId,entry.version);
+
+				sct={};
+				sct.groupId=entry.groupId;
+				sct.artifactId=entry.artifactId;
+				sct.version=entry.version;
+				sct.vs=cfc.toVersionSortable(entry.version);
+				sct.type=ah.repositoryId;
+				
+				if(!isNull(sources.pom.src))sct.pomSrc=sources.pom.src;
+				if(!isNull(sources.pom.date))sct.pomDate=sources.pom.date;
+				if(!isNull(sources.jar.src))sct.jarSrc=sources.jar.src;
+				if(!isNull(sources.jar.date))sct.jarDate=sources.jar.date;
+				
+				data[sct.version]=sct;
+			}
+
+			lock timeout=2 name=file {
+				fileWrite(file,serialize(data));
+				application.listCached=true;
+			}
+
+		}
+		catch(e) {
+			var curr=getDirectoryFromPath(getCurrenttemplatePath())&"readFromExtern.log";
+			fileWrite(curr,serialize(e));
+			
+		}
+	}
+
+	private function toQuery(struct data, string type, boolean extended, boolean onlyLatest, boolean checkIgnoreMajor,specificVersion) {
+		
 		// create the list
 		local.qry=queryNew("groupId,artifactId,version,vs,type"&(extended?",pomSrc,pomDate,jarSrc,jarDate":""));
-		loop array=raw.data item="local.entry" {
-			if(isNull(entry.artifactHits[1])) continue;
-			local.ah=entry.artifactHits[1];
+		loop struct=data index="local.v" item="local.entry" {
+			
 			local.hasApendix=find('-',entry.version);
 			local._type=hasApendix?"snapshots":"releases";
 
+			
 			// ignore list
 			if(arrayContains(variables.ignoreVersions,entry.version)) continue;
+			
+
 			if(checkIgnoreMajor) {
 				var isBeta=left(entry.version,len(variables.majorBeta))==variables.majorBeta;
 				if(type=='beta') {
@@ -289,42 +378,38 @@ component {
 			if(type=='beta') type='all'; // because there is not necessary the keyword beta, in that case only the version decides
 			// check type
 			if(type!="all" && type!=_type)  continue;
-			//if(type!="all" && type!=ah.repositoryId) continue; // this is snapshots for snapshots and releases for all others
 			
-
-			// latest
-			//if(onlyLatest && entry.version!=entry.latestSnapshot && entry.version!=entry.latestRelease) continue;
-			if(onlyLatest && qry.recordcount>0) break;  // TODO do better
-
 			// specific
 			if(!isNull(specificVersion) && specificVersion!=entry.version) continue;
-
+			
 			local.row=qry.addRow();
-
-			if(extended)local.sources=getDetail(repos[ah.repositoryId],entry.groupId,entry.artifactId,entry.version);
-
+			
 			qry.setCell("groupId",entry.groupId,row);
 			qry.setCell("artifactId",entry.artifactId,row);
 			qry.setCell("version",entry.version,row);
-			qry.setCell("vs",toVersionSortable(entry.version),row);
-			qry.setCell("type",ah.repositoryId,row);
+			qry.setCell("vs",entry.vs,row);
+			qry.setCell("type",entry.type,row);
 			
 			if(extended) {
-				if(!isNull(sources.pom.src))qry.setCell("pomSrc",sources.pom.src,row);
-				if(!isNull(sources.pom.date))qry.setCell("pomDate",sources.pom.date,row);
-				if(!isNull(sources.jar.src))qry.setCell("jarSrc",sources.jar.src,row);
-				if(!isNull(sources.jar.date))qry.setCell("jarDate",sources.jar.date,row);
+				if(!isNull(entry.pomSrc))qry.setCell("pomSrc",entry.pomSrc,row);
+				if(!isNull(entry.pomDate))qry.setCell("pomDate",entry.pomDate,row);
+				if(!isNull(entry.jarSrc))qry.setCell("jarSrc",entry.jarSrc,row);
+				if(!isNull(entry.jarDate))qry.setCell("jarDate",entry.jarDate,row);
 			}
-			//else qry.setCell("artifacts",ah.artifactLinks,row);
 		}
+
 		if(extended)querySort(qry,"jarDate","asc");
 		else querySort(qry,"version","asc");
 
 
-
+		// only latest
+		if(onlyLatest) {
+			return querySlice(qry,qry.recordcount,1);
+		}
 
 		return qry;
 	}
+
 
 	function getRepositories(required array repoDetails) {
 		local.repos={};
@@ -382,7 +467,7 @@ component {
 		return sources;
 	}
 
-	private function toVersionSortable(required string version){
+	public function toVersionSortable(required string version){
 		local.arr=listToArray(arguments.version,'.');
 		
 		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
@@ -400,8 +485,10 @@ component {
 			else if(sct.qualifier_appendix=="BETA")sct.qualifier_appendix_nbr=50;
 			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
 		}
-		else throw "version number ["&arguments.version&"] is invalid";
-		
+		else {
+			sct.qualifier=qArr[1]+0;
+			sct.qualifier_appendix_nbr=75;
+		}
 
 
 		return 		repeatString("0",2-len(sct.major))&sct.major
@@ -413,10 +500,11 @@ component {
 
 
 
-	private function convertPattern(required string pattern,string group,string artifact){
-		local.rtn=replace(pattern,'{group}',group,'all');
-		local.rtn=replace(rtn,'{artifact}',artifact,'all');
-		return rtn;
+	private function convertPattern(required string pattern,string group,string artifact, numeric from=1, numeric count=-1){
+		pattern=pattern&"?g="&group&"&a="&artifact;
+		if(from>0) pattern=pattern&"&from="&from;
+		if(count>0) pattern=pattern&"&count="&count;
+		return pattern;
 	}
 
 	private function toDate(string str,string timeZone){
@@ -801,6 +889,71 @@ component {
 		return war;
 	}
 
+
+	/**
+	* returns local location for the core of a specific version (get downloaded if necessary)
+	* @version version to get the express for 
+	*/
+	public string function getForgeBox(required string version) {
+		local.info=getInfo(version:version,checkIgnoreMajor=false); // get info for defined version
+		local.dir=getArtifactDirectory();
+		local.zip=dir&"forgebox-"&info.version&".zip";
+		
+		if(!fileExists(zip)) {
+			try {
+				// temp directory
+				local.temp=getTempDir();
+
+				// extension directory
+				local.extDir=("build/extensions/");
+				if(!directoryExists(extDir))directoryCreate(extDir);
+
+				// common directory
+				local.commonDir=ExpandPath("build/common/");
+				if(!directoryExists(commonDir))directoryCreate(commonDir);
+
+				// war directory
+				local.warDir=ExpandPath("build/war/");
+				if(!directoryExists(warDir))directoryCreate(warDir);
+
+				// create the war
+				local.war=dir&"engine.war";
+				zip action="zip" file=war overwrite=true {
+					zipparam source=extDir filter="*.lex" prefix="WEB-INF/lucee-server/context/deploy";
+					zipparam source=getLoader(version) entrypath="WEB-INF/lib/lucee.jar";
+					zipparam source=commonDir;
+					zipparam source=warDir;
+				}
+
+				// create the json
+				var v=reReplace( arguments.version, '([0-9]*\.[0-9]*\.[0-9]*)(\.)([0-9]*)', '\1+\3' );
+				local.json=dir&"box.json";
+				fileWrite(json,
+'{
+    "name":"Lucee CF Engine",
+    "version":"#v#",
+    "createPackageDirectory":false,
+    "location":"http://cdn.lucee.org/rest/update/provider/forgebox/#arguments.version#",
+    "slug":"lucee",
+    "shortDescription":"Lucee WAR engine for CommandBox servers.",
+    "type":"cf-engines"
+}');
+
+
+				// create the war
+				zip action="zip" file=zip overwrite=true {
+					zipparam source=war;
+					zipparam source=json;
+				}
+
+			}
+			finally {
+				if(directoryExists(temp))directoryDelete(temp,true);
+			}
+		}
+		return zip;
+	}
+
 	private function validateArtifact(required string path) {
 		// fist we check if we have the file already on s3
 		if(hasS3) {
@@ -828,5 +981,187 @@ component {
 		return S3_DIRECTORY&fileName;
 	}
 
+
+
+	public function list() localmode=true {
+		thread {
+			_list();
+		}
+	}
+
+	public function _list() localmode=true {
+		curr=getDirectoryFromPath(getCurrenttemplatePath());
+		dir=curr&"index/";
+		if(!directoryExists(dir)) directoryCreate(dir);
+
+
+
+
+
+		// collect the size of the index=
+		infoURL=convertPattern(listPattern,group,artifact,1,1);
+		http url=infoURL result="local.res" {
+			httpparam type="header" name="accept" value="application/json";
+		}
+		info=deserializeJSON(res.fileContent);
+
+
+		data=structNew("linked");
+		repos=structNew("linked");
+		from=1;
+		max=200;
+		count=0;
+		last=false;
+		e=0;n=0;
+		while(true) {
+
+			to=from+max;
+			if(to>=info.totalCount) {
+				to=info.totalCount;
+				last=true;
+			}
+			file=dir&group&"-"&artifact&"-"&from&"-"&to&".json";
+			
+			// do we have locally?
+			if(fileExists(file)) {
+				raw=evaluate(fileRead(file));
+				e++;
+			}
+			else {
+				n++;
+				listURL=convertPattern(listPattern,group,artifact,from,max);
+				http url=listURL result="local.res" {
+					httpparam type="header" name="accept" value="application/json";
+				}
+				raw=deserializeJSON(res.fileContent);
+				fileWrite(file,res.fileContent);
+			}
+			extractData(repos,data,raw,dir);
+ 			from=to;
+
+
+			if(last) break;
+			if(count++>1000) throw "something went wrong!";
+		}
+		return data;
+	}
+
+
+	private function extractRepos(repos,raw) {
+		loop array=raw.repoDetails item="local.entry" {
+			if(structKeyExists(repos,entry.repositoryId)) continue;
+			if(!isnull(application.repos[entry.repositoryId])) {
+				repos[entry.repositoryId]=application.repos[entry.repositoryId];
+				continue;
+			}
+
+			http url=entry.repositoryURL result="local.res" {
+				httpparam type="header" name="accept" value="application/json";
+			}
+			local._raw=deSerializeJson(res.fileContent);
+			repos[entry.repositoryId]=_raw.data.contentResourceURI;
+			application.repos[entry.repositoryId]=_raw.data.contentResourceURI;
+		}
+	}
+
+
+	private function extractData(repos,data,raw,dir) {
+		
+			
+		//extractRepos(repos,raw);
+
+		// create the list
+		loop array=raw.data item="local.entry" {
+			if(isNull(entry.artifactHits[1])) continue;
+			local.ah=entry.artifactHits[1];
+			local.hasApendix=find('-',entry.version);
+			local._type=hasApendix?"snapshots":"releases";
+
+			
+
+			sct={};
+			sct.groupId=entry.groupId;
+			sct.artifactId=entry.artifactId;
+			sct.version=entry.version;
+			sct.vs=toVersionSortable(entry.version);
+			sct.repositoryId=ah.repositoryId;
+			sct.hits=len(entry.artifactHits);
+			//sct.repositoryURL=repos[ah.repositoryId].url;
+
+			/*local.sources=getDetailToArtifact(repos[ah.repositoryId],entry.groupId,entry.artifactId,entry.version,sct.hits,dir);
+			if(!isNull(sources.pom.src))sct.pomSrc=sources.pom.src;
+			if(!isNull(sources.pom.date))sct.pomDate=sources.pom.date;
+			if(!isNull(sources.jar.src))sct.jarSrc=sources.jar.src;
+			if(!isNull(sources.jar.date))sct.jarDate=sources.jar.date;*/
+			
+			data[sct.version]=sct;
+		}
+		
+	}
+
+	private struct function getDetailToArtifact(required string repoURL, required string groupId,required string artifactId,required string version,required numeric hits,dir){
+		
+		// cached file
+		//local.file=dir&"detail-"&groupId&"-"&artifactId&"-"&version&"-"&hits&".json";
+
+		/* cache 
+		if(fileExists(file)) {
+			sources = deserializeJson(fileRead(file));
+			if(structCount(sources)) return sources;
+		}*/
+		if(!isNull(application.detail[version]))
+			return application.detail[version];
+
+
+		//local.base=repoURL&"/"&replace(groupId,'.','/',"all")&"/"&artifactId&"/"&version;
+		
+
+
+		local.sources={};
+		http url=base&"/maven-metadata.xml" result="local.content" {
+			httpparam type="header" name="accept" value="application/json";
+		}
+		//throw base&"/maven-metadata.xml";
+		
+		// read the files names from xml
+		if(!isNull(content.status_code) &&  content.status_code==200) {
+			local.xml=xmlParse(content.fileContent);
+			loop array=xml.XMLRoot.versioning.snapshotVersions.xmlChildren item="node" {
+				local.date=toDate(node.updated.xmlText,"GMT");
+				local.src=base&"/"&artifactId&"-"&node.value.xmlText&"."&node.extension.xmlText;
+				sources[node.extension.xmlText]={date:date,src:src};
+			}
+		}
+		// if there is no meta file simply assume
+		else {
+			// date jar
+			try{
+				http method="head" url=base&"/"&artifactId&"-"&version&".jar" result="local.t";
+				//throw (base&"/"&artifactId&"-"&version&".jar ")&serialize(t);
+				if(!isNull(t.status_code) && t.status_code==200) {
+					local.sources.jar.src=base&"/"&artifactId&"-"&version&".jar";
+					local.sources.jar.date=parseDateTime(t.responseheader['Last-Modified']);
+				}
+			}
+			catch(e){}
+			// date pom
+			try{
+				http method="head" url=base&"/"&artifactId&"-"&version&".pom" result="local.t";
+				if(!isNull(t.status_code) && t.status_code==200) {
+					local.sources.pom.src=base&"/"&artifactId&"-"&version&".pom";
+					local.sources.pom.date=parseDateTime(t.responseheader['Last-Modified']);
+				}
+			}
+			catch(e){}
+		}
+
+
+		application.detail[version]=sources;
+		/* cache 
+		if(structCount(sources))fileWrite(file,serializeJson(sources));
+		*/
+
+		return sources;
+	}
 
 }

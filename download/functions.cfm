@@ -169,7 +169,8 @@ lang.installer.lin32="Linux (32b)";
 	}
 
 	query function _download() {
-		lock timeout=1 {
+		var n=now();
+		lock name="download#year(n)&":"&month(n)&":"&day(n)&":"&hour(n)#" timeout=10 {
 			try{
 				local.mr=new MavenRepo();
 				flush;
@@ -299,13 +300,19 @@ direct links
 		var sct={};
 		application.installers[version]=sct;
 
-		if(fileExists(host&uriWin)) sct.win = host&uriWin;
-		if(fileExists(host&uriLin64)) sct.lin64 = host&uriLin64;
-		if(fileExists(host&uriLin32)) sct.lin32 = host&uriLin32;
+		if(is200(host&uriWin)) sct.win = host&uriWin;
+		if(is200(host&uriLin64)) sct.lin64 = host&uriLin64;
+		if(is200(host&uriLin32)) sct.lin32 = host&uriLin32;
 
 		application.installerCheck[version]=now();
 		return sct;
 	}
+
+	function is200(url) {
+		http url=arguments.url method="head" result="local.result";
+		return (result.status_code?:404)==200;
+	}
+	
 	function toCDN(_url) {
 		_url=replace(_url,'lucee.viviotech.net','cdn.lucee.org');
 		_url=replace(_url,'release.lucee.org','cdn.lucee.org');
