@@ -432,7 +432,7 @@
 					<h4>Jar file (*.jar)</h4>
 					<p><cfif downloads.v[latest] GTE _5_0_0_219>#lang.libNew#<cfelse>#lang.lib#</cfif></p>
 					<cfset uri="#_url[type]#/rest/update/provider/#downloads.v[latest] GTE _5_0_0_112?"loader":"libs"#/#downloads.version[latest]#">
-					<div class="btn-group mb-3"><a class="btn btn-primary" href="#toCDN(uri)#">Download with Extensions</a></div>
+					<div class="btn-group mb-3"><a class="btn btn-primary" href="#(uri)#">Download with Extensions</a></div>
 					<cfset uri="#_url[type]#/rest/update/provider/light/#downloads.version[latest]#">
 					<div class="btn-group mb-3"><a class="btn btn-primary" href="#(uri)#">Download without Extensions</a></div>
 

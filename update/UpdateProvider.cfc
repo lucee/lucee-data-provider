@@ -54,12 +54,10 @@
 	* @ioid ioid of the requesting user
 	* @langauage language f the requesting user
 	*/
-	remote struct function getInfo(required string version restargsource="Path",string ioid="" restargsource="url",required string language="en" restargsource="url")
-		httpmethod="GET" restpath="info/{version}" {
-		return _getInfo(version,ioid,language);
-	}
-
-	private struct function _getInfo(required string version ,string ioid="",required string language="en",boolean internal=false)
+	remote struct function getInfo(
+		required string version restargsource="Path",
+		string ioid="" restargsource="url",
+		string language="en" restargsource="url")
 		httpmethod="GET" restpath="info/{version}" {
 		
 
@@ -75,13 +73,17 @@
 					"type":"warning",
 					"message":"Version ["&version.display&"] is not supported for automatic updates."};
 
+
 		try{
 			local.version=toVersion(arguments.version);
 
 
 			local.mr=new MavenRepo();
-			local.latest=mr.getLatest(type:type,checkIgnoreMajor:local.type!="beta");
-			latestVersion=toVersion(latest.version);
+			var list=mr.list(type:type);
+			var latest= list[arrayLen(list)];
+			var latestVersion=toVersion(latest.version);
+			var sources=mr.getSources(latest.repository,latest.version);
+			// {"version":"5.2.7.34-SNAPSHOT","hits":1,"repository":"https://oss.sonatype.org/content/repositories/snapshots","artifactId":"lucee","groupId":"org.lucee","g":14,"vs":"05.002.007.0034.000"}
 			
 			// no updates for versions smaller than ...
 			if(!isNewer(version,toVersion(MIN_UPDATE_VERSION))) 
@@ -107,95 +109,53 @@
 				<div class=""error"">Warning! <br/>
 				If this Lucee install is on a Windows based computer/server, please do not use the updater for this version due to a bug.  Instead download the latest lucee.jar from <a href=""http://stable.lucee.org/download/?type=snapshots"">here</a> and replace your existing lucee.jar with it.  This is a one-time workaround.";
 			
+			// others
+			local.otherVersions=[];
+			loop array=list index='local.i' item='local.el' {
+				arrayAppend(otherVersions,el.version);
+			}
+
 			return {
 				"type":"info"
 				,"language":arguments.language
 				,"current":version.display
-				,"released":latest.jarDate
+				,"released":sources.jar.date
 				,"available":latestVersion.display
-				,"otherVersions":latest.otherVersions?:[]
+				,"otherVersions":otherVersions?:[]
 				,"message":"A patch (#latestVersion.display#) is available for your current version (#version.display#)."&msgAppendix
 				,"changelog":isSimpleValue(notes)?{}:notes/*readChangeLog(newest.log)*/
 			}; // TODO get the right version for given version
-
-			/*if(internal){
-				rtn.file=newest.core;
-			}*/
-
-			//return rtn;
 		}
 		catch(e){
 			log log="application" exception="#e#" type="error";
 			return {"type":"error","message":e.message,cfcatch:e};
 		}
 	}
-
-	/*remote array function getInfo2(required string version restargsource="Path",string ioid="" restargsource="url",required string language="en" restargsource="url")
-		httpmethod="GET" restpath="info2/{version}" {
-		return _getInfo2(version,ioid,language);
-	}
-
-	private array function _getInfo2(required string version ,string ioid="",required string language="en",boolean internal=false) {
-		
-
-		if(findNoCase("snapshot",cgi.SERVER_NAME) || findNoCase("dev.",cgi.SERVER_NAME) || findNoCase("preview.",cgi.SERVER_NAME)) 
-			local.type="snapshots";
-		else if(findNoCase("release",cgi.SERVER_NAME) || findNoCase("stable.",cgi.SERVER_NAME) || findNoCase("www.",cgi.SERVER_NAME)) 
-			local.type="releases";
-		else if(findNoCase("beta",cgi.SERVER_NAME) || findNoCase("betasnap",cgi.SERVER_NAME)) 
-			local.type="beta";
-		else  return {
-					"type":"warning",
-					"message":"Version ["&version.display&"] is not supported for automatic updates."};
-
-		try{
-			local.version=toVersion(arguments.version);
-
-
-			local.mr=new MavenRepo();
-			local.qry=mr.getAvailableVersions(type:type, extended:false, onlyLatest:false, checkIgnoreMajor:false);
-			local.sct={};
-			loop query=qry {
-				sct[qry.vs]=qry.version;
-			}
-
-			local.keys=sct.keyArray().sort('text');
-			local.arr=[];
-			loop array=keys index='local.i' item='local.v' {
-				arrayAppend(arr,sct[v]);
-			}
-			return arr;
-
-		}
-		catch(e){
-			log log="application" exception="#e#" type="error";
-			return {"type":"error","message":e.message,cfcatch:e};
-		}
-	}*/
 
 	/**
 	* function to download Lucee Loader file (lucee.jar)
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
 	*/
-	remote function downLoader(required string version restargsource="Path",string ioid="" restargsource="url", boolean allowRedirect=true restargsource="url")
+	remote function downLoader(
+			required string version restargsource="Path",
+			string ioid="" restargsource="url", 
+			boolean allowRedirect=true restargsource="url")
 		httpmethod="GET" restpath="loader/{version}" {
+
 		local.mr=new MavenRepo();
 		
+		// redirect to maven source
 		if(arguments.allowRedirect) {
-			//return mr.getInfo(version);
-			local.src=mr.getInfo(version:version,checkIgnoreMajor:false).jarSrc;
+			var data=mr.get(version:version,extended:true);
 			header statuscode="302" statustext="Found";
-			header name="Location" value=src;
+			header name="Location" value=data.sources.jar.src;
 			return;
 		}
-
-
 
 		try{
 			local.path=mr.getLoader(version);
 			var name="lucee-#version#.jar";
 			if(fromS3(path,name)) return;
-
 		}
 		catch(e){
 			return {
@@ -205,7 +165,7 @@
 		}
 
 		file action="readBinary" file="#path#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=lucee-#version#.jar";
+		header name="Content-disposition" value="attachment;filename=#name#";
         content variable="#bin#" type="application/zip";
 	}
 
@@ -222,7 +182,6 @@
 			local.path=mr.getLightLoader(version);
 			var name="lucee-light-#version#.jar";
 			if(fromS3(path,name)) return;
-
 		}
 		catch(e){
 			return {
@@ -232,7 +191,7 @@
 		}
 
 		file action="readBinary" file="#path#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=lucee-light-#version#.jar";
+		header name="Content-disposition" value="attachment;filename=#name#";
         content variable="#bin#" type="application/zip";
 	}
 
@@ -309,7 +268,6 @@
 		//local.version=toVersion(arguments.version);
 		local.mr=new MavenRepo();
 
-
 		try{
 			local.path=mr.getCore(version);
 			var name="#version#.lco";
@@ -323,7 +281,7 @@
 		}
 
 		file action="readBinary" file="#path#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=#version#.lco";
+		header name="Content-disposition" value="attachment;filename=#name#";
         content variable="#bin#" type="application/zip";
 	}
 
@@ -352,7 +310,7 @@
 		}
 
 		file action="readBinary" file="#path#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=#version#.war";
+		header name="Content-disposition" value="attachment;filename=#name#";
         content variable="#bin#" type="application/zip";
 	}
 
@@ -382,34 +340,6 @@
 		header name="Content-disposition" value="attachment;filename=cf-engine-#version#.zip";
         content variable="#bin#" type="application/zip";
 	}
-
-
-
-	/** THIS IS NO LONGER NEEDED BECAUSE THE lucee.jar NOW CONTAINS THE FELIX JAR
-	* function to download the files that need to go to the libs folder (felix and lucee jar)
-	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
-	*/
-	remote function downloadLibs(required string version restargsource="Path",string ioid="" restargsource="url")
-		httpmethod="GET" restpath="libs/{version}" {
-		setting requesttimeout="1000";
-		//local.version=toVersion(arguments.version);
-		local.mr=new MavenRepo();
-		try{
-		local.path=mr.getLibs(version);
-		}
-		catch(e){
-			return {
-				"type":"error",
-				"message":"The version #version# is not available.",
-				"detail":e.message};
-		}
-
-		file action="readBinary" file="#path#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=lucee-libs-#version#.zip";
-        content variable="#bin#" type="application/zip";
-	}
-
-
 
 	/**
 	* function to load 3 party Bundle file, for example "/antlr/2.7.6"
@@ -614,13 +544,7 @@
 	}
 
 	private function downloadLatestBundle(required string bundleName) {
-		
-		// request for a core TODO
-		/*if(arguments.bundleName=='lucee.core') {
-			return downloadCore(arguments.bundleVersion,arguments.ioid,arguments.allowRedirect);
-		}*/
 
-		
 		// first we get all matching bundles
 		var file="";
 		//var str="";
@@ -651,10 +575,7 @@
 
 			}
 		}
-		/*if(!isNull(url.abcd)) {
-			throw (serialize(file))&str;
 
-		}*/
 		if(isStruct(file)) {
 			file action="readBinary" file="#file.dir#/#file.filename#" variable="local.bin";
 			header name="Content-disposition" value="attachment;filename=#file.filename#";
@@ -669,9 +590,6 @@
 			output="#arguments.bundleName#-latest-version" fixnewline="no";
 		}
 	}
-
-
-
 
 	private function checkForJar(bundleName,bundleVersion, ext='jar') {
 		
@@ -803,34 +721,15 @@
 	* function to get all dependencies (bundles) for a specific version
 	* @version version to get bundles for
 	*/
-	remote function readInfo(
-		required string version restargsource="Path",
-		string ioid="" restargsource="url",
-		boolean force=false restargsource="url")
-		httpmethod="GET" restpath="info-read/{version}" {
-
-		setting requesttimeout="1000";
-		local.mr=new MavenRepo();
-		try {
-			return mr.getInfo(version,force);
-		}
-		catch(e){
-			return {"type":"error","message":"The version #version# is not available."};
-		}
- 
-	}
-
-	/**
-	* function to get all dependencies (bundles) for a specific version
-	* @version version to get bundles for
-	*/
-	remote function readList(boolean force=false restargsource="url")
+	remote function readListOnlyForDebugging(
+		boolean force=false restargsource="url"
+		,string type='all' restargsource="url")
 		httpmethod="GET" restpath="list" {
 
 		setting requesttimeout="1000";
 		local.mr=new MavenRepo();
 		try {
-			return mr.list();
+			return mr.list(arguments.type);
 		}
 		catch(e){
 			return {"type":"error","message":e.getMessage()};
@@ -838,39 +737,20 @@
  
 	}
 
-
-	/**
-	* function to get felix.jar for a specific version
-	* @version version to get bundles for
-	*/
-	remote function downloadFelix(
-		required string version restargsource="Path",
-		string ioid="" restargsource="url",
-		boolean allowRedirect=true restargsource="url")
-		httpmethod="GET" restpath="felix/{version}" {
+	remote function readGetOnlyForDebugging(
+		required string version restargsource="Path"
+		,boolean extended restargsource="url")
+		httpmethod="GET" restpath="get/{version}" {
 
 		setting requesttimeout="1000";
 		local.mr=new MavenRepo();
-		
-
-		if(arguments.allowRedirect) {
-			//return mr.getInfo(version);
-			local.src=mr.getFelixRemote(version);
-			header statuscode="302" statustext="Found";
-			header name="Location" value=src;
-			return;
-		}
-
-		try{
-			local.path=mr.getFelix(version);
+		try {
+			return mr.get(arguments.version,arguments.extended);
 		}
 		catch(e){
-			return {"type":"error","message":"Felix for the version #version# is not available."};
+			return {"type":"error","message":e.getMessage()};
 		}
-
-		file action="readBinary" file="#path#" variable="local.bin";
-			header name="Content-disposition" value="attachment;filename=#listLast(path,'/')#";
-	        content variable="#bin#" type="application/zip"; 
+ 
 	}
 
 	/**
@@ -888,13 +768,14 @@
 			local.path=mr.getExpress(version);
 		}
 		catch(e){
-			//throw serialize(e);
-			return {"type":"error","message":"The version #version# is not available."};
+			return {"type":"error","message":"The version #version# is not available.","exception":e};
 		}
-
+		
+			
 		var name="lucee-express-#version#.zip";
-
-		if(fromS3(path,name)) return;
+		if(fromS3(path,name)) {
+			return;
+		}
 		
 		file action="readBinary" file="#path#" variable="local.bin";
 		header name="Content-disposition" value="attachment;filename=#name#";
@@ -903,79 +784,35 @@
 	}
 
 	/**
-	* checks if file exists on S3 and if so redirect to it, if not it copies it to S3 and the next one will have it there.
-	* So nobody has to wait that it is copied over
-	*/
-	private function fromS3(path,name) {
-		// if exist we redirect to it
-			if(!isNull(application.exists[name]) || fileExists(variables.s3Root&name)) {
-				application.exists[name]=true;
-				header statuscode="302" statustext="Found";
-				header name="Location" value=variables.s3URL&name;
-				return true;
-			}
-			// if not exist we make ready for the next
-			else {
-				thread src=path trg=variables.s3Root&name {
-					lock timeout=100 name=src {
-						if(!fileExists(trg)) // we do this because it was created by a thread blocking this thread
-							fileCopy(src,trg);
-					}
-				}
-			}
-			return false;
-	}
-
-
-
-
-	/**
 	* this functions triggers that everything is prepared/build for future requests
 	* @version version to get bundles for
 	*/
 	remote function buildLatest()
 		httpmethod="GET" restpath="buildLatest" {
-		
-		thread name="t#getTickCount()#" {
+		thread name="alles" {
 			setting requesttimeout="1000";
-
-			_buildLatest("snapshots");
-			_buildLatest("releases");
-
+			
 			local.mr=new MavenRepo();
 			mr.flushAndBuild();
 
+			_buildLatest("snapshots",mr);
+			_buildLatest("releases",mr);
+
+			
 			application.releaseNotesItem={};
 			application.releaseNotesData={};
 		}
 		return "done";
 	}
 
-	private function _buildLatest(type) {
-		thread name="alles" type=type {
-			info=getAvailableVersions(type,true,true,false);
-			downloadExpress(info.version);
-			downloadCore(info.version);
-			downloadWar(info.version);
-			downLight(info.version);
-			downLoader(info.version);
-		}
-	}
-
-
-
-
-	remote function buildLatestsync()
-		httpmethod="GET" restpath="buildLatestSync" {
-		setting requesttimeout="1000";
-		
-
-			local.mr=new MavenRepo();
-			mr.flushAndBuild();
-			application.releaseNotesItem={};
-			application.releaseNotesData={};
-		
-		return "done";
+	private function _buildLatest(type,mr) {
+		var list=mr.list(type:type);
+		var latest= list[arrayLen(list)];
+		downloadExpress(latest.version);
+		downloadCore(version:latest.version,allowRedirect:false);
+		downloadWar(latest.version);
+		downLight(latest.version);
+		downLoaderAll(version:latest.version,allowRedirect:false);
 	}
 
 	private boolean function isVersion(required string version) { 
@@ -988,7 +825,6 @@
 		}
 	}
 	
-
 	private struct function toVersion(required string version, boolean ignoreInvalidVersion=false){
 		local.arr=listToArray(arguments.version,'.');
 		if(arr.len()==3) {
@@ -1070,154 +906,157 @@
 		return true;
 	}
 
-	/*private struct function readChangeLog(required string path){
-		file action="read" file="#path#" variable="local.content";
+	/** returns version information from JIRA */
+	private function getVersionInfoFromJira( string version="" ) {
+		// remove appendix
+		local.version=len(version)?toVersion(arguments.version).pure:"";
 
-		var res={};
-		var arr=listToArray(content.trim(),"
-");
-		loop array="#arr#" item="local.v" {
-			var i1=find('[',v);
-			var i2=find(']',v);
-			if(i1==0 || i2==0) continue;
-			local.k=mid(v,i1+1,i2-2).replace('##','').trim();
-			if(!isNumeric(k)) continue;
-			res[k]=mid(v,i2+1).trim();
-		}
-		return res;
-	}*/
+		var empty = { id: 0, name: "", released: false, self: "" };
 
-	
-
-
-/** returns version information from JIRA */
-private function getVersionInfoFromJira( string version="" ) {
-	// remove appendix
-	local.version=len(version)?toVersion(arguments.version).pure:"";
-
-	var empty = { id: 0, name: "", released: false, self: "" };
-
-	try {
-		http url=jiraListURL result="local.http";
-		var raw = deserializeJSON( http.fileContent );
-
-		var result = structNew("linked");
-		for ( var ai in raw ) {
-			var v = ai.name CT '(' ? listGetAt( ai.name, 2, "()" ) : ai.name;
-			try{v=toVersion(v).pure;}catch(local.e){continue;}
-			if(!isNumeric(listFirst(v,'.'))) continue;
-			if(!isNull(ai.releaseDate))ai.releaseDate=dateAdd("m",0,ai.releaseDate);
-			if ( len( version ) && v == version )
-				return ai;
-			result[ v ] = ai;
-		}
-		if ( len( version ))return empty;
-		return result;
-
-	}
-	catch( ex ) {
-		rethrow;
-	}
-}
-
-
-
-
-/** 
-* retruns the Release Notes from JIRA
-* 
-* @version - the Lucee version, e.g. 5.0.3.005
-*/
-private struct function getVersionReleaseNotes( required string versionFrom, string versionTo="", boolean simple=false) {
-
-	if(isNull(application.releaseNotesData)) application.releaseNotesData={};
-	var coll=application.releaseNotesData;
-		
-	local.key=versionFrom&":"&versionTo;
-	//if(!isNull(coll[key].data) && DateDiff('n',coll[key].date,now())<60)
-	if(!isNull(coll[key].data))
-		return coll[key].data;
-
-	local.vFrom=toVersion(arguments.versionFrom);
-	// single version
-	if(versionTo=="")
-		return _getVersionReleaseNotes(GetVersionInfoFromJira( vFrom.pure ));
-	
-	local.vTo=toVersion(arguments.versionTo);	
-
-	// 05.000.000.0197.000...05.000.000.0206.000
-	// ,05.000.000.0197.100,05.000.000.0205.100
-	// multiple versions
-	local.res=structNew("linked");
-	local.versionInfo=GetVersionInfoFromJira();
-	
-	loop struct=versionInfo index="local.k" item="local.item" { 
-		local.v=toVersion(item.name).sortable;
-		// sct.sortable
-
-		if(v >= vFrom.sortable && v <= vTo.sortable) {
-			if(simple) _getVersionReleaseNotes(item,res);
-			else res[item.name]=_getVersionReleaseNotes(item);
-		}
-	}
-	application.releaseNotesData[key]={data:res,date:now()};
-	return application.releaseNotesData[key].data;
-}
-
-private struct function _getVersionReleaseNotes( versionInfo ,struct fillHere=structNew("linked")) {
-	if(versionInfo.id) {
-		if(isNull(application.releaseNotesItem)) 
-			application.releaseNotesItem={};
-		
-		var coll=application.releaseNotesItem;
-		
-		//if(!isNull(coll[versionInfo.id].data) && DateDiff('n',coll[versionInfo.id].date,now())<60) {
-		if(!isNull(coll[versionInfo.id].data)) {
-			loop struct=coll[versionInfo.id].data index="local.k" item="local.v" {
-				fillHere[k]=v;
-			}
-			return coll[versionInfo.id].data;
-		}
-		
-		local.res=structNew("linked");
 		try {
-			http url=replace( jiraNotesURL, "{version-id}", versionInfo.id ) result="Local.http";
-			var raw = http.fileContent;
-			var pos = find( "</textarea>", raw );
-			raw = left( raw, pos - 1 );
-			pos = find( "<textarea", raw );
-			raw = mid( raw, pos );
-			pos = find( ">", raw );
-			raw = trim( mid( raw, pos + 1 ) );
-			//var res = ;
-			loop list=raw delimiters="#chr(13)##chr(10)#" index="Local.li" {
-				pos = find( "[LDEV-", li );
-				if ( pos==0 ) continue;
-				
-				local.v=trim( mid( li, pos ) );
+			http url=jiraListURL result="local.http";
+			var raw = deserializeJSON( http.fileContent );
 
-				var i1=find('[',v);
-				var i2=find(']',v);
-				if(i1==0 || i2==0) continue;
-				local.k=mid(v,i1+1,i2-2).replace('##','').trim();
-				v=mid(v,i2+1).trim()
-				if(left(v,1)=='-')v=mid(v,2).trim();
-				//if(!isNumeric(k)) continue;
-				res[k]=v;
-				fillHere[k]=v;
+			var result = structNew("linked");
+			for ( var ai in raw ) {
+				var v = ai.name CT '(' ? listGetAt( ai.name, 2, "()" ) : ai.name;
+				try{v=toVersion(v).pure;}catch(local.e){continue;}
+				if(!isNumeric(listFirst(v,'.'))) continue;
+				if(!isNull(ai.releaseDate))ai.releaseDate=dateAdd("m",0,ai.releaseDate);
+				if ( len( version ) && v == version )
+					return ai;
+				result[ v ] = ai;
 			}
-			application.releaseNotesItem[versionInfo.id]={data:res,date:now()}
+			if ( len( version ))return empty;
+			return result;
 
-			return application.releaseNotesItem[versionInfo.id].data;
 		}
-		catch ( ex ) {
+		catch( ex ) {
 			rethrow;
 		}
 	}
 
-	return {};
-}
 
 
 
+	/** 
+	* retruns the Release Notes from JIRA
+	* 
+	* @version - the Lucee version, e.g. 5.0.3.005
+	*/
+	private struct function getVersionReleaseNotes( required string versionFrom, string versionTo="", boolean simple=false) {
+
+		if(isNull(application.releaseNotesData)) application.releaseNotesData={};
+		var coll=application.releaseNotesData;
+			
+		local.key=versionFrom&":"&versionTo;
+		//if(!isNull(coll[key].data) && DateDiff('n',coll[key].date,now())<60)
+		if(!isNull(coll[key].data))
+			return coll[key].data;
+
+		local.vFrom=toVersion(arguments.versionFrom);
+		// single version
+		if(versionTo=="")
+			return _getVersionReleaseNotes(GetVersionInfoFromJira( vFrom.pure ));
+		
+		local.vTo=toVersion(arguments.versionTo);	
+
+		// 05.000.000.0197.000...05.000.000.0206.000
+		// ,05.000.000.0197.100,05.000.000.0205.100
+		// multiple versions
+		local.res=structNew("linked");
+		local.versionInfo=GetVersionInfoFromJira();
+		
+		loop struct=versionInfo index="local.k" item="local.item" { 
+			local.v=toVersion(item.name).sortable;
+			// sct.sortable
+
+			if(v >= vFrom.sortable && v <= vTo.sortable) {
+				if(simple) _getVersionReleaseNotes(item,res);
+				else res[item.name]=_getVersionReleaseNotes(item);
+			}
+		}
+		application.releaseNotesData[key]={data:res,date:now()};
+		return application.releaseNotesData[key].data;
+	}
+
+	private struct function _getVersionReleaseNotes( versionInfo ,struct fillHere=structNew("linked")) {
+		if(versionInfo.id) {
+			if(isNull(application.releaseNotesItem)) 
+				application.releaseNotesItem={};
+			
+			var coll=application.releaseNotesItem;
+			
+			//if(!isNull(coll[versionInfo.id].data) && DateDiff('n',coll[versionInfo.id].date,now())<60) {
+			if(!isNull(coll[versionInfo.id].data)) {
+				loop struct=coll[versionInfo.id].data index="local.k" item="local.v" {
+					fillHere[k]=v;
+				}
+				return coll[versionInfo.id].data;
+			}
+			
+			local.res=structNew("linked");
+			try {
+				http url=replace( jiraNotesURL, "{version-id}", versionInfo.id ) result="Local.http";
+				var raw = http.fileContent;
+				var pos = find( "</textarea>", raw );
+				raw = left( raw, pos - 1 );
+				pos = find( "<textarea", raw );
+				raw = mid( raw, pos );
+				pos = find( ">", raw );
+				raw = trim( mid( raw, pos + 1 ) );
+				//var res = ;
+				loop list=raw delimiters="#chr(13)##chr(10)#" index="Local.li" {
+					pos = find( "[LDEV-", li );
+					if ( pos==0 ) continue;
+					
+					local.v=trim( mid( li, pos ) );
+
+					var i1=find('[',v);
+					var i2=find(']',v);
+					if(i1==0 || i2==0) continue;
+					local.k=mid(v,i1+1,i2-2).replace('##','').trim();
+					v=mid(v,i2+1).trim()
+					if(left(v,1)=='-')v=mid(v,2).trim();
+					//if(!isNumeric(k)) continue;
+					res[k]=v;
+					fillHere[k]=v;
+				}
+				application.releaseNotesItem[versionInfo.id]={data:res,date:now()}
+
+				return application.releaseNotesItem[versionInfo.id].data;
+			}
+			catch ( ex ) {
+				rethrow;
+			}
+		}
+
+		return {};
+	}	
+	
+	
+
+	/**
+	* checks if file exists on S3 and if so redirect to it, if not it copies it to S3 and the next one will have it there.
+	* So nobody has to wait that it is copied over
+	*/
+	private function fromS3(path,name) {
+		// if exist we redirect to it
+			if(!isNull(application.exists[name]) || fileExists(variables.s3Root&name)) {
+				application.exists[name]=true;
+				header statuscode="302" statustext="Found";
+				header name="Location" value=variables.s3URL&name;
+				return true;
+			}
+			// if not exist we make ready for the next
+			else {
+				thread src=path trg=variables.s3Root&name {
+					lock timeout=100 name=src {
+						if(!fileExists(trg)) // we do this because it was created by a thread blocking this thread
+							fileCopy(src,trg);
+					}
+				}
+			}
+			return false;
+	}
 }
