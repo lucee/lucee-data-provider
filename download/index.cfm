@@ -327,7 +327,7 @@
 						return arr[1]&"-"&arr[2];
 					}
 					tmpDownloads=getDownloads();
-
+					
 					if(!queryColumnExists(tmpDownloads,"state"))queryAddColumn(tmpDownloads,"state");
 					loop query=tmpDownloads {
 						if(findNoCase("alpha",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="alpha";
@@ -335,7 +335,6 @@
 						else if(findNoCase("rc",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="rc";
 						else if(findNoCase("ReleaseCandidate",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="rc";
 					}
-
 					// filter out not matching major version
 					downloads=queryNew("test,"&tmpDownloads.columnlist);
 					arrColumns=tmpDownloads.columnArray();
@@ -367,6 +366,8 @@
 					}
 					if(downloads.recordcount) latest=1;
 
+					//dump(downloads);
+					//dump(tmpDownloads);
 					// sort changelog
 					if(queryColumnExists(downloads,"changelog")) {
 						loop query=downloads {

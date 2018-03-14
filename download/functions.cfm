@@ -20,6 +20,7 @@ _url={
 
 
 
+UPDATE_PROVIDER="http://update.lucee.org/rest/update/provider/list?extended=true";
 EXTENSION_PROVIDER="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=release";
 EXTENSION_PROVIDER_ABC="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=abc";
 EXTENSION_PROVIDER_SNAPSHOT="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=snapshot";
@@ -169,13 +170,42 @@ lang.installer.lin32="Linux (32b)";
 	}
 
 	query function _download() {
+
+
+		
+		
+
 		var n=now();
-		lock name="download#year(n)&":"&month(n)&":"&day(n)&":"&hour(n)#" timeout=10 {
+		lock name="download-#year(n)&":"&month(n)&":"&day(n)&":"&hour(n)#" timeout=100 {
 			try{
-				local.mr=new MavenRepo();
 				flush;
 				local.start=getTickCount();
-				local.qry=mr.getAvailableVersions("all",true,false);
+				
+				http url=UPDATE_PROVIDER result="local.res";
+				var arr=deserializeJSON(res.fileContent);
+				var qry=queryNew('groupId,artifactId,version,vs,type,jarDate');
+				for(var r=arrayLen(arr);r>=1;r--) {
+					row=arr[r];
+					//dump(row.sources);abort;
+					qr=queryAddRow(qry);
+					querySetCell(qry,"groupId",row.groupId,qr);
+					querySetCell(qry,"artifactId",row.artifactId,qr);
+					querySetCell(qry,"version",row.version,qr);
+					querySetCell(qry,"vs",row.vs,qr);
+					querySetCell(qry,"type",listLast(row.repository,'/'),qr);
+					//querySetCell(qry,"versionNoAppendix",toVersionWithoutAppendix(row.version));
+					//querySetCell(qry,"jarSrc",row.sources.jar.src,qr);
+					var date="";
+					if(!isNull(row.sources.jar.date)) date=parseDateTime(row.sources.jar.date);
+					else if(!isNull(row.sources.pom.date)) date=parseDateTime(row.sources.pom.date);
+
+					querySetCell(qry,"jarDate",date,qr);
+					//querySetCell(qry,"pomSrc",row.sources.pom.src);
+					//querySetCell(qry,"pomDate",parseDateTime(row.sources.pom.date));
+					
+				}
+
+				//local.qry=mr.getAvailableVersions("all",true,false);
 				
 				// add version that can be sorted right (5.0.0.1-SNAPSHOT -> 5.000.000.0001-SNAPSHOT)
 				queryAddColumn(qry,"v");
