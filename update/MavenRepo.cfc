@@ -610,8 +610,7 @@ component {
 		throw "version [#arguments.version#] is not available";
 	}
 
-	public function list(string type='all') localmode=true {
-
+	public function list(string type='all', boolean extended=false) localmode=true {
 		if(type!='all' && type!='snapshots' && type!='releases' && type!='abc')
 			throw "provided type [#type#] is invalid, valid types are [all,snapshots,releases,abc]";
 
@@ -664,7 +663,7 @@ component {
 				raw=deserializeJSON(res.fileContent);
 				fileWrite(file,res.fileContent);
 			}
-			extractData(repos,data,raw,dir,type);
+			extractData(repos,data,raw,dir,type,extended);
  			from=to;
 
 
@@ -674,6 +673,7 @@ component {
 		arraySort(data,function(l,r) {
 			return compare(l.vs,r.vs);
 		});
+
 		return data;//{data:data,repos:repos};
 	}
 
@@ -696,7 +696,7 @@ component {
 		}
 	}
 
-	private function extractData(repos,data,raw,dir,type) {
+	private function extractData(repos,data,raw,dir,type, extended=false) {
 		
 		extractRepos(repos,raw);
 
@@ -728,7 +728,8 @@ component {
 			sct.vs=toVersionSortable(entry.version);
 			//sct.repositoryId=ah.repositoryId;
 			sct.repository=repos[ah.repositoryId];
-			
+			if(extended) sct.sources=getSources(sct.repository,sct.version);
+				
 			sct.hits=len(entry.artifactHits);
 			sct.g=g();
 
@@ -746,7 +747,20 @@ component {
 		
 
 		if(!isNull(application.detail[base]))
-			return application.detail[base];
+			;//return application.detail[base];
+
+
+		curr=getDirectoryFromPath(getCurrenttemplatePath());
+		dir=curr&"detail/";
+		if(!directoryExists(dir)) directoryCreate(dir);
+
+		file=dir&version&".json";
+		if(fileExists(file)) {
+			var data=deSerializeJson(fileRead(file));
+			application.detail[base]=data;
+			return data;
+		}
+
 
 		local.sources={};
 		inc();
@@ -789,7 +803,8 @@ component {
 			catch(e){}
 		}
 
-
+		fileWrite(file,SerializeJson(sources));
+			
 		application.detail[base]=sources;
 		/* cache 
 		if(structCount(sources))fileWrite(file,serializeJson(sources));

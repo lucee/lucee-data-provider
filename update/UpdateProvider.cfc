@@ -7,6 +7,7 @@
 	jiraListURL="https://luceeserver.atlassian.net/rest/api/2/project/LDEV/versions";
 	jiraNotesURL="https://luceeserver.atlassian.net/secure/ReleaseNote.jspa?version={version-id}&styleName=Text&projectId=10000";
 
+	ALL_VERSION="0.0.0.0";
 	MIN_UPDATE_VERSION="5.0.0.254";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
 
@@ -86,14 +87,14 @@
 			// {"version":"5.2.7.34-SNAPSHOT","hits":1,"repository":"https://oss.sonatype.org/content/repositories/snapshots","artifactId":"lucee","groupId":"org.lucee","g":14,"vs":"05.002.007.0034.000"}
 			
 			// no updates for versions smaller than ...
-			if(!isNewer(version,toVersion(MIN_UPDATE_VERSION))) 
+			if(ALL_VERSION!=version.display && !isNewer(version,toVersion(MIN_UPDATE_VERSION))) 
 				return {
 					"type":"warning",
 					"message":"Version ["&version.display&"] can not be updated from within the Lucee Administrator.  Please update Lucee by replacing the lucee.jar, which can be downloaded from [http://download.lucee.org]"};
 			
 			
 			// no update
-			if(!isNewer(latestVersion,version))
+			if(ALL_VERSION!=version.display && !isNewer(latestVersion,version))
 				return {
 					"type":"info",
 					"message":"There is no update available for your version (#version.display#). Latest version is [#latestVersion.display#].",
@@ -101,18 +102,20 @@
 				};
 
 
-			try{local.notes=getVersionReleaseNotes(version.display,latestVersion.display,true);}catch(local.ee){local.notes="";}
+			try{local.notes=(ALL_VERSION==version.display)?"":getVersionReleaseNotes(version.display,latestVersion.display,true);}catch(local.ee){local.notes="";}
 			
 			var msgAppendix="";
-			if(!isNewer(version,toVersion(MIN_WIN_UPDATE_VERSION))) 
+			if(ALL_VERSION!=version.display && !isNewer(version,toVersion(MIN_WIN_UPDATE_VERSION))) 
 				msgAppendix="
 				<div class=""error"">Warning! <br/>
 				If this Lucee install is on a Windows based computer/server, please do not use the updater for this version due to a bug.  Instead download the latest lucee.jar from <a href=""http://stable.lucee.org/download/?type=snapshots"">here</a> and replace your existing lucee.jar with it.  This is a one-time workaround.";
 			
 			// others
 			local.otherVersions=[];
-			loop array=list index='local.i' item='local.el' {
-				arrayAppend(otherVersions,el.version);
+			if(ALL_VERSION!=version.display) {
+				loop array=list index='local.i' item='local.el' {
+					arrayAppend(otherVersions,el.version);
+				}
 			}
 
 			return {
@@ -174,25 +177,30 @@
 	* function to download Light Lucee Loader file (lucee-light.jar)
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
 	*/
-	remote function downLight(required string version restargsource="Path",string ioid="" restargsource="url")
+	remote function downLight(
+		required string version restargsource="Path",
+		string ioid="" restargsource="url",
+		boolean deliver=true restargsource="url")
 		httpmethod="GET" restpath="light/{version}" {
 		local.mr=new MavenRepo();
 
 		try{
 			local.path=mr.getLightLoader(version);
 			var name="lucee-light-#version#.jar";
-			if(fromS3(path,name)) return;
+			if(fromS3(path,name,deliver)) return;
 		}
 		catch(e){
+			//application.test123=now()&" - "&serialize(e);
 			return {
 				"type":"error",
 				"message":"The version #version# is not available as a light version.",
 				"detail":e.message};
 		}
-
-		file action="readBinary" file="#path#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=#name#";
-        content variable="#bin#" type="application/zip";
+		if(deliver) {
+			file action="readBinary" file="#path#" variable="local.bin";
+			header name="Content-disposition" value="attachment;filename=#name#";
+	        content variable="#bin#" type="application/zip";
+	    }
 	}
 
 
@@ -203,7 +211,11 @@
 	* 
 	* used by old version 
 	*/
-	remote function downLoaderAll(required string version restargsource="Path",string ioid="" restargsource="url", boolean allowRedirect=true restargsource="url")
+	remote function downLoaderAll(
+		required string version restargsource="Path",
+		string ioid="" restargsource="url", 
+		boolean allowRedirect=true restargsource="url", 
+		boolean deliver=true restargsource="url")
 		httpmethod="GET" restpath="loader-all/{version}" {
 		
 		try{
@@ -220,10 +232,11 @@
 				//,"cfcatch":serialize(structkeyList(e))
 			};
 		}
-
-		file action="readBinary" file="#path#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=lucee-all-#version#.jar";
-        content variable="#bin#" type="application/zip";
+		if(deliver) {
+			file action="readBinary" file="#path#" variable="local.bin";
+			header name="Content-disposition" value="attachment;filename=lucee-all-#version#.jar";
+	        content variable="#bin#" type="application/zip";
+	    }
 	}
 
 
@@ -262,7 +275,8 @@
 	remote function downloadCore(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url", 
-		boolean allowRedirect=false restargsource="url")
+		boolean allowRedirect=false restargsource="url",
+		boolean deliver=true restargsource="url")
 		httpmethod="GET" restpath="download/{version}" {
 		
 		//local.version=toVersion(arguments.version);
@@ -271,7 +285,7 @@
 		try{
 			local.path=mr.getCore(version);
 			var name="#version#.lco";
-			if(allowRedirect && fromS3(path,name)) return;
+			if(allowRedirect && fromS3(path,name,deliver)) return;
 		}
 		catch(e){
 			return {
@@ -279,10 +293,11 @@
 				"message":"The version #version# is not available.",
 				"detail":e.message};
 		}
-
-		file action="readBinary" file="#path#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=#name#";
-        content variable="#bin#" type="application/zip";
+		if(deliver) {
+			file action="readBinary" file="#path#" variable="local.bin";
+			header name="Content-disposition" value="attachment;filename=#name#";
+	        content variable="#bin#" type="application/zip";
+	    }
 	}
 
 
@@ -291,7 +306,14 @@
 	* function to download Lucee Core file
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
 	*/
-	remote function downloadWar(required string version restargsource="Path",string ioid="" restargsource="url")
+	remote function downloadWarHead(required string version restargsource="Path",string ioid="" restargsource="url")
+		httpmethod="HEAD" restpath="war/{version}" {
+			return downloadWar(version, ioid);
+	}
+	remote function downloadWar(
+		required string version restargsource="Path",
+		string ioid="" restargsource="url",
+		boolean deliver=true restargsource="url")
 		httpmethod="GET" restpath="war/{version}" {
 		
 		setting requesttimeout="1000";
@@ -299,19 +321,22 @@
 		local.mr=new MavenRepo();
 		try{
 			local.path=mr.getWar(version);
-			var name="#version#.war";
-			if(fromS3(path,name)) return;
+			var name="lucee-#version#.war";
+			if(fromS3(path,name,deliver)) return;
+			//if(fromS3Deep(path,version,"war")) return;
 		}
 		catch(e){
+			//application.test123=now()&" - "&serialize(e);
 			return {
 				"type":"error",
 				"message":"The version #version# is not available.",
 				"detail":e.message};
 		}
-
-		file action="readBinary" file="#path#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=#name#";
-        content variable="#bin#" type="application/zip";
+		if(deliver) {
+			file action="readBinary" file="#path#" variable="local.bin";
+			header name="Content-disposition" value="attachment;filename=#name#";
+	        content variable="#bin#" type="application/zip";
+	    }
 	}
 
 
@@ -721,15 +746,17 @@
 	* function to get all dependencies (bundles) for a specific version
 	* @version version to get bundles for
 	*/
-	remote function readListOnlyForDebugging(
-		boolean force=false restargsource="url"
-		,string type='all' restargsource="url")
+	remote function readList(
+		boolean force=false restargsource="url",
+		string type='all' restargsource="url",
+		boolean extended=false restargsource="url"
+		)
 		httpmethod="GET" restpath="list" {
-
+			
 		setting requesttimeout="1000";
 		local.mr=new MavenRepo();
 		try {
-			return mr.list(arguments.type);
+			return mr.list(arguments.type,arguments.extended);
 		}
 		catch(e){
 			return {"type":"error","message":e.getMessage()};
@@ -759,7 +786,8 @@
 	*/
 	remote function downloadExpress(
 		required string version restargsource="Path",
-		string ioid="" restargsource="url")
+		string ioid="" restargsource="url",
+		boolean deliver=true restargsource="url")
 		httpmethod="GET" restpath="express/{version}" {
 
 		setting requesttimeout="1000";
@@ -773,15 +801,21 @@
 		
 			
 		var name="lucee-express-#version#.zip";
-		if(fromS3(path,name)) {
+		if(fromS3(path,name,deliver)) {
 			return;
 		}
-		
-		file action="readBinary" file="#path#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=#name#";
-        content variable="#bin#" type="application/zip";
-		
+		if(deliver) {
+			file action="readBinary" file="#path#" variable="local.bin";
+			header name="Content-disposition" value="attachment;filename=#name#";
+	        content variable="#bin#" type="application/zip";
+    	}
 	}
+
+	/*remote function buildLatestX()
+		httpmethod="GET" restpath="buildLatestX" {
+		return application.test123;
+	}*/
+
 
 	/**
 	* this functions triggers that everything is prepared/build for future requests
@@ -789,30 +823,48 @@
 	*/
 	remote function buildLatest()
 		httpmethod="GET" restpath="buildLatest" {
-		thread name="alles" {
-			setting requesttimeout="1000";
-			
-			local.mr=new MavenRepo();
-			mr.flushAndBuild();
+		
+		setting requesttimeout="10000";
+		
+		local.mr=new MavenRepo();
+		mr.flushAndBuild();
 
-			_buildLatest("snapshots",mr);
-			_buildLatest("releases",mr);
+		_buildLatest("snapshots",mr);
+		_buildLatest("releases",mr);
 
-			
-			application.releaseNotesItem={};
-			application.releaseNotesData={};
-		}
+		
+		application.releaseNotesItem={};
+		application.releaseNotesData={};
+		
 		return "done";
 	}
+
+
 
 	private function _buildLatest(type,mr) {
 		var list=mr.list(type:type);
 		var latest= list[arrayLen(list)];
-		downloadExpress(latest.version);
-		downloadCore(version:latest.version,allowRedirect:false);
-		downloadWar(latest.version);
-		downLight(latest.version);
-		downLoaderAll(version:latest.version,allowRedirect:false);
+		
+		// express
+		thread name="buildLatest_express_#latest.version#" cfc=this vs=latest.version {
+			cfc.downloadExpress(version:vs,deliver:false);
+		}
+		// core
+		thread name="buildLatest_core_#latest.version#" cfc=this vs=latest.version {
+			cfc.downloadCore(version:vs,allowRedirect:true,deliver:false);
+		}
+		// war
+		thread name="buildLatest_war_#latest.version#" cfc=this vs=latest.version {
+			cfc.downloadWar(version:vs,deliver:false);
+		}
+		// light
+		thread name="buildLatest_light_#latest.version#" cfc=this vs=latest.version {
+			cfc.downLight(version:vs,deliver:false);
+		}
+		// all
+		thread name="buildLatest_all_#latest.version#" cfc=this vs=latest.version {
+			cfc.downLoaderAll(version:vs,deliver:false);
+		}
 	}
 
 	private boolean function isVersion(required string version) { 
@@ -1040,7 +1092,7 @@
 	* checks if file exists on S3 and if so redirect to it, if not it copies it to S3 and the next one will have it there.
 	* So nobody has to wait that it is copied over
 	*/
-	private function fromS3(path,name) {
+	private function fromS3(path,name,async=true) {
 		// if exist we redirect to it
 			if(!isNull(application.exists[name]) || fileExists(variables.s3Root&name)) {
 				application.exists[name]=true;
@@ -1050,13 +1102,24 @@
 			}
 			// if not exist we make ready for the next
 			else {
-				thread src=path trg=variables.s3Root&name {
+				if(async) {
+					thread src=path trg=variables.s3Root&name {
+						lock timeout=100 name=src {
+							if(!fileExists(trg)) // we do this because it was created by a thread blocking this thread
+								fileCopy(src,trg);
+						}
+					}
+				}
+				else {
+					var src=path;
+					var trg=variables.s3Root&name;
 					lock timeout=100 name=src {
 						if(!fileExists(trg)) // we do this because it was created by a thread blocking this thread
 							fileCopy(src,trg);
 					}
-				}
+				}	
 			}
 			return false;
 	}
+
 }
