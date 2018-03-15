@@ -3,6 +3,7 @@
 
 	variables.s3Root="s3:///lucee-downloads/";
 	variables.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
+	variables.cdnURL="http://cdn.lucee.org/";
 
 	jiraListURL="https://luceeserver.atlassian.net/rest/api/2/project/LDEV/versions";
 	jiraNotesURL="https://luceeserver.atlassian.net/secure/ReleaseNote.jspa?version={version-id}&styleName=Text&projectId=10000";
@@ -752,11 +753,21 @@
 		boolean extended=false restargsource="url"
 		)
 		httpmethod="GET" restpath="list" {
-			
+
 		setting requesttimeout="1000";
 		local.mr=new MavenRepo();
 		try {
-			return mr.list(arguments.type,arguments.extended);
+
+			var arr=mr.list(arguments.type,arguments.extended);
+			if(arguments.extended) {
+				for(var i=arrayLen(arr);i>0;i--) {
+					arr[i].s3Express=s3Exists("lucee-express-#arr[i].version#.zip");
+					arr[i].s3Core=s3Exists("#arr[i].version#.lco");
+					arr[i].s3Light=s3Exists("lucee-light-#arr[i].version#.jar");
+					arr[i].s3War=s3Exists("lucee-#arr[i].version#.war");
+				}
+			}
+			return arr;
 		}
 		catch(e){
 			return {"type":"error","message":e.getMessage()};
@@ -845,6 +856,22 @@
 		var list=mr.list(type:type);
 		var latest= list[arrayLen(list)];
 		
+		// clean cache for that version
+		if(!isNull(application.exists)) {		
+			loop struct=application.exists index="local.k" item="local.v" {
+				if(findNoCase(latest.version,k)) 
+					structDelete( application.exists, k, false );
+			}
+		}
+		if(!isNull(application.detail)) {		
+			loop struct=application.detail index="local.k" item="local.v" {
+				if(findNoCase(latest.version,k)) 
+					structDelete(application.detail, k, false );
+			}
+		}
+		var file=mr.getDetailFile(latest.version);
+		if(fileExists(file)) fileDelete(file);
+
 		// express
 		thread name="buildLatest_express_#latest.version#" cfc=this vs=latest.version {
 			cfc.downloadExpress(version:vs,deliver:false);
@@ -1086,6 +1113,18 @@
 		return {};
 	}	
 	
+
+	private function s3Exists(name) {
+		if(!isNull(application.exists[name])) {
+			return application.exists[name];
+		}
+		if(fileExists(variables.s3Root&name)) {
+			application.exists[name]=true;
+			return true;
+		}
+		application.exists[name]=false;
+		return false;
+	}
 	
 
 	/**
@@ -1094,10 +1133,10 @@
 	*/
 	private function fromS3(path,name,async=true) {
 		// if exist we redirect to it
-			if(!isNull(application.exists[name]) || fileExists(variables.s3Root&name)) {
+			if((!isNull(application.exists[name]) && application.exists[name]) || fileExists(variables.s3Root&name)) {
 				application.exists[name]=true;
 				header statuscode="302" statustext="Found";
-				header name="Location" value=variables.s3URL&name;
+				header name="Location" value=variables.cdnURL&name;
 				return true;
 			}
 			// if not exist we make ready for the next

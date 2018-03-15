@@ -728,8 +728,11 @@ component {
 			sct.vs=toVersionSortable(entry.version);
 			//sct.repositoryId=ah.repositoryId;
 			sct.repository=repos[ah.repositoryId];
-			if(extended) sct.sources=getSources(sct.repository,sct.version);
-				
+			if(extended) {
+				local.sources=getSources(sct.repository,sct.version);
+				if(!isNull(sources.jar.date)) sct.date=sources.jar.date;
+				else if(!isNull(sources.pom.date)) sct.date=sources.pom.date;
+			}
 			sct.hits=len(entry.artifactHits);
 			sct.g=g();
 
@@ -737,6 +740,14 @@ component {
 			//data[sct.vs]=sct;
 		}
 		
+	}
+
+	public string function getDetailFile(version) {
+		curr=getDirectoryFromPath(getCurrenttemplatePath());
+		dir=curr&"detail/";
+		if(!directoryExists(dir)) directoryCreate(dir);
+
+		return dir&version&".json";
 	}
 
 	public struct function getSources(required string repoURL, required string version, string group="", string artifact="") {
@@ -747,14 +758,10 @@ component {
 		
 
 		if(!isNull(application.detail[base]))
-			;//return application.detail[base];
+			return application.detail[base];
 
 
-		curr=getDirectoryFromPath(getCurrenttemplatePath());
-		dir=curr&"detail/";
-		if(!directoryExists(dir)) directoryCreate(dir);
-
-		file=dir&version&".json";
+		var file=getDetailFile(version);
 		if(fileExists(file)) {
 			var data=deSerializeJson(fileRead(file));
 			application.detail[base]=data;

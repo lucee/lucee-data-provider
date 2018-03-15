@@ -183,7 +183,7 @@ lang.installer.lin32="Linux (32b)";
 				
 				http url=UPDATE_PROVIDER result="local.res";
 				var arr=deserializeJSON(res.fileContent);
-				var qry=queryNew('groupId,artifactId,version,vs,type,jarDate');
+				var qry=queryNew('groupId,artifactId,version,vs,type,jarDate,s3War,s3Express,s3Light,s3Core');
 				for(var r=arrayLen(arr);r>=1;r--) {
 					row=arr[r];
 					//dump(row.sources);abort;
@@ -193,10 +193,15 @@ lang.installer.lin32="Linux (32b)";
 					querySetCell(qry,"version",row.version,qr);
 					querySetCell(qry,"vs",row.vs,qr);
 					querySetCell(qry,"type",listLast(row.repository,'/'),qr);
+					querySetCell(qry,"s3War",row.s3War,qr);
+					querySetCell(qry,"s3Express",row.s3Express,qr);
+					querySetCell(qry,"s3Light",row.s3Light,qr);
+					querySetCell(qry,"s3Core",row.s3Core,qr);
 					//querySetCell(qry,"versionNoAppendix",toVersionWithoutAppendix(row.version));
 					//querySetCell(qry,"jarSrc",row.sources.jar.src,qr);
 					var date="";
-					if(!isNull(row.sources.jar.date)) date=parseDateTime(row.sources.jar.date);
+					if(!isNull(row.date)) date=parseDateTime(row.date);
+					else if(!isNull(row.sources.jar.date)) date=parseDateTime(row.sources.jar.date);
 					else if(!isNull(row.sources.pom.date)) date=parseDateTime(row.sources.pom.date);
 
 					querySetCell(qry,"jarDate",date,qr);

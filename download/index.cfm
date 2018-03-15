@@ -1,6 +1,9 @@
 
 <cfoutput>
 <cfscript>
+	
+	cdnURL="http://cdn.lucee.org/";
+
 	if(isNull(url.type)) url.type="releases";
 
 	if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org" addtoken=false;
@@ -336,7 +339,7 @@
 						else if(findNoCase("ReleaseCandidate",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="rc";
 					}
 					// filter out not matching major version
-					downloads=queryNew("test,"&tmpDownloads.columnlist);
+					downloads=queryNew("s3,test,"&tmpDownloads.columnlist);
 					arrColumns=tmpDownloads.columnArray();
 					loop query=tmpDownloads {
 						if(
@@ -363,13 +366,14 @@
 								_changelog[key]=ver;
 							}
 						}
+
+						// S3
 					}
 					if(downloads.recordcount) latest=1;
-
-					//dump(downloads);
 					//dump(tmpDownloads);
 					// sort changelog
 					if(queryColumnExists(downloads,"changelog")) {
+						
 						loop query=downloads {
 							cl=downloads.changelog;
 							if(isStruct(cl) && structCount(cl)>1) {
@@ -426,28 +430,47 @@
 					<!---  Express--->
 					<h4>Express Build (*.zip)</h4>
 					<p>#lang.express#</p>
-					<cfset uri="#_url[type]#/rest/update/provider/express/#downloads.version[latest]#">
+					<cfif downloads.s3Express[latest]>
+						<cfset uri="#cdnURL#lucee-express-#downloads.version[latest]#.zip">
+					<cfelse>
+						<cfset uri="#_url[type]#/rest/update/provider/express/#downloads.version[latest]#">
+					</cfif>
 					<div class="btn-group mb-3"><a class="btn btn-primary" href="#uri#">Download</a></div>
 
 					<!--- jar --->
 					<h4>Jar file (*.jar)</h4>
 					<p><cfif downloads.v[latest] GTE _5_0_0_219>#lang.libNew#<cfelse>#lang.lib#</cfif></p>
+
 					<cfset uri="#_url[type]#/rest/update/provider/#downloads.v[latest] GTE _5_0_0_112?"loader":"libs"#/#downloads.version[latest]#">
 					<div class="btn-group mb-3"><a class="btn btn-primary" href="#(uri)#">Download with Extensions</a></div>
-					<cfset uri="#_url[type]#/rest/update/provider/light/#downloads.version[latest]#">
+					
+					<!--- jar light --->
+					<cfif downloads.s3Light[latest]>
+						<cfset uri="#cdnURL#lucee-light-#downloads.version[latest]#.jar">
+					<cfelse>
+						<cfset uri="#_url[type]#/rest/update/provider/light/#downloads.version[latest]#">
+					</cfif>
 					<div class="btn-group mb-3"><a class="btn btn-primary" href="#(uri)#">Download without Extensions</a></div>
 
 
 					<!--- War --->
 					<h4>WAR file (*.war)</h4>
 					<p>#lang.war#</p>
-					<cfset uri="#_url[type]#/rest/update/provider/war/#downloads.version[latest]#">
+					<cfif downloads.s3War[latest]>
+						<cfset uri="#cdnURL#lucee-#downloads.version[latest]#.war">
+					<cfelse>
+						<cfset uri="#_url[type]#/rest/update/provider/war/#downloads.version[latest]#">
+					</cfif>
 					<div class="btn-group mb-3"><a class="btn btn-primary" href="#(uri)#">Download</a></div>
 
 					<!--- Lucee Core --->
 					<h4>Core file (*.lco)</h4>
 					<p>#lang.core#</p>
-					<cfset uri="#_url[type]#/rest/update/provider/core/#downloads.version[latest]#">
+					<cfif downloads.s3Core[latest]>
+						<cfset uri="#cdnURL##downloads.version[latest]#.lco">
+					<cfelse>
+						<cfset uri="#_url[type]#/rest/update/provider/core/#downloads.version[latest]#">
+					</cfif>
 					<div class="btn-group mb-3"><a class="btn btn-primary" href="#(uri)#">download</a></div>
 
 					<!--- changelog --->
@@ -534,20 +557,30 @@
 															#str#
 														</td>
 													</cfif>
+													<!--- Express --->
 													<td>
-														<cfset uri="#_url[type]#/rest/update/provider/express/#downloads.version#">
+														<cfif downloads.s3Express>
+															<cfset uri="#cdnURL#lucee-express-#downloads.version#.zip">
+														<cfelse>
+															<cfset uri="#_url[type]#/rest/update/provider/express/#downloads.version#">
+														</cfif>
 														<a href="#(uri)#">Express</a>
 													</td>
+													<!--- JAR --->
 													<td>
+														<!--- full --->
 														<cfif downloads.v GTE _5_0_0_219>
 															<cfset uri="#_url[type]#/rest/update/provider/loader/#downloads.version#">
-															<a href="#toCDN(uri)#">lucee.jar</a>
+															<a href="#(uri)#">lucee.jar</a>
 															<cfif downloads.v GTE _5_1_0_008>
-															<br><cfset uri="#_url[type]#/rest/update/provider/light/#downloads.version#">
-															<a href="#(uri)#">lucee.jar (without Extension)</a>
+																<br>
+																<cfif downloads.s3Light>
+																	<cfset uri="#cdnURL#lucee-light-#downloads.version#.jar">
+																<cfelse>
+																	<cfset uri="#_url[type]#/rest/update/provider/light/#downloads.version#">
+																</cfif>
+																<a href="#(uri)#">lucee.jar (without Extension)</a>
 															</cfif>
-					
-
 														<cfelseif downloads.v GTE _5_0_0_112>
 															<cfset uri="#_url[type]#/rest/update/provider/loader-all/#downloads.version#">
 															<a href="#toCDN(uri)#">lucee.jar</a></span>
@@ -555,9 +588,20 @@
 															-
 														</cfif>
 													</td>
-													<cfset uri="#_url[type]#/rest/update/provider/core/#downloads.version#">
+													<!--- Core --->
+													<cfif downloads.s3Core>
+														<cfset uri="#cdnURL##downloads.version#.lco">
+													<cfelse>
+														<cfset uri="#_url[type]#/rest/update/provider/core/#downloads.version#">
+													</cfif>
 													<td><a href="#(uri)#">Core</a></td>
-													<cfset uri="#_url[type]#/rest/update/provider/war/#downloads.version#">
+													
+													<!--- WAR --->
+													<cfif downloads.s3War>
+														<cfset uri="#cdnURL#lucee-#downloads.version#.war">
+													<cfelse>
+														<cfset uri="#_url[type]#/rest/update/provider/war/#downloads.version#">
+													</cfif>
 													<td><a href="#(uri)#">WAR</a></td>
 												</tr>
 												<!--- changelog --->
