@@ -627,6 +627,8 @@ component {
 			http url=infoURL result="local.res" {
 				httpparam type="header" name="accept" value="application/json";
 			}
+			directoryDelete(dir,true);
+			directoryCreate(dir);
 			info=deserializeJSON(res.fileContent);
 			application.info[infoURL]=info;
 		}

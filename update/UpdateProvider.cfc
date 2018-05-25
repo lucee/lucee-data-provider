@@ -11,7 +11,7 @@
 	ALL_VERSION="0.0.0.0";
 	MIN_UPDATE_VERSION="5.0.0.254";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
-
+ 
 	variables.mavenMappings={
 		'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
 		,'aws-java-sdk-osgi':{'group':'com.amazonaws','artifact':'aws-java-sdk-osgi'}
@@ -85,8 +85,8 @@
 			var latest= list[arrayLen(list)];
 			var latestVersion=toVersion(latest.version);
 			var sources=mr.getSources(latest.repository,latest.version);
-			// {"version":"5.2.7.34-SNAPSHOT","hits":1,"repository":"https://oss.sonatype.org/content/repositories/snapshots","artifactId":"lucee","groupId":"org.lucee","g":14,"vs":"05.002.007.0034.000"}
-			
+
+
 			// no updates for versions smaller than ...
 			if(ALL_VERSION!=version.display && !isNewer(version,toVersion(MIN_UPDATE_VERSION))) 
 				return {
@@ -94,6 +94,27 @@
 					"message":"Version ["&version.display&"] can not be updated from within the Lucee Administrator.  Please update Lucee by replacing the lucee.jar, which can be downloaded from [http://download.lucee.org]"};
 			
 			
+			// others
+			latest.otherVersions=[];
+			var maxSnap=400; 
+			var maxRel=100;
+			if(ALL_VERSION!=version.display) {
+				for(var i=arrayLen(list);i>=1;i--) {
+					var el=list[i];
+					if(findNoCase("-SNAPSHOT",el.version)) {
+						if((--maxSnap)<=0) continue;
+					}
+					else {
+						if((--maxRel)<=0) continue;
+					}
+					arrayPrepend(latest.otherVersions,el.version);
+				}
+			}
+
+
+
+
+
 			// no update
 			if(ALL_VERSION!=version.display && !isNewer(latestVersion,version))
 				return {
@@ -111,13 +132,7 @@
 				<div class=""error"">Warning! <br/>
 				If this Lucee install is on a Windows based computer/server, please do not use the updater for this version due to a bug.  Instead download the latest lucee.jar from <a href=""http://stable.lucee.org/download/?type=snapshots"">here</a> and replace your existing lucee.jar with it.  This is a one-time workaround.";
 			
-			// others
-			local.otherVersions=[];
-			if(ALL_VERSION!=version.display) {
-				loop array=list index='local.i' item='local.el' {
-					arrayAppend(otherVersions,el.version);
-				}
-			}
+			
 
 			return {
 				"type":"info"
@@ -125,7 +140,7 @@
 				,"current":version.display
 				,"released":sources.jar.date
 				,"available":latestVersion.display
-				,"otherVersions":otherVersions?:[]
+				,"otherVersions":latest.otherVersions?:[]
 				,"message":"A patch (#latestVersion.display#) is available for your current version (#version.display#)."&msgAppendix
 				,"changelog":isSimpleValue(notes)?{}:notes/*readChangeLog(newest.log)*/
 			}; // TODO get the right version for given version

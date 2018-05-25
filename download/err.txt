@@ -1,0 +1,84 @@
+{'Extended_Info':'','Message':'key [v] not found in query, columns are [groupId,artifactId,version,vs,type,jarDate,s3War,s3Express,s3Light,s3Core,state,versionNoAppendix]','queryError':'','Sql':'','Detail':'','SQLState':'','additional':{},'TagContext':[{'Raw_Trace':'stable.download.functions_cfm$cf.udfCall1(/var/www/sites/updateprovider/stable/download/functions.cfm:231)','codePrintPlain':'229: 				//qry=merge(qry);
+230: 				// sort
+231: 				querySort(qry,"v","desc");
+232: 
+233: 				// get changelog
+','column':0,'line':231,'template':'/var/www/sites/updateprovider/stable/download/functions.cfm','id':'??','type':'cfml','codePrintHTML':'229: 				//qry=merge(qry);<br>
+230: 				// sort<br>
+<b>231: 				querySort(qry,&quot;v&quot;,&quot;desc&quot;);</b><br>
+232: <br>
+233: 				// get changelog<br>
+'},{'Raw_Trace':'stable.download.functions_cfm$cf.udfCall1(/var/www/sites/updateprovider/stable/download/functions.cfm:120)','codePrintPlain':'118: 			}
+119: 			else {
+120: 				application.download.query=_download();
+121: 				application.download.age=now();
+122: 			}
+','column':0,'line':120,'template':'/var/www/sites/updateprovider/stable/download/functions.cfm','id':'??','type':'cfml','codePrintHTML':'118: 			}<br>
+119: 			else {<br>
+<b>120: 				application.download.query=_download();</b><br>
+121: 				application.download.age=now();<br>
+122: 			}<br>
+'},{'Raw_Trace':'stable.download.index_cfm$cf.call(/var/www/sites/updateprovider/stable/download/index.cfm:332)','codePrintPlain':'330: 						return arr[1]&"-"&arr[2];
+331: 					}
+332: 					tmpDownloads=getDownloads();
+333: 					
+334: 					/*if(!queryColumnExists(tmpDownloads,"state"))queryAddColumn(tmpDownloads,"state");
+','column':0,'line':332,'template':'/var/www/sites/updateprovider/stable/download/index.cfm','id':'??','type':'cfml','codePrintHTML':'330: 						return arr[1]&amp;&quot;-&quot;&amp;arr[2];<br>
+331: 					}<br>
+<b>332: 					tmpDownloads=getDownloads();</b><br>
+333: 					<br>
+334: 					/*if(!queryColumnExists(tmpDownloads,&quot;state&quot;))queryAddColumn(tmpDownloads,&quot;state&quot;);<br>
+'}],'ErrorCode':'0','NativeErrorCode':-1,'type':'database','DataSource':'','StackTrace':'key [v] not found in query, columns are [groupId,artifactId,version,vs,type,jarDate,s3War,s3Express,s3Light,s3Core,state,versionNoAppendix]
+	at lucee.runtime.type.QueryImpl.getColumn(Unknown Source):-1
+	at lucee.runtime.type.QueryImpl.sort(Unknown Source):-1
+	at lucee.runtime.functions.query.QuerySort.call(Unknown Source):-1
+	at stable.download.functions_cfm$cf.udfCall1(/var/www/sites/updateprovider/stable/download/functions.cfm:231):231
+	at stable.download.functions_cfm$cf.udfCall(/var/www/sites/updateprovider/stable/download/functions.cfm):-1
+	at lucee.runtime.type.UDFImpl.implementation(Unknown Source):-1
+	at lucee.runtime.type.UDFImpl._call(Unknown Source):-1
+	at lucee.runtime.type.UDFImpl.call(Unknown Source):-1
+	at lucee.runtime.type.scope.UndefinedImpl.call(Unknown Source):-1
+	at lucee.runtime.util.VariableUtilImpl.callFunctionWithoutNamedValues(Unknown Source):-1
+	at lucee.runtime.PageContextImpl.getFunction(Unknown Source):-1
+	at stable.download.functions_cfm$cf.udfCall1(/var/www/sites/updateprovider/stable/download/functions.cfm:120):120
+	at stable.download.functions_cfm$cf.udfCall(/var/www/sites/updateprovider/stable/download/functions.cfm):-1
+	at lucee.runtime.type.UDFImpl.implementation(Unknown Source):-1
+	at lucee.runtime.type.UDFImpl._call(Unknown Source):-1
+	at lucee.runtime.type.UDFImpl.call(Unknown Source):-1
+	at lucee.runtime.type.scope.UndefinedImpl.call(Unknown Source):-1
+	at lucee.runtime.util.VariableUtilImpl.callFunctionWithoutNamedValues(Unknown Source):-1
+	at lucee.runtime.PageContextImpl.getFunction(Unknown Source):-1
+	at stable.download.index_cfm$cf.call(/var/www/sites/updateprovider/stable/download/index.cfm:332):332
+	at lucee.runtime.PageContextImpl.doInclude(Unknown Source):-1
+	at lucee.runtime.PageContextImpl.doInclude(Unknown Source):-1
+	at lucee.runtime.listener.ModernAppListener._onRequest(Unknown Source):-1
+	at lucee.runtime.listener.MixedAppListener.onRequest(Unknown Source):-1
+	at lucee.runtime.PageContextImpl.execute(Unknown Source):-1
+	at lucee.runtime.PageContextImpl.execute(Unknown Source):-1
+	at lucee.runtime.engine.CFMLEngineImpl.serviceCFML(Unknown Source):-1
+	at lucee.loader.servlet.CFMLServlet.service(Unknown Source):-1
+	at javax.servlet.http.HttpServlet.service(HttpServlet.java:727):727
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:303):303
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:208):208
+	at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:52):52
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:241):241
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:208):208
+	at org.tuckey.web.filters.urlrewrite.UrlRewriteFilter.doFilter(UrlRewriteFilter.java:404):404
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:241):241
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:208):208
+	at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:220):220
+	at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:122):122
+	at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:501):501
+	at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:171):171
+	at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:102):102
+	at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:116):116
+	at org.apache.catalina.valves.RemoteIpValve.invoke(RemoteIpValve.java:683):683
+	at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:408):408
+	at org.apache.coyote.http11.AbstractHttp11Processor.process(AbstractHttp11Processor.java:1040):1040
+	at org.apache.coyote.AbstractProtocol$AbstractConnectionHandler.process(AbstractProtocol.java:607):607
+	at org.apache.tomcat.util.net.AprEndpoint$SocketWithOptionsProcessor.run(AprEndpoint.java:2379):2379
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145):1145
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615):615
+	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:61):61
+	at java.lang.Thread.run(Thread.java:745):745
+','where':'','ExtendedInfo':''}

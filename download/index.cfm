@@ -47,14 +47,16 @@
 
 	downloads45=query(
 		version:[
-			'4.5.5.006'
+			'4.5.5.015'
+			,'4.5.5.006'
 			,'4.5.4.017'
 			,'4.5.3.020'
 			,'4.5.2.018'
 			,'4.5.1.024'
 		]
 		,date:[
-			createDate(2017,1,26)
+			createDate(2018,4,9)
+			,createDate(2017,1,26)
 			,createDate(2016,10,24)
 			,createDate(2016,9,1)
 			,createDate(2015,11,9)
@@ -62,6 +64,8 @@
 		]
 		,installer:[
 			{
+			}
+			,{
 				win:"http://cdn.lucee.org/lucee-4.5.5.006-pl0-windows-installer.exe"
 				,lin64:"http://cdn.lucee.org/lucee-4.5.5.006-pl0-linux-x64-installer.run"
 				,lin32:"http://cdn.lucee.org/lucee-4.5.5.006-pl0-linux-installer.run"
@@ -88,21 +92,24 @@
 			}
 		]
 		,express:[
-			'http://cdn.lucee.org/lucee-4.5.5.006-express.zip'
+			'http://cdn.lucee.org/lucee-4.5.5.015-express.zip'
+			,'http://cdn.lucee.org/lucee-4.5.5.006-express.zip'
 			,'http://cdn.lucee.org/lucee-4.5.4.017-express.zip'
 			,'http://cdn.lucee.org/lucee-4.5.3.020-express.zip'
 			,'http://cdn.lucee.org/lucee-4.5.2.018-express.zip'
 			,'http://cdn.lucee.org/lucee-4.5.1.024-express.zip'
 		]
 		,jar:[
-			'http://cdn.lucee.org/lucee-4.5.5.006-jars.zip'
+			'http://cdn.lucee.org/lucee-4.5.5.015-jars.zip'
+			,'http://cdn.lucee.org/lucee-4.5.5.006-jars.zip'
 			,'http://cdn.lucee.org/lucee-4.5.4.017-jars.zip'
 			,'http://cdn.lucee.org/lucee-4.5.3.020-jars.zip'
 			,'http://cdn.lucee.org/lucee-4.5.2.018-jars.zip'
 			,'http://cdn.lucee.org/lucee-4.5.1.024-jars.zip'
 		]
 		,war:[
-			'http://cdn.lucee.org/lucee-4.5.5.006.war'
+			'http://cdn.lucee.org/lucee-4.5.5.015.war'
+			,'http://cdn.lucee.org/lucee-4.5.5.006.war'
 			,'http://cdn.lucee.org/lucee-4.5.4.017.war'
 			,'http://cdn.lucee.org/lucee-4.5.3.020.war'
 			,'http://cdn.lucee.org/lucee-4.5.2.018.war'
@@ -110,7 +117,8 @@
 		]
 		//'https://bitbucket.org/lucee/lucee/downloads/4.5.5.006.lco'
 		,core:[
-			'http://cdn.lucee.org/4.5.5.006.lco'
+			'http://cdn.lucee.org/4.5.5.015.lco'
+			,'http://cdn.lucee.org/4.5.5.006.lco'
 			,'http://cdn.lucee.org/4.5.4.017.lco'
 			,'http://cdn.lucee.org/4.5.3.020.lco'
 			,'http://cdn.lucee.org/4.5.2.018.lco'
@@ -118,6 +126,9 @@
 		]
 		,changelog:[
 			{
+				"LDEV-1462":"expandPath fails with contextpath that are start the same way as other contextpath"
+			}
+			,{
 				"LDEV-96":"ORM cache error when secondary cache is enabled and autoManageSession/flushAtRequestEnd are false"
 				,"LDEV-391":"Default timezone for cfquery"
 				,"LDEV-613":"ORM NullPointerException caused by <cfquery dbtype=""hql""> in latest stable release"
@@ -322,78 +333,8 @@
 
 			<cfif type EQ "releases" or type EQ"snapshots" or type EQ "abc">
 				<cfscript>
-					function toKeySortable(key) {
-						var arr=listToArray(key,'-');
-						while(len(arr[2])<5) {
-							arr[2]="0"&arr[2];
-						}
-						return arr[1]&"-"&arr[2];
-					}
-					tmpDownloads=getDownloads();
-					
-					if(!queryColumnExists(tmpDownloads,"state"))queryAddColumn(tmpDownloads,"state");
-					loop query=tmpDownloads {
-						if(findNoCase("alpha",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="alpha";
-						else if(findNoCase("beta",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="beta";
-						else if(findNoCase("rc",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="rc";
-						else if(findNoCase("ReleaseCandidate",tmpDownloads.version)) tmpDownloads.state[tmpDownloads.currentrow]="rc";
-					}
-					// filter out not matching major version
-					downloads=queryNew("s3,test,"&tmpDownloads.columnlist);
-					arrColumns=tmpDownloads.columnArray();
-					loop query=tmpDownloads {
-						if(
-							( url.type==tmpDownloads.type && tmpDownloads.state=="" )
-							||
-							( url.type=="abc" && tmpDownloads.state!="" ) // has -ALPAH for example
-						) {
-							row=downloads.addRow();
-							loop array=arrColumns item="col" {
-								if(col=="changelog") {
-									_changelog=tmpDownloads[col];
-									if(!isStruct(_changelog))_changelog={};
-									else _changelog=duplicate(_changelog);
-									downloads.setCell(col,_changelog,row);
-								}
-								else downloads.setCell(col,tmpDownloads[col],row);
-							}
-							downloads.setCell('test',listLen(tmpDownloads.version,'-'),row);
-
-							if(downloads.recordcount>=MAX) break;
-						}
-						else if(!isNull(_changelog) && isStruct(tmpDownloads.changelog)) {
-							loop struct=tmpDownloads.changelog index="key" item="ver" {
-								_changelog[key]=ver;
-							}
-						}
-
-						// S3
-					}
+					downloads=getDownloadFor(url.type);
 					if(downloads.recordcount) latest=1;
-					//dump(tmpDownloads);
-					// sort changelog
-					if(queryColumnExists(downloads,"changelog")) {
-						
-						loop query=downloads {
-							cl=downloads.changelog;
-							if(isStruct(cl) && structCount(cl)>1) {
-								q=queryNew('k,ks,v');
-								loop struct=cl index="key" item="val" {
-									r=queryAddRow(q);
-									querySetCell(q,"k",key,r);
-									querySetCell(q,"ks",toKeySortable(key),r);
-									querySetCell(q,"v",val,r);
-								}
-								querySort(q,"ks","desc");
-								sct=structNew("linked");
-								loop query=q {
-									sct[q.k]=q.v;
-								}
-								downloads.changelog=sct;
-							}
-						}
-					}
-					//dump(downloads);
 				</cfscript>
 
 				<cfif isNull(latest)>
@@ -439,9 +380,9 @@
 
 					<!--- jar --->
 					<h4>Jar file (*.jar)</h4>
-					<p><cfif downloads.v[latest] GTE _5_0_0_219>#lang.libNew#<cfelse>#lang.lib#</cfif></p>
+					<p><cfif downloads.vs[latest] GTE _5_0_0_219>#lang.libNew#<cfelse>#lang.lib#</cfif></p>
 
-					<cfset uri="#_url[type]#/rest/update/provider/#downloads.v[latest] GTE _5_0_0_112?"loader":"libs"#/#downloads.version[latest]#">
+					<cfset uri="#_url[type]#/rest/update/provider/#downloads.vs[latest] GTE _5_0_0_112?"loader":"libs"#/#downloads.version[latest]#">
 					<div class="btn-group mb-3"><a class="btn btn-primary" href="#(uri)#">Download with Extensions</a></div>
 					
 					<!--- jar light --->
@@ -520,19 +461,19 @@
 									<tbody>
 										<cfloop query=downloads>
 											<cfif
-												downloads.v == _5_0_0_255 ||
-												downloads.v == _5_0_0_256 ||
-												downloads.v == _5_0_0_257 ||
-												downloads.v == _5_0_0_258 ||
-												downloads.v == _5_0_0_259 ||
-												downloads.v == _5_0_0_260 ||
-												downloads.v == _5_0_0_261 ||
-												downloads.v == _5_0_0_262 ||
-												downloads.v == _5_1_0_31  ||
-												downloads.v == _5_1_0_008 ||
-												downloads.v == _5_2_1_7 ||
-												downloads.v == _5_2_1_8 ||
-												downloads.v == _5_2_3_30_RC 
+												downloads.vs == _5_0_0_255 ||
+												downloads.vs == _5_0_0_256 ||
+												downloads.vs == _5_0_0_257 ||
+												downloads.vs == _5_0_0_258 ||
+												downloads.vs == _5_0_0_259 ||
+												downloads.vs == _5_0_0_260 ||
+												downloads.vs == _5_0_0_261 ||
+												downloads.vs == _5_0_0_262 ||
+												downloads.vs == _5_1_0_31  ||
+												downloads.vs == _5_1_0_008 ||
+												downloads.vs == _5_2_1_7 ||
+												downloads.vs == _5_2_1_8 ||
+												downloads.vs == _5_2_3_30_RC 
 											>
 												<cfcontinue>
 											</cfif>
@@ -569,10 +510,10 @@
 													<!--- JAR --->
 													<td>
 														<!--- full --->
-														<cfif downloads.v GTE _5_0_0_219>
+														<cfif downloads.vs GTE _5_0_0_219>
 															<cfset uri="#_url[type]#/rest/update/provider/loader/#downloads.version#">
 															<a href="#(uri)#">lucee.jar</a>
-															<cfif downloads.v GTE _5_1_0_008>
+															<cfif downloads.vs GTE _5_1_0_008>
 																<br>
 																<cfif downloads.s3Light>
 																	<cfset uri="#cdnURL#lucee-light-#downloads.version#.jar">
@@ -581,7 +522,7 @@
 																</cfif>
 																<a href="#(uri)#">lucee.jar (without Extension)</a>
 															</cfif>
-														<cfelseif downloads.v GTE _5_0_0_112>
+														<cfelseif downloads.vs GTE _5_0_0_112>
 															<cfset uri="#_url[type]#/rest/update/provider/loader-all/#downloads.version#">
 															<a href="#toCDN(uri)#">lucee.jar</a></span>
 														<cfelse>
@@ -649,7 +590,7 @@
 													</td>
 													<td>
 														<cfset uri="#downloads45.jar#">
-														<a href="#toCDN(uri)#">Lucee.jar</a>
+														<a href="#toCDN(uri)#">lucee.jar</a>
 													</td>
 													<cfset uri="#downloads45.core#">
 													<td class="#css#"><cfif len(uri)><a href="#toCDN(uri)#">Core</a></cfif></td>
@@ -705,7 +646,7 @@
 					<table class="table table-bordered">
 						<cfloop query="#extQry#">
 							<tr>
-								<td><img src="data:image/png;base64,#extQry.image#"></td>
+								<td><cfif len(extQry.image)><img style="max-width: 200px;" src="data:image/png;base64,#extQry.image#"></cfif></td>
 								<td>
 									<h3>#extQry.name#</h3>
 									<p>

@@ -1,7 +1,28 @@
 <cfscript>
-	http url="https://oss.sonatype.org/content/repositories/snapshots/org/lucee/lucee/5.0.0.80-SNAPSHOT/maven-metadata.xml" 
-	result="content" {
-		httpparam type="header" name="accept" value="application/json";
-	}
-	dump(content);
+	start=getTickCount();
+	UPDATE_PROVIDER="http://update.lucee.org/rest/update/provider/list?extended=true";
+
+
+	http url=UPDATE_PROVIDER result="res";
+	dump(getTickCount()-start);
+	data=deserializeJSON(res.fileContent);
+	dump(getTickCount()-start);
+
+
+	to=data[1].version;
+	from=data[arrayLen(data)].version;
+	uri="http://snapshot.lucee.org/rest/update/provider/changelog/"&from&"/"&to;
+	http url=uri result="res2";
+
+	dump(getTickCount()-start);
+
+	
+	dump(res);
+	//dump(data);
+	dump(res2);
+
+
+	dump(getTickCount()-start);
+
+	
 </cfscript>

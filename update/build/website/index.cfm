@@ -5,6 +5,7 @@
 	adminURL="#CGI.CONTEXT_PATH#/lucee/admin.cfm";
 	webAdminURL="#CGI.CONTEXT_PATH#/lucee/admin/web.cfm";
 	serverAdminURL="#CGI.CONTEXT_PATH#/lucee/admin/server.cfm";
+	docURL="#CGI.CONTEXT_PATH#/lucee/doc.cfm";
 	mailinglistURL="https://groups.google.com/forum/##!forum/lucee";
 	profURL="https://www.lucee.org/support.html";
 	issueURL="https://bitbucket.org/lucee/lucee/issues";
@@ -136,7 +137,7 @@
 
 							<li class="listing-item thumb-large">
 								<div class="listing-thumb">
-									<a href="#refURL#">
+									<a href="#docURL#">
 										<img src="#cgi.context_path#/assets/img/img-code.png" alt="">
 									</a>
 								</div>
@@ -144,11 +145,12 @@
 
 								<div class="listing-content">
 									<h2 class="title">
-										<a href="#refURL#">Documentation</a>
+										<a href="#docURL#">Documentation</a>
 									</h2>
-
 									<p>
-										Reference and guides to all things to do with the Lucee Server.
+										If you have any questions about Lucee please take a look at the documentation in the first instance.
+										<p><a href="http://docs.lucee.org" target="_blank">Online Documentation</a></p>
+										<p><a href="#docURL#" target="_blank">Local Reference</a></p>
 									</p>
 
 								</div>

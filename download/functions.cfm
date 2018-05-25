@@ -100,6 +100,71 @@ lang.installer.lin32="Linux (32b)";
 		return 	sct.major&"."&sct.minor&"."&sct.micro&"."&sct.qualifier;
 	}
 
+	private function toKeySortable(key) {
+		var arr=listToArray(key,'-');
+		while(len(arr[2])<5) {
+			arr[2]="0"&arr[2];
+		}
+		return arr[1]&"-"&arr[2];
+	}
+
+	query function getDownloadFor(type) {
+		if(isNull(url.reset) && !isNull(application.download[arguments.type]))
+			return application.download[arguments.type];
+
+		var tmpDownloads=getDownloads();
+		var downloads=queryNew(tmpDownloads.columnlist);
+		var arrColumns=tmpDownloads.columnArray();
+		loop query=tmpDownloads {
+			if(
+				( arguments.type==tmpDownloads.type && tmpDownloads.state=="" )
+				||
+				( arguments.type=="abc" && tmpDownloads.state!="" ) // has -ALPAH for example
+			) {
+				var row=downloads.addRow();
+				loop array=arrColumns item="col" {
+					if(col=="changelog") {
+						var _changelog=tmpDownloads[col];
+						if(!isStruct(_changelog))_changelog={};
+						else _changelog=duplicate(_changelog);
+						downloads.setCell(col,_changelog,row);
+					}
+					else downloads.setCell(col,tmpDownloads[col],row);
+				}
+				//downloads.setCell('test',listLen(tmpDownloads.version,'-'),row);
+
+				if(downloads.recordcount>=MAX) break;
+			}
+			else if(!isNull(_changelog) && isStruct(tmpDownloads.changelog)) {
+				loop struct=tmpDownloads.changelog index="key" item="ver" {
+					_changelog[key]=ver;
+				}
+			}
+		}
+
+		if(queryColumnExists(downloads,"changelog")) {
+			loop query=downloads {
+				var cl=downloads.changelog;
+				if(isStruct(cl) && structCount(cl)>1) {
+					var q=queryNew('k,ks,v');
+					loop struct=cl index="local.key" item="local.val" {
+						var r=queryAddRow(q);
+						querySetCell(q,"k",key,r);
+						querySetCell(q,"ks",toKeySortable(key),r);
+						querySetCell(q,"v",val,r);
+					}
+					querySort(q,"ks","desc");
+					var sct=structNew("linked");
+					loop query=q {
+						sct[q.k]=q.v;
+					}
+					downloads.changelog=sct;
+				}
+			}
+		}
+		application.download[arguments.type]=downloads;
+		return downloads;
+	}
 
 	query function getDownloads() {
 		setting requesttimeout="1000";
@@ -183,7 +248,7 @@ lang.installer.lin32="Linux (32b)";
 				
 				http url=UPDATE_PROVIDER result="local.res";
 				var arr=deserializeJSON(res.fileContent);
-				var qry=queryNew('groupId,artifactId,version,vs,type,jarDate,s3War,s3Express,s3Light,s3Core');
+				var qry=queryNew('groupId,artifactId,version,vs,type,jarDate,s3War,s3Express,s3Light,s3Core,state');
 				for(var r=arrayLen(arr);r>=1;r--) {
 					row=arr[r];
 					//dump(row.sources);abort;
@@ -197,6 +262,14 @@ lang.installer.lin32="Linux (32b)";
 					querySetCell(qry,"s3Express",row.s3Express,qr);
 					querySetCell(qry,"s3Light",row.s3Light,qr);
 					querySetCell(qry,"s3Core",row.s3Core,qr);
+
+					// state
+					if(findNoCase("alpha",row.version)) querySetCell(qry,"state","alpha",qr); 
+					else if(findNoCase("beta",row.version)) querySetCell(qry,"state","beta",qr);
+					else if(findNoCase("rc",row.version)) querySetCell(qry,"state","rc",qr);
+					else if(findNoCase("ReleaseCandidate",row.version)) querySetCell(qry,"state","rc",qr);
+
+
 					//querySetCell(qry,"versionNoAppendix",toVersionWithoutAppendix(row.version));
 					//querySetCell(qry,"jarSrc",row.sources.jar.src,qr);
 					var date="";
@@ -210,19 +283,17 @@ lang.installer.lin32="Linux (32b)";
 					
 				}
 
-				//local.qry=mr.getAvailableVersions("all",true,false);
-				
 				// add version that can be sorted right (5.0.0.1-SNAPSHOT -> 5.000.000.0001-SNAPSHOT)
-				queryAddColumn(qry,"v");
+				//queryAddColumn(qry,"v");
 				queryAddColumn(qry,"versionNoAppendix");
 				loop query=qry {
-					qry.v[qry.currentrow]=toVersionSortable(qry.version);
+					//qry.v[qry.currentrow]=toVersionSortable(qry.version);
 					qry.versionNoAppendix[qry.currentrow]=toVersionWithoutAppendix(qry.version);
 				}
 				// merge with existing data (if exist), because sometime maven does not deliver all data
-				qry=merge(qry);
+				//qry=merge(qry);
 				// sort
-				querySort(qry,"v","desc");
+				querySort(qry,"vs","desc");
 
 				// get changelog
 				if(qry.recordcount>0) {
@@ -243,8 +314,33 @@ lang.installer.lin32="Linux (32b)";
 						queryAddColumn(qry,"changelog");
 						data=deSerializeJson(local._fileContent,false);
 						loop query=qry {
-							if(!isNull(data[qry.versionNoAppendix]))
-								qry.changelog[qry.currentrow]=data[qry.versionNoAppendix];
+							if(!isNull(data[qry.versionNoAppendix])) {
+
+							cl=data[qry.versionNoAppendix];
+							/*
+							if(isStruct(cl) && structCount(cl)>1) {
+								q=queryNew('k,ks,v');
+								loop struct=cl index="key" item="val" {
+									r=queryAddRow(q);
+									querySetCell(q,"k",key,r);
+									querySetCell(q,"ks",toKeySortable(key),r);
+									querySetCell(q,"v",val,r);
+								}
+								querySort(q,"ks","desc");
+								sct=structNew("linked");
+								loop query=q {
+									sct[q.k]=q.v;
+								}
+								qry.changelog[qry.currentrow]=sct;
+
+
+							}
+							else qry.changelog[qry.currentrow]=isSimpleVAlue(cl)?{}:cl; // TODO i think it is alwyys a simple value
+							*/
+							qry.changelog[qry.currentrow]=cl; 
+
+								
+							}
 						}
 					}
 					else {
