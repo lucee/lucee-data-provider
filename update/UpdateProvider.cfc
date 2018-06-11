@@ -1,7 +1,7 @@
 ﻿component restpath="/provider"  rest="true" {
 
 
-	variables.s3Root="s3:///lucee-downloads/";
+	variables.s3Root=request.s3Root;//"s3:///lucee-downloads/";
 	variables.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
 	variables.cdnURL="http://cdn.lucee.org/";
 
@@ -787,8 +787,39 @@
 		catch(e){
 			return {"type":"error","message":e.getMessage()};
 		}
- 
 	}
+
+
+	remote function readListAsync(
+		boolean force=false restargsource="url",
+		string type='all' restargsource="url",
+		boolean extended=false restargsource="url"
+		)
+		httpmethod="GET" restpath="listAsync" {
+
+		setting requesttimeout="1000";
+		local.mr=new MavenRepo();
+		try {
+
+			var arr=mr.list(arguments.type,arguments.extended);
+			if(arguments.extended) {
+				thread cfc=this arr=arr {
+					for(var i=arrayLen(arr);i>0;i--) {
+						arr[i].s3Express=cfc.s3Exists("lucee-express-#arr[i].version#.zip");
+						arr[i].s3Core=cfc.s3Exists("#arr[i].version#.lco");
+						arr[i].s3Light=cfc.s3Exists("lucee-light-#arr[i].version#.jar");
+						arr[i].s3War=cfc.s3Exists("lucee-#arr[i].version#.war");
+					}
+				}
+			}
+			return arr;
+		}
+		catch(e){
+			return {"type":"error","message":e.getMessage()};
+		}
+	}
+
+	
 
 	remote function readGetOnlyForDebugging(
 		required string version restargsource="Path"
@@ -858,7 +889,7 @@
 		_buildLatest("snapshots",mr);
 		_buildLatest("releases",mr);
 
-		
+		//application.exists={};
 		application.releaseNotesItem={};
 		application.releaseNotesData={};
 		
@@ -1156,6 +1187,7 @@
 			}
 			// if not exist we make ready for the next
 			else {
+
 				if(async) {
 					thread src=path trg=variables.s3Root&name {
 						lock timeout=100 name=src {
@@ -1168,8 +1200,12 @@
 					var src=path;
 					var trg=variables.s3Root&name;
 					lock timeout=100 name=src {
-						if(!fileExists(trg)) // we do this because it was created by a thread blocking this thread
+						
+						if(!fileExists(trg)) {// we do this because it was created by a thread blocking this thread
 							fileCopy(src,trg);
+
+							if(isDefined("url.abcd")) throw  serialize(server) &" - "& src&":"&trg&">>"&fileExists(trg)&request.s3Root;
+						}
 					}
 				}	
 			}
