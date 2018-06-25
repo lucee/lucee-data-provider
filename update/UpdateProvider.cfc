@@ -196,14 +196,15 @@
 	remote function downLight(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url",
-		boolean deliver=true restargsource="url")
+		boolean deliver=true restargsource="url", 
+		boolean s3=true restargsource="url")
 		httpmethod="GET" restpath="light/{version}" {
 		local.mr=new MavenRepo();
 
 		try{
 			local.path=mr.getLightLoader(version);
 			var name="lucee-light-#version#.jar";
-			if(fromS3(path,name,deliver)) return;
+			if(arguments.s3 && fromS3(path,name,deliver)) return;
 		}
 		catch(e){
 			//application.test123=now()&" - "&serialize(e);
@@ -322,14 +323,15 @@
 	* function to download Lucee Core file
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
 	*/
-	remote function downloadWarHead(required string version restargsource="Path",string ioid="" restargsource="url")
+	remote function downloadWarHead(required string version restargsource="Path", string ioid="" restargsource="url")
 		httpmethod="HEAD" restpath="war/{version}" {
 			return downloadWar(version, ioid);
 	}
 	remote function downloadWar(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url",
-		boolean deliver=true restargsource="url")
+		boolean deliver=true restargsource="url", 
+		boolean s3=true restargsource="url")
 		httpmethod="GET" restpath="war/{version}" {
 		
 		setting requesttimeout="1000";
@@ -338,7 +340,7 @@
 		try{
 			local.path=mr.getWar(version);
 			var name="lucee-#version#.war";
-			if(fromS3(path,name,deliver)) return;
+			if(s3 && fromS3(path,name,deliver)) return;
 			//if(fromS3Deep(path,version,"war")) return;
 		}
 		catch(e){
@@ -1179,6 +1181,8 @@
 	*/
 	private function fromS3(path,name,async=true) {
 		// if exist we redirect to it
+			if(!isNull(url.show)) throw (!isNull(application.exists[name]) && application.exists[name])&":"&fileExists(variables.s3Root&name)&"->"&(variables.s3Root&name);
+
 			if((!isNull(application.exists[name]) && application.exists[name]) || fileExists(variables.s3Root&name)) {
 				application.exists[name]=true;
 				header statuscode="302" statustext="Found";
@@ -1203,8 +1207,6 @@
 						
 						if(!fileExists(trg)) {// we do this because it was created by a thread blocking this thread
 							fileCopy(src,trg);
-
-							if(isDefined("url.abcd")) throw  serialize(server) &" - "& src&":"&trg&">>"&fileExists(trg)&request.s3Root;
 						}
 					}
 				}	

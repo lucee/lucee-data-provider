@@ -15,6 +15,8 @@ snapshots="http://snapshot.lucee.org";
 _url={
 	releases:"http://release.lucee.org"
 	,abc:"http://release.lucee.org"
+	,beta:"http://release.lucee.org"
+	,rc:"http://release.lucee.org"
 	,snapshots:snapshots
 };
 
@@ -33,17 +35,19 @@ EXTENSION_DOWNLOAD="http://extension.lucee.org/rest/extension/provider/{type}/{i
 jarInfo='(Java ARchive, read more about <a target="_blank" href="https://en.wikipedia.org/wiki/JAR_(file_format)">here</a>)';
 lang.desc={
 	abc:"Beta and Release Candidates are a preview for upcoming versions and not ready for production environments."
+	,beta:"Beta are a preview for upcoming versions and not ready for production environments."
+	,rc:"Release Candidates are candidates to get ready for production environments."
 	,releases:"Releases are ready for production environments."
 	,snapshots:"Snapshots are generated automatically with every push to the repository. 
 	Snapshots can be unstable are NOT recommended for production environments."
 };
 
 lang.express="The Express version is an easy to setup version which does not need to be installed. Just extract the zip file onto your computer and without further installation you can start by executing the corresponding start file. This is especially useful if you would like to get to know Lucee or want to test your applications under Lucee. It is also useful for use as a development environment.";
-lang.war='Java Servlet engine Web ARchive, read more about <a target="_blank" href="https://en.wikipedia.org/wiki/WAR_(file_format)">here</a>';
+lang.war='Java Servlet engine Web ARchive';
 lang.core='The Lucee Core file, you can simply copy this to the "patches" folder of your existing Lucee installation.';
 lang.jar='The Lucee jar #jarInfo#, simply copy that file to the lib (classpath) folder of your servlet engine.';
 lang.dependencies='Dependencies (3 party bundles) Lucee needs for this release, simply copy this to "/lucee-server/bundles" of your installation (If this files are not present Lucee will download them).';
-lang.jar='Lucee jar file (and felix jar file, for older versions necessary) without dependencies Lucee needs to run. Simply copy this file(s) to your servlet engine lib folder (classpath). If dependecy bundles are not in place Lucee will download them.';
+lang.jar='Lucee jar file without dependencies Lucee needs to run. Simply copy this file to your servlet engine lib folder (classpath). If dependecy bundles are not in place Lucee will download them.';
 lang.luceeAll='Lucee jar file that contains all dependencies Lucee needs to run. Simply copy this file to your servlet engine lib folder (classpath)';
 
 lang.lib="The Lucee Jar file, you can simply copy to your existing installation to update to Lucee 5. This file comes in 2 favors, the ""lucee.jar"" that only contains Lucee itself and no dependecies (Lucee will download dependencies if necessary) or the lucee-all.jar with all dependencies Lucee needs bundled (not availble for versions before 5.0.0.112).";
@@ -115,11 +119,16 @@ lang.installer.lin32="Linux (32b)";
 		var tmpDownloads=getDownloads();
 		var downloads=queryNew(tmpDownloads.columnlist);
 		var arrColumns=tmpDownloads.columnArray();
+		
 		loop query=tmpDownloads {
 			if(
 				( arguments.type==tmpDownloads.type && tmpDownloads.state=="" )
 				||
-				( arguments.type=="abc" && tmpDownloads.state!="" ) // has -ALPAH for example
+				( arguments.type=="abc" && tmpDownloads.state!="" )
+				||
+				( arguments.type=="beta" && tmpDownloads.state=="beta" ) 
+				||
+				( arguments.type=="rc" && tmpDownloads.state=="rc" ) 
 			) {
 				var row=downloads.addRow();
 				loop array=arrColumns item="col" {
@@ -141,7 +150,7 @@ lang.installer.lin32="Linux (32b)";
 				}
 			}
 		}
-
+		if(!isNull(url.kkk)){dump(downloads);abort;}
 		if(queryColumnExists(downloads,"changelog")) {
 			loop query=downloads {
 				var cl=downloads.changelog;
@@ -164,6 +173,50 @@ lang.installer.lin32="Linux (32b)";
 		}
 		application.download[arguments.type]=downloads;
 		return downloads;
+	}
+
+
+	struct function getLatestDownloads() {
+		//if(isNull(url.reset) && !isNull(application.latestDownloads))
+		//	return application.latestDownloads;
+
+
+		var downloads=getDownloads();
+		//var rtn=queryNew(downloads.columnlist);
+		var sct={};
+		loop query=downloads {
+			if("snapshots"==downloads.type) {
+				if(isNull(sct.snapshots) || sct.snapshots.vs<downloads.vs) {
+					sct.snapshots=toStruct(downloads,downloads.currentrow);
+				}
+			}
+			else if("beta"==downloads.state){
+				if(isNull(sct.beta) || sct.beta.vs<downloads.vs) {
+					sct.beta=toStruct(downloads,downloads.currentrow);
+				}
+			}
+			else if("rc"==downloads.state){
+				if(isNull(sct.rc) || sct.rc.vs<downloads.vs) {
+					sct.rc=toStruct(downloads,downloads.currentrow);
+				}
+			}
+			else if(""==downloads.state){
+				if(isNull(sct.releases) || sct.releases.vs<downloads.vs) {
+					sct.releases=toStruct(downloads,downloads.currentrow);
+				}
+			}
+		}
+
+		application.latestDownload=sct;
+		return sct;
+	}
+
+	function toStruct(qry,row) {
+		var sct={};
+		loop array=queryColumnArray(qry) item="local.k" {
+			sct[k]=qry[k][row];
+		}
+		return sct;
 	}
 
 	query function getDownloads() {
@@ -236,10 +289,6 @@ lang.installer.lin32="Linux (32b)";
 
 	query function _download() {
 
-
-		
-		
-
 		var n=now();
 		lock name="download-#year(n)&":"&month(n)&":"&day(n)&":"&hour(n)#" timeout=100 {
 			try{
@@ -248,7 +297,7 @@ lang.installer.lin32="Linux (32b)";
 				
 				http url=UPDATE_PROVIDER result="local.res";
 				var arr=deserializeJSON(res.fileContent);
-				var qry=queryNew('groupId,artifactId,version,vs,type,jarDate,s3War,s3Express,s3Light,s3Core,state');
+				var qry=queryNew('id,groupId,artifactId,version,vs,type,jarDate,s3War,s3Express,s3Light,s3Core,state,t');
 				for(var r=arrayLen(arr);r>=1;r--) {
 					row=arr[r];
 					//dump(row.sources);abort;
@@ -263,12 +312,28 @@ lang.installer.lin32="Linux (32b)";
 					querySetCell(qry,"s3Light",row.s3Light,qr);
 					querySetCell(qry,"s3Core",row.s3Core,qr);
 
-					// state
-					if(findNoCase("alpha",row.version)) querySetCell(qry,"state","alpha",qr); 
-					else if(findNoCase("beta",row.version)) querySetCell(qry,"state","beta",qr);
-					else if(findNoCase("rc",row.version)) querySetCell(qry,"state","rc",qr);
-					else if(findNoCase("ReleaseCandidate",row.version)) querySetCell(qry,"state","rc",qr);
+					if(findNoCase("snapshot",row.version)) {
+						querySetCell(qry,"t","snapshots",qr);
+					}
+					else if(findNoCase("alpha",row.version)) {
+						querySetCell(qry,"state","alpha",qr); 
+						querySetCell(qry,"t","alpha",qr);
+					}
+					else if(findNoCase("beta",row.version)) {
+						querySetCell(qry,"state","beta",qr);
+						querySetCell(qry,"t","beta",qr);
+					}
+					else if(findNoCase("rc",row.version) || findNoCase("ReleaseCandidate",row.version)) {
+						querySetCell(qry,"state","rc",qr);
+						querySetCell(qry,"t","rc",qr);
+					}
+					else {
+						querySetCell(qry,"t","releases",qr);
+					}
 
+					
+					// state
+					
 
 					//querySetCell(qry,"versionNoAppendix",toVersionWithoutAppendix(row.version));
 					//querySetCell(qry,"jarSrc",row.sources.jar.src,qr);
@@ -278,6 +343,10 @@ lang.installer.lin32="Linux (32b)";
 					else if(!isNull(row.sources.pom.date)) date=parseDateTime(row.sources.pom.date);
 
 					querySetCell(qry,"jarDate",date,qr);
+					querySetCell(qry,"id",hash(row.version&":"&date),qr);
+
+
+
 					//querySetCell(qry,"pomSrc",row.sources.pom.src);
 					//querySetCell(qry,"pomDate",parseDateTime(row.sources.pom.date));
 					
@@ -350,7 +419,7 @@ lang.installer.lin32="Linux (32b)";
 				// store as file
 				fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"downloads.ser",serialize(qry));
 			}
-			catch(ex) {
+			catch(ex) {rethrow;
 				fileWrite(getDirectoryFromPath(getCurrentTemplatePath())&"err.txt",serialize(ex));
 			}
 			return qry;

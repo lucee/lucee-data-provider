@@ -284,39 +284,69 @@ component {
 	*/
 	public string function getLightLoader(required string version) { 
 		local.jar=getArtifactDirectory()&"lucee-light-"&version&".jar"; // the jar
-		if(fileExists(jar)) return jar;
-
+		if(!structKeyExists(url,"makefresh") && fileExists(jar)) return jar;
+		
+		setting requesttimeout="10000";
 		var loader=getLoader(version);
-		try {
-			// make a copy to work on
-			local.tmpLoader=getArtifactDirectory()&"lucee-tmp-"&createUniqueId()&".jar"; // the jar
-			fileCopy(loader,tmpLoader);
-
-			// remove extensions
-			var extDir="zip://"&tmpLoader&"!/extensions";
-			directoryDelete(extDir,true); // deletes directory with all files inside
-			directoryCreate(extDir); // create empty dir again (maybe Lucee expect this directory to exist)
-
-			// update Manifest from the core file
-			var lcoFile="zip://"&tmpLoader&"!/core/core.lco";
-			local.tmpCore=getArtifactDirectory()&"lucee-tmp-"&createUniqueId()&".lco"; // the jar
-			fileCopy(lcoFile,tmpCore);
-			var manifest="zip://"&tmpCore&"!/META-INF/MANIFEST.MF";
-			var content=fileRead(manifest);
-			var index=find('Require-Extension',content);
-			if(index>0) content=mid(content,1,index-1)&variables.NL;
-			fileWrite(manifest,content);
-			fileCopy(tmpCore,lcoFile);
-
-			fileMove(tmpLoader,jar);
-
-		}
-		finally {
-			if(!isNull(tmpLoader) && fileExists(tmpLoader)) fileDelete(tmpLoader);
-			if(!isNull(tmpCore) && fileExists(tmpCore)) fileDelete(tmpCore);
-		}
+		createLight(loader,jar);
 		return jar;
 	}
+
+
+	private function getTmpDirectory(){
+        var tmp=getPageContext().getConfig().getTempDirectory();
+        if(!directoryExists(tmp))
+                    directoryCreate(tmp);
+        return tmp&server.separator.file;
+    }
+
+    private function createLight(string loader, string light,version) {
+        var sep=server.separator.file;
+        
+        try {
+
+            local.tmpLoader=getTmpDirectory()&"lucee-loader-"&createUniqueId(); // the jar
+            directoryCreate(tmpLoader);
+
+            // unzip
+            zip action="unzip" file=loader destination=tmpLoader;
+
+            // remove extensions
+            var extDir=tmpLoader&sep&"extensions";
+            directoryDelete(extDir,true); // deletes directory with all files inside
+            directoryCreate(extDir); // create empty dir again (maybe Lucee expect this directory to exist)
+
+            // unzip core
+            var lcoFile=tmpLoader&sep&"core"&sep&"core.lco";
+            local.tmpCore=getTmpDirectory()&"lucee-core-"&createUniqueId(); // the jar
+            directoryCreate(tmpCore);
+            zip action="unzip" file=lcoFile destination=tmpCore;
+
+            // rewrite manifest
+            var manifest=tmpCore&sep&"META-INF"&sep&"MANIFEST.MF";
+            var content=fileRead(manifest);
+            var index=find('Require-Extension',content);
+            if(index>0) content=mid(content,1,index-1)&variables.NL;
+            fileWrite(manifest,content);
+            
+            // zip core
+            fileDelete(lcoFile);
+            zip action="zip" source=tmpCore file=lcoFile;
+            
+            // zip loader
+            local.tmpLoaderFile=getTmpDirectory()&"lucee-loader-"&createUniqueId()&".jar";
+            zip action="zip" source=tmpLoader file=tmpLoaderFile;
+
+			if(fileExists(light)) fileDelete(light);
+            fileMove(tmpLoaderFile,light);
+        }
+        finally {
+            if(!isNull(tmpLoader) && directoryExists(tmpLoader)) directoryDelete(tmpLoader,true);
+            if(!isNull(tmpCore) && directoryExists(tmpCore)) directoryDelete(tmpCore,true);
+        }
+    }
+
+
 
 	/**
 	* returns local location for the loader (lucee.jar) of a specific version (get downloaded if necessary)
@@ -407,6 +437,8 @@ component {
 		
 		if(fileExists(zip)) return zip;
 
+		local.zipTmp=dir&"lucee-express-"&version&"-temp-"&createUniqueId()&".zip";
+
 		// Create the express zip
 		try {
 			// temp directory
@@ -437,7 +469,7 @@ component {
 			zip action="unzip" file="#getDirectoryFromPath(getCurrenttemplatePath())&("build/servers/tomcat.zip")#" destination="#temp#tomcat";
 			
 			// let's zip it
-			zip action="zip" file=zip overwrite=true {
+			zip action="zip" file=zipTmp overwrite=true {
 
 			// tomcat server
 				zipparam source=temp&"tomcat";
@@ -464,6 +496,9 @@ component {
 		finally {
 			if(!isNull(temp) && directoryExists(temp))directoryDelete(temp,true);
 		}
+
+		fileMove(zipTmp,zip);
+
 		return zip;
 	}
 
@@ -474,6 +509,7 @@ component {
 	public string function getWar(required string version) {
 		local.dir=getArtifactDirectory();
 		local.war=dir&"lucee-"&version&".war";
+		local.warTmp=dir&"lucee-"&version&"-temp-"&createUniqueId()&".war";
 		
 		if(!fileExists(war)) {
 			try {
@@ -502,7 +538,7 @@ component {
 				//zip action="unzip" file="#getDependencies(version)#" destination=jarsDir;
 				
 				// let's zip it
-				zip action="zip" file=war overwrite=true {
+				zip action="zip" file=warTmp overwrite=true {
 
 				// extensions to bundle
 					zipparam source=extDir filter="*.lex" prefix="WEB-INF/lucee-server/context/deploy";
@@ -530,7 +566,11 @@ component {
 			finally {
 				if(directoryExists(temp))directoryDelete(temp,true);
 			}
+
+			// rename to permanent file
+			fileMove(warTmp,war);
 		}
+
 		return war;
 	}
 
@@ -544,6 +584,9 @@ component {
 		local.zip=dir&"forgebox-"&version&".zip";
 		
 		if(!fileExists(zip)) {
+
+			local.zipTmp=dir&"forgebox-"&version&"-temp-"&createUniqueId()&".zip";
+
 			try {
 				// temp directory
 				local.temp=getTempDir();
@@ -585,7 +628,7 @@ component {
 
 
 				// create the war
-				zip action="zip" file=zip overwrite=true {
+				zip action="zip" file=zipTmp overwrite=true {
 					zipparam source=war;
 					zipparam source=json;
 				}
@@ -594,6 +637,8 @@ component {
 			finally {
 				if(directoryExists(temp))directoryDelete(temp,true);
 			}
+
+			fileMove(zipTmp,zip);
 		}
 		return zip;
 	}
