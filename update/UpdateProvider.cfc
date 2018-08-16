@@ -3,7 +3,7 @@
 
 	variables.s3Root=request.s3Root;//"s3:///lucee-downloads/";
 	variables.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
-	variables.cdnURL="http://cdn.lucee.org/";
+	variables.cdnURL="https://cdn.lucee.org/";
 
 	jiraListURL="https://luceeserver.atlassian.net/rest/api/2/project/LDEV/versions";
 	jiraNotesURL="https://luceeserver.atlassian.net/secure/ReleaseNote.jspa?version={version-id}&styleName=Text&projectId=10000";
@@ -344,6 +344,7 @@
 			//if(fromS3Deep(path,version,"war")) return;
 		}
 		catch(e){
+			rethrow;
 			//application.test123=now()&" - "&serialize(e);
 			return {
 				"type":"error",

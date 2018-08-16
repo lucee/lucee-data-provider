@@ -1,17 +1,11 @@
 
 <cfoutput>
 <cfscript>
-
-
-	allowCDNWAR=true;
-	allowCDNLight=false;
-	disableInstaller=false;
-	
-	cdnURL="http://cdn.lucee.org/";
+	cdnURL="https://cdn.lucee.org/";
 
 	if(isNull(url.type)) url.type="releases";
 
-	if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org" addtoken=false;
+	// if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org" addtoken=false;
 
 	MAX=1000;
 	include "functions.cfm";
@@ -45,15 +39,22 @@
 	intro="The latest {type} is version <b>{version}</b> released at <b>{date}</b>.";
 	historyDesc="Older Versions:";
 	singular={
-		releases:"Release",snapshots:"Snapshot",abc:'RC / Beta',beta:'Beta',rc:'Release Candidate'
+		releases:"Release",snapshots:"Snapshot",abc:'RC / Beta',beta:'Beta',rc:'RC'
 		,ext:"Release",extsnap:"Snapshot",extabc:'RC / Beta'
 	};
 	multi={
-		releases:"Releases",
-		snapshots:"Snapshots",
+		release:"Releases",
+		snapshot:"Snapshots",
 		abc:'RCs / Betas',
 		beta:'Betas',
 		rc:'Release Candidates'
+	};
+	appendix={
+		releases:"Release",
+		snapshots:"",
+		abc:'',
+		beta:'',
+		rc:''
 	};
 
 	noVersion="There are currently no downloads available in this category.";
@@ -79,63 +80,63 @@
 			{
 			}
 			,{
-				win:"http://cdn.lucee.org/lucee-4.5.5.006-pl0-windows-installer.exe"
-				,lin64:"http://cdn.lucee.org/lucee-4.5.5.006-pl0-linux-x64-installer.run"
-				,lin32:"http://cdn.lucee.org/lucee-4.5.5.006-pl0-linux-installer.run"
+				win:cdnURL&"lucee-4.5.5.006-pl0-windows-installer.exe"
+				,lin64:cdnURL&"lucee-4.5.5.006-pl0-linux-x64-installer.run"
+				,lin32:cdnURL&"lucee-4.5.5.006-pl0-linux-installer.run"
 			}
 			,{
-				win:"http://cdn.lucee.org/lucee-4.5.4.017-pl0-windows-installer.exe"
-				,lin64:"http://cdn.lucee.org/lucee-4.5.4.017-pl0-linux-x64-installer.run"
-				,lin32:"http://cdn.lucee.org/lucee-4.5.4.017-pl0-linux-installer.run"
+				win:cdnURL&"lucee-4.5.4.017-pl0-windows-installer.exe"
+				,lin64:cdnURL&"lucee-4.5.4.017-pl0-linux-x64-installer.run"
+				,lin32:cdnURL&"lucee-4.5.4.017-pl0-linux-installer.run"
 			}
 			,{
-				win:"http://cdn.lucee.org/lucee-4.5.3.020-pl0-windows-installer.exe"
-				,lin64:"http://cdn.lucee.org/lucee-4.5.3.020-pl0-linux-x64-installer.run"
-				,lin32:"http://cdn.lucee.org/lucee-4.5.3.020-pl0-linux-installer.run"
+				win:cdnURL&"lucee-4.5.3.020-pl0-windows-installer.exe"
+				,lin64:cdnURL&"lucee-4.5.3.020-pl0-linux-x64-installer.run"
+				,lin32:cdnURL&"lucee-4.5.3.020-pl0-linux-installer.run"
 			}
 			,{
-				win:"http://cdn.lucee.org/lucee-4.5.2.018-pl0-windows-installer.exe"
-				,lin64:"http://cdn.lucee.org/lucee-4.5.2.018-pl0-linux-x64-installer.run"
-				,lin32:"http://cdn.lucee.org/lucee-4.5.2.018-pl0-linux-installer.run"
+				win:cdnURL&"lucee-4.5.2.018-pl0-windows-installer.exe"
+				,lin64:cdnURL&"lucee-4.5.2.018-pl0-linux-x64-installer.run"
+				,lin32:cdnURL&"lucee-4.5.2.018-pl0-linux-installer.run"
 			}
 			,{
-				win:"http://cdn.lucee.org/lucee-4.5.1.024-pl0-windows-installer.exe"
-				,lin64:"http://cdn.lucee.org/lucee-4.5.1.024-pl0-linux-x64-installer.run"
-				,lin32:"http://cdn.lucee.org/lucee-4.5.1.024-pl0-linux-installer.run"
+				win:cdnURL&"lucee-4.5.1.024-pl0-windows-installer.exe"
+				,lin64:cdnURL&"lucee-4.5.1.024-pl0-linux-x64-installer.run"
+				,lin32:cdnURL&"lucee-4.5.1.024-pl0-linux-installer.run"
 			}
 		]
 		,express:[
-			'http://cdn.lucee.org/lucee-4.5.5.015-express.zip'
-			,'http://cdn.lucee.org/lucee-4.5.5.006-express.zip'
-			,'http://cdn.lucee.org/lucee-4.5.4.017-express.zip'
-			,'http://cdn.lucee.org/lucee-4.5.3.020-express.zip'
-			,'http://cdn.lucee.org/lucee-4.5.2.018-express.zip'
-			,'http://cdn.lucee.org/lucee-4.5.1.024-express.zip'
+			cdnURL&'lucee-4.5.5.015-express.zip'
+			,cdnURL&'lucee-4.5.5.006-express.zip'
+			,cdnURL&'lucee-4.5.4.017-express.zip'
+			,cdnURL&'lucee-4.5.3.020-express.zip'
+			,cdnURL&'lucee-4.5.2.018-express.zip'
+			,cdnURL&'lucee-4.5.1.024-express.zip'
 		]
 		,jar:[
-			'http://cdn.lucee.org/lucee-4.5.5.015-jars.zip'
-			,'http://cdn.lucee.org/lucee-4.5.5.006-jars.zip'
-			,'http://cdn.lucee.org/lucee-4.5.4.017-jars.zip'
-			,'http://cdn.lucee.org/lucee-4.5.3.020-jars.zip'
-			,'http://cdn.lucee.org/lucee-4.5.2.018-jars.zip'
-			,'http://cdn.lucee.org/lucee-4.5.1.024-jars.zip'
+			cdnURL&'lucee-4.5.5.015-jars.zip'
+			,cdnURL&'lucee-4.5.5.006-jars.zip'
+			,cdnURL&'lucee-4.5.4.017-jars.zip'
+			,cdnURL&'lucee-4.5.3.020-jars.zip'
+			,cdnURL&'lucee-4.5.2.018-jars.zip'
+			,cdnURL&'lucee-4.5.1.024-jars.zip'
 		]
 		,war:[
-			'http://cdn.lucee.org/lucee-4.5.5.015.war'
-			,'http://cdn.lucee.org/lucee-4.5.5.006.war'
-			,'http://cdn.lucee.org/lucee-4.5.4.017.war'
-			,'http://cdn.lucee.org/lucee-4.5.3.020.war'
-			,'http://cdn.lucee.org/lucee-4.5.2.018.war'
-			,'http://cdn.lucee.org/lucee-4.5.1.024.war'
+			cdnURL&'lucee-4.5.5.015.war'
+			,cdnURL&'lucee-4.5.5.006.war'
+			,cdnURL&'lucee-4.5.4.017.war'
+			,cdnURL&'lucee-4.5.3.020.war'
+			,cdnURL&'lucee-4.5.2.018.war'
+			,cdnURL&'lucee-4.5.1.024.war'
 		]
 		//'https://bitbucket.org/lucee/lucee/downloads/4.5.5.006.lco'
 		,core:[
-			'http://cdn.lucee.org/4.5.5.015.lco'
-			,'http://cdn.lucee.org/4.5.5.006.lco'
-			,'http://cdn.lucee.org/4.5.4.017.lco'
-			,'http://cdn.lucee.org/4.5.3.020.lco'
-			,'http://cdn.lucee.org/4.5.2.018.lco'
-			,'http://cdn.lucee.org/4.5.1.024.lco'
+			cdnURL&'4.5.5.015.lco'
+			,cdnURL&'4.5.5.006.lco'
+			,cdnURL&'4.5.4.017.lco'
+			,cdnURL&'4.5.3.020.lco'
+			,cdnURL&'4.5.2.018.lco'
+			,cdnURL&'4.5.1.024.lco'
 		]
 		,changelog:[
 			{
@@ -302,15 +303,55 @@
 </cfscript>
 
 <cfhtmlhead>
+	<script crossorigin="anonymous" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
 	<link href="/res/download.css" rel="stylesheet">
 </cfhtmlhead>
-
 <cfhtmlbody>
-	<script crossorigin="anonymous" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
-	<script src="/res/download.js"></script>
+<script src="/res/download.js"></script>
 </cfhtmlbody>
+<style rel="stylesheet">
+.data-content{ background-color: ##01798a; color: white; min-width: 100%; font-size: 14px; line-height: 15px;}
 
+.triggerIcon{color :##01798A !important;}
+.pointer {cursor: pointer;}
+.jumboStyle {padding: 0rem 0rem !important; border-radius : 0px !important; text-align: center !important;}
+.fontSize{font-size: 20px !important;}
 
+.BoxWidth { padding: 1rem 1rem 2rem 1rem; border-radius: 1%; padding-left: 6%;}
+.col-md-3{ padding-right: 8px !important; padding-left: 8px !important; }
+.desc{ padding: 8px; vertical-align: top; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol"; font-size: 1.5rem; font-weight: 600; line-height: 1.5; color: ##212529; text-align: left;}
+.descDiv{min-height: 130px;}
+.installerDiv{min-height: 75px;}
+.jarDiv{min-height: 60px;}
+.divHeight{min-height: 36px;}
+.fontStyle { font-size: 16px !important; font-weight: normal !important;}
+.row_even { background-color: ##EBEBEB; padding: 1% 0 0 4%; }
+.row_odd { background-color: ##DADADA; padding: 1% 0 0 4%; }
+.borderInfo { border: 1px ridge ##C7C7C7 !important; padding-left: 0px !important; padding-right: 0px !important;background-color:##EBEBEB; }
+.well{background-color: white !important;}
+.popover-content{ padding: 0.5px 0px !important; }
+.popover.bottom .arrow:after { border-bottom-color: ##01798A !important; }
+.popover{ border: 2px solid ##01798a !important;}
+.popover-title{ padding: 4px 8px !important; }
+.row_alterEven{ background-color: ##EBEBEB; padding: 0% 0 0 4%; } 
+.row_alterOdd{ background-color: ##DADADA; padding: 0% 0 0 4%; }
+
+/*.TextStyle{ padding: 1%; font-family: "Segoe UI"; font-size: 1.25rem; font-weight: 600;}*/
+.TextStyle{ padding: 1%; font-family:  -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol" !important; font-size:1.5rem !important;font-weight: normal !important;}
+.head1{font-family: "Times New Roman", Times, serif; font-size: 2.5rem; font-weight: 503;}
+h2.fontSize{margin-bottom:-1.80rem !important;}
+.title{font-family:  -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol" !important;font-size: 28px !important;}
+.textWrap{text-align:center;overflow:hidden;white-space:nowrap;}
+@media only screen and (max-width: 1200px){
+.textWrap{text-align:center !important;overflow:auto !important;white-space:normal !important;}
+}
+@media only screen and (min-width: 1500px){
+.textWrap{text-align:center !important;overflow:auto !important;white-space:normal !important;}
+}
+
+</style>
 
 
 
@@ -321,374 +362,405 @@
 		<meta content="ie=edge" http-equiv="x-ua-compatible">
 		<meta content="initial-scale=1, shrink-to-fit=no, width=device-width" name="viewport">
 		<title>Download Lucee</title>
-
+		<link rel="shortcut icon" href="/res/images/logo.png">
+		<link rel="apple-touch-icon" href="/res/images/logo.png">
+		<link rel="apple-touch-icon" sizes="72x72" href="/res/images/logo.png">
+		<link rel="apple-touch-icon" sizes="114x114" href="/res/images/logo.png">
 		<cfhtmlhead action="flush">
 	</head>
 	<body class="container py-3">
 
 		<!--- output --->
-		
 			<div class="bg-primary jumbotron text-white">
 				<h1 class="display-3">Downloads</h1>
-				<h2>Lucee</h2>
-				<p class="lead">
-					<a class="text-light" href="?type=releases">Releases</a>
-					<!--- | <a class="text-light" href="?type=abc">Release Candidates/Betas</a> --->
-					| <a class="text-light" href="?type=rc">Release Candidates</a>
-					| <a class="text-light" href="?type=beta">Betas</a>
-					| <a class="text-light" href="?type=snapshots">Snapshots</a>
-				</p>
-				<h2>Extensions</h2>
-				<p class="lead">
-					<a class="text-light" href="?type=ext">Releases</a>
-					| <a class="text-light" href="?type=extabc">Release Candidates/Betas</a>
-					| <a class="text-light" href="?type=extsnap">Snapshots</a>
-				</p>
+				<p>Lucee core and extension downloads.</p>
 			</div>
 
 			<cfif type EQ "releases" or type EQ"snapshots" or type EQ "abc" or type EQ "beta" or type EQ "rc">
 				<cfscript>
-					downloads=getDownloadFor(url.type);
-					if(downloads.recordcount) latest=1;
+					adownloads=getDownloads();
 				</cfscript>
 
-				<cfif isNull(latest)>
-					<p>#noVersion#</p>
-				<cfelse>
-					<h2>Lucee #singular[type]#</h2>
-					<h3>#downloads.version[latest]#</h3>
-					<p>#replace(replace(replace(intro,"{date}",lsDateFormat(downloads.jarDate[latest])),"{version}",downloads.version[latest]),"{type}",singular[type])# #lang.desc[type]#</p>
+				<cfif true>
+					<!--- <cfif structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5>
+						<div class="alert alert-danger">
+						   <strong>Warning: </strong> <span style="font-size: 14px;"> Lucee 4.5 has reached it end of life, it will no longer get any security updates or hot fix </span>
+					  	</div>
+					</cfif>	 --->
+					<h2>Lucee Core</h2>
+					<p style="font-size: 1.7rem;">Get releases, release candidates, beta or snapshots from Lucee.</p>
+					<script type="text/javascript">
+						$(document).ready(function () {
+							isSafari = !!navigator.userAgent.match(/Version\/[\d\.]+.*Safari/)
+							var isTouch = ('ontouchstart' in document.documentElement);
+							if(isTouch) var mthd = 'click';
+							else var mthd = 'mouseenter';
+							$('.triggerIcon').attr('class','pop').attr("popover-placement", "auto");
+							$(".pop").popover({
+								trigger: "hover",
+								placement: 'bottom',
+								position: 'relative',
+								html: true,
+								animation:false
+							})
+							.on(mthd, function () {
+								var _this = this;
+								if (isSafari) {
+									$('.popover').attr('style', 'max-width: 200px !important');
+									$('.popover-title').attr('style', 'max-width: 100px !important');
+								}
+								$(this).popover("show");
+							})
+							.on("mouseleave touchmove", function () {
+								var _this = this;
+								setTimeout(function () {
+									if (!$(".popover:hover").length) {
+									  $(_this).popover("hide");
+									}
+								})
+							});
+						});
+						function hideData (a) {
+						  $('.'+a).removeClass('show');
+						  $('##'+a+'_id').show();
+						}
+						function hideToggle (a) {
+						  $('##'+a).hide();
+						}
+						function change(type,field,id) {
+						  window.location="?"+type+"="+field.value+"##"+id;
+						}
+					</script>
+					<cfscript>
+						rows={};
+					</cfscript>
+					<div class="panel" id="core">
+						<cfset types="releases,snapshots,rc,beta">
+						<div class="panel-body">
+							<cfloop list="releases,snapshots,rc,beta" item="_type">
+								<div class="col-md-3 col-sm-3 col-xs-3">
+									<!--- dropDown --->
+									<div class="bg-primary BoxWidth text-white">
+										<cfif !structKeyEXists(url,_type)>
+											<cfloop query="#adownloads#"><cfif adownloads.t==_type><cfset url[_type]=adownloads.id><cfset rows[_type]=adownloads.currentrow><cfbreak></cfif></cfloop>
+										</cfif>
+										<b><h2>#singular[_type]#</h2> <!--- #ldownloads[type].versionNoAppendix#</b> (#lsDateFormat(ldownloads[type].jarDate)#) --->
+										<select onchange="change('#_type#',this, 'core')" style="color:7f8c8d;font-style:normal;" id="lCore" class="form-control" <!--- class="custom-select" --->>
+											<cfloop query="#adownloads#"><cfif adownloads.t==_type><option <cfif url[_type]==adownloads.id><cfset rows[_type]=adownloads.currentrow> selected="selected"</cfif> value="#adownloads.id#"><!---
 
-					<!--- installers --->
-					<cfif type == "releases" >
-						<cfset installers=getInstaller(downloads.version[latest])>
-						<cfif structCount(installers)>
-							<h4>Installers (*.exe, *.run)</h4>
-							<p>Platform Specific Installers for
-							<cfset count=1>
-							<cfset str="">
-							<cfset l=structCount(installers)>
-							<cfloop struct="#installers#" index="k" item="v">
-								<cfif count GT 1>
-									<cfif count	EQ l>
-										<cfset str&=' and '>
-									<cfelse>
-										<cfset str&=', '>
-									</cfif>		
-								</cfif>
-								<cfset str&='<a href="#toCDN(v)#">#lang.installer[k]#</a>'>
-								<cfset count++>
+												--->#adownloads.versionNoAppendix# (#lsDateFormat(adownloads.jarDate)#)</option></cfif></cfloop>
+
+											<cfif _type EQ "releases">
+											<cfloop query="#downloads45#">
+												<option <cfif ListLast(url[_type], "_")==downloads45.version><cfset rows['releases']=downloads45.currentrow> selected="selected"</cfif> value="4.5_#downloads45.version#"><!---
+												--->#downloads45.version# (#lsDateFormat(downloads45.date)#)</option>
+											</cfloop>
+											</cfif>
+										</select>
+									</div>
+									<!--- desc --->
+									<div class="desc descDiv row_even">#lang.desc[_type]#</div>
+									<!--- Express --->
+									<div class="row_odd divHeight">
+										<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
+											<cfset dw=querySlice(downloads45,rows['releases'],1)>
+											<cfset uri=toCDN(dw.express)>
+										<cfelse>
+											<cfset dw=querySlice(adownloads,rows[_type],1)>
+											<cfif dw.s3Express>
+												<cfset uri="#cdnURL#lucee-express-#dw.version#.zip">
+											<cfelse>
+												<cfset uri="#_url[type]#/rest/update/provider/express/#dw.version#">
+											</cfif>
+										</cfif>
+										<div class="fontStyle">
+											<a href="#(uri)#">Express</a>
+											<span  class="triggerIcon pointer" style="color :##01798A" title="#lang.express#">
+												<span class="glyphicon glyphicon-info-sign"></span>
+											</span>
+										</div>
+									</div>
+									<!--- Installer --->
+									<div class="row_even installerDiv">
+										<cfif _type == "releases">
+											<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
+												<cfset dw=querySlice(downloads45,rows['releases'],1)>
+												<cfset installers=dw.installer>
+											<cfelse>
+												<cfset dw=querySlice(adownloads,rows[_type],1)>
+												<cfset installers=getInstaller(dw.version)>
+											</cfif>
+											<cfif structIsEmpty(installers) && (listFirst(dw.version,".") GTE 5)>
+												<div class="fontStyle">
+													<span class="text-primary">Coming Soon!</span>
+													<span  class="triggerIcon pointer" style="color :##01798A" title="Installers will available on soon">
+														<span class="glyphicon glyphicon-info-sign"></span>
+													</span>
+												</div>
+											<cfelse>
+												<cfset count=1>
+												<cfset str="">
+												<cfset l=structCount(installers)>
+												<cfloop struct="#installers#" index="kk" item="vv">
+													<cfif count GT 1>
+														<cfset str&='<br>'>
+													</cfif>
+													<cfset str&='<a href="#toCDN(vv)#">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
+													<span class="glyphicon glyphicon-info-sign"></span>
+												</span>'>
+													<cfset count++>
+												</cfloop>
+												<div class="fontStyle">#str#</div>
+											</cfif>
+										</cfif>
+									</div>
+									<!--- jar --->
+									<div class="row_odd jarDiv">
+										<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
+											<cfset dw=querySlice(downloads45,rows['releases'],1)>
+											<div class="fontStyle"><a href="#toCDN(dw.jar)#">lucee.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title="#lang.jar#">
+												<span class="glyphicon glyphicon-info-sign"></span>
+											</span></div>
+										<cfelse>
+											<cfset dw=querySlice(adownloads,rows[_type],1)>
+											<cfset uri="#_url[_type]#/rest/update/provider/loader/#dw.version#">
+											<div class="fontStyle"><a href="#(uri)#">lucee.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title="#lang.jar#">
+												<span class="glyphicon glyphicon-info-sign"></span>
+											</span></div>
+
+											<cfif dw.s3Light>
+												<cfset uri="#cdnURL#lucee-light-#dw.version#.jar">
+											<cfelse>
+												<cfset uri="#_url[_type]#/rest/update/provider/light/#dw.version#">
+											</cfif>
+											<div class="fontStyle"><a href="#(uri)#">lucee.jar(without Extension)</a><span  class="triggerIcon pointer" style="color :##01798A" title="Lucee Jar file without Extension bundled">
+												<span class="glyphicon glyphicon-info-sign"></span>
+											</span></div>
+
+										</cfif>
+									</div>
+									<!--- core --->
+									<div class="row_even divHeight">
+										<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
+										<cfset dw=querySlice(downloads45,rows['releases'],1)>
+										<cfset uri=toCDN(dw.core)>
+										<cfelse>
+											<cfset dw=querySlice(adownloads,rows[_type],1)>
+											<cfif dw.s3Core>
+												<cfset uri="#cdnURL##dw.version#.lco">
+											<cfelse>
+												<cfset uri="#_url[_type]#/rest/update/provider/core/#dw.version#">
+											</cfif>
+										</cfif>
+										<div class="fontStyle"><a href="#(uri)#" >Core</a><span class="triggerIcon pointer" style="color :##01798A" title='#lang.core#'>
+												<span class="glyphicon glyphicon-info-sign"></span>
+											</span></div>
+									</div>
+									<!--- WAR --->
+									<div class="row_odd divHeight">
+										<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
+										<cfset dw=querySlice(downloads45,rows['releases'],1)>
+										<cfset uri=toCDN(dw.war)>
+										<cfelse>
+											<cfset dw=querySlice(adownloads,rows[_type],1)>
+											<cfif dw.s3War>
+												<cfset uri="#cdnURL#lucee-#dw.version#.war">
+											<cfelse>
+												<cfset uri="#_url[_type]#/rest/update/provider/war/#dw.version#">
+											</cfif>
+										</cfif>
+										<div class="fontStyle"><a href="#(uri)#" title="#lang.war#">WAR</a><span class="triggerIcon pointer" style="color :##01798A" title="#lang.war#">
+												<span class="glyphicon glyphicon-info-sign"></span>
+											</span></div>
+									</div>
+									<!--- logs --->
+									<div class="row_even divHeight">
+										<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
+											<cfset dw=querySlice(downloads45,rows['releases'],1)>
+											<cfset res.version = dw.version>
+											<cfset res.changelog = dw.changelog>
+										<cfelse>
+											<cfset downloads=getDownloadFor(_type)>
+											<cfset dw=querySlice(adownloads,rows[_type],1)>
+											<cfquery name="res" dbtype="query">
+												select * from downloads where ID = '#dw.id#'
+											</cfquery>
+										</cfif>
+										<cfif isstruct(res.changelog) && structCount(res.changelog) GT 0>
+											<div class="fontStyle">
+												<p class="collapsed mb-0" data-toggle="modal" data-target="##myModal#_type#">Changelog<small class="align-middle h6 mb-0 ml-1"><i class="icon icon-collapse collapsed"></i></small></p>
+											</div>
+											<div class="modal fade" id="myModal#_type#" role="dialog">
+												<div class="modal-dialog modal-lg">
+													<div class="modal-content">
+														<div class="modal-header">
+															<button type="button" class="close" data-dismiss="modal">&times;</button>
+															<h4 class="modal-title"><b>Version-#res.version# Changelogs</b></h4>
+														</div>
+														<div class="modal-body desc">
+															<cfloop struct="#res.changelog#" index="id" item="subject">
+																<a href="http://bugs.lucee.org/browse/#id#" target="blank">#id#</a>- #subject#
+																<br>
+															</cfloop>
+														</div>
+														<div class="modal-footer">
+															<button type="button" class="btn btn-default btn-lg" data-dismiss="modal">Close</button>
+														</div>
+												  	</div>
+												</div>
+											</div>
+										<cfelse>
+											<div class="fontStyle"></div>
+										</cfif>
+									</div>
+									<div><hr></div>
+								</div>
 							</cfloop>
-							<cfif !disableInstaller>#str#</cfif>
-						</cfif>
-					</cfif>
-	
-					<!---  Express--->
-					<h4>Express Build (*.zip)</h4>
-					<p>#lang.express#</p>
-					<cfif downloads.s3Express[latest]>
-						<cfset uri="#cdnURL#lucee-express-#downloads.version[latest]#.zip">
-					<cfelse>
-						<cfset uri="#_url[type]#/rest/update/provider/express/#downloads.version[latest]#">
-					</cfif>
-					<div class="btn-group mb-3"><a class="btn btn-primary" href="#uri#">Download</a></div>
-
-					<!--- jar --->
-					<h4>Jar file (*.jar)</h4>
-					<p><cfif downloads.vs[latest] GTE _5_0_0_219>#lang.libNew#<cfelse>#lang.lib#</cfif></p>
-
-					<cfset uri="#_url[type]#/rest/update/provider/#downloads.vs[latest] GTE _5_0_0_112?"loader":"libs"#/#downloads.version[latest]#">
-					<div class="btn-group mb-3"><a class="btn btn-primary" href="#(uri)#">Download with Extensions</a></div>
-					
-					<!--- jar light --->
-					<cfif downloads.s3Light[latest] && allowCDNLight>
-						<cfset uri="#cdnURL#lucee-light-#downloads.version[latest]#.jar">
-					<cfelse>
-						<cfset uri="#_url[type]#/rest/update/provider/light/#downloads.version[latest]##allowCDNLight?'':'?s3=false'#">
-					</cfif>
-					<div class="btn-group mb-3"><a class="btn btn-primary" href="#(uri)#">Download without Extensions</a></div>
-
-
-					<!--- War --->
-					<h4>WAR file (*.war)</h4>
-					<p>#lang.war#</p>
-					<cfif downloads.s3War[latest] && allowCDNWAR>
-						<cfset uri="#cdnURL#lucee-#downloads.version[latest]#.war">
-					<cfelse>
-						<cfset uri="#_url[type]#/rest/update/provider/war/#downloads.version[latest]##allowCDNWAR?'':'?s3=false'#">
-					</cfif>
-					<div class="btn-group mb-3"><a class="btn btn-primary" href="#(uri)#">Download</a></div>
-
-					<!--- Lucee Core --->
-					<h4>Core file (*.lco)</h4>
-					<p>#lang.core#</p>
-					<cfif downloads.s3Core[latest]>
-						<cfset uri="#cdnURL##downloads.version[latest]#.lco">
-					<cfelse>
-						<cfset uri="#_url[type]#/rest/update/provider/core/#downloads.version[latest]#">
-					</cfif>
-					<div class="btn-group mb-3"><a class="btn btn-primary" href="#(uri)#">download</a></div>
-
-					<!--- changelog --->
-					<cfif !isnull(downloads.changelog[latest]) && isStruct(downloads.changelog[latest]) && structCount(downloads.changelog[latest])>
-						<div class="mb-3">
-							<h4 class="collapse-toggle" data-toggle="collapse">Changelog<small class="align-middle h6 mb-0 ml-1"><i class="icon icon-collapse"></i></small></h4>
-							<div class="clog-detail collapse show" id="clog_detail">
-								<cfloop struct="#downloads.changelog[latest]#" index="idx" item="subject">
-									<a href="http://bugs.lucee.org/browse/#idx#">#idx#</a> #subject#<br>
-								</cfloop>
-							</div>
 						</div>
-					</cfif>
+					</div>
 
-					<hr>
-
-					<cfif downloads.recordcount GT 1>
-						<cfsilent>
-							<cfloop query=downloads>
-								<cfif true> <!--- downloads.version!=downloads.version[latest] --->
-									<cfif isNull(last)>
-										<cfset last=downloads.version>
+					<div id="ext">
+						<h2>Extensions</h2>
+						<p style="font-size: 1.7rem;font-weight:normal;">Lucee Extensions, simply copy them to /lucee-server/deploy, of a running Lucee installation, to install them.
+						You can also install this Extensions from within your Lucee Administrator under "Extension/Application".</p>
+						<cfset types_ = "release,abc,snapshot">
+						<cfset rows_ = {}>
+						<cfset extQry_ = {}>
+						<cfloop list="#types_#" item="type">
+							<cfset extQry_[type]=getExtensions(type)>
+						</cfloop>
+						<cfset ListID = "">
+						<div id="ext">
+							<cfloop list="#types_#" item="type">
+								<cfloop query=extQry_[type]>
+									<cfif listFindNoCase(ListID, extQry_[type].id) GT 0>
+										<cfcontinue>
 									</cfif>
-									<cfset first=downloads.version>
-								</cfif>
-							</cfloop>
-						</cfsilent>
-						<cfif !isNUll(first)>
-							<h3>
-								#singular[type]# History (#last# - #first#)<span class="align-middle collapse-all-toggle collapsed h6 mb-0 ml-1" data-target="" data-toggle="collapse">Changelogs<i class="icon icon-collapse ml-1"></i></span>
-							</h3>
-							<p>#historyDesc#</p>
+									<cfset ListID = listAppend(ListID, extQry_[type].id)>
+									<div class="container">
+										<cfset extVersions = {}>
+										<cfset extVersions[type]= extQry_[type].older>
+										<cfif arrayLen(ArrayFindAllNoCase( extVersions[type], extQry_[type].version ) )  EQ 0>
+											<cfset arrayPrepend(extVersions[type], extQry_[type].version)>
+										</cfif>
+										<cfsavecontent variable="details1">
+											Latest Version: <i>#extQry_[type].version#</i><br>
+											Birth Date: <i>#dateFormat(extQry_[type].created,'mmmm, dd/yyyy')#</i><br>
+											Trial: <i>#yesnoformat(extQry_[type].trial)#</i>
+										</cfsavecontent>
+										<cfset extVersions['_'&type] = details1>
 
-							<div class="table-responsive">
-								<table class="table table-bordered">
-									<thead>
-										<tr>
-											<th>Version</th>
-											<th>Date</th>
-											<cfif url.type == "releases"><th>Installer</td></th></cfif>
-											<th>Express</th>
-											<th>Jar</th>
-											<th>Core</th>
-											<th>WAR</th>
-										</tr>
-									</thead>
-									<tbody>
-										<cfloop query=downloads>
-											<cfif
-												downloads.vs == _5_0_0_255 ||
-												downloads.vs == _5_0_0_256 ||
-												downloads.vs == _5_0_0_257 ||
-												downloads.vs == _5_0_0_258 ||
-												downloads.vs == _5_0_0_259 ||
-												downloads.vs == _5_0_0_260 ||
-												downloads.vs == _5_0_0_261 ||
-												downloads.vs == _5_0_0_262 ||
-												downloads.vs == _5_1_0_31  ||
-												downloads.vs == _5_1_0_008 ||
-												downloads.vs == _5_2_1_7 ||
-												downloads.vs == _5_2_1_8 ||
-												downloads.vs == _5_2_3_30_RC ||
-												downloads.vs == _5_2_8_52
-											>
+										<cfloop list="#types_#" item="extType">
+											<cfif extType EQ type>
 												<cfcontinue>
 											</cfif>
-											<cfset css="">
-											<cfif true><!--- downloads.version!=downloads.version[latest] --->
-												<tr>
-													<td>#downloads.version#</td>
-													<td>#lsDateFormat(downloads.jarDate)#</td>
-													<cfif url.type == "releases">
-														<td>
-															<cfset installers=getInstaller(downloads.version)>
-															<cfset count=1>
-															<cfset str="">
-															<cfset l=structCount(installers)>
-															<cfloop struct="#installers#" index="kk" item="vv">
-																<cfif count GT 1>
-																	<cfset str&=', '>
-																</cfif>
-																<cfset str&='<a href="#toCDN(vv)#">#lang.installer[kk]#</a>'>
-																<cfset count++>
-															</cfloop>
-															<cfif !disableInstaller>#str#</cfif>
-														</td>
-													</cfif>
-													<!--- Express --->
-													<td>
-														<cfif downloads.s3Express>
-															<cfset uri="#cdnURL#lucee-express-#downloads.version#.zip">
-														<cfelse>
-															<cfset uri="#_url[type]#/rest/update/provider/express/#downloads.version#">
-														</cfif>
-														<a href="#(uri)#">Express</a>
-													</td>
-													<!--- JAR --->
-													<td>
-														<!--- full --->
-														<cfif downloads.vs GTE _5_0_0_219>
-															<cfset uri="#_url[type]#/rest/update/provider/loader/#downloads.version#">
-															<a href="#(uri)#">lucee.jar</a>
-															<cfif downloads.vs GTE _5_1_0_008>
-																<br>
-																<cfif downloads.s3Light && allowCDNLight>
-																	<cfset uri="#cdnURL#lucee-light-#downloads.version#.jar">
-																<cfelse>
-																	<cfset uri="#_url[type]#/rest/update/provider/light/#downloads.version##allowCDNLight?'':'?s3=false'#">
-																</cfif>
-																<a href="#(uri)#">lucee.jar (without Extension)</a>
-															</cfif>
-														<cfelseif downloads.vs GTE _5_0_0_112>
-															<cfset uri="#_url[type]#/rest/update/provider/loader-all/#downloads.version#">
-															<a href="#toCDN(uri)#">lucee.jar</a></span>
-														<cfelse>
-															-
-														</cfif>
-													</td>
-													<!--- Core --->
-													<cfif downloads.s3Core>
-														<cfset uri="#cdnURL##downloads.version#.lco">
-													<cfelse>
-														<cfset uri="#_url[type]#/rest/update/provider/core/#downloads.version#">
-													</cfif>
-													<td><a href="#(uri)#">Core</a></td>
-													
-													<!--- WAR --->
-													<cfif downloads.s3War && allowCDNWAR>
-														<cfset uri="#cdnURL#lucee-#downloads.version#.war">
-													<cfelse>
-														<cfset uri="#_url[type]#/rest/update/provider/war/#downloads.version##allowCDNWAR?'':'?s3=false'#">
-													</cfif>
-													<td><a href="#(uri)#">WAR</a></td>
-												</tr>
-												<!--- changelog --->
-												<cfif !isNull(downloads.changelog) && isStruct(downloads.changelog) && structCount(downloads.changelog)>
-													<tr>
-														<td colspan="#(type == "releases")?8:7#" class="table-active">
-															<p class="collapse-toggle collapsed mb-0" data-toggle="collapse">Changelog<small class="align-middle h6 mb-0 ml-1"><i class="icon icon-collapse"></i></small></p>
-															<div class="clog-detail collapse">
-																<cfloop struct="#downloads.changelog#" index="idx" item="subject">
-																	<a href="http://bugs.lucee.org/browse/#idx#">#idx#</a> #subject#<br>
-																</cfloop>
-															</div>
-														</td>
-													</tr>
+											<cfset table = extQry_[extType]>
+											<cfquery dbtype="query" name="_res">
+												select * from table where id = '#extQry_[type].id#'
+											</cfquery>
+											<cfif _res.recordcount>
+												<cfsavecontent variable="details2">
+													Latest Version : <i>#_res.version#</i><br>
+													Birth Date : <i>#dateFormat(_res.created,'mmmm, dd/yyyy')#</i><br>
+													Trial : <i>#yesnoformat(_res.trial)#</i>
+												</cfsavecontent>
+												<cfset extVersions[extType] = _res.older>
+												<cfset extVersions['_'&extType] = details2>
+												<cfif arrayLen(ArrayFindAllNoCase( extVersions[extType], _res.version ) ) EQ 0 >
+													<cfset arrayPrepend(extVersions[extType], _res.version)>
 												</cfif>
 											</cfif>
 										</cfloop>
-
-										<!--- Lucee 4.5 --->
-										<cfif type == "releases">
-											<cfloop query=downloads45>
-												<cfset css="">
-												<tr>
-													<td>#downloads45.version#</td>
-													<td>#lsDateFormat(downloads45.date)#</td>
-													<cfif type == "releases">
-														<td>
-															<cfset installers=downloads45.installer>
-															<cfset count=1>
-															<cfset str="">
-															<cfset l=structCount(installers)>
-															<cfloop struct="#installers#" index="kk" item="vv">
-																<cfif count GT 1>
-																	<cfset str&=', '>
-																</cfif>
-																<cfset str&='<a href="#toCDN(vv)#">#lang.installer[kk]#</a>'>
-																<cfset count++>
-															</cfloop>
-															#str#
-														</td>
+										<cfset extQry = extQry_[type]>
+										<div class="col-ms-12 col-xs-12 well well-sm">
+												<span class="head1 title">#extQry.name#</span>
+												<hr>
+											<div class='col-xs-2 col-md-2'>
+												<div>
+													<cfif len(extQry.image)>
+														<img style="max-width: 100%;" src="data:image/png;base64,#extQry.image#">
 													</cfif>
-													<td>
-														<cfset uri="#downloads45.express#">
-														<a href="#toCDN(uri)#">Express</a>
-													</td>
-													<td>
-														<cfset uri="#downloads45.jar#">
-														<a href="#toCDN(uri)#">lucee.jar</a>
-													</td>
-													<cfset uri="#downloads45.core#">
-													<td class="#css#"><cfif len(uri)><a href="#toCDN(uri)#">Core</a></cfif></td>
-													<cfset uri="#downloads45.war#">
-													<td class="#css#"><a href="#toCDN(uri)#">WAR</a></td>
-												</tr>
-												<!--- changelog --->
-												<cfif !isNull(downloads45.changelog) && isStruct(downloads45.changelog) && structCount(downloads45.changelog)>
-													<tr>
-														<td colspan="#(type == "releases")?8:7#" class="table-active">
-															<p class="collapse-toggle collapsed mb-0" data-toggle="collapse">Changelog<small class="align-middle h6 mb-0 ml-1"><i class="icon icon-collapse"></i></small></p>
-															<div class="clog-detail collapse">
-																<cfset sct=downloads45.changelog>
-																<cfset keys=structKeyArray(sct)>
-																<cfset arraySort(keys,function(l,r) {
-																	return compare(makeComparable(r),makeComparable(l));
-																})>
-																<cfloop array="#keys#" index="i" item="key">
-																	<cfif find('LDEV-',key)>
-																		<a href="http://bugs.lucee.org/browse/#key#">#key#</a>
-																	<cfelse>
-																		#key#
-																	</cfif>
-												 					#sct[key]#<br>
-																</cfloop>
-															</div>
-														</td>
-													</tr>
+												</div>
+											</div>
+											<div class='col-md-10 col-xs-10'>
+												<div class="container bg-white mb-2" style="margin-left:-1.7%;">
+													<div class="head1 textStyle" style="font-size:2rem !important;"> ID: #extQry.id# </div>
+													<p class="fontStyle ml-2">#extQry.description#</p>
+												</div>
+												<cfif !isNull(extQry.older) && isArray(extQry.older) && arrayLen(extQry.older)>
+													<div class="row">
+														<cfloop list="#types_#" item="_extType">
+															<cfif !structKeyExists(extVersions, _extType)>
+																<cfcontinue>
+															</cfif>
+																<cftry><cfset arraySort(extVersions[_extType],"textnocase", "desc")><cfcatch></cfcatch></cftry>
+																<div class="mb-0 mt-1 col-xs-4 col-md-4 borderInfo">
+																	<div class="bg-primary jumbotron text-white jumboStyle">
+																		<span class="btn-primary">
+																			<h2 class="fontSize">#multi[_extType]#</h2>
+																		</span>
+																	</div>
+																	<cfset len = 1>
+																	<cfloop array="#extVersions[_extType]#" item="_older">
+																		<cfif len LTE 5>
+																			<div <cfif len MOD 2 eq 0>class="row_alterEven textStyle textWrap"<cfelse>class="row_alterOdd textStyle textWrap"</cfif>>
+																				<a href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',extQry.trial?"trial":"full"),'{id}',extQry.id)#?version=#_older#">download#extQry.trial?" trial":""# version (#_older#)</a>
+																				<span  class="triggerIcon pointer" style="color :##01798A" title="#extVersions['_'&_extType]#">
+																					<span class="glyphicon glyphicon-info-sign"></span>
+																				</span>
+																			</div>
+																		<cfelseif len EQ 6>
+																			<cfset ext_Version = extQry.id&'_'&_extType>
+																			<div style="text-align:center;background-color:##BCBCBC;color:2C3A47;" id="#ext_Version#_id" class="collapse-toggle collapsed textStyle" onclick="return hideToggle('#ext_Version#_id');"  data-toggle="collapse">
+																				<b><i>Show more..</i></b>
+																				<small class="align-middle h6 mb-0">
+																					<i class="icon icon-open"></i>
+																				</small>
+																			</div>
+																			<div  class="clog-detail collapse #ext_Version# row_alter" style="text-align:center;">
+																				<div <cfif len MOD 2 eq 0>class="row_alterEven textStyle textWrap"<cfelse>class="row_alterOdd textStyle textWrap"</cfif>>
+																					<a href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',extQry.trial?"trial":"full"),'{id}',extQry.id)#?version=#_older#">
+																						download#extQry.trial?" trial":""# version (#_older#)
+																					</a>
+																					<span  class="triggerIcon pointer" style="color :##01798A" title="#extVersions['_'&_extType]#">
+																						<span class="glyphicon glyphicon-info-sign"></span>
+																					</span>
+																				</div>
+																		<cfelseif len GT 5>
+																				<div <cfif len MOD 2 eq 0>class="row_alterEven textStyle textWrap"<cfelse>class="row_alterOdd textStyle textWrap"</cfif>>
+																					<a href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',extQry.trial?"trial":"full"),'{id}',extQry.id)#?version=#_older#">
+																						download#extQry.trial?" trial":""# version (#_older#)
+																					</a>
+																					<span  class="triggerIcon pointer" style="color :##01798A" title="#extVersions['_'&_extType]#">
+																						<span class="glyphicon glyphicon-info-sign">
+																						</span>
+																					</span>
+																				</div>
+																		</cfif>
+																		<cfif len GT 5 && len eq arrayLen(extVersions[_extType])>
+																			<div class="showLess pointer textStyle" style="text-align:center;background-color:##BCBCBC;" onclick="return hideData('#ext_Version#');">
+																				<b><i>Show less</i></b>
+																				<small class="align-middle h6 mb-0  hideClick">
+																					<i class="icon icon-collapse"></i>
+																				</small>
+																			</div>
+																			</div>
+																		</cfif>
+																		<cfset len++>
+																	</cfloop>
+																</div>
+														</cfloop>
+													</div>
 												</cfif>
-											</cfloop>
-										</cfif>
-									</tbody>
-								</table>
-							</div>
-						</cfif>
-					</cfif>
+											</div>
+										</div>
+									</div>
+								</cfloop>
+							</cfloop>
+						</div>
+					</div>
 				</cfif>
 			</cfif>
-
-		<cfif !isNull(extQry)>
-			<!--- output --->
-				<h2>Extension #singular[url.type]#</h2>
-				<p>Lucee Extensions, simply copy them to /lucee-server/deploy, of a running Lucee installation, to install them.</p>
-
-				<cfif url.type=="extabc">
-					<p>To install this Extensions from within your Lucee Administrator, you need to add "http://beta.lucee.org" under "Extension/Provider" as a new Provider, after that you can install this Extensions under "Extension/Application" in the Administartor.</p>
-				<cfelseif url.type=="ext">
-					<p>You can also install this Extensions from within your Lucee Administrator under "Extension/Application".</p>
-				<cfelseif url.type=="extsnap">
-				</cfif>
-
-				<div class="table-responsive">
-					<table class="table table-bordered">
-						<cfloop query="#extQry#">
-							<tr>
-								<td><cfif len(extQry.image)><img style="max-width: 200px;" src="data:image/png;base64,#extQry.image#"></cfif></td>
-								<td>
-									<h3>#extQry.name#</h3>
-									<p>
-										ID:#extQry.id#<br>
-										Latest Version:#extQry.version#<br>
-										Category:#extQry.category#<br>
-										Birth Date:#extQry.created#<br>
-										Trial:#yesNoFormat(extQry.trial)#
-									</p>
-									<p>#extQry.description#</p>
-									<a class="btn btn-primary" href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',extQry.trial?"trial":"full"),'{id}',extQry.id)#?version=#extQry.version#">Download#extQry.trial?" trial":""# version (#extQry.version#)</a>
-									<cfif !isNull(extQry.older) && isArray(extQry.older) && arrayLen(extQry.older)>
-										<cftry><cfset arraySort(extQry.older,function(l,r) {return compare(toVersionSortable(l),toVersionSortable(r)); })><cfcatch></cfcatch></cftry>
-										<p>Older Versions:</p>
-										<ul class="mb-0 mt-3">
-											<cfloop array="#extQry.older#" item="_older">
-												<li><a href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',extQry.trial?"trial":"full"),'{id}',extQry.id)#?version=#_older#">download#extQry.trial?" trial":""# version (#_older#)</a></li>
-											</cfloop>
-										</ul>
-									</cfif>
-								</td>
-							</tr>
-						</cfloop>
-					</table>
-		</cfif>
-
 		<cfhtmlbody action="flush">
 	</body>
 </html>

@@ -484,7 +484,7 @@ lang.installer.lin32="Linux (32b)";
 		}
 
 		// look for the version
-		var host="http://cdn.lucee.org";
+		var host="https://cdn.lucee.org";
 		var uriWin="/lucee-"&version&"-pl0-windows-installer.exe";
 		var uriLin64="/lucee-"&version&"-pl0-linux-x64-installer.run";
 		var uriLin32="/lucee-"&version&"-pl0-linux-installer.run";
@@ -499,7 +499,6 @@ direct links
 
 		var sct={};
 		application.installers[version]=sct;
-
 		if(is200(host&uriWin)) sct.win = host&uriWin;
 		if(is200(host&uriLin64)) sct.lin64 = host&uriLin64;
 		if(is200(host&uriLin32)) sct.lin32 = host&uriLin32;
@@ -509,7 +508,7 @@ direct links
 	}
 
 	function is200(url) {
-		http url=arguments.url method="head" result="local.result";
+		http url=replace(arguments.url,'https://','http://') method="head" result="local.result";
 		return (result.status_code?:404)==200;
 	}
 	
@@ -517,6 +516,7 @@ direct links
 		_url=replace(_url,'lucee.viviotech.net','cdn.lucee.org');
 		_url=replace(_url,'release.lucee.org','cdn.lucee.org');
 		_url=replace(_url,'snapshot.lucee.org','cdn.lucee.org');
+		_url=replace(_url,'http://','https://');
 		return _url;
 
 	}

@@ -511,7 +511,8 @@ component {
 		local.war=dir&"lucee-"&version&".war";
 		local.warTmp=dir&"lucee-"&version&"-temp-"&createUniqueId()&".war";
 		
-		if(!fileExists(war)) {
+		if(!fileExists(war)  || fileSize(war)<30000000) { // 70479555 size of a average war
+			if(fileExists(war)) fileDelete(war);
 			try {
 				// temp directory
 				local.temp=getTempDir();
@@ -568,7 +569,7 @@ component {
 			}
 
 			// rename to permanent file
-			fileMove(warTmp,war);
+			if(fileSize(warTmp)>30000000)fileMove(warTmp,war);
 		}
 
 		return war;
@@ -620,7 +621,7 @@ component {
     "name":"Lucee CF Engine",
     "version":"#v#",
     "createPackageDirectory":false,
-    "location":"http://cdn.lucee.org/rest/update/provider/forgebox/#arguments.version#",
+    "location":"https://cdn.lucee.org/rest/update/provider/forgebox/#arguments.version#",
     "slug":"lucee",
     "shortDescription":"Lucee WAR engine for CommandBox servers.",
     "type":"cf-engines"
@@ -877,6 +878,13 @@ component {
 			application.httpCounter=0;
 		return application.httpCounter;
 		 
+	}
+
+	private function fileSize(path) {
+	    var dir=getDirectoryFromPath(path);
+	    var file=listLast(path,'\/');
+	    directory filter=file name="local.res" directory=dir action="list";
+	    return res.recordcount==1?res.size:0;
 	}
 
 }

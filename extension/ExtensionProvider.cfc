@@ -18,7 +18,6 @@
 		if(application._extensionLast>getTickCount()-variables.EXPIRE) return;
 				
 		directory action="list" name="local.dir" directory="#variables.extensionDir#" filter="*.#variables.ext#" sort="asc";
-
 		// read in all extensions (full and trial)
 		//var tmpLatest.trial=structNew('linked');
 		//var tmpLatest.full=structNew('linked');
@@ -80,7 +79,7 @@
 		application.extensions=tmpAll;
 		//application.extensionLatest=tmpLatest;
 		//systemOutput(tmp,true,true);
-
+		
 	}
 	
 	/**
@@ -131,8 +130,9 @@
 		// we only show full versions in the list
 		loop struct="#application.extensions.full#" index="local.id" item="local.all" {
 			local.coll=_getLatest(all,isNull(local.luceeVersion)?"":local.luceeVersion,arguments.type);
-			if(isSimpleValue(coll)) continue;
-
+			if(isSimpleValue(coll)) {
+				continue;
+			}
 			local.main=coll.manifest;
 			local.filename=coll.filename;
 			if(left(filename,1)=='_') continue;
@@ -179,6 +179,7 @@
 			}
 			querySetCell(rtn.extensions,"older",arr,row);
 		}
+
 		return rtn;
 	}
 
