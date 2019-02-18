@@ -245,7 +245,7 @@ lang.installer.lin32="Linux (32b)";
 			// update for the next user when older than 5 minutes
 			if(!isNull(url.reset)) {
 				application.download.age=now();
-				thread {
+				thread name="t-#getTickCount()#" {
 					setting requesttimeout=1000000;
 					application.download.query=_download();
 				}
@@ -488,7 +488,12 @@ lang.installer.lin32="Linux (32b)";
 		var uriWin="/lucee-"&version&"-pl0-windows-installer.exe";
 		var uriLin64="/lucee-"&version&"-pl0-linux-x64-installer.run";
 		var uriLin32="/lucee-"&version&"-pl0-linux-installer.run";
+		
+		var uriWinPref="/lucee-"&version&"-pl1-windows-installer.exe";
+		var uriLin64Pref="/lucee-"&version&"-pl1-linux-x64-installer.run";
+		var uriLin32Pref="/lucee-"&version&"-pl1-linux-installer.run";
 
+		//throw "-->"&version;
 		/*
 direct links
 		var host="http://lucee.viviotech.net";
@@ -499,9 +504,17 @@ direct links
 
 		var sct={};
 		application.installers[version]=sct;
-		if(is200(host&uriWin)) sct.win = host&uriWin;
-		if(is200(host&uriLin64)) sct.lin64 = host&uriLin64;
-		if(is200(host&uriLin32)) sct.lin32 = host&uriLin32;
+		// Windows
+		if(isDefined("url.pref") && is200(host&uriWinPref)) sct.win = host&uriWinPref;
+		else if(is200(host&uriWin)) sct.win = host&uriWin;
+		
+		// Linux 64
+		if(isDefined("url.pref") && is200(host&uriLin64Pref)) sct.lin64 = host&uriLin64Pref;
+		else if(is200(host&uriLin64)) sct.lin64 = host&uriLin64;
+		
+		// Linux 32
+		if(isDefined("url.pref") && is200(host&uriLin32Pref)) sct.lin32 = host&uriLin32Pref;
+		else if(is200(host&uriLin32)) sct.lin32 = host&uriLin32;
 
 		application.installerCheck[version]=now();
 		return sct;
@@ -513,6 +526,8 @@ direct links
 	}
 	
 	function toCDN(_url) {
+		if(isDefined("url.doCDN") && !url.doCDN) return _url;
+
 		_url=replace(_url,'lucee.viviotech.net','cdn.lucee.org');
 		_url=replace(_url,'release.lucee.org','cdn.lucee.org');
 		_url=replace(_url,'snapshot.lucee.org','cdn.lucee.org');

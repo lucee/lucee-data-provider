@@ -11,9 +11,10 @@
 	ALL_VERSION="0.0.0.0";
 	MIN_UPDATE_VERSION="5.0.0.254";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
- 
+ 	
 	variables.mavenMappings={
-		'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
+		'com.mysql.cj':{'group':'mysql','artifact':'mysql-connector-java'}
+		,'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
 		,'aws-java-sdk-osgi':{'group':'com.amazonaws','artifact':'aws-java-sdk-osgi'}
 		,'com.sun.jna':{'group':'net.java.dev.jna','artifact':'jna'}
 		,'org.apache.commons.pool2':{'group':'org.apache.commons','artifact':'commons-pool2'}
@@ -24,7 +25,10 @@
 		,'activiti-engine':{'group':'org.activiti','artifact':'activiti-engine'}
 		,'org.apache.tika.core':{'group':'org.apache.tika','artifact':'tika-core'}
 		,'org.apache.tika.parsers':{'group':'org.apache.tika','artifact':'tika-parsers'}
+		,'org.apache.commons.commons-text':{'group':'org.apache.commons','artifact':'commons-text'}
 	};
+
+	
 
 	variables.extMappings={
 		'hibernate.extension':{lex:'hibernate-orm',jar:'lucee-hibernate'}
@@ -158,7 +162,7 @@
 	remote function downLoader(
 			required string version restargsource="Path",
 			string ioid="" restargsource="url", 
-			boolean allowRedirect=true restargsource="url")
+			boolean allowRedirect=false restargsource="url")
 		httpmethod="GET" restpath="loader/{version}" {
 
 		local.mr=new MavenRepo();
@@ -1193,9 +1197,9 @@
 			// if not exist we make ready for the next
 			else {
 
-				if(async) {
+				if(async && isNull(url.show)) {
 					thread src=path trg=variables.s3Root&name {
-						lock timeout=100 name=src {
+						lock timeout=1000 name=src {
 							if(!fileExists(trg)) // we do this because it was created by a thread blocking this thread
 								fileCopy(src,trg);
 						}
@@ -1204,10 +1208,10 @@
 				else {
 					var src=path;
 					var trg=variables.s3Root&name;
-					lock timeout=100 name=src {
-						
+					lock timeout=1000 name=src {
 						if(!fileExists(trg)) {// we do this because it was created by a thread blocking this thread
 							fileCopy(src,trg);
+							if(!isNull(url.show)) throw "fileExists: "&fileExists(src)&" + "&fileExists(trg);
 						}
 					}
 				}	
