@@ -5,8 +5,6 @@
 	cdnDirect=!isNull(url.cdnDirect) && url.cdnDirect;
 	if(isNull(url.type)) url.type="releases";
 
-	// if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org" addtoken=false;
-
 	MAX=1000;
 	include "functions.cfm";
 
@@ -129,7 +127,6 @@
 			,cdnURL&'lucee-4.5.2.018.war'
 			,cdnURL&'lucee-4.5.1.024.war'
 		]
-		//'https://bitbucket.org/lucee/lucee/downloads/4.5.5.006.lco'
 		,core:[
 			cdnURL&'4.5.5.015.lco'
 			,cdnURL&'4.5.5.006.lco'
