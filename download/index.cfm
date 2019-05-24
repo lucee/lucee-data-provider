@@ -2,7 +2,7 @@
 <cfoutput>
 <cfscript>
 	cdnURL="https://cdn.lucee.org/";
-
+	cdnDirect=!isNull(url.cdnDirect) && url.cdnDirect;
 	if(isNull(url.type)) url.type="releases";
 
 	// if(cgi.http_host!="download.lucee.org") location url="http://download.lucee.org" addtoken=false;
@@ -464,10 +464,10 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 									<div class="row_odd divHeight">
 										<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
 											<cfset dw=querySlice(downloads45,rows['releases'],1)>
-											<cfset uri=toCDN(dw.express)>
+											<cfset uri=cdnDirect?toCDN(dw.express):dw.express>
 										<cfelse>
 											<cfset dw=querySlice(adownloads,rows[_type],1)>
-											<cfif dw.s3Express>
+											<cfif cdnDirect && dw.s3Express>
 												<cfset uri="#cdnURL#lucee-express-#dw.version#.zip">
 											<cfelse>
 												<cfset uri="#_url[type]#/rest/update/provider/express/#dw.version#">
@@ -505,7 +505,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 													<cfif count GT 1>
 														<cfset str&='<br>'>
 													</cfif>
-													<cfset str&='<a href="#toCDN(vv)#">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
+													<cfset str&='<a href="#cdnDirect?toCDN(vv):vv#">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
 													<span class="glyphicon glyphicon-info-sign"></span>
 												</span>'>
 													<cfset count++>
@@ -518,7 +518,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 									<div class="row_odd jarDiv">
 										<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
 											<cfset dw=querySlice(downloads45,rows['releases'],1)>
-											<div class="fontStyle"><a href="#toCDN(dw.jar)#">lucee.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title="#lang.jar#">
+											<div class="fontStyle"><a href="#cdnDirect?toCDN(dw.jar):dw.jar#">lucee.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title="#lang.jar#">
 												<span class="glyphicon glyphicon-info-sign"></span>
 											</span></div>
 										<cfelse>
@@ -528,7 +528,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 												<span class="glyphicon glyphicon-info-sign"></span>
 											</span></div>
 
-											<cfif dw.s3Light>
+											<cfif cdnDirect && dw.s3Light>
 												<cfset uri="#cdnURL#lucee-light-#dw.version#.jar">
 											<cfelse>
 												<cfset uri="#_url[_type]#/rest/update/provider/light/#dw.version#">
@@ -543,10 +543,10 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 									<div class="row_even divHeight">
 										<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
 										<cfset dw=querySlice(downloads45,rows['releases'],1)>
-										<cfset uri=toCDN(dw.core)>
+										<cfset uri=cdnDirect?toCDN(dw.core):dw.core>
 										<cfelse>
 											<cfset dw=querySlice(adownloads,rows[_type],1)>
-											<cfif dw.s3Core>
+											<cfif cdnDirect && dw.s3Core>
 												<cfset uri="#cdnURL##dw.version#.lco">
 											<cfelse>
 												<cfset uri="#_url[_type]#/rest/update/provider/core/#dw.version#">
@@ -560,10 +560,10 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 									<div class="row_odd divHeight">
 										<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
 										<cfset dw=querySlice(downloads45,rows['releases'],1)>
-										<cfset uri=toCDN(dw.war)>
+										<cfset uri=cdnDirect?toCDN(dw.war):dw.war>
 										<cfelse>
 											<cfset dw=querySlice(adownloads,rows[_type],1)>
-											<cfif dw.s3War>
+											<cfif cdnDirect && dw.s3War>
 												<cfset uri="#cdnURL#lucee-#dw.version#.war">
 											<cfelse>
 												<cfset uri="#_url[_type]#/rest/update/provider/war/#dw.version#">

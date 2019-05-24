@@ -7,7 +7,7 @@
 	variables.ext="lex";
 	application._extensionLast=0;
 
-	variables.columnList='id,version,name,description,image,category,author,created,releaseType,minLoaderVersion,minCoreVersion'
+	variables.columnList='id,version,versionSortable,name,description,image,category,author,created,releaseType,minLoaderVersion,minCoreVersion'
 			&',price,currency,disableFull,trial,older,promotionLevel,promotionText';
 
 	private function init() {
@@ -141,6 +141,10 @@
 			loop list="#rtn.extensions.columnlist()#" item="local.col" {
 				querySetCell(rtn.extensions,col,structKeyExists(main,col)?main[col]:'',row);
 			}
+
+			querySetCell(rtn.extensions,"versionSortable",structKeyExists(main,"version")?toVersionSortable(main["version"]):'',row);
+			
+
 
 			if(arguments.withLogo) {
 				local.logo="zip://"&variables.extensionDir&filename&"!/META-INF/logo.png";

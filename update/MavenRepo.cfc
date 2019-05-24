@@ -15,7 +15,10 @@ component {
 	//variables.mavenOsgi={"apache.lucene.analyzers-2-4-1.jar":"apache.lucene.analyzers-2.4.1.jar","commons-compress-1.9.jar":"org.apache.commons.compress-1.9.0.jar","commons-net-3.3.jar":"org.apache.commons.net-3.3.0.jar","ldapbp-1.2.4.jar":"sun.jndi.ldapbp-1.2.4.jar","oro-2.0.8.jar":"org.apache.oro-2.0.8.jar","sun.activation-1-1-1.jar":"sun.activation-1.1.1.jar","apache.lucene.similarity-2-4-1.jar":"apache.lucene.similarity-2.4.1.jar","s3.extension-0-0-0-26.jar":"s3.extension-0.0.0.26.jar","activation-1.1.0.jar":"sun.activation-1.1.0.jar","dom-1.1.0.jar":"w3c.dom-1.1.0.jar","core-1.2.1.jar":"sun.jai.core-1.2.1.jar","ant-1.4.0.jar":"apache.ws.axis.ant-1.4.0.jar","org.apache.commons.codec-1-9-0.jar":"org.apache.commons.codec-1.9.0.jar","apache.lucene.spellchecker-2-4-1.jar":"apache.lucene.spellchecker-2.4.1.jar","mail-1.3.3.01.jar":"sun.mail-1.3.3.01.jar","gpl-3.51.12.jar":"jpedal.gpl-3.51.12.jar","server-1.0.20.jar":"fusiondebug.api.server-1.0.20.jar","jcifs-1.3.17.jar":"jcifs-1.3.17.jar","axis-1.4.0.L004.jar":"apache.ws.axis-1.4.0.L004.jar","java.xmlbuilder-1-1-0.jar":"java.xmlbuilder-1.1.0.jar","adapters-1.1.1.jar":"org.apache.commons.logging.adapters-1.1.1.jar","xalan-2.7.1.jar":"apache.xml.xalan-2.7.1.jar","time-2.1.0.jar":"org.joda.time-2.1.0.jar","jackson-mapper-asl-1-9-13.jar":"jackson-mapper-asl-1.9.13.jar","extractors-3.8.0.jar":"apache.poi.tm.extractors-3.8.0.jar","concurrent-2.2.0.jar":"backport.util.concurrent-2.2.0.jar","api-1.1.1.jar":"org.apache.commons.logging.api-1.1.1.jar","core-4.4.1.jar":"apache.http.components.core-4.4.1.jar","apache.lucene.misc-2-4-1.jar":"apache.lucene.misc-2.4.1.jar","log4j-1.2.17.jar":"log4j-1.2.17.jar","jacob-1.16.1.jar":"jacob-1.16.1.jar","apache.poi-3-8-0.jar":"apache.poi-3.8.0.jar","apache.lucene.highlighter-2-4-1.jar":"apache.lucene.highlighter-2.4.1.jar","jaas-1.2.4.jar":"sun.security.jaas-1.2.4.jar","xerces-2.11.0.jar":"apache.xml.xerces-2.11.0.jar","asm-all-4.2.jar":"org.objectweb.asm.all-4.2.jar","ESAPI-2.1.0.jar":"ESAPI-2.1.0.jar","hsqldb-1.8.0.jar":"hsqldb-1.8.0.jar","jcommon-1.0.10.jar":"jcommon-1.0.10.jar","com.mysql.jdbc-5-1-20.jar":"com.mysql.jdbc-5.1.20.jar","codec-1.6.0.jar":"org.apache.commons.codec-1.6.0.jar","resolver-1.2.0.jar":"resolver-1.2.0.jar","ojdbc14-0.0.0.jar":"ojdbc14-0.0.0.jar","client-4.5.0.0002L.jar":"apache.http.components.client-4.5.0.0002L.jar","slf4j-api-1.7.12.jar":"slf4j.api-1.7.12.jar","xmlparserv2-1.2.2.jar":"xmlparserv2-1.2.2.jar","ldap-1.2.4.jar":"sun.jndi.ldap-1.2.4.jar","commons-httpclient-3.1.jar":"org.lucee.commons-httpclient-3.1.jar","mime-4.5.0.jar":"apache.http.components.mime-4.5.0.jar","mx4j-3-0-2.jar":"mx4j-3.0.2.jar","apis-1.3.2.jar":"xml.apis-1.3.2.jar","sanselan-0.97-incubator.jar":"org.apache.sanselan.sanselan-0.97.0.incubator.jar","ehcache-2.10.0.jar":"net.sf.ehcache-2.10.0.jar","ldapsec-1.2.4.jar":"sun.jndi.ldapsec-1.2.4.jar","commons-discovery-0.5.jar":"org.apache.commons.discovery-0.5.jar","xdb-1.0.0.jar":"xdb-1.0.0.jar","apache.poi.ooxml-3-8-0.jar":"apache.poi.ooxml-3.8.0.jar","apache.lucene-2-4-1.jar":"apache.lucene-2.4.1.jar","PDFBox-0-7-3.jar":"PDFBox-0.7.3.jar","extractor-2.6.4.jar":"metadata.extractor-2.6.4.jar","logging-1.1.1.jar":"org.apache.commons.logging-1.1.1.jar","wsdl4j-1.5.1.jar":"sun.xml.wsdl4j-1.5.1.jar","providerutil-1.2.4.jar":"sun.jndi.providerutil-1.2.4.jar","saaj-1.2.1.jar":"sun.xml.saaj-1.2.1.jar","codec-1.1.2.jar":"sun.jai.codec-1.1.2.jar","jtds-1-2-5.jar":"jtds-1.2.5.jar","javasysmon-0.3.3.jar":"javasysmon-0.3.3.jar","jackson-core-asl-1-9-13.jar":"jackson-core-asl-1.9.13.jar","oswego-concurrent-1.3.4.jar":"org.lucee.oswego-concurrent-1.3.4.jar","serializer-2.7.1.jar":"serializer-2.7.1.jar","org.apache.commons.logging-1-2-0.jar":"org.apache.commons.logging-1.2.0.jar","microsoft.sqljdbc-4-0-0.jar":"microsoft.sqljdbc-4.0.0.jar","apache.lucene.snowball-2-4-1.jar":"apache.lucene.snowball-2.4.1.jar","schemas-3.8.0.jar":"apache.poi.ooxml.schemas-3.8.0.jar","postgresql-9-1-902.jar":"postgresql-9.1.902.jar","jets3t-0-9-4.jar":"jets3t-0.9.4.jar","tika-core-1.10.jar":"org.apache.tika.core-1.10.0.jar","bcprov-1-52-0.jar":"bcprov-1.52.jar","jaxrpc-1.2.1.jar":"sun.xml.jaxrpc-1.2.1.jar","slf4j-nop-1.7.12.jar":"slf4j.nop-1.7.12.jar","log4j-1-2-16.jar":"log4j-1.2.16.jar","javaparser-1.0.8.jar":"javaparser-1.0.8.jar","fileupload-1.2.1.jar":"org.apache.commons.fileupload-1.2.1.jar","ooxml-3.8.0.jar":"org.apache.poi.ooxml-3.8.0.jar","commons-collections4-4.0.jar":"org.apache.commons.collections4-4.0.0.jar","lucene.search.extension-1-0-0-22.jar":"lucene.search.extension-1.0.0.22.jar","api-1.0.1.jar":"stax.api-1.0.1.jar","xmlbeans-2.3.0.r540734.jar":"xmlbeans-2.3.0.r540734.jar","jencrypt-1.4.2.04.jar":"jencrypt-1.4.2.04.jar","jfreechart-1.0.12.jar":"jfreechart-1.0.12.jar","tagsoup-1.2.1.jar":"tagsoup-1.2.1.jar","sun.mail-1-4-7.jar":"sun.mail-1.4.7.jar","commons-lang-2.6.jar":"org.apache.commons.lang-2.6.jar","commons-io-2.4.jar":"org.apache.commons.io-2.4.0.jar","css2-0.9.4.jar":"ss.css2-0.9.4.jar","commons-email-1.2.jar":"org.apache.commons.email-1.2.jar","jffmpeg-1.4.2.09.jar":"jffmpeg-1.4.2.09.jar","poi-3.8.0.jar":"org.apache.poi-3.8.0.jar","patch-1.0.12.jar":"jfreechart.patch-1.0.12.jar"};
 
 	// this are version that should not be used in any case
-	variables.ignoreVersions=["5.3.0.34-ALPHA","5.3.0.0-ALPHA-SNAPSHOT","5.2.3.30-RC","5.0.0.22","5.0.0.travis-74435522-SNAPSHOT","5.1.0.8-SNAPSHOT","5.1.0.31","5.2.1.7","5.2.1.8","5.1.4.18","5.2.0.11-ALPHA"];
+	variables.ignoreVersions=[
+		"5.3.0.34-ALPHA","5.3.0.0-ALPHA-SNAPSHOT","5.2.3.30-RC","5.0.0.22","5.0.0.travis-74435522-SNAPSHOT"
+		,"5.1.0.8-SNAPSHOT","5.1.0.31","5.2.1.7","5.2.1.8","5.1.4.18","5.2.0.11-ALPHA"
+		,"5.3.1.103"];
 	variables.majorBeta="5.3";
 
 	public function readDependenciesFromPOM(string pom, boolean extended=false,string specifivDep=""){
@@ -97,7 +100,7 @@ component {
 			loop array=dependencies item="local.dep" {
 				// first we store the file locally, if not exist locally yet
 				local.trg=dir&"mvn-"&dep.groupId&"-"&dep.artifactId&"-"&dep.version&".jar";
-				if(!fileExists(trg)) fileCopy(dep.jar,trg);
+				if(!fileExists(trg)) _fileCopy(dep.jar,trg);
 
 				// now we read the manifest
 				try{
@@ -269,9 +272,12 @@ component {
 	*/
 	public string function getLoader(required string version) {
 		local.jar=getArtifactDirectory()&"lucee-"&version&".jar"; // the jar
-		if(!fileExists(jar)) {
+		var sz=fileSize(jar);
+		//if(!isNull(url.abcd)) throw sz;
+		if(sz<5000000) {
+			if(sz>0) fileDelete(jar);
 			var data=get(version:version,extended:true);
-			fileCopy(data.sources.jar.src,jar); // download it to local
+			_fileCopy(data.sources.jar.src,jar); // download it to local
 		}
 		return jar;
 	}
@@ -288,7 +294,13 @@ component {
 		
 		setting requesttimeout="10000";
 		var loader=getLoader(version);
-		createLight(loader,jar);
+		//try{
+			createLight(loader,jar);
+		/*}
+		catch(e) {
+			throw serializeJson(e);
+		}*/
+		
 		return jar;
 	}
 
@@ -313,7 +325,7 @@ component {
 
             // remove extensions
             var extDir=tmpLoader&sep&"extensions";
-            directoryDelete(extDir,true); // deletes directory with all files inside
+            if(directoryExists(extDir))directoryDelete(extDir,true); // deletes directory with all files inside
             directoryCreate(extDir); // create empty dir again (maybe Lucee expect this directory to exist)
 
             // unzip core
@@ -381,7 +393,7 @@ component {
 
 			// now we get the lucee.jar
 			try {
-				fileCopy(getLoader(version),jar); // get a copy of the loader
+				_fileCopy(getLoader(version),jar); // get a copy of the loader
 				
 				if(!directoryExists(getPageContext().getConfig().getTempDirectory()))
 					directoryCreate(getPageContext().getConfig().getTempDirectory());
@@ -411,7 +423,7 @@ component {
 		local.remote=dependency[1].jar;
 		local.jar=getArtifactDirectory()&listLast(remote,'/');
 		
-		if(!fileExists(jar)) fileCopy(remote,jar);
+		if(!fileExists(jar)) _fileCopy(remote,jar);
 		
 		return jar;
 	}
@@ -514,62 +526,69 @@ component {
 		if(!fileExists(war)  || fileSize(war)<30000000) { // 70479555 size of a average war
 			if(fileExists(war)) fileDelete(war);
 			try {
-				// temp directory
-				local.temp=getTempDir();
+				try {
+					// temp directory
+					local.temp=getTempDir();
 
-				// extension directory
-				local.extDir=("build/extensions/");
-				if(!directoryExists(extDir))directoryCreate(extDir);
+					// extension directory
+					local.extDir=("build/extensions/");
+					if(!directoryExists(extDir))directoryCreate(extDir);
 
-				// common directory
-				local.commonDir=ExpandPath("build/common/");
-				if(!directoryExists(commonDir))directoryCreate(commonDir);
+					// common directory
+					local.commonDir=ExpandPath("build/common/");
+					if(!directoryExists(commonDir))directoryCreate(commonDir);
 
-				// website directory
-				local.webDir=ExpandPath("build/website/");
-				if(!directoryExists(webDir))directoryCreate(webDir);
+					// website directory
+					local.webDir=ExpandPath("build/website/");
+					if(!directoryExists(webDir))directoryCreate(webDir);
 
-				// war directory
-				local.warDir=ExpandPath("build/war/");
-				if(!directoryExists(warDir))directoryCreate(warDir);
+					// war directory
+					local.warDir=ExpandPath("build/war/");
+					if(!directoryExists(warDir))directoryCreate(warDir);
 
-				// get the jars for that release
-				//local.jarsDir=temp&"jars";
-				//if(!directoryExists(jarsDir))directoryCreate(jarsDir);
-				//zip action="unzip" file="#getDependencies(version)#" destination=jarsDir;
-				
-				// let's zip it
-				zip action="zip" file=warTmp overwrite=true {
+					// get the jars for that release
+					//local.jarsDir=temp&"jars";
+					//if(!directoryExists(jarsDir))directoryCreate(jarsDir);
+					//zip action="unzip" file="#getDependencies(version)#" destination=jarsDir;
+					
+					// let's zip it
+					zip action="zip" file=warTmp overwrite=true {
 
-				// extensions to bundle
-					zipparam source=extDir filter="*.lex" prefix="WEB-INF/lucee-server/context/deploy";
-				// jars
-					// dependencies
-					// do not add jars zipparam source=jarsDir filter="*.jar" prefix="WEB-INF/lucee-server/bundles";
+					// extensions to bundle
+						zipparam source=extDir filter="*.lex" prefix="WEB-INF/lucee-server/context/deploy";
+					// jars
+						// dependencies
+						// do not add jars zipparam source=jarsDir filter="*.jar" prefix="WEB-INF/lucee-server/bundles";
 
-					// loader
-					zipparam source=getLoader(version) entrypath="WEB-INF/lib/lucee.jar";
+						// loader
+						zipparam source=getLoader(version) entrypath="WEB-INF/lib/lucee.jar";
 
-					// felix 
-					//zipparam source=getFelix(version) prefix="WEB-INF/lib/"; this is bundled with the lucee.jar
-	       
-				// common files
-					zipparam source=commonDir;
-				
-				// website files
-					zipparam source=webDir;
-				
-				// war files
-					zipparam source=warDir;
+						// felix 
+						//zipparam source=getFelix(version) prefix="WEB-INF/lib/"; this is bundled with the lucee.jar
+		       
+					// common files
+						zipparam source=commonDir;
+					
+					// website files
+						zipparam source=webDir;
+					
+					// war files
+						zipparam source=warDir;
 
+					}
 				}
+				finally {
+					if(directoryExists(temp))directoryDelete(temp,true);
+				}
+
+				// rename to permanent file
+				if(fileSize(warTmp)>30000000)fileMove(warTmp,war);
 			}
 			finally {
-				if(directoryExists(temp))directoryDelete(temp,true);
+				if(fileExists(warTmp)) fileDelete(warTmp);
 			}
 
-			// rename to permanent file
-			if(fileSize(warTmp)>30000000)fileMove(warTmp,war);
+
 		}
 
 		return war;
@@ -804,13 +823,12 @@ component {
 
 		local.base=repoURL&"/"&replace(group,'.','/',"all")&"/"&artifact&"/"&version;
 		
-
-		if(!isNull(application.detail[base]))
+		if(!isNull(application.detail[base]) && !isNull(application.detail[base].sources.pom.date))
 			return application.detail[base];
 
-
 		var file=getDetailFile(version);
-		if(fileExists(file)) {
+		
+		if(fileExists(file) && fileSize(file)>2) {
 			var data=deSerializeJson(fileRead(file));
 			application.detail[base]=data;
 			return data;
@@ -822,8 +840,8 @@ component {
 		http url=base&"/maven-metadata.xml" result="local.content" {
 			httpparam type="header" name="accept" value="application/json";
 		}
-		//throw base&"/maven-metadata.xml";
-		
+
+
 		// read the files names from xml
 		if(!isNull(content.status_code) &&  content.status_code==200) {
 			local.xml=xmlParse(content.fileContent);
@@ -838,24 +856,45 @@ component {
 			// date jar
 			try{
 				inc();
-				http method="head" url=base&"/"&artifact&"-"&version&".jar" result="local.t";
-				//throw (base&"/"&artifact&"-"&version&".jar ")&serialize(t);
+				var _url=base&"/"&artifact&"-"&version&".jar.md5";
+				http method="get" url=_url result="local.t";
 				if(!isNull(t.status_code) && t.status_code==200) {
 					local.sources.jar.src=base&"/"&artifact&"-"&version&".jar";
 					local.sources.jar.date=parseDateTime(t.responseheader['Last-Modified']);
 				}
+				// somtimes we struggle with https, why no clue
+				else if(findNoCase("https://",_url)==1) {
+					_url=replace(_url,"https://","http://");
+					http method="get" url=_url result="local.t";
+					if(!isNull(t.status_code) && t.status_code==200) {
+						local.sources.jar.src=base&"/"&artifact&"-"&version&".jar";
+						local.sources.jar.date=parseDateTime(t.responseheader['Last-Modified']);
+					}
+				}
+
 			}
 			catch(e){}
 			// date pom
 			try{
 				inc();
-				http method="head" url=base&"/"&artifact&"-"&version&".pom" result="local.t";
+				var _url=base&"/"&artifact&"-"&version&".pom.md5";
+				http method="get" url=_url result="local.t";
 				if(!isNull(t.status_code) && t.status_code==200) {
 					local.sources.pom.src=base&"/"&artifact&"-"&version&".pom";
 					local.sources.pom.date=parseDateTime(t.responseheader['Last-Modified']);
 				}
+				// somtimes we struggle with https, why no clue
+				else if(findNoCase("https://",_url)==1) {
+					_url=replace(_url,"https://","http://");
+					http method="get" url=_url result="local.t";
+					if(!isNull(t.status_code) && t.status_code==200) {
+						local.sources.pom.src=base&"/"&artifact&"-"&version&".pom";
+						local.sources.pom.date=parseDateTime(t.responseheader['Last-Modified']);
+					}
+				}
 			}
 			catch(e){}
+		
 		}
 
 		fileWrite(file,SerializeJson(sources));
@@ -885,6 +924,29 @@ component {
 	    var file=listLast(path,'\/');
 	    directory filter=file name="local.res" directory=dir action="list";
 	    return res.recordcount==1?res.size:0;
+	}
+
+	private function _fileCopy(src,trg) {
+			
+		if(isSimpleValue(src) && findNoCase("http",src)==1) {
+			// we do this because of 302 the function cannot handle
+			http url=src result="local.res";
+			if(isNull(res.status_code) || res.status_code!=200) {
+				if(findNoCase("https://",src)) {
+					src=replaceNoCase(src,"https://","http://");
+					http url=src result="local.res";
+				}
+
+			}
+			if(isNull(res.status_code) || res.status_code!=200) {
+				if(structKeyExists(res,"status_code")) local.sc=":"&res.status_code;
+				else local.sc="";
+				throw src&sc;
+			}
+
+			fileWrite(trg,res.filecontent);
+		}
+		else fileCopy(src,trg);
 	}
 
 }

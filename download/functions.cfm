@@ -60,9 +60,11 @@ lang.installer.lin32="Linux (32b)";
 	function toVersionSortable(required string version){
 		local.arr=listToArray(arguments.version,'.');
 		
-		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
+		if(arr.len()>4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
 			throw "version number ["&arguments.version&"] is invalid";
 		}
+		if(arr.len()==3) arrayAppend(arr,0); 
+		if(arr.len()==3) arrayAppend(arr,0); 
 		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
 
 		// qualifier has an appendix? (BETA,SNAPSHOT)
@@ -369,6 +371,7 @@ lang.installer.lin32="Linux (32b)";
 					local.to=qry.version[1];
 					local.from=qry.version[qry.recordcount];
 					local.uri=snapshots&"/rest/update/provider/changelog/"&from&"/"&to;
+					if(!isNull(url.abcd))throw uri;
 					http url=uri result="local.http";
 					_http=getDirectoryFromPath(getCurrentTemplatePath())&"http.ser";
 					if(!isNull(http.status_code) && http.status_code==200) {
@@ -526,7 +529,7 @@ direct links
 	}
 	
 	function toCDN(_url) {
-		if(isDefined("url.doCDN") && !url.doCDN) return _url;
+		if(true || isDefined("url.doCDN") && !url.doCDN) return _url;
 
 		_url=replace(_url,'lucee.viviotech.net','cdn.lucee.org');
 		_url=replace(_url,'release.lucee.org','cdn.lucee.org');

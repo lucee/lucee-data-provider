@@ -165,6 +165,7 @@
 			boolean allowRedirect=false restargsource="url")
 		httpmethod="GET" restpath="loader/{version}" {
 
+
 		local.mr=new MavenRepo();
 		
 		// redirect to maven source
@@ -431,7 +432,7 @@
 
 		// download from Maven if we have a .json file
 		if(len(path)==0 && !isNull(data.jar)) {
-			fileCopy(data.jar,orgPath);
+			_fileCopy(data.jar,orgPath);
 			path=orgPath;
 		}
 
@@ -479,7 +480,7 @@
 					local.fff="";
 					loop query=jars {
 						if(!FileExists(variables.jarDirectory&jars.name)) {
-							fileCopy(jars.directory&jars.name,variables.jarDirectory&jars.name);
+							_fileCopy(jars.directory&jars.name,variables.jarDirectory&jars.name);
 							found=true;
 						}
 						if(structKeyExists(variables.extMappings,arguments.bundleName)) {
@@ -489,7 +490,7 @@
 							fff&=jars.name&":"&(len(jars.name)>len(map.jar))&":"&left(jars.name,len(map.jar))&" :: "&jars.name&">"&map.jar&";";
 							if(len(jars.name)>len(map.jar) && left(jars.name,len(map.jar))==map.jar && !FileExists(variables.jarDirectory&trgName)) {
 								if(isDefined("url.xc11")) throw jars.directory&jars.name&" -> "&variables.jarDirectory&trgName;
-								fileCopy(jars.directory&jars.name,variables.jarDirectory&trgName);
+								_fileCopy(jars.directory&jars.name,variables.jarDirectory&trgName);
 								found=true;
 							}
 						}
@@ -563,7 +564,7 @@
 					return;
 				}
 				else {
-					fileCopy(redirectURL,orgPath);
+					_fileCopy(redirectURL,orgPath);
 					filewrite(jsonPath,serialize({"jar":redirectURL,"local":path}));
 					
 					file action="readBinary" file="#orgPath#" variable="local.bin";
@@ -1080,10 +1081,10 @@
 
 		if(isNull(application.releaseNotesData)) application.releaseNotesData={};
 		var coll=application.releaseNotesData;
-			
-		local.key=versionFrom&":"&versionTo;
+		
+		local.key=versionFrom&"|"&versionTo;
 		//if(!isNull(coll[key].data) && DateDiff('n',coll[key].date,now())<60)
-		if(!isNull(coll[key].data))
+		if(!isNull(coll[key].data) && isNull(url.abcd))
 			return coll[key].data;
 
 		local.vFrom=toVersion(arguments.versionFrom);
@@ -1098,21 +1099,29 @@
 		// multiple versions
 		local.res=structNew("linked");
 		local.versionInfo=GetVersionInfoFromJira();
+		if(!isNull(url.abcd)) throw serializeJson(versionInfo);
 		
+		local.arr=[];
+		local.fines=[];
 		loop struct=versionInfo index="local.k" item="local.item" { 
-			local.v=toVersion(item.name).sortable;
-			// sct.sortable
-
+			try {
+				local.v=toVersion(item.name).sortable;
+			}
+			catch(e) {
+				continue;
+			}
 			if(v >= vFrom.sortable && v <= vTo.sortable) {
 				if(simple) _getVersionReleaseNotes(item,res);
 				else res[item.name]=_getVersionReleaseNotes(item);
 			}
 		}
+
 		application.releaseNotesData[key]={data:res,date:now()};
 		return application.releaseNotesData[key].data;
 	}
 
 	private struct function _getVersionReleaseNotes( versionInfo ,struct fillHere=structNew("linked")) {
+		if(!isNull(url.abcd)) throw serializeJson(versionInfo);
 		if(versionInfo.id) {
 			if(isNull(application.releaseNotesItem)) 
 				application.releaseNotesItem={};
@@ -1159,6 +1168,7 @@
 				return application.releaseNotesItem[versionInfo.id].data;
 			}
 			catch ( ex ) {
+				throw SerializeJSON(ex);
 				rethrow;
 			}
 		}
@@ -1185,10 +1195,12 @@
 	* So nobody has to wait that it is copied over
 	*/
 	private function fromS3(path,name,async=true) {
+		
 		// if exist we redirect to it
 			if(!isNull(url.show)) throw (!isNull(application.exists[name]) && application.exists[name])&":"&fileExists(variables.s3Root&name)&"->"&(variables.s3Root&name);
 
-			if((!isNull(application.exists[name]) && application.exists[name]) || fileExists(variables.s3Root&name)) {
+			var hasDef=(!isNull(application.exists[name]) && application.exists[name]);
+			if(hasDef || fileExists(variables.s3Root&name)) {
 				application.exists[name]=true;
 				header statuscode="302" statustext="Found";
 				header name="Location" value=variables.cdnURL&name;
@@ -1200,8 +1212,8 @@
 				if(async && isNull(url.show)) {
 					thread src=path trg=variables.s3Root&name {
 						lock timeout=1000 name=src {
-							if(!fileExists(trg)) // we do this because it was created by a thread blocking this thread
-								fileCopy(src,trg);
+							if(!fileExists(trg) && fileSize(src)>100000) // we do this because it was created by a thread blocking this thread
+								_fileCopy(src,trg);
 						}
 					}
 				}
@@ -1209,14 +1221,41 @@
 					var src=path;
 					var trg=variables.s3Root&name;
 					lock timeout=1000 name=src {
-						if(!fileExists(trg)) {// we do this because it was created by a thread blocking this thread
-							fileCopy(src,trg);
+						if(!fileExists(trg) && fileSize(src)>100000) {// we do this because it was created by a thread blocking this thread
+							_fileCopy(src,trg);
 							if(!isNull(url.show)) throw "fileExists: "&fileExists(src)&" + "&fileExists(trg);
 						}
 					}
 				}	
 			}
 			return false;
+	}
+
+	private function _fileCopy(src,trg) {
+		if(isSimpleValue(src) && findNoCase("http",src)==1) {
+			// we do this because of 302 the function cannot handle
+			http url=src result="local.res";
+			if(isNull(res.statuscode) || res.statuscode!=200) {
+				if(findNoCase("https://",src)) {
+					src=replaceNoCase(src,"https://","http://");
+					http url=src result="local.res";
+				}
+
+			}
+			//throw src&":"&res.statuscode&":"&len(res.filecontent);
+			if(isNull(res.statuscode) || res.statuscode!=200) throw src&":"&res.statuscode;
+			if(len(res.filecontent)<1000) throw "file [#src#] is to small (#len(res.filecontent)#)";
+			fileWrite(trg,res.filecontent);
+		}
+		else fileCopy(src,trg);
+	}
+
+
+	private function fileSize(path) {
+	    var dir=getDirectoryFromPath(path);
+	    var file=listLast(path,'\/');
+	    directory filter=file name="local.res" directory=dir action="list";
+	    return res.recordcount==1?res.size:0;
 	}
 
 }
