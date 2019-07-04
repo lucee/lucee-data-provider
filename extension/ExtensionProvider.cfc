@@ -8,7 +8,7 @@
 	application._extensionLast=0;
 
 	variables.columnList='id,version,versionSortable,name,description,image,category,author,created,releaseType,minLoaderVersion,minCoreVersion'
-			&',price,currency,disableFull,trial,older,promotionLevel,promotionText';
+			&',price,currency,disableFull,trial,older,promotionLevel,promotionText,projectUrl,sourceUrl,documentionUrl';
 
 	private function init() {
 		
