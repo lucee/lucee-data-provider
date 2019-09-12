@@ -633,7 +633,8 @@ component {
 				}
 
 				// create the json
-				var v=reReplace( arguments.version, '([0-9]*\.[0-9]*\.[0-9]*)(\.)([0-9]*)', '\1+\3' );
+				// Turn 1.2.3.4 into 1.2.3+4 and 1.2.3.4-rc into 1.2.3-rc+4
+				var v=reReplace( arguments.version, '([0-9]*\.[0-9]*\.[0-9]*)(\.)([0-9]*)(-.*)?', '\1\4+\3' );
 				local.json=dir&"box.json";
 				fileWrite(json,
 '{
