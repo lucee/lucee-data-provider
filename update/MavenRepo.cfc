@@ -602,7 +602,7 @@ component {
 	public string function getForgeBox(required string version, boolean light=false) {
 		local.dir=getArtifactDirectory();
 		local.zip=dir&"forgebox#( light ? '-light' : '' )#-"&version&".zip";
-		
+
 		if(!fileExists(zip)) {
 
 			local.zipTmp=dir&"forgebox#( light ? '-light' : '' )#-"&version&"-temp-"&createUniqueId()&".zip";
@@ -688,61 +688,79 @@ component {
 
 		// collect the size of the index=
 		infoURL=convertPattern(listPattern,group,artifact,1,1);
+		var update=false;
 		if(!structKeyExists(application,"info") || !structKeyExists(application.info,infoURL)) {
 			inc();
 			http url=infoURL result="local.res" {
 				httpparam type="header" name="accept" value="application/json";
 			}
-			directoryDelete(dir,true);
-			directoryCreate(dir);
 			info=deserializeJSON(res.fileContent);
+
+			var fi=dir&"info.json";
+			if(!fileExists(fi) || fileRead(fi)!=info.totalCount) update=true;
+
+
+			//directoryDelete(dir,true);
+			//directoryCreate(dir);
+			fileWrite(fi,info.totalCount);
 			application.info[infoURL]=info;
 		}
 		else info=application.info[infoURL];
+		
 
-		data=[];
-		repos=structNew("linked");
 		from=1;
 		max=200;
 		count=0;
 		last=false;
-		e=0;n=0;
+		
+		// files
+		var files=[];
+		var cnt=0
 		while(true) {
-
+			if(cnt++>100) break;
 			to=from+max;
 			if(to>=info.totalCount) {
 				to=info.totalCount;
 				last=true;
 			}
 			file=dir&group&"-"&artifact&"-"&from&"-"&to&".json";
-			
+			arrayPrepend(files,file);
+			if(last) break;
+			from=to;
+			if(count++>1000) throw "something went wrong!";
+		}
+
+
+		data=[];
+		repos=structNew("linked");
+		
+		loop array=files item="local.file" {
+
 			// do we have locally?
-			if(fileExists(file)) {
+			if(!update && fileExists(file)) {
 				raw=evaluate(fileRead(file));
-				e++;
 			}
 			else {
-				n++;
 				listURL=convertPattern(listPattern,group,artifact,from,max);
 				inc();
 				http url=listURL result="local.res" {
 					httpparam type="header" name="accept" value="application/json";
 				}
 				raw=deserializeJSON(res.fileContent);
-				fileWrite(file,res.fileContent);
+				
+				var existing="";
+				if(fileExists(file) && fileRead(file)==res.fileContent) {
+					update=false;
+				}
+				else fileWrite(file,res.fileContent);
 			}
 			extractData(repos,data,raw,dir,type,extended);
- 			from=to;
-
-
-			if(last) break;
-			if(count++>1000) throw "something went wrong!";
 		}
 		arraySort(data,function(l,r) {
 			return compare(l.vs,r.vs);
 		});
 
-		return data;//{data:data,repos:repos};
+		return data;
 	}
 
 
