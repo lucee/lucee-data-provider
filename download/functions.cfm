@@ -11,12 +11,12 @@ if(isNull(cookie.showAll_releases))cookie.showAll_releases=false;
 
 cacheLiveSpanInMinutes=5;
 extcacheLiveSpanInMinutes=1000;
-snapshots="http://snapshot.lucee.org";
+snapshots="https://release.lucee.org";
 _url={
-	releases:"http://release.lucee.org"
-	,abc:"http://release.lucee.org"
-	,beta:"http://release.lucee.org"
-	,rc:"http://release.lucee.org"
+	releases:"https://release.lucee.org"
+	,abc:"https://release.lucee.org"
+	,beta:"https://release.lucee.org"
+	,rc:"https://release.lucee.org"
 	,snapshots:snapshots
 };
 
@@ -26,7 +26,7 @@ UPDATE_PROVIDER="http://update.lucee.org/rest/update/provider/list?extended=true
 EXTENSION_PROVIDER="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=release";
 EXTENSION_PROVIDER_ABC="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=abc";
 EXTENSION_PROVIDER_SNAPSHOT="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=snapshot";
-EXTENSION_DOWNLOAD="http://extension.lucee.org/rest/extension/provider/{type}/{id}";
+EXTENSION_DOWNLOAD="https://extension.lucee.org/rest/extension/provider/{type}/{id}";
 
 // texts
 
@@ -302,6 +302,14 @@ lang.installer.lin32="Linux (32b)";
 				var qry=queryNew('id,groupId,artifactId,version,vs,type,jarDate,s3War,s3Express,s3Light,s3Core,state,t');
 				for(var r=arrayLen(arr);r>=1;r--) {
 					row=arr[r];
+					
+					var date="";
+					if(!isNull(row.date)) date=parseDateTime(row.date);
+					else if(!isNull(row.sources.jar.date)) date=parseDateTime(row.sources.jar.date);
+					else if(!isNull(row.sources.pom.date)) date=parseDateTime(row.sources.pom.date);
+
+					if(!isDate(date)) continue;
+
 					//dump(row.sources);abort;
 					qr=queryAddRow(qry);
 					querySetCell(qry,"groupId",row.groupId,qr);
@@ -337,13 +345,7 @@ lang.installer.lin32="Linux (32b)";
 					// state
 					
 
-					//querySetCell(qry,"versionNoAppendix",toVersionWithoutAppendix(row.version));
-					//querySetCell(qry,"jarSrc",row.sources.jar.src,qr);
-					var date="";
-					if(!isNull(row.date)) date=parseDateTime(row.date);
-					else if(!isNull(row.sources.jar.date)) date=parseDateTime(row.sources.jar.date);
-					else if(!isNull(row.sources.pom.date)) date=parseDateTime(row.sources.pom.date);
-
+					
 					querySetCell(qry,"jarDate",date,qr);
 					querySetCell(qry,"id",hash(row.version&":"&date),qr);
 

@@ -443,7 +443,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 										</cfif>
 										<b><h2>#singular[_type]#</h2> <!--- #ldownloads[type].versionNoAppendix#</b> (#lsDateFormat(ldownloads[type].jarDate)#) --->
 										<select onchange="change('#_type#',this, 'core')" style="color:7f8c8d;font-style:normal;" id="lCore" class="form-control" <!--- class="custom-select" --->>
-											<cfloop query="#adownloads#"><cfif adownloads.t==_type><option <cfif url[_type]==adownloads.id><cfset rows[_type]=adownloads.currentrow> selected="selected"</cfif> value="#adownloads.id#"><!---
+											<cfloop query="#adownloads#"><cfif adownloads.t==_type && isDate(adownloads.jarDate)><option <cfif url[_type]==adownloads.id><cfset rows[_type]=adownloads.currentrow> selected="selected"</cfif> value="#adownloads.id#"><!---
 
 												--->#adownloads.versionNoAppendix# (#lsDateFormat(adownloads.jarDate)#)</option></cfif></cfloop>
 
