@@ -369,14 +369,14 @@
 	* function to download Lucee as a forgebox bundle
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
 	*/
-	remote function downloadForgebox(required string version restargsource="Path",string ioid="" restargsource="url")
+	remote function downloadForgebox(required string version restargsource="Path",string ioid="" restargsource="url", boolean light=false restargsource="url")
 		httpmethod="GET" restpath="forgebox/{version}" {
 		
 		setting requesttimeout="1000";
 		//local.version=toVersion(arguments.version);
 		local.mr=new MavenRepo();
 		try{
-		local.path=mr.getForgeBox(version);
+		local.path=mr.getForgeBox(version,light);
 		}
 		catch(e){
 			return {
@@ -386,7 +386,7 @@
 		}
 
 		file action="readBinary" file="#path#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=cf-engine-#version#.zip";
+		header name="Content-disposition" value="attachment;filename=cf-engine#( light ? '-light' : '' )#-#version#.zip";
         content variable="#bin#" type="application/zip";
 	}
 

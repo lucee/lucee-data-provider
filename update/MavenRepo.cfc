@@ -599,13 +599,13 @@ component {
 	* returns local location for the core of a specific version (get downloaded if necessary)
 	* @version version to get the express for 
 	*/
-	public string function getForgeBox(required string version) {
+	public string function getForgeBox(required string version, boolean light=false) {
 		local.dir=getArtifactDirectory();
-		local.zip=dir&"forgebox-"&version&".zip";
+		local.zip=dir&"forgebox#( light ? '-light' : '' )#-"&version&".zip";
 		
 		if(!fileExists(zip)) {
 
-			local.zipTmp=dir&"forgebox-"&version&"-temp-"&createUniqueId()&".zip";
+			local.zipTmp=dir&"forgebox#( light ? '-light' : '' )#-"&version&"-temp-"&createUniqueId()&".zip";
 
 			try {
 				// temp directory
@@ -624,10 +624,10 @@ component {
 				if(!directoryExists(warDir))directoryCreate(warDir);
 
 				// create the war
-				local.war=dir&"engine.war";
+				local.war=temp&"engine.war";
 				zip action="zip" file=war overwrite=true {
 					zipparam source=extDir filter="*.lex" prefix="WEB-INF/lucee-server/context/deploy";
-					zipparam source=getLoader(version) entrypath="WEB-INF/lib/lucee.jar";
+					zipparam source=( light ? getLightLoader(version) : getLoader(version) ) entrypath="WEB-INF/lib/lucee#( light ? '-light' : '' )#.jar";
 					zipparam source=commonDir;
 					zipparam source=warDir;
 				}
@@ -635,15 +635,15 @@ component {
 				// create the json
 				// Turn 1.2.3.4 into 1.2.3+4 and 1.2.3.4-rc into 1.2.3-rc+4
 				var v=reReplace( arguments.version, '([0-9]*\.[0-9]*\.[0-9]*)(\.)([0-9]*)(-.*)?', '\1\4+\3' );
-				local.json=dir&"box.json";
+				local.json=temp&"box.json";
 				fileWrite(json,
 '{
-    "name":"Lucee CF Engine",
+    "name":"Lucee #( light ? 'Light' : '' )# CF Engine",
     "version":"#v#",
     "createPackageDirectory":false,
-    "location":"https://cdn.lucee.org/rest/update/provider/forgebox/#arguments.version#",
-    "slug":"lucee",
-    "shortDescription":"Lucee WAR engine for CommandBox servers.",
+    "location":"https://cdn.lucee.org/rest/update/provider/forgebox/#arguments.version##( light ? '?light=true' : '' )#",
+    "slug":"lucee#( light ? '-light' : '' )#",
+    "shortDescription":"Lucee #( light ? 'Light' : '' )# WAR engine for CommandBox servers.",
     "type":"cf-engines"
 }');
 
