@@ -741,7 +741,7 @@ component {
 				raw=evaluate(fileRead(file));
 			}
 			else {
-				listURL=convertPattern(listPattern,group,artifact,from,max);
+				listURL=convertPattern(listPattern,group,artifact,val( file.listLast( '/' ).replaceNoCase( 'org.lucee-lucee-', '' ) ),max);
 				inc();
 				http url=listURL result="local.res" {
 					httpparam type="header" name="accept" value="application/json";
