@@ -56,7 +56,6 @@ component {
 			
 			
 			// find the right repo
-			//dump(id);
 			// TODO store physically
 			if(!isNull(application.repoMatch[id&":"&extended])) {
 				local.detail=application.repoMatch[id&":"&extended];
@@ -237,8 +236,12 @@ component {
 		var data=get(latest.version,true);
 
 		local.art=getArtifactDirectory();
-		local.diff=DateDiff("n",data.sources.pom.date,now());
-		
+		try{
+			local.diff=DateDiff("n",data.sources.pom.date,now());
+		}
+		catch(eee){
+			diff=100;
+		}
 		if(diff>10) return;
 
 		// flush
@@ -698,8 +701,7 @@ component {
 
 			var fi=dir&"info.json";
 			if(!fileExists(fi) || fileRead(fi)!=info.totalCount) update=true;
-
-
+			
 			//directoryDelete(dir,true);
 			//directoryCreate(dir);
 			fileWrite(fi,info.totalCount);
@@ -724,42 +726,38 @@ component {
 				last=true;
 			}
 			file=dir&group&"-"&artifact&"-"&from&"-"&to&".json";
-			arrayPrepend(files,file);
+			arrayPrepend(files,{file:file,from:from,max:max});
 			if(last) break;
 			from=to;
 			if(count++>1000) throw "something went wrong!";
 		}
-
-
 		data=[];
-		repos=structNew("linked");
 		
+		repos=structNew("linked");
 		loop array=files item="local.file" {
 
 			// do we have locally?
-			if(!update && fileExists(file)) {
-				raw=evaluate(fileRead(file));
+			if(!update && fileExists(file.file)) {
+				raw=evaluate(fileRead(file.file));
 			}
 			else {
-				listURL=convertPattern(listPattern,group,artifact,from,max);
+				listURL=convertPattern(listPattern,group,artifact,file.from,max);
 				inc();
 				http url=listURL result="local.res" {
 					httpparam type="header" name="accept" value="application/json";
 				}
 				raw=deserializeJSON(res.fileContent);
-				
 				var existing="";
-				if(fileExists(file) && fileRead(file)==res.fileContent) {
+				if(fileExists(file.file) && fileRead(file.file)==res.fileContent) {
 					update=false;
 				}
-				else fileWrite(file,res.fileContent);
+				else fileWrite(file.file,res.fileContent);
 			}
 			extractData(repos,data,raw,dir,type,extended);
 		}
 		arraySort(data,function(l,r) {
 			return compare(l.vs,r.vs);
 		});
-
 		return data;
 	}
 
@@ -812,7 +810,6 @@ component {
 			sct.artifactId=entry.artifactId;
 			sct.version=entry.version;
 			sct.vs=toVersionSortable(entry.version);
-			//sct.repositoryId=ah.repositoryId;
 			sct.repository=repos[ah.repositoryId];
 			if(extended) {
 				local.sources=getSources(sct.repository,sct.version);
@@ -823,9 +820,7 @@ component {
 			sct.g=g();
 
 			arrayAppend(data,sct);
-			//data[sct.vs]=sct;
 		}
-		
 	}
 
 	public string function getDetailFile(version) {
@@ -842,25 +837,23 @@ component {
 
 		local.base=repoURL&"/"&replace(group,'.','/',"all")&"/"&artifact&"/"&version;
 		
-		if(!isNull(application.detail[base]) && !isNull(application.detail[base].sources.pom.date))
+		if(!isNull(application.detail[base]) && !isNull(application.detail[base].sources.pom.date) && !isDefined("url.abc"))
 			return application.detail[base];
 
 		var file=getDetailFile(version);
-		
-		if(fileExists(file) && fileSize(file)>2) {
+
+		if(fileExists(file) && fileSize(file)>10) {
 			var data=deSerializeJson(fileRead(file));
 			application.detail[base]=data;
 			return data;
 		}
-
 
 		local.sources={};
 		inc();
 		http url=base&"/maven-metadata.xml" result="local.content" {
 			httpparam type="header" name="accept" value="application/json";
 		}
-
-
+		
 		// read the files names from xml
 		if(!isNull(content.status_code) &&  content.status_code==200) {
 			local.xml=xmlParse(content.fileContent);
@@ -877,6 +870,7 @@ component {
 				inc();
 				var _url=base&"/"&artifact&"-"&version&".jar.md5";
 				http method="get" url=_url result="local.t";
+
 				if(!isNull(t.status_code) && t.status_code==200) {
 					local.sources.jar.src=base&"/"&artifact&"-"&version&".jar";
 					local.sources.jar.date=parseDateTime(t.responseheader['Last-Modified']);
@@ -913,16 +907,10 @@ component {
 				}
 			}
 			catch(e){}
-		
 		}
-
+		
 		fileWrite(file,SerializeJson(sources));
-			
 		application.detail[base]=sources;
-		/* cache 
-		if(structCount(sources))fileWrite(file,serializeJson(sources));
-		*/
-
 		return sources;
 	}
 

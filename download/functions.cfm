@@ -299,7 +299,7 @@ lang.installer.lin32="Linux (32b)";
 				
 				http url=UPDATE_PROVIDER result="local.res";
 				var arr=deserializeJSON(res.fileContent);
-				var qry=queryNew('id,groupId,artifactId,version,vs,type,jarDate,s3War,s3Express,s3Light,s3Core,state,t');
+				var qry=queryNew('id,groupId,artifactId,version,vs,type,jarDate,src,s3War,s3Express,s3Light,s3Core,state,t');
 				for(var r=arrayLen(arr);r>=1;r--) {
 					row=arr[r];
 					
@@ -317,6 +317,7 @@ lang.installer.lin32="Linux (32b)";
 					querySetCell(qry,"version",row.version,qr);
 					querySetCell(qry,"vs",row.vs,qr);
 					querySetCell(qry,"type",listLast(row.repository,'/'),qr);
+					querySetCell(qry,"src",row.sources.jar.src?:"",qr);
 					querySetCell(qry,"s3War",row.s3War,qr);
 					querySetCell(qry,"s3Express",row.s3Express,qr);
 					querySetCell(qry,"s3Light",row.s3Light,qr);

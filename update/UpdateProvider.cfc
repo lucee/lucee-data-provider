@@ -840,7 +840,7 @@
 			return mr.get(arguments.version,arguments.extended);
 		}
 		catch(e){
-			return {"type":"error","message":e.getMessage()};
+			return {"type":"error","message":e.message};
 		}
  
 	}
@@ -888,19 +888,23 @@
 	*/
 	remote function buildLatest()
 		httpmethod="GET" restpath="buildLatest" {
-		
-		setting requesttimeout="10000";
-		
-		local.mr=new MavenRepo();
-		mr.flushAndBuild();
+		try{
+			setting requesttimeout="10000";
+			
+			local.mr=new MavenRepo();
+			mr.flushAndBuild();
 
-		_buildLatest("snapshots",mr);
-		_buildLatest("releases",mr);
+			_buildLatest("snapshots",mr);
+			_buildLatest("releases",mr);
 
-		//application.exists={};
-		application.releaseNotesItem={};
-		application.releaseNotesData={};
-		
+			//application.exists={};
+			application.releaseNotesItem={};
+			application.releaseNotesData={};
+		}
+		catch(e) {
+			if(!isDefined("url.abc")) rethrow;
+			return e;
+		}
 		return "done";
 	}
 
