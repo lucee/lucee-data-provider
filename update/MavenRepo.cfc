@@ -1,7 +1,7 @@
 component {
 	variables.listPattern=	"https://oss.sonatype.org/service/local/lucene/search";
 	//defaultRepo="https://oss.sonatype.org/content/repositories/releases";
-	variables.defaultRepo="http://central.maven.org/maven2";
+	variables.defaultRepo="https://repo1.maven.org/maven2";
 	variables.group="org.lucee";
 	variables.artifact="lucee";
 	variables.NL="
