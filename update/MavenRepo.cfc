@@ -855,6 +855,7 @@ component {
 		}
 		
 		// read the files names from xml
+		// patch because that version does not work on the server for unknow reason
 		if(!isNull(content.status_code) &&  content.status_code==200) {
 			local.xml=xmlParse(content.fileContent);
 			loop array=xml.XMLRoot.versioning.snapshotVersions.xmlChildren item="node" {
@@ -862,6 +863,13 @@ component {
 				local.src=base&"/"&artifact&"-"&node.value.xmlText&"."&node.extension.xmlText;
 				sources[node.extension.xmlText]={date:date,src:src};
 			}
+		}
+		// TODO patch because on the server ONLY that version does not work (unauthicated)
+		else if(version=="5.3.3.62") {
+			local.sources.jar.src="https://oss.sonatype.org/content/repositories/releases/org/lucee/lucee/5.3.3.62/lucee-5.3.3.62.jar";
+			local.sources.jar.date=parseDateTime("September, 09 2019 11:27:17 +0200");
+			local.sources.pom.src="https://oss.sonatype.org/content/repositories/releases/org/lucee/lucee/5.3.3.62/lucee-5.3.3.62.pom";
+			local.sources.pom.date=parseDateTime("September, 09 2019 11:27:18 +0200");
 		}
 		// if there is no meta file simply assume
 		else {
