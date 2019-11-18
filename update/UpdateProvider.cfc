@@ -507,7 +507,7 @@
 		}
 		if(len(path)==0 || !FileExists(path)) {
 			// last try, when the pattrn of the maven name matches the pattern of the osgi name we could be lucky
-			var mvnRep="http://central.maven.org/maven2";
+			var mvnRep="https://repo1.maven.org/maven2";
 			var repositories=[
 				mvnRep
 				,"https://raw.githubusercontent.com/lucee/mvn/master/releases"
