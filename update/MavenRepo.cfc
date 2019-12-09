@@ -835,6 +835,11 @@ component {
 		if(len(arguments.group)==0) arguments.group=variables.group;
 		if(len(arguments.artifact)==0) arguments.artifact=variables.artifact;
 
+		// 
+		if(repoURL=="https://oss.sonatype.org/content/repositories/releases") {
+			repoURL="https://repo1.maven.org/maven2/";
+		}
+
 		local.base=repoURL&"/"&replace(group,'.','/',"all")&"/"&artifact&"/"&version;
 		
 		if(!isNull(application.detail[base]) && !isNull(application.detail[base].sources.pom.date) && !isDefined("url.abc"))
@@ -844,8 +849,10 @@ component {
 
 		if(fileExists(file) && fileSize(file)>10) {
 			var data=deSerializeJson(fileRead(file));
-			application.detail[base]=data;
-			return data;
+			if(structCount(data)) {
+				application.detail[base]=data;
+				return data;
+			}
 		}
 
 		local.sources={};
@@ -866,9 +873,9 @@ component {
 		}
 		// TODO patch because on the server ONLY that version does not work (unauthicated)
 		else if(version=="5.3.3.62") {
-			local.sources.jar.src="https://oss.sonatype.org/content/repositories/releases/org/lucee/lucee/5.3.3.62/lucee-5.3.3.62.jar";
+			local.sources.jar.src="https://repo1.maven.org/maven2/org/lucee/lucee/5.3.3.62/lucee-5.3.3.62.jar";
 			local.sources.jar.date=parseDateTime("September, 09 2019 11:27:17 +0200");
-			local.sources.pom.src="https://oss.sonatype.org/content/repositories/releases/org/lucee/lucee/5.3.3.62/lucee-5.3.3.62.pom";
+			local.sources.pom.src="https://repo1.maven.org/maven2/org/lucee/lucee/5.3.3.62/lucee-5.3.3.62.pom";
 			local.sources.pom.date=parseDateTime("September, 09 2019 11:27:18 +0200");
 		}
 		// if there is no meta file simply assume

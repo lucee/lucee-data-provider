@@ -26,7 +26,12 @@
 		,'org.apache.tika.core':{'group':'org.apache.tika','artifact':'tika-core'}
 		,'org.apache.tika.parsers':{'group':'org.apache.tika','artifact':'tika-parsers'}
 		,'org.apache.commons.commons-text':{'group':'org.apache.commons','artifact':'commons-text'}
+		,'javax.mail.activation':{'group':'javax.mail','artifact':'mail'}
+		,'apache.http.components.client':{'group':'org.apache.httpcomponents','artifact':'httpclient'}
+		,'apache.http.components.mime':{'group':'org.apache.httpcomponents','artifact':'httpmime'}
+		,'apache.http.components.core':{'group':'org.apache.httpcomponents','artifact':'httcore'}
 	};
+
 
 	
 
@@ -39,7 +44,6 @@
 	};
 
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
-	variables.jarDirectory=variables.current&"bundles/";
 	variables.artDirectory=variables.current&"artifacts/";
 	variable.buildDirectory=variables.current&"builds/";
 	variables.extDirectory="/var/www/sites/extension/extension5/extensions/"; // TODO make more dynamic
@@ -395,11 +399,12 @@
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
 	*/
 	remote function downloadBundle(required string bundleName restargsource="Path", string bundleVersion restargsource="Path",
-		string ioid="" restargsource="url",boolean allowRedirect=false restargsource="url")
+		string ioid="" restargsource="url",boolean allowRedirect=true restargsource="url")
 		httpmethod="GET" restpath="download/{bundlename}/{bundleversion}" {
 		
 		if(arguments.bundleVersion=='latest') {
-			return downloadLatestBundle(arguments.bundleName);
+			arguments.bundleVersion= getLatestBundle(arguments.bundleName);
+
 		}
 
 		// request for a core
@@ -417,6 +422,10 @@
 
 		// redirect to maven repo
 		if(arguments.allowRedirect && !isNull(data.jar)) {
+			var jarPath=variables.artDirectory&arguments.bundleName&"-"&arguments.bundleVersion&".jar";
+			if(fileExists(jarPath)) {
+				fileDelete(jarPath);
+			}
 			header statuscode="302" statustext="Found";
 			header name="Location" value=data.jar;
 			return;
@@ -425,10 +434,7 @@
 		// first of all we look at the artifacts directory (lucee dependecies download automatically)
 		var orgName=arguments.bundleName&"-"&arguments.bundleVersion&".jar";
 		var orgPath=variables.artDirectory&orgName;
-
 		var path=checkForJar(arguments.bundleName,arguments.bundleVersion);
-
-
 
 		// download from Maven if we have a .json file
 		if(len(path)==0 && !isNull(data.jar)) {
@@ -479,8 +485,8 @@
 					directory filter="*.jar" name="local.jars" action="list" directory=dir;
 					local.fff="";
 					loop query=jars {
-						if(!FileExists(variables.jarDirectory&jars.name)) {
-							_fileCopy(jars.directory&jars.name,variables.jarDirectory&jars.name);
+						if(!FileExists(variables.artDirectory&jars.name)) {
+							_fileCopy(jars.directory&jars.name,variables.artDirectory&jars.name);
 							found=true;
 						}
 						if(structKeyExists(variables.extMappings,arguments.bundleName)) {
@@ -488,35 +494,26 @@
 							var map=variables.extMappings[arguments.bundleName];
 							var trgName=arguments.bundleName&"-"&arguments.bundleVersion&".jar";
 							fff&=jars.name&":"&(len(jars.name)>len(map.jar))&":"&left(jars.name,len(map.jar))&" :: "&jars.name&">"&map.jar&";";
-							if(len(jars.name)>len(map.jar) && left(jars.name,len(map.jar))==map.jar && !FileExists(variables.jarDirectory&trgName)) {
-								if(isDefined("url.xc11")) throw jars.directory&jars.name&" -> "&variables.jarDirectory&trgName;
-								_fileCopy(jars.directory&jars.name,variables.jarDirectory&trgName);
+							if(len(jars.name)>len(map.jar) && left(jars.name,len(map.jar))==map.jar && !FileExists(variables.artDirectory&trgName)) {
+								_fileCopy(jars.directory&jars.name,variables.artDirectory&trgName);
 								found=true;
 							}
 						}
 					}
-					if(isDefined("url.xc20")) throw "->"&fff;
-			
 				}
 				
 			}
 			var path=checkForJar(arguments.bundleName,arguments.bundleVersion);
-			if(isDefined("url.xc2")) throw path&" "&fileExists(path);
-			
-
 		}
 		if(len(path)==0 || !FileExists(path)) {
 			// last try, when the pattrn of the maven name matches the pattern of the osgi name we could be lucky
-			var mvnRep="https://repo1.maven.org/maven2";
+			var mvnRep="http://repo1.maven.org/maven2";
 			var repositories=[
 				mvnRep
-				,"https://raw.githubusercontent.com/lucee/mvn/master/releases"
-				,"https://oss.sonatype.org/content/repositories/snapshots"
-				,"https://oss.sonatype.org/content/repositories/releases"
+				,"http://raw.githubusercontent.com/lucee/mvn/master/releases"
+				,"http://oss.sonatype.org/content/repositories/snapshots"
+				,"https://repo1.maven.org/maven2"
 			];
-
-			// /mysql/mysql-connector-java/5.1.44/mysql-connector-java-5.1.44.jar
-			// 'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
 
 			if(structKeyExists(variables.mavenMappings,arguments.bundleName)) {
 				var mvnId=variables.mavenMappings[arguments.bundleName];
@@ -531,14 +528,15 @@
 					&listLast(arguments.bundleName,'.')&"-"
 					&arguments.bundleVersion&".jar";
 			}
-			if(isDefined('url.xc60')) throw "-->"&uri;
 			loop array=repositories item="local.rep" {
-				if(fileExists(rep&uri)) {
+				http url=rep&uri result="local.tmp";
+				if(isNull(tmp.status_code)) tmp.status_code=404;
+				if(tmp.status_code>=200 && tmp.status_code<300) {
 					local.redirectURL=rep&uri;
 					break;
 				}
 			}
-
+			
 			// ok an other last try, when "org.lucee" we know more about the pattern
 			if(isNull(redirectURL) && left(arguments.bundleName,10)=='org.lucee.'){
 				var art1=mid(arguments.bundleName,11);
@@ -558,6 +556,11 @@
 
 				
 			if(!isNull(redirectURL)){
+				if(isDefined("url.xa1")) throw jsonPath&":"&redirectURL;
+				filewrite(
+					jsonPath,
+					serialize({"jar":redirectURL,"local":path}));
+
 				if(arguments.allowRedirect) {
 					header statuscode="302" statustext="Found";
 					header name="Location" value=redirectURL;
@@ -565,7 +568,6 @@
 				}
 				else {
 					_fileCopy(redirectURL,orgPath);
-					filewrite(jsonPath,serialize({"jar":redirectURL,"local":path}));
 					
 					file action="readBinary" file="#orgPath#" variable="local.bin";
 					header name="Content-disposition" value="attachment;filename=#orgName#";
@@ -592,43 +594,53 @@
 		}
 	}
 
-	private function downloadLatestBundle(required string bundleName) {
+	private function getLatestBundle(required string bundleName) {
 
 		// first we get all matching bundles
 		var file="";
 		//var str="";
-		loop list=variables.artDirectory&","&variables.jarDirectory item="local.dir" {
-			directory action="list" name="local.children" directory=dir filter="*.jar";
-			var bn1=arguments.bundleName&"-";
-			var bn2=replace(arguments.bundleName,'-','.','all')&"-";
-			var bn3=replace(arguments.bundleName,'.','-','all')&"-";
-			var lbn=len(bn1);
-			loop query=children {
-				if(left(children.name,lbn)==bn1 || left(children.name,lbn)==bn2 || left(children.name,lbn)==bn3) {
-					v=mid(children.name,lbn+1);
-					v=left(v,len(v)-4); // remove .jar
-					//str&="-"&v&isVersion(v);
-					if(isVersion(v)) {
+		local.dir=variables.artDirectory;
+		
+		directory action="list" name="local.children" directory=dir filter=function(path) {
+			var ext=listLast(arguments.path,'.');
+			return ext=='jar' || ext=='json';
+		};
+		var bn1=arguments.bundleName&"-";
+		var bn2=replace(arguments.bundleName,'-','.','all')&"-";
+		var bn3=replace(arguments.bundleName,'.','-','all')&"-";
+		var lbn=len(bn1);
+		loop query=children {
+			if(left(children.name,lbn)==bn1 || 
+				left(children.name,lbn)==bn2 || 
+				left(children.name,lbn)==bn3) {
 
-						var vs=toVersion(v);
-						if(!isStruct(file) || isNewer(vs,file.version)) {
-							file={
-								dir:dir
-								,filename:children.name
-								,name:left(children.name,lbn)
-								,version:vs
-							};
-						}
+		
+				v=mid(children.name,lbn+1);
+				v=left(v,len(v)- (right(v,4)==".jar"?4:5)); // remove .jar
+				//str&="-"&v&isVersion(v);
+				if(isVersion(v)) {
+
+					var vs=toVersion(v);
+					if(!isStruct(file) || isNewer(vs,file.version)) {
+						file={
+							dir:dir
+							,filename:children.name
+							,name:left(children.name,lbn)
+							,version:vs
+							,v:v
+						};
 					}
 				}
-
 			}
 		}
+		
 
 		if(isStruct(file)) {
-			file action="readBinary" file="#file.dir#/#file.filename#" variable="local.bin";
-			header name="Content-disposition" value="attachment;filename=#file.filename#";
-	        content variable="#bin#" type="application/zip"; 
+			return file.v;
+			//if(!isNull(url.test))throw ""&serialize(file);
+			//file action="readBinary" file="#file.dir#/#file.filename#" variable="local.bin";
+			//header name="Content-disposition" value="attachment;filename=#file.filename#";
+	        //content variable="#bin#" type="application/zip"; 
 		}
 		else {
 			var text="no jar available for bundle "&arguments.bundleName;
@@ -644,37 +656,29 @@
 		
 		var name=arguments.bundleName&"-"&arguments.bundleVersion&"."&ext;
 		if(isDefined("url.xc3"))throw name;
-		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
 		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
 
 		// try different name patterns
 		name=replace(arguments.bundleName,'.','-','all')&"-"&arguments.bundleVersion&".jar";
-		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
 		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
 		
 		name=arguments.bundleName&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
-		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
 		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
 		
 
 		name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
-		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
 		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
 		
 		name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".jar";
-		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
 		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
 		
 		name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
-		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
 		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
 		
 		name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".jar";
-		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
 		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
 		
 		name=replace(arguments.bundleName,'-','.','all')&"."&replace(arguments.bundleVersion,'-','.','all')&".jar";
-		if(FileExists(variables.jarDirectory&name)) return variables.jarDirectory&name;
 		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
 		
 		return "";
