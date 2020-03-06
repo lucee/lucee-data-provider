@@ -1,41 +1,151 @@
 
 <cfoutput>
 <cfscript>
+doS3={
+	express:true
+	,jar:true
+	,lco:true
+	,light:true
+	,war:true
+};
+
+listURL="https://release.lucee.org/rest/update/provider/list/";
+
+
+extcacheLiveSpanInMinutes=1000;
+
+EXTENSION_PROVIDER="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=release";
+EXTENSION_PROVIDER_ABC="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=abc";
+EXTENSION_PROVIDER_SNAPSHOT="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=snapshot";
+EXTENSION_DOWNLOAD="https://extension.lucee.org/rest/extension/provider/{type}/{id}";
+
+
+	function _getExtensions(required string type) localmode=true {
+		if(arguments.type=="snapshot") local.ep=EXTENSION_PROVIDER_SNAPSHOT;
+		else if(arguments.type=="abc") local.ep=EXTENSION_PROVIDER_ABC;
+		else local.ep=EXTENSION_PROVIDER;
+		//dump(type&"-"&ep);abort;
+
+		http url=ep result="http";
+		if(isNull(http.status_code) || http.status_code!=200) throw "could not connect to extension provider (#ep#)";
+		data=deSerializeJson(http.fileContent,false);
+		return data.extensions;
+	}
+
+	function getExtensions(required string type) localmode=true {
+		// get data from server
+		if(isNull(application['downloadExtensions_'&type].query) || !isNull(url.reset) || !isNull(url.resetExtension)){
+			application['downloadExtensions_'&type].query=local.downloads=_getExtensions(arguments.type);
+			application['downloadExtensions_'&type].age=now();
+		}
+		// get data from cache (application scope)
+		else {
+			local.downloads=application['downloadExtensions_'&type].query;
+			// update for the next user when older than 5 minutes
+			if(dateDiff("n",application['downloadExtensions_'&type].age,now())>=extcacheLiveSpanInMinutes) {
+				application['downloadExtensions_'&type].age=now();
+				thread {
+					application['downloadExtensions_'&type].query=_getExtensions(arguments.type);
+					systemOutput("done");
+				}
+			}
+		}
+		return downloads;
+	}
+
+
+function getVersions(flush) {
+	if(!structKeyExists(application,"extVer") || flush) {
+		http url=listURL&"?extended=true"&(flush?"&flush=true":"") result="local.res";
+		application.extVer= deserializeJson(res.fileContent);
+	}
+	return application.extVer;
+}
+function getDate(version,flush=false) {
+	if(flush || isNull(application.mavenDates[version])) {
+		local.res="";
+		try{
+			http url="https://release.lucee.org/rest/update/provider/getdate/"&version result="local.res";
+			var res= trim(deserializeJson(res.fileContent));
+			application.mavenDates[version]= lsDateFormat(parseDateTime(res));
+		}
+		catch(e) {}
+		if(len(res)==0) return "";
+		
+	}
+	return application.mavenDates[version]?:"";
+}
+
+function getInfo(version,flush=false) {
+	if(flush || isNull(application.mavenInfo[version])) {
+		local.res="";
+		try{
+			http url="https://release.lucee.org/rest/update/provider/info/"&version result="local.res";
+			var res= deserializeJson(res.fileContent);
+			application.mavenInfo[version]= res;
+		}
+		catch(e) {}
+		if(len(res)==0) return "";
+		
+	}
+	return application.mavenInfo[version]?:"";
+}
+
+function getChangelog(versionFrom,versionTo,flush=false) {
+	var id=versionFrom&"-"&versionTo;
+	if(flush || isNull(application.mavenChangeLog[id])) {
+		local.res="";
+		//try{
+			http url="https://release.lucee.org/rest/update/provider/changelog/"&versionFrom&"/"&versionTo result="local.res";
+			var res= deserializeJson(res.fileContent);
+			application.mavenChangeLog[id]= res;
+		//}catch(e) {}
+		if(len(res)==0) return "";
+		
+	}
+	return application.mavenChangeLog[id]?:"";
+}
+
+
+baseURL="https://release.lucee.org/rest/update/provider/";
+
+
+jarInfo='(Java ARchive, read more about <a target="_blank" href="https://en.wikipedia.org/wiki/JAR_(file_format)">here</a>)';
+lang.desc={
+	abc:"Beta and Release Candidates are a preview for upcoming versions and not ready for production environments."
+	,beta:"Beta are a preview for upcoming versions and not ready for production environments."
+	,rc:"Release Candidates are candidates to get ready for production environments."
+	,releases:"Releases are ready for production environments."
+	,snapshots:"Snapshots are generated automatically with every push to the repository. 
+	Snapshots can be unstable are NOT recommended for production environments."
+};
+
+lang.express="The Express version is an easy to setup version which does not need to be installed. Just extract the zip file onto your computer and without further installation you can start by executing the corresponding start file. This is especially useful if you would like to get to know Lucee or want to test your applications under Lucee. It is also useful for use as a development environment.";
+lang.war='Java Servlet engine Web ARchive';
+lang.core='The Lucee Core file, you can simply copy this to the "patches" folder of your existing Lucee installation.';
+lang.jar='The Lucee jar #jarInfo#, simply copy that file to the lib (classpath) folder of your servlet engine.';
+lang.dependencies='Dependencies (3 party bundles) Lucee needs for this release, simply copy this to "/lucee-server/bundles" of your installation (If this files are not present Lucee will download them).';
+lang.jar='Lucee jar file without dependencies Lucee needs to run. Simply copy this file to your servlet engine lib folder (classpath). If dependecy bundles are not in place Lucee will download them.';
+lang.luceeAll='Lucee jar file that contains all dependencies Lucee needs to run. Simply copy this file to your servlet engine lib folder (classpath)';
+
+lang.lib="The Lucee Jar file, you can simply copy to your existing installation to update to Lucee 5. This file comes in 2 favors, the ""lucee.jar"" that only contains Lucee itself and no dependecies (Lucee will download dependencies if necessary) or the lucee-all.jar with all dependencies Lucee needs bundled (not availble for versions before 5.0.0.112).";
+lang.libNew="The Lucee Jar file, you can simply copy to your existing installation to update to Lucee 5. This file comes with all necessary dependencies Lucee needs build in, so no addional jars necessary. You can have this Jar in 2 flavors, a version containing all Core Extension (like Hibernate, Lucene or Axis) and a version with no Extension bundled.";
+
+lang.installer.win="Windows";
+lang.installer.lin64="Linux (64b)";
+lang.installer.lin32="Linux (32b)";
+
+
+
 	cdnURL="https://cdn.lucee.org/";
-	cdnDirect=!isNull(url.cdnDirect) && url.cdnDirect;
-	if(isNull(url.type)) url.type="releases";
-
 	MAX=1000;
-	include "functions.cfm";
 
+	if(isNull(url.type)) url.type="releases";
 	if(url.type=='ext') extQry=getExtensions('release');
 	else if(url.type=='extabc') extQry=getExtensions('abc');
 	else if(url.type=='extsnap') extQry=getExtensions('snapshot');
 
-	_5_0_0_70=toVersionSortable("5.0.0.70-SNAPSHOT");
-	_5_0_0_112=toVersionSortable("5.0.0.112-SNAPSHOT");
-	_5_0_0_219=toVersionSortable("5.0.0.219-SNAPSHOT");
-	_5_0_0_255=toVersionSortable("5.0.0.255-SNAPSHOT");
-	_5_0_0_256=toVersionSortable("5.0.0.256-SNAPSHOT");
-	_5_0_0_257=toVersionSortable("5.0.0.257-SNAPSHOT");
-	_5_0_0_258=toVersionSortable("5.0.0.258-SNAPSHOT");
-	_5_0_0_259=toVersionSortable("5.0.0.259-SNAPSHOT");
-	_5_0_0_260=toVersionSortable("5.0.0.260-SNAPSHOT");
-	_5_0_0_261=toVersionSortable("5.0.0.261-SNAPSHOT");
-	_5_0_0_262=toVersionSortable("5.0.0.262-SNAPSHOT");
-	_5_1_0_31=toVersionSortable("5.1.0.31");
-	_5_1_0_008=toVersionSortable("5.1.0.008-SNAPSHOT");
-	_5_2_1_7=toVersionSortable("5.2.1.7");
-	_5_2_1_8=toVersionSortable("5.2.1.8");
-	_5_2_3_30_RC=toVersionSortable("5.2.3.30-RC");
-	_5_2_8_52=toVersionSortable("5.2.8.52-SNAPSHOT");
-
-	// 5.2.8.52-SNAPSHOT/
-	if(isNull(url.type))url.type="releases";
-	else type=url.type;
-
-	intro="The latest {type} is version <b>{version}</b> released at <b>{date}</b>.";
-	historyDesc="Older Versions:";
+	
 	singular={
 		releases:"Release",snapshots:"Snapshot",abc:'RC / Beta',beta:'Beta',rc:'RC'
 		,ext:"Release",extsnap:"Snapshot",extabc:'RC / Beta'
@@ -47,256 +157,35 @@
 		beta:'Betas',
 		rc:'Release Candidates'
 	};
-	appendix={
-		releases:"Release",
-		snapshots:"",
-		abc:'',
-		beta:'',
-		rc:''
-	};
 
 	noVersion="There are currently no downloads available in this category.";
 
-	downloads45=query(
-		version:[
-			'4.5.5.015'
-			,'4.5.5.006'
-			,'4.5.4.017'
-			,'4.5.3.020'
-			,'4.5.2.018'
-			,'4.5.1.024'
-		]
-		,date:[
-			createDate(2018,4,9)
-			,createDate(2017,1,26)
-			,createDate(2016,10,24)
-			,createDate(2016,9,1)
-			,createDate(2015,11,9)
-			,createDate(2015,10,20)
-		]
-		,installer:[
-			{
-			}
-			,{
-				win:cdnURL&"lucee-4.5.5.006-pl0-windows-installer.exe"
-				,lin64:cdnURL&"lucee-4.5.5.006-pl0-linux-x64-installer.run"
-				,lin32:cdnURL&"lucee-4.5.5.006-pl0-linux-installer.run"
-			}
-			,{
-				win:cdnURL&"lucee-4.5.4.017-pl0-windows-installer.exe"
-				,lin64:cdnURL&"lucee-4.5.4.017-pl0-linux-x64-installer.run"
-				,lin32:cdnURL&"lucee-4.5.4.017-pl0-linux-installer.run"
-			}
-			,{
-				win:cdnURL&"lucee-4.5.3.020-pl0-windows-installer.exe"
-				,lin64:cdnURL&"lucee-4.5.3.020-pl0-linux-x64-installer.run"
-				,lin32:cdnURL&"lucee-4.5.3.020-pl0-linux-installer.run"
-			}
-			,{
-				win:cdnURL&"lucee-4.5.2.018-pl0-windows-installer.exe"
-				,lin64:cdnURL&"lucee-4.5.2.018-pl0-linux-x64-installer.run"
-				,lin32:cdnURL&"lucee-4.5.2.018-pl0-linux-installer.run"
-			}
-			,{
-				win:cdnURL&"lucee-4.5.1.024-pl0-windows-installer.exe"
-				,lin64:cdnURL&"lucee-4.5.1.024-pl0-linux-x64-installer.run"
-				,lin32:cdnURL&"lucee-4.5.1.024-pl0-linux-installer.run"
-			}
-		]
-		,express:[
-			cdnURL&'lucee-4.5.5.015-express.zip'
-			,cdnURL&'lucee-4.5.5.006-express.zip'
-			,cdnURL&'lucee-4.5.4.017-express.zip'
-			,cdnURL&'lucee-4.5.3.020-express.zip'
-			,cdnURL&'lucee-4.5.2.018-express.zip'
-			,cdnURL&'lucee-4.5.1.024-express.zip'
-		]
-		,jar:[
-			cdnURL&'lucee-4.5.5.015-jars.zip'
-			,cdnURL&'lucee-4.5.5.006-jars.zip'
-			,cdnURL&'lucee-4.5.4.017-jars.zip'
-			,cdnURL&'lucee-4.5.3.020-jars.zip'
-			,cdnURL&'lucee-4.5.2.018-jars.zip'
-			,cdnURL&'lucee-4.5.1.024-jars.zip'
-		]
-		,war:[
-			cdnURL&'lucee-4.5.5.015.war'
-			,cdnURL&'lucee-4.5.5.006.war'
-			,cdnURL&'lucee-4.5.4.017.war'
-			,cdnURL&'lucee-4.5.3.020.war'
-			,cdnURL&'lucee-4.5.2.018.war'
-			,cdnURL&'lucee-4.5.1.024.war'
-		]
-		,core:[
-			cdnURL&'4.5.5.015.lco'
-			,cdnURL&'4.5.5.006.lco'
-			,cdnURL&'4.5.4.017.lco'
-			,cdnURL&'4.5.3.020.lco'
-			,cdnURL&'4.5.2.018.lco'
-			,cdnURL&'4.5.1.024.lco'
-		]
-		,changelog:[
-			{
-				"LDEV-1462":"expandPath fails with contextpath that are start the same way as other contextpath"
-			}
-			,{
-				"LDEV-96":"ORM cache error when secondary cache is enabled and autoManageSession/flushAtRequestEnd are false"
-				,"LDEV-391":"Default timezone for cfquery"
-				,"LDEV-613":"ORM NullPointerException caused by <cfquery dbtype=""hql""> in latest stable release"
-				,"LDEV-1076":"Exception TagContext template paths have changed from absolute to relative"
-				,"LDEV-1083":"xmlParse with big invalid input can produce a out of memor error"
-				,"LDEV-1122":"Class files no longer have full path for sourceFile"
-				,"LDEV-1124":"datasource timezone ignored for reading incoming date"
-				,"LDEV-1172":"SNI support"
-			}
-			,{
-				"LDEV-1036":"callStackGet() function no longer returns full paths to template"
-				,"LDEV-1020":"http.setMethod('put') does not send variables set with http.addParam(type='form')"
-				,"LDEV-1002":"NPE cfmail with empty html body."
-				,"LDEV-995":"Performance Degradation with Unary Increment Operator"
-				,"LDEV-969":"JSON-String inside <cfsavecontent> throws error"
-				,"LDEV-988":"performance degradation with unary operator in for loops"
-				,"LDEV-901":"clustered session/client scope does not merge data"
-				,"LDEV-954":"cfhttp blocks for long running calls"
-				,"LDEV-914":"sessionInvalidate() causes java.lang.ClassCastException"
-				,"LDEV-918":"J2EE Session not maintained in cfhttp requests"
-				,"LDEV-947":"cfsavecontent & cfinclude - java.util.ConcurrentModificationException"
-				,"LDEV-441":"UDF's mixed into CFC via temp file error when trying to recompile and file is deleted"
-				,"LDEV-901":"clustered session/client scope does not merge data"
-				,"LDEV-866":"entrySet from a linked struct is loosing the order"
-			}
-			,{
-				"LDEV-992":"JSON Security issue"
-				,"LDEV-862":"DateTimeFormat returns wrong value for ISO8601"
-				,"LDEV-834":"CollectionMap Causes a Threadleak when parallel=true"
-				,"LDEV-840":"webservice complex object invalid case"
-				,"LDEV-637":"cfstoredproc fails when calling a procedure with parameters on Oracle with a specified schema"
-				,"LDEV-830":"query fails with Can't call commit when autocommit=true"
-				,"LDEV-32":"Incompat with val()"
-				,"LDEV-775":"Bug with fileExists() with an Application mapping of /"
-				,"LDEV-812":"Writelog/cflog's file is not unique per web context"
-				,"LDEV-814":"cfadmin action=""stopThread"" does not work"
-				,"LDEV-818":"queryAddColumn does not accept a type argument"
-				,"LDEV-793":"Fix compatibility - HTML 5 multiple file upload"
-				,"LDEV-789":"Web Service CFC soap XML"
-				,"LDEV-688":"LDEV-488 Fix Re-Introduces LDEV-78 Bug"
-				,"LDEV-777":"connection pool counter is not thread safe"
-				,"LDEV-778":"CSV parser used with cfhttp fails with NL at the end"
-				,"LDEV-774":"JEE session looses data on onsessionEnd call"
-				,"LDEV-761":"CR line breaks when using <cfhttp> on csv files"
-				,"LDEV-738":"relative component path fails"
-				,"LDEV-714":"onSessionEnd creates WEB-INF/lucee/output/onSessionEnd.out"
-				,"LDEV-719":"missing name declaration for property"
-				,"LDEV-622":"Cannot use a Map as a struct with null value"
-				,"LDEV-684":"CFARGUMENT Can't cast String [] to a boolean"
-				,"LDEV-692":"getApplicationSettings() does not return expected results"
-				,"LDEV-224":"QueryExecute throws error when specifying list of numerics"
-				,"LDEV-297":"DSN screen UX"
-				,"LDEV-360":"Add explicit link to ""Overview"" in Admin navigation"
-				,"LDEV-371":"cfhttp creates connections that don't expire until the keep-alive timeout"
-				,"LDEV-434":"isJSON and deserializeJSON accept invalid JSON"
-				,"LDEV-458":"Parsing issue with CFC property containing attribute with no value"
-				,"LDEV-467":"?: bug with false"
-				,"LDEV-488":"ORM Stack overflow error"
-				,"LDEV-490":"Regression - ""ORM not enabled"" error when ORM attributes are used"
-				,"LDEV-516":"Debug output doesn't show up if using default-function-output=false"
-				,"LDEV-573":"Update links in Lucee web and server admin home page screens"
-				,"LDEV-631":"YesNoFormat() empty string response"
-				,"LDEV-671":"QueryExecute right context"
-				,"LDEV-650":"share application context with modern and classic listener fails"
-				,"LDEV-620":"enlargeCapacity blocks the system"
-			}
-			,{
-				"LDEV-599":"inspect template double check leads to missingIncludeException"
-				,"LDEV-569":"SSLCertificateInstall fails with some hosts"
-				,"LDEV-411":"Debugging displays wrong execution times in specific cases"
-				,"LDEV-557":"life and idle timeout for mail server"
-				,"LDEV-471":"SQL Error, Negative delay"
-				,"LDEV-509":"datasource storage clean open new connection"
-				,"LDEV-24":"queryExecute does not support passing arguments scope as param structure"
-				,"LDEV-340":"SpoolerEngineImpl$SimpleThread can get in an endless loop"
-				,"LDEV-364":"queryParam null=true doesn't work for QueryExecute"
-				,"LDEV-370":"cfscript Query doesn't play well with oracle parameters"
-				,"LDEV-432":"Better ORM Errors, Include SQL statement"
-				,"LDEV-475":"fileSetLastModified() Fails Silently on Non-Existent File"
-				,"LDEV-476":"built in function names reserved in cfinterface"
-				,"LDEV-492":"XML objects don't cast to string properly"
-				,"LDEV-501":"PostgreSQL Driver Queries Fail in 4.5.2.005"
-				,"LDEV-503":"Lucee fails to read cookie"
-				,"LDEV-504":"controller thread can get blocked"
-				,"LDEV-485":"cfhttp (with updated library) timeout issue"
-				,"LDEV-479":"improve default query timeout"
-				,"LDEV-480":"validate connections in the datasource connection pool"
-				,"LDEV-472":"Queries called from event gateways break due to invalid request timeout"
-				,"LDEV-457":"HTMLEditFormat handling of carriage returns"
-				,"LDEV-470":"Graylog does not work with Lucee"
-				,"LDEV-463":"reduce size of of udf properties (getter/setter/ ...)"
-				,"LDEV-429":"Unable to access Youtube API using SSL"
-				,"LDEV-430":"logging for datasources"
-			}
-			,{
-				"LDEV-78":"ORM doesn't persist data in cftransactions"
-				,"LDEV-384":"Hanging requests if debugging is enabled / Locking in ArrayImpl"
-				,"LDEV-383":"cfhttp fails"
-				,"LDEV-292":"CFHTTP fails over SSL with SNI"
-				,"LDEV-376":"writable CGI Scope"
-				,"LDEV-372":"make CGI Scope writable"
-				,"LDEV-354":"IsEmpty(0) returns true"
-				,"LDEV-353":"NPE when using a struct as an exception"
-				,"LDEV-348":"Invalid Cookie name causes stacktrace and can bring down lucee/tomcat"
-				,"LDEV-322":"If structKeyExists() works on an Exception, so should .keyExists()"
-				,"LDEV-47":"Support for (element in list)"
-				,"LDEV-327":"add frontend for request Queue"
-				,"LDEV-338":"declared inline datasource does not work with ORM"
-				,"LDEV-2":"QueryExecute generates wrong entries in the debug information"
-				,"LDEV-327":"add frontend for request Queue"
-				,"##331":"cached query not disconnect from life query"
-				,"##23":"queryExecute does not support passing arguments scope as param structure"
-				,"##237":"application.cfc this.tag.function.output=""false"" default attribute value does not work"
-				,"##319":"mail sending is synchronized"
-				,"##293":"Listener mode modern invokes Application.cfm files"
-				,"##292":"duplicate check in duplication get not cleaned"
-				,"##277":"Request timeout fails with Java8"
-				,"##274":"ThreadQueue size is off"
-				,"##210":"Duplicate encoding in soap webservice"
-				,"##222":"Setting request timeout to 0 throws exception"
-				,"##216":"typo ""succesful"" when verifying smtp server"
-				,"##215":"queryExecute allows invalid parameter syntax without erroring"
-				,"##207":"Error in memcached cache after migration from Railo"
-				,"##204":"Update CFHTTP multipart response handling to support quoted boundaries"
-				,"##201":"Make Lucee compatible with Railo extensions"
-				,"##189":"Extension license viewer displays white text on white background, thus it never displays"
-				,"##178":"Multipart image byte array response doesn't handle quoted boundary"
-				,"##188":"cfhttp empty csv fails"
-				,"##185":"The Layout CFC based CustomTag still has references to the railo package"
-				,"##180":"RequestTimeout cripples 3 party code"
-				,"##164":"""!"" in mail message"
-				,"##150":"Error executing function tests as embedded Application.cfc was missing TestBox archive"
-				,"##78":"Services - Update: Error ""server http://dev.lucee.org failed to return a valid response. The key [APIKEY] does not exist."""
-				,"##103":"queryGetRow() function and Query.getRow() method"
-				,"##145":"Lucee logo and maximize/minimize button disappear with maximised"
-				,"##147":"structKeyExists return true for ""server.railo"""
-				,"##118":"toBinary should not throw an error when 1st arg is an empty string"
-				,"##136":"Get off of Java 7"
-				,"##143":"testcases testbox archive not works"
-				,"##139":"Admin page broken - Remote: Security Key"
-				,"##126":"actions without text are not processed by cfhtmlhead and cfhtmlbody"
-				,"##125":"cfhtmlhead and cfhtmlbody ignore the id attribute"
-				,"##3":"dateDiff() method implemented incorrectly"
-				,"##79":"Axis info messages shouldn't be logged"
-				,"##4":"cfhtmlhead does not work"
-				,"##8":"getID() built-in function conflicting with component functions"
-				,"##88":"Admin Settings Export: extra equals sign in mappings statements"
-				,"##80":"Verify Providers: key [VALIDURLS] doesn't exist (existing keys:ROWS,URLS)"
-				,"##76":"ContentBox with Lucee"
-				,"##21":"Error when migrating if EHCache is defined"
-				,"##15":"Mura/ORM reload error after upgrade from Railo"
-				,"##14":"Layout.cfc is looking for railo.core.ajax.AjaxBinder"
-				,"##13":"Debugging settings issue"
-				,"##11":"missing IEventHandler Interface"
-			}
-		]
-	);
+	versions=getVersions(structKeyExists(url,"reset"));
+	
+	keys=structKeyArray(versions);
+	tmp=structNew('linked');
+	for(i=arrayLen(keys);i>0;i--) {
+		k=keys[i];
+		tmp[k]=versions[k];
+	}
+	versions=tmp;
+
+
+	// add types
+	//releases,snapshots,rc,beta
+	loop struct=versions index="vs" item="data" {
+		if(findNoCase("-snapshot",data.version)) data['type']="snapshots";
+		else if(findNoCase("-rc",data.version)) data['type']="rc";
+		else if(findNoCase("-beta",data.version)) data['type']="beta";
+		else if(findNoCase("-alpha",data.version)) data['type']="alpha";
+		else  data['type']="releases";
+
+		data['versionNoAppendix']=data.version;
+	}
+
+
+	//dump(versions);abort;
+
 </cfscript>
 
 <cfhtmlhead>
@@ -318,7 +207,7 @@
 
 .BoxWidth { padding: 1rem 1rem 2rem 1rem; border-radius: 1%; padding-left: 6%;}
 .col-md-3{ padding-right: 8px !important; padding-left: 8px !important; }
-.desc{ padding: 8px; vertical-align: top; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol"; font-size: 1.5rem; font-weight: 600; line-height: 1.5; color: ##212529; text-align: left;}
+.desc{ padding: 8px; vertical-align: top; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol"; font-size: 1.5rem; font-weight: 400; line-height: 1.5; color: ##212529; text-align: left;}
 .descDiv{min-height: 130px;}
 .installerDiv{min-height: 75px;}
 .jarDiv{min-height: 60px;}
@@ -351,7 +240,6 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 </style>
 
 
-
 <!DOCTYPE html>
 <html>
 	<head>
@@ -374,16 +262,9 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 			</div>
 
 			<cfif type EQ "releases" or type EQ"snapshots" or type EQ "abc" or type EQ "beta" or type EQ "rc">
-				<cfscript>
-					adownloads=getDownloads();
-				</cfscript>
-
+				
 				<cfif true>
-					<!--- <cfif structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5>
-						<div class="alert alert-danger">
-						   <strong>Warning: </strong> <span style="font-size: 14px;"> Lucee 4.5 has reached it end of life, it will no longer get any security updates or hot fix </span>
-					  	</div>
-					</cfif>	 --->
+					
 					<h2>Lucee Core</h2>
 					<p style="font-size: 1.7rem;">Get releases, release candidates, beta or snapshots from Lucee.</p>
 					<script type="text/javascript">
@@ -434,75 +315,69 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 					<div class="panel" id="core">
 						<cfset types="releases,snapshots,rc,beta">
 						<div class="panel-body">
+							<cfset _versions={}>
 							<cfloop list="releases,snapshots,rc,beta" item="_type">
+								<cfset _versions[_type]=[]>
 								<div class="col-md-3 col-sm-3 col-xs-3">
 									<!--- dropDown --->
 									<div class="bg-primary BoxWidth text-white">
 										<cfif !structKeyEXists(url,_type)>
-											<cfloop query="#adownloads#"><cfif adownloads.t==_type><cfset url[_type]=adownloads.id><cfset rows[_type]=adownloads.currentrow><cfbreak></cfif></cfloop>
+											<cfloop struct="#versions#" index="vs" item="data"><cfif data.type==_type><cfset url[_type]=vs><cfset rows[_type]=vs><cfbreak></cfif></cfloop>
 										</cfif>
 										<b><h2>#singular[_type]#</h2> <!--- #ldownloads[type].versionNoAppendix#</b> (#lsDateFormat(ldownloads[type].jarDate)#) --->
 										<select onchange="change('#_type#',this, 'core')" style="color:7f8c8d;font-style:normal;" id="lCore" class="form-control" <!--- class="custom-select" --->>
-											<cfloop query="#adownloads#"><cfif adownloads.t==_type && isDate(adownloads.jarDate)><option <cfif url[_type]==adownloads.id><cfset rows[_type]=adownloads.currentrow> selected="selected"</cfif> value="#adownloads.id#"><!---
+											<cfloop struct="#versions#" index="vs" item="data"><cfif data.type==_type><option <cfif url[_type]==vs><cfset rows[_type]=vs> selected="selected"</cfif> value="#vs#"><!---
 
-												--->#adownloads.versionNoAppendix# (#lsDateFormat(adownloads.jarDate)#)</option></cfif></cfloop>
+												---><cfset arrayAppend(_versions[_type],data.version)>#data.versionNoAppendix#</option></cfif></cfloop>
 
-											<cfif _type EQ "releases">
-											<cfloop query="#downloads45#">
-												<option <cfif ListLast(url[_type], "_")==downloads45.version><cfset rows['releases']=downloads45.currentrow> selected="selected"</cfif> value="4.5_#downloads45.version#"><!---
-												--->#downloads45.version# (#lsDateFormat(downloads45.date)#)</option>
-											</cfloop>
-											</cfif>
 										</select>
 									</div>
+									<cfset dw=versions[rows[_type]]>
 									<!--- desc --->
-									<div class="desc descDiv row_even">#lang.desc[_type]#</div>
+									<div class="desc descDiv row_even">
+										<cfset res=getDate(dw.version)>
+										<span style="font-weight:600">#dw.version#</span><cfif len(res)>
+	
+ <span style="font-size:12px">(#res#)</span></cfif><br><br>
+
+									 #lang.desc[_type]#</div>
+									
 									<!--- Express --->
-									<div class="row_odd divHeight">
-										<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
-											<cfset dw=querySlice(downloads45,rows['releases'],1)>
-											<cfset uri=cdnDirect?toCDN(dw.express):dw.express>
+									<cfif structKeyExists(dw,"express")><div class="row_odd divHeight">
+										<cfif doS3.express>
+											<cfset uri="#cdnURL##dw.express#">
 										<cfelse>
-											<cfset dw=querySlice(adownloads,rows[_type],1)>
-											<cfif cdnDirect && dw.s3Express>
-												<cfset uri="#cdnURL#lucee-express-#dw.version#.zip">
-											<cfelse>
-												<cfset uri="#_url[type]#/rest/update/provider/express/#dw.version#">
-											</cfif>
+											<cfset uri="#baseURL#express/#dw.version#">
 										</cfif>
 										<div class="fontStyle">
-											<a href="#(uri)#">Express</a>
+											<a href="#uri#">Express</a>
 											<span  class="triggerIcon pointer" style="color :##01798A" title="#lang.express#">
 												<span class="glyphicon glyphicon-info-sign"></span>
 											</span>
 										</div>
-									</div>
+									</div></cfif>
 									<!--- Installer --->
 									<div class="row_even installerDiv">
 										<cfif _type == "releases">
-											<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
-												<cfset dw=querySlice(downloads45,rows['releases'],1)>
-												<cfset installers=dw.installer>
-											<cfelse>
-												<cfset dw=querySlice(adownloads,rows[_type],1)>
-												<cfset installers=getInstaller(dw.version)>
-											</cfif>
-											<cfif structIsEmpty(installers) && (listFirst(dw.version,".") GTE 5)>
-												<div class="fontStyle">
+											
+											<cfif !structKeyExists(dw,"win") and !structKeyExists(dw,"lin32") and !structKeyExists(dw,"lin64")>
+												<cfif left(dw.version,1) GT 4>
+													<div class="fontStyle">
 													<span class="text-primary">Coming Soon!</span>
 													<span  class="triggerIcon pointer" style="color :##01798A" title="Installers will available on soon">
 														<span class="glyphicon glyphicon-info-sign"></span>
 													</span>
-												</div>
+												</div></cfif>
 											<cfelse>
 												<cfset count=1>
 												<cfset str="">
-												<cfset l=structCount(installers)>
-												<cfloop struct="#installers#" index="kk" item="vv">
+												<cfloop list="win,lin64,lin32" item="kk">
+													<cfif !structKeyExists(dw,kk)><cfcontinue></cfif>
+													<cfset uri="#cdnURL##dw[kk]#">
 													<cfif count GT 1>
 														<cfset str&='<br>'>
 													</cfif>
-													<cfset str&='<a href="#cdnDirect?toCDN(vv):vv#">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
+													<cfset str&='<a href="#uri#">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
 													<span class="glyphicon glyphicon-info-sign"></span>
 												</span>'>
 													<cfset count++>
@@ -513,77 +388,71 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 									</div>
 									<!--- jar --->
 									<div class="row_odd jarDiv">
-										<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
-											<cfset dw=querySlice(downloads45,rows['releases'],1)>
-											<div class="fontStyle"><a href="#cdnDirect?toCDN(dw.jar):dw.jar#">lucee.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title="#lang.jar#">
-												<span class="glyphicon glyphicon-info-sign"></span>
-											</span></div>
-										<cfelse>
-											<cfset dw=querySlice(adownloads,rows[_type],1)>
-											<cfset uri="#_url[_type]#/rest/update/provider/loader/#dw.version#">
+											<cfif structKeyExists(dw,"jar")>
+											<cfif doS3.jar>
+												<cfset uri="#cdnURL##dw.jar#">
+											<cfelse>
+												<cfset uri="#baseURL#loader/#dw.version#">
+											</cfif>
+										
 											<div class="fontStyle"><a href="#(uri)#">lucee.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title="#lang.jar#">
 												<span class="glyphicon glyphicon-info-sign"></span>
-											</span></div>
-
-											<cfif cdnDirect && dw.s3Light>
-												<cfset uri="#cdnURL#lucee-light-#dw.version#.jar">
+											</span></div></cfif>
+											<cfif structKeyExists(dw,"light")>
+											<cfif doS3.light>
+												<cfset uri="#cdnURL##dw.light#">
 											<cfelse>
-												<cfset uri="#_url[_type]#/rest/update/provider/light/#dw.version#">
+												<cfset uri="#baseURL#light/#dw.version#">
 											</cfif>
+											
 											<div class="fontStyle"><a href="#(uri)#">lucee.jar(without Extension)</a><span  class="triggerIcon pointer" style="color :##01798A" title="Lucee Jar file without Extension bundled">
 												<span class="glyphicon glyphicon-info-sign"></span>
-											</span></div>
+											</span></div></cfif>
 
-										</cfif>
 									</div>
 									<!--- core --->
-									<div class="row_even divHeight">
-										<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
-										<cfset dw=querySlice(downloads45,rows['releases'],1)>
-										<cfset uri=cdnDirect?toCDN(dw.core):dw.core>
+									<cfif structKeyExists(dw,"lco")><div class="row_even divHeight">
+										<cfif doS3.lco>
+											<cfset uri="#cdnURL##dw.lco#">
 										<cfelse>
-											<cfset dw=querySlice(adownloads,rows[_type],1)>
-											<cfif cdnDirect && dw.s3Core>
-												<cfset uri="#cdnURL##dw.version#.lco">
-											<cfelse>
-												<cfset uri="#_url[_type]#/rest/update/provider/core/#dw.version#">
-											</cfif>
+											<cfset uri="#baseURL#core/#dw.version#">
 										</cfif>
+											
 										<div class="fontStyle"><a href="#(uri)#" >Core</a><span class="triggerIcon pointer" style="color :##01798A" title='#lang.core#'>
 												<span class="glyphicon glyphicon-info-sign"></span>
 											</span></div>
-									</div>
+									</div></cfif>
 									<!--- WAR --->
-									<div class="row_odd divHeight">
-										<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
-										<cfset dw=querySlice(downloads45,rows['releases'],1)>
-										<cfset uri=cdnDirect?toCDN(dw.war):dw.war>
+									<cfif structKeyExists(dw,"war")><div class="row_odd divHeight">
+										<cfif doS3.war>
+											<cfset uri="#cdnURL##dw.war#">
 										<cfelse>
-											<cfset dw=querySlice(adownloads,rows[_type],1)>
-											<cfif cdnDirect && dw.s3War>
-												<cfset uri="#cdnURL#lucee-#dw.version#.war">
-											<cfelse>
-												<cfset uri="#_url[_type]#/rest/update/provider/war/#dw.version#">
-											</cfif>
+											<cfset uri="#baseURL#war/#dw.version#">
 										</cfif>
+										
 										<div class="fontStyle"><a href="#(uri)#" title="#lang.war#">WAR</a><span class="triggerIcon pointer" style="color :##01798A" title="#lang.war#">
 												<span class="glyphicon glyphicon-info-sign"></span>
 											</span></div>
-									</div>
+									</div></cfif>
 									<!--- logs --->
 									<div class="row_even divHeight">
-										<cfif _type=="releases" && structKeyExists(URL, "releases") && ListFirst(URL.releases, "_") EQ 4.5 >
-											<cfset dw=querySlice(downloads45,rows['releases'],1)>
-											<cfset res.version = dw.version>
-											<cfset res.changelog = dw.changelog>
-										<cfelse>
-											<cfset downloads=getDownloadFor(_type)>
-											<cfset dw=querySlice(adownloads,rows[_type],1)>
-											<cfquery name="res" dbtype="query">
-												select * from downloads where ID = '#dw.id#'
-											</cfquery>
-										</cfif>
-										<cfif isstruct(res.changelog) && structCount(res.changelog) GT 0>
+											<cfscript>
+											loop array=_versions[_type] item="vv" index="i"{
+												if(vv==dw.version ) {
+													prevVersion=arrayIndexExists(_versions[_type],i+1)?_versions[_type][i+1]:"0.0.0.0";
+												}
+											}
+											changelog=getChangelog(prevVersion,dw.version);
+											structDelete(changelog,prevVersion);
+											//dump(prevVersion);
+											//dump(dw.version);
+											//dump(changelog);
+											
+											</cfscript>
+											
+
+
+										<cfif isstruct(changelog) && structCount(changelog) GT 0>
 											<div class="fontStyle">
 												<p class="collapsed mb-0" data-toggle="modal" data-target="##myModal#_type#">Changelog<small class="align-middle h6 mb-0 ml-1"><i class="icon icon-collapse collapsed"></i></small></p>
 											</div>
@@ -592,13 +461,14 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 													<div class="modal-content">
 														<div class="modal-header">
 															<button type="button" class="close" data-dismiss="modal">&times;</button>
-															<h4 class="modal-title"><b>Version-#res.version# Changelogs</b></h4>
+															<h4 class="modal-title"><b>Version-#dw.version# Changelogs</b></h4>
 														</div>
 														<div class="modal-body desc">
-															<cfloop struct="#res.changelog#" index="id" item="subject">
+															<cfloop struct="#changelog#" index="ver" item="tickets">
+																<cfloop struct="#tickets#" index="id" item="subject">
 																<a href="http://bugs.lucee.org/browse/#id#" target="blank">#id#</a>- #subject#
 																<br>
-															</cfloop>
+															</cfloop></cfloop>
 														</div>
 														<div class="modal-footer">
 															<button type="button" class="btn btn-default btn-lg" data-dismiss="modal">Close</button>
@@ -610,7 +480,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 											<div class="fontStyle"></div>
 										</cfif>
 									</div>
-									<div><hr></div>
+									<div><hr></div><!--- --->
 								</div>
 							</cfloop>
 						</div>

@@ -667,7 +667,6 @@ component {
 		return zip;
 	}
 
-	// TODO remove, no longer needed just for testing
 	public function get(required string version, boolean extended=false) localmode=true {
 		arr=list();
 		loop array=arr item="sct" {
@@ -831,6 +830,10 @@ component {
 		return dir&version&".json";
 	}
 
+	private function isOK(statusCode) {
+		return statusCode>=200 && statusCode<300;
+	}
+ 
 	public struct function getSources(required string repoURL, required string version, string group="", string artifact="") {
 		if(len(arguments.group)==0) arguments.group=variables.group;
 		if(len(arguments.artifact)==0) arguments.artifact=variables.artifact;
@@ -863,7 +866,7 @@ component {
 		
 		// read the files names from xml
 		// patch because that version does not work on the server for unknow reason
-		if(!isNull(content.status_code) &&  content.status_code==200) {
+		if(!isNull(content.status_code) &&  isOK(content.status_code)) {
 			local.xml=xmlParse(content.fileContent);
 			loop array=xml.XMLRoot.versioning.snapshotVersions.xmlChildren item="node" {
 				local.date=toDate(node.updated.xmlText,"GMT");
@@ -872,13 +875,31 @@ component {
 			}
 		}
 		// TODO patch because on the server ONLY that version does not work (unauthicated)
-		else if(version=="5.3.3.62") {
+		/*else if(version=="5.3.3.62") {
 			local.sources.jar.src="https://repo1.maven.org/maven2/org/lucee/lucee/5.3.3.62/lucee-5.3.3.62.jar";
 			local.sources.jar.date=parseDateTime("September, 09 2019 11:27:17 +0200");
 			local.sources.pom.src="https://repo1.maven.org/maven2/org/lucee/lucee/5.3.3.62/lucee-5.3.3.62.pom";
 			local.sources.pom.date=parseDateTime("September, 09 2019 11:27:18 +0200");
+		}*/
+		else if(version=="5.3.4.80") {
+			local.sources.jar.src="https://repo1.maven.org/maven2/org/lucee/lucee/5.3.4.80/lucee-5.3.4.80.jar";
+			local.sources.jar.date=parseDateTime("February, 24 2020 19:23:00 +0100");
+			local.sources.pom.src="https://repo1.maven.org/maven2/org/lucee/lucee/5.3.4.80/lucee-5.3.4.80.pom";
+			local.sources.pom.date=parseDateTime("February, 24 2020 19:23:00 +0100");
 		}
-		// if there is no meta file simply assume
+		/*else if(version=="5.3.4.77") {
+			local.sources.jar.src="https://repo1.maven.org/maven2/org/lucee/lucee/5.3.4.77/lucee-5.3.4.77.jar";
+			local.sources.jar.date=parseDateTime("February, 03 2020 21:23:00 +0100");
+			local.sources.pom.src="https://repo1.maven.org/maven2/org/lucee/lucee/5.3.4.77/lucee-5.3.4.77.pom";
+			local.sources.pom.date=parseDateTime("February, 03 2020 21:23:00 +0100");
+		}*/
+		else if(version=="5.3.5.78-RC") {
+			local.sources.jar.src="https://repo1.maven.org/maven2/org/lucee/lucee/5.3.5.78-RC/lucee-5.3.5.78-RC.jar";
+			local.sources.jar.date=parseDateTime("February, 10 2020 20:00:00 +0100");
+			local.sources.pom.src="https://repo1.maven.org/maven2/org/lucee/lucee/5.3.5.78-RC/lucee-5.3.5.78-RC.pom";
+			local.sources.pom.date=parseDateTime("February, 10 2020 20:00:00 +0100");
+		}
+		// if there is no meta file simply assume  2020-02-03 21:23
 		else {
 			// date jar
 			try{
@@ -886,7 +907,7 @@ component {
 				var _url=base&"/"&artifact&"-"&version&".jar.md5";
 				http method="get" url=_url result="local.t";
 
-				if(!isNull(t.status_code) && t.status_code==200) {
+				if(!isNull(t.status_code) && isOK(t.status_code)) {
 					local.sources.jar.src=base&"/"&artifact&"-"&version&".jar";
 					local.sources.jar.date=parseDateTime(t.responseheader['Last-Modified']);
 				}
@@ -894,7 +915,7 @@ component {
 				else if(findNoCase("https://",_url)==1) {
 					_url=replace(_url,"https://","http://");
 					http method="get" url=_url result="local.t";
-					if(!isNull(t.status_code) && t.status_code==200) {
+					if(!isNull(t.status_code) && isOK(t.status_code)) {
 						local.sources.jar.src=base&"/"&artifact&"-"&version&".jar";
 						local.sources.jar.date=parseDateTime(t.responseheader['Last-Modified']);
 					}
@@ -907,7 +928,7 @@ component {
 				inc();
 				var _url=base&"/"&artifact&"-"&version&".pom.md5";
 				http method="get" url=_url result="local.t";
-				if(!isNull(t.status_code) && t.status_code==200) {
+				if(!isNull(t.status_code) && isOK(t.status_code)) {
 					local.sources.pom.src=base&"/"&artifact&"-"&version&".pom";
 					local.sources.pom.date=parseDateTime(t.responseheader['Last-Modified']);
 				}
@@ -915,7 +936,7 @@ component {
 				else if(findNoCase("https://",_url)==1) {
 					_url=replace(_url,"https://","http://");
 					http method="get" url=_url result="local.t";
-					if(!isNull(t.status_code) && t.status_code==200) {
+					if(!isNull(t.status_code) && isOK(t.status_code)) {
 						local.sources.pom.src=base&"/"&artifact&"-"&version&".pom";
 						local.sources.pom.date=parseDateTime(t.responseheader['Last-Modified']);
 					}
@@ -953,14 +974,15 @@ component {
 		if(isSimpleValue(src) && findNoCase("http",src)==1) {
 			// we do this because of 302 the function cannot handle
 			http url=src result="local.res";
-			if(isNull(res.status_code) || res.status_code!=200) {
+			if(!isNull(url.ttzz)) throw serializeJson(res)&":"&src;
+			if(isNull(res.status_code) || !isOK(res.status_code)) {
 				if(findNoCase("https://",src)) {
 					src=replaceNoCase(src,"https://","http://");
 					http url=src result="local.res";
 				}
 
 			}
-			if(isNull(res.status_code) || res.status_code!=200) {
+			if(isNull(res.status_code) || !isOK(res.status_code)) {
 				if(structKeyExists(res,"status_code")) local.sc=":"&res.status_code;
 				else local.sc="";
 				throw src&sc;

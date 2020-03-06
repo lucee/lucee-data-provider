@@ -5,9 +5,8 @@
 	variables.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
 	variables.cdnURL="https://cdn.lucee.org/";
 
-	jiraListURL="https://luceeserver.atlassian.net/rest/api/2/project/LDEV/versions";
-	jiraNotesURL="https://luceeserver.atlassian.net/secure/ReleaseNote.jspa?version={version-id}&styleName=Text&projectId=10000";
-
+	jiraDomain="luceeserver.atlassian.net";
+	
 	ALL_VERSION="0.0.0.0";
 	MIN_UPDATE_VERSION="5.0.0.254";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
@@ -30,10 +29,8 @@
 		,'apache.http.components.client':{'group':'org.apache.httpcomponents','artifact':'httpclient'}
 		,'apache.http.components.mime':{'group':'org.apache.httpcomponents','artifact':'httpmime'}
 		,'apache.http.components.core':{'group':'org.apache.httpcomponents','artifact':'httcore'}
+		,'org.mariadb.jdbc':{'group':'org.mariadb.jdbc','artifact':'mariadb-java-client'}
 	};
-
-
-	
 
 	variables.extMappings={
 		'hibernate.extension':{lex:'hibernate-orm',jar:'lucee-hibernate'}
@@ -45,10 +42,9 @@
 
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.artDirectory=variables.current&"artifacts/";
-	variable.buildDirectory=variables.current&"builds/";
 	variables.extDirectory="/var/www/sites/extension/extension5/extensions/"; // TODO make more dynamic
 
-	/**
+		/**
 	* if there is a update the function is returning a struct like this:
 	* {"type":"info"
 	* ,"language":arguments.language
@@ -71,29 +67,8 @@
 		httpmethod="GET" restpath="info/{version}" {
 		
 
-		if(findNoCase("stable.",cgi.SERVER_NAME) || findNoCase("update.",cgi.SERVER_NAME)) 
-			local.type="all";
-		else if(findNoCase("snapshot",cgi.SERVER_NAME) || findNoCase("dev.",cgi.SERVER_NAME) || findNoCase("preview.",cgi.SERVER_NAME)) 
-			local.type="snapshots";
-		else if(findNoCase("release",cgi.SERVER_NAME) || findNoCase("www.",cgi.SERVER_NAME)) 
-			local.type="releases";
-		else if(findNoCase("beta",cgi.SERVER_NAME) || findNoCase("betasnap",cgi.SERVER_NAME)) 
-			local.type="beta";
-		else  return {
-					"type":"warning",
-					"message":"Version ["&version.display&"] is not supported for automatic updates."};
-
-
 		try{
 			local.version=toVersion(arguments.version);
-
-
-			local.mr=new MavenRepo();
-			var list=mr.list(type:type);
-			var latest= list[arrayLen(list)];
-			var latestVersion=toVersion(latest.version);
-			var sources=mr.getSources(latest.repository,latest.version);
-
 
 			// no updates for versions smaller than ...
 			if(ALL_VERSION!=version.display && !isNewer(version,toVersion(MIN_UPDATE_VERSION))) 
@@ -101,14 +76,22 @@
 					"type":"warning",
 					"message":"Version ["&version.display&"] can not be updated from within the Lucee Administrator.  Please update Lucee by replacing the lucee.jar, which can be downloaded from [http://download.lucee.org]"};
 			
+
+
+			local.s3=new S3(variables.s3Root);
+			var versions=s3.getVersions();
+			var keys=structKeyArray(versions);
+			arraySort(keys,"textnocase");
+			var latest.version = versions[keys[arrayLen(keys)]].version;
+			var latestVersion=toVersion(latest.version);
 			
 			// others
 			latest.otherVersions=[];
 			var maxSnap=400; 
 			var maxRel=100;
 			if(ALL_VERSION!=version.display) {
-				for(var i=arrayLen(list);i>=1;i--) {
-					var el=list[i];
+				for(var i=arrayLen(keys);i>=1;i--) {
+					var el=versions[keys[i]];
 					if(findNoCase("-SNAPSHOT",el.version)) {
 						if((--maxSnap)<=0) continue;
 					}
@@ -119,10 +102,6 @@
 				}
 			}
 
-
-
-
-
 			// no update
 			if(ALL_VERSION!=version.display && !isNewer(latestVersion,version))
 				return {
@@ -131,8 +110,7 @@
 					"otherVersions":latest.otherVersions?:[]
 				};
 
-
-			try{local.notes=(ALL_VERSION==version.display)?"":getVersionReleaseNotes(version.display,latestVersion.display,true);}catch(local.ee){local.notes="";}
+			try{local.notes=(ALL_VERSION==version.display)?"":getChangeLog(version.display,latestVersion.display);}catch(local.ee){local.notes="";}
 			
 			var msgAppendix="";
 			if(ALL_VERSION!=version.display && !isNewer(version,toVersion(MIN_WIN_UPDATE_VERSION))) 
@@ -146,7 +124,6 @@
 				"type":"info"
 				,"language":arguments.language
 				,"current":version.display
-				,"released":sources.jar.date
 				,"available":latestVersion.display
 				,"otherVersions":latest.otherVersions?:[]
 				,"message":"A patch (#latestVersion.display#) is available for your current version (#version.display#)."&msgAppendix
@@ -159,44 +136,23 @@
 		}
 	}
 
+
+
 	/**
 	* function to download Lucee Loader file (lucee.jar)
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
 	*/
 	remote function downLoader(
 			required string version restargsource="Path",
-			string ioid="" restargsource="url", 
-			boolean allowRedirect=false restargsource="url")
+			string ioid="" restargsource="url")
 		httpmethod="GET" restpath="loader/{version}" {
 
-
-		local.mr=new MavenRepo();
-		
-		// redirect to maven source
-		if(arguments.allowRedirect) {
-			var data=mr.get(version:version,extended:true);
-			header statuscode="302" statustext="Found";
-			header name="Location" value=data.sources.jar.src;
-			return;
-		}
-
-		try{
-			local.path=mr.getLoader(version);
-			var name="lucee-#version#.jar";
-			if(fromS3(path,name)) return;
-		}
-		catch(e){
-			return {
-				"type":"error",
-				"message":"The version #version# is not available.",
-				"detail":e.message};
-		}
-
-		file action="readBinary" file="#path#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=#name#";
-        content variable="#bin#" type="application/zip";
+		createArtifactIfNecessary("jar",version);
+			
+		header statuscode="302" statustext="Found";
+		header name="Location" value=variables.cdnURL&"lucee-"&arguments.version&".jar";
+		return;
 	}
-
 
 	/**
 	* function to download Light Lucee Loader file (lucee-light.jar)
@@ -204,79 +160,36 @@
 	*/
 	remote function downLight(
 		required string version restargsource="Path",
-		string ioid="" restargsource="url",
-		boolean deliver=true restargsource="url", 
-		boolean s3=true restargsource="url")
+		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="light/{version}" {
-		local.mr=new MavenRepo();
 
-		try{
-			local.path=mr.getLightLoader(version);
-			var name="lucee-light-#version#.jar";
-			if(arguments.s3 && fromS3(path,name,deliver)) return;
-		}
-		catch(e){
-			//application.test123=now()&" - "&serialize(e);
-			return {
-				"type":"error",
-				"message":"The version #version# is not available as a light version.",
-				"detail":e.message};
-		}
-		if(deliver) {
-			file action="readBinary" file="#path#" variable="local.bin";
-			header name="Content-disposition" value="attachment;filename=#name#";
-	        content variable="#bin#" type="application/zip";
-	    }
+		createArtifactIfNecessary("light",version);
+	
+		header statuscode="302" statustext="Found";
+		header name="Location" value=variables.cdnURL&"lucee-light-"&arguments.version&".jar";
+		return;
 	}
 
-
-
 	/**
-	* function to download Lucee Loader file (lucee-all.jar) that bundles all dependencies
-	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
-	* 
-	* used by old version 
+	* only for backward compatibility
 	*/
 	remote function downLoaderAll(
 		required string version restargsource="Path",
-		string ioid="" restargsource="url", 
-		boolean allowRedirect=true restargsource="url", 
-		boolean deliver=true restargsource="url")
+		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="loader-all/{version}" {
-		
-		try{
-			local.mr=new MavenRepo();
-			setting requesttimeout="1000";
-			local.path=mr.getLoaderAll(version,!isNull(url.doPack200));
-		}
-		catch(e){
-			return {
-				"type":"error"
-				,"message":"The version #version# is not available."
-				,"detail":e.message
-				,"StackTrace":isNull(e.StackTraceAsString)?serialize(e.stacktrace):e.StackTraceAsString
-				//,"cfcatch":serialize(structkeyList(e))
-			};
-		}
-		if(deliver) {
-			file action="readBinary" file="#path#" variable="local.bin";
-			header name="Content-disposition" value="attachment;filename=lucee-all-#version#.jar";
-	        content variable="#bin#" type="application/zip";
-	    }
+		return downLoaderNew(version,ioid);
 	}
 
-
-	/**
-	* function to download Lucee Core file
-	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
+		/**
+	* only for backward compatibility
 	*/
 	remote function downloadCoreAlias(
 		required string version restargsource="Path",
-		string ioid="" restargsource="url", 
-		boolean allowRedirect=true restargsource="url")
+		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="core/{version}" {
-		return downloadCore(version,ioid,allowRedirect);
+		return downloadCoreNew(version,ioid);
 	}
+
 
 	remote function echoGET() httpmethod="GET" restpath="echoGet" {return _echo();}
 	remote function echoPOST() httpmethod="POST" restpath="echoPost" {return _echo();}
@@ -296,34 +209,16 @@
 		return sct;
 	}
 
-
-
 	remote function downloadCore(
 		required string version restargsource="Path",
-		string ioid="" restargsource="url", 
-		boolean allowRedirect=false restargsource="url",
-		boolean deliver=true restargsource="url")
+		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="download/{version}" {
 		
-		//local.version=toVersion(arguments.version);
-		local.mr=new MavenRepo();
-
-		try{
-			local.path=mr.getCore(version);
-			var name="#version#.lco";
-			if(allowRedirect && fromS3(path,name,deliver)) return;
-		}
-		catch(e){
-			return {
-				"type":"error",
-				"message":"The version #version# is not available.",
-				"detail":e.message};
-		}
-		if(deliver) {
-			file action="readBinary" file="#path#" variable="local.bin";
-			header name="Content-disposition" value="attachment;filename=#name#";
-	        content variable="#bin#" type="application/zip";
-	    }
+		createArtifactIfNecessary("lco",version);
+		
+		header statuscode="302" statustext="Found";
+		header name="Location" value=variables.cdnURL&arguments.version&".lco";
+		return;
 	}
 
 
@@ -336,62 +231,31 @@
 		httpmethod="HEAD" restpath="war/{version}" {
 			return downloadWar(version, ioid);
 	}
+
 	remote function downloadWar(
 		required string version restargsource="Path",
-		string ioid="" restargsource="url",
-		boolean deliver=true restargsource="url", 
-		boolean s3=true restargsource="url")
+		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="war/{version}" {
+
+		createArtifactIfNecessary("war",version);
 		
-		setting requesttimeout="1000";
-		//local.version=toVersion(arguments.version);
-		local.mr=new MavenRepo();
-		try{
-			local.path=mr.getWar(version);
-			var name="lucee-#version#.war";
-			if(s3 && fromS3(path,name,deliver)) return;
-			//if(fromS3Deep(path,version,"war")) return;
-		}
-		catch(e){
-			rethrow;
-			//application.test123=now()&" - "&serialize(e);
-			return {
-				"type":"error",
-				"message":"The version #version# is not available.",
-				"detail":e.message};
-		}
-		if(deliver) {
-			file action="readBinary" file="#path#" variable="local.bin";
-			header name="Content-disposition" value="attachment;filename=#name#";
-	        content variable="#bin#" type="application/zip";
-	    }
+		header statuscode="302" statustext="Found";
+		header name="Location" value=variables.cdnURL&"lucee-"&arguments.version&".war";
+		return;
 	}
 
 
-
-	/**
-	* function to download Lucee as a forgebox bundle
-	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
-	*/
-	remote function downloadForgebox(required string version restargsource="Path",string ioid="" restargsource="url", boolean light=false restargsource="url")
+	remote function downloadForgebox(
+		required string version restargsource="Path",
+		string ioid="" restargsource="url", 
+		boolean light=false restargsource="url")
 		httpmethod="GET" restpath="forgebox/{version}" {
-		
-		setting requesttimeout="1000";
-		//local.version=toVersion(arguments.version);
-		local.mr=new MavenRepo();
-		try{
-		local.path=mr.getForgeBox(version,light);
-		}
-		catch(e){
-			return {
-				"type":"error",
-				"message":"The version #version# is not available.",
-				"detail":e.message};
-		}
 
-		file action="readBinary" file="#path#" variable="local.bin";
-		header name="Content-disposition" value="attachment;filename=cf-engine#( light ? '-light' : '' )#-#version#.zip";
-        content variable="#bin#" type="application/zip";
+		createArtifactIfNecessary(light?"fbl":"fb",version);
+		
+		header statuscode="302" statustext="Found";
+		header name="Location" value=variables.cdnURL&"forgebox-"&(light?"light-":"")&arguments.version&".zip";
+		return;
 	}
 
 	/**
@@ -475,7 +339,6 @@
 			
 
 			var found=false;
-			if(isDefined("url.xc")) throw name&" "&FileExists(variables.extDirectory&name)&" "&useMapping;
 			if(FileExists(variables.extDirectory&name)) {
 
 				// extract jars
@@ -505,7 +368,7 @@
 			}
 			var path=checkForJar(arguments.bundleName,arguments.bundleVersion);
 		}
-		if(len(path)==0 || !FileExists(path)) {
+		if(len(path)==0 || !FileExists(path) || !isNull(url.ignoreLocal)) {
 			// last try, when the pattrn of the maven name matches the pattern of the osgi name we could be lucky
 			var mvnRep="http://repo1.maven.org/maven2";
 			var repositories=[
@@ -701,17 +564,27 @@
 		return "";
 	}
 
-	/**
-	* if there is a update the function is returning a sting with the available version, if not a empty string is returned
-	* @version current version installed
-	* @ioid ioid of the requesting user
-	*/
 	remote struct function getChangeLog(
 		required string versionFrom restargsource="Path",
 		required string versionTo restargsource="Path")
 		httpmethod="GET" restpath="changelog/{versionFrom}/{versionTo}" {
 		
-		return getVersionReleaseNotes( versionFrom, versionTo);
+		var from=toVersionSortable(versionFrom);
+		var to=toVersionSortable(versionTo);
+
+		var jira=new Jira("luceeserver.atlassian.net");
+		var issues=jira.listIssues(project:"LDEV",stati:["Deployed","Done"]).issues;
+		var sct=structNew("linked");
+		loop query=issues {
+			loop array=issues.fixVersions item="local.fv" {
+				try{var fvs=toVersionSortable(fv);}catch(e) {continue;}
+				if(fvs<from || fvs>to) continue;
+				if(!structKeyExists(sct,fv)) sct[fv]=structNew("linked");
+				sct[fv][issues.key]=issues.summary;
+			}
+			
+		}
+		return sct;
 	}
 
 
@@ -759,40 +632,29 @@
  
 	}
 
-	/**
-	* 
-	*/
 	remote function reset()
 		httpmethod="GET" restpath="reset" {
-
-
-		local.mr=new MavenRepo();
-		mr.reset();
+		new MavenRepo().reset();
+		new S3(variables.s3Root).reset();
 	}
 
-	/**
-	* function to get all dependencies (bundles) for a specific version
-	* @version version to get bundles for
-	*/
 	remote function readList(
 		boolean force=false restargsource="url",
 		string type='all' restargsource="url",
-		boolean extended=false restargsource="url"
+		boolean extended=false restargsource="url",
+		boolean flush=false restargsource="url"
 		)
 		httpmethod="GET" restpath="list" {
 
 		setting requesttimeout="1000";
-		local.mr=new MavenRepo();
-		try {
 
-			var arr=mr.list(arguments.type,arguments.extended);
-			if(arguments.extended) {
-				for(var i=arrayLen(arr);i>0;i--) {
-					arr[i].s3Express=s3Exists("lucee-express-#arr[i].version#.zip");
-					arr[i].s3Core=s3Exists("#arr[i].version#.lco");
-					arr[i].s3Light=s3Exists("lucee-light-#arr[i].version#.jar");
-					arr[i].s3War=s3Exists("lucee-#arr[i].version#.war");
-				}
+		try {
+			var s3=new S3(request.s3Root);
+			var versions=s3.getVersions(flush);
+			if(extended) return versions;
+			var arr=[];
+			loop struct=versions index="local.vs" item="local.data" {
+				arrayAppend(arr,{'vs':vs,'version':data.version});
 			}
 			return arr;
 		}
@@ -801,8 +663,7 @@
 		}
 	}
 
-
-	remote function readListAsync(
+	/*remote function readListAsync(
 		boolean force=false restargsource="url",
 		string type='all' restargsource="url",
 		boolean extended=false restargsource="url"
@@ -829,7 +690,24 @@
 		catch(e){
 			return {"type":"error","message":e.getMessage()};
 		}
+	}*/
+
+
+	remote function getDate(required string version restargsource="Path")
+		httpmethod="GET" restpath="getdate/{version}" {
+		var mr=new MavenRepo();
+		var info=mr.get(version,true);
+		try{
+			if(!isNull(info.sources.pom.date))
+				return parseDateTime(info.sources.pom.date);
+			else if(!isNull(info.sources.jar.date))
+				return parseDateTime(info.sources.jar.date);
+		}catch(e) {}
+		
+		return "";
 	}
+
+
 
 	
 
@@ -849,112 +727,52 @@
  
 	}
 
-	/**
-	* function to get Lucee "express" for a specific version
-	* @version version to get bundles for
-	*/
 	remote function downloadExpress(
 		required string version restargsource="Path",
-		string ioid="" restargsource="url",
-		boolean deliver=true restargsource="url")
+		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="express/{version}" {
-
-		setting requesttimeout="1000";
-		local.mr=new MavenRepo();
-		try{
-			local.path=mr.getExpress(version);
-		}
-		catch(e){
-			return {"type":"error","message":"The version #version# is not available.","exception":e};
-		}
 		
-			
-		var name="lucee-express-#version#.zip";
-		if(fromS3(path,name,deliver)) {
-			return;
-		}
-		if(deliver) {
-			file action="readBinary" file="#path#" variable="local.bin";
-			header name="Content-disposition" value="attachment;filename=#name#";
-	        content variable="#bin#" type="application/zip";
-    	}
+		createArtifactIfNecessary("express",version);
+		
+		header statuscode="302" statustext="Found";
+		header name="Location" value=variables.cdnURL&"lucee-express-"&arguments.version&".zip";
+		return;
 	}
 
-	/*remote function buildLatestX()
-		httpmethod="GET" restpath="buildLatestX" {
-		return application.test123;
-	}*/
+	remote function listMissing(boolean inclFB=false restargsource="url")
+		httpmethod="GET" restpath="list-missing" {
+		setting requesttimeout="100";
+		var s3=new S3(variables.s3Root);
+		var versions=s3.getVersions(true);
 
+		var rtn=structNew("linked");
+		var list="jar,lco,war,light,express";
+		if(inclFB)list&=",fb,fbl";
+		loop list=list item="type" {
+			
+			loop struct=versions index="vs" item="data" {
+				if(!structKeyExists(data,type) && left(data.version,1)>4) {
+					if(isNull(rtn[type]))rtn[type]=[];
+					arrayAppend(rtn[type],data.version);
+				}
+			}
+		}
+		return rtn;
+	}
 
 	/**
 	* this functions triggers that everything is prepared/build for future requests
 	* @version version to get bundles for
 	*/
-	remote function buildLatest()
+	remote function buildLatest(boolean inclFB=false restargsource="url")
 		httpmethod="GET" restpath="buildLatest" {
-		try{
-			setting requesttimeout="10000";
-			
-			local.mr=new MavenRepo();
-			mr.flushAndBuild();
-
-			_buildLatest("snapshots",mr);
-			_buildLatest("releases",mr);
-
-			//application.exists={};
-			application.releaseNotesItem={};
-			application.releaseNotesData={};
-		}
-		catch(e) {
-			if(!isDefined("url.abc")) rethrow;
-			return e;
-		}
+		var s3=new S3(variables.s3Root);
+		s3.addMissing(inclFB);
+		s3.reset();
 		return "done";
 	}
 
 
-
-	private function _buildLatest(type,mr) {
-		var list=mr.list(type:type);
-		var latest= list[arrayLen(list)];
-		
-		// clean cache for that version
-		if(!isNull(application.exists)) {		
-			loop struct=application.exists index="local.k" item="local.v" {
-				if(findNoCase(latest.version,k)) 
-					structDelete( application.exists, k, false );
-			}
-		}
-		if(!isNull(application.detail)) {		
-			loop struct=application.detail index="local.k" item="local.v" {
-				if(findNoCase(latest.version,k)) 
-					structDelete(application.detail, k, false );
-			}
-		}
-		var file=mr.getDetailFile(latest.version);
-		if(fileExists(file)) fileDelete(file);
-
-		// express
-		thread name="buildLatest_express_#latest.version#" cfc=this vs=latest.version {
-			cfc.downloadExpress(version:vs,deliver:false);
-		}
-		// core
-		thread name="buildLatest_core_#latest.version#" cfc=this vs=latest.version {
-			cfc.downloadCore(version:vs,allowRedirect:true,deliver:false);
-		}
-		// war
-		thread name="buildLatest_war_#latest.version#" cfc=this vs=latest.version {
-			cfc.downloadWar(version:vs,deliver:false);
-		}
-		// light
-		thread name="buildLatest_light_#latest.version#" cfc=this vs=latest.version {
-			cfc.downLight(version:vs,deliver:false);
-		}
-		// all
-		thread name="buildLatest_all_#latest.version#" cfc=this vs=latest.version {
-			cfc.downLoaderAll(version:vs,deliver:false);
-		}
-	}
 
 	private boolean function isVersion(required string version) { 
 		try{
@@ -1047,144 +865,6 @@
 		return true;
 	}
 
-	/** returns version information from JIRA */
-	private function getVersionInfoFromJira( string version="" ) {
-		// remove appendix
-		local.version=len(version)?toVersion(arguments.version).pure:"";
-
-		var empty = { id: 0, name: "", released: false, self: "" };
-
-		try {
-			http url=jiraListURL result="local.http";
-			var raw = deserializeJSON( http.fileContent );
-
-			var result = structNew("linked");
-			for ( var ai in raw ) {
-				var v = ai.name CT '(' ? listGetAt( ai.name, 2, "()" ) : ai.name;
-				try{v=toVersion(v).pure;}catch(local.e){continue;}
-				if(!isNumeric(listFirst(v,'.'))) continue;
-				if(!isNull(ai.releaseDate))ai.releaseDate=dateAdd("m",0,ai.releaseDate);
-				if ( len( version ) && v == version )
-					return ai;
-				result[ v ] = ai;
-			}
-			if ( len( version ))return empty;
-			return result;
-
-		}
-		catch( ex ) {
-			rethrow;
-		}
-	}
-
-
-
-
-	/** 
-	* retruns the Release Notes from JIRA
-	* 
-	* @version - the Lucee version, e.g. 5.0.3.005
-	*/
-	private struct function getVersionReleaseNotes( required string versionFrom, string versionTo="", boolean simple=false) {
-
-		if(isNull(application.releaseNotesData)) application.releaseNotesData={};
-		var coll=application.releaseNotesData;
-		
-		local.key=versionFrom&"|"&versionTo;
-		//if(!isNull(coll[key].data) && DateDiff('n',coll[key].date,now())<60)
-		if(!isNull(coll[key].data) && isNull(url.abcd))
-			return coll[key].data;
-
-		local.vFrom=toVersion(arguments.versionFrom);
-		// single version
-		if(versionTo=="")
-			return _getVersionReleaseNotes(GetVersionInfoFromJira( vFrom.pure ));
-		
-		local.vTo=toVersion(arguments.versionTo);	
-
-		// 05.000.000.0197.000...05.000.000.0206.000
-		// ,05.000.000.0197.100,05.000.000.0205.100
-		// multiple versions
-		local.res=structNew("linked");
-		local.versionInfo=GetVersionInfoFromJira();
-		if(!isNull(url.abcd)) throw serializeJson(versionInfo);
-		
-		local.arr=[];
-		local.fines=[];
-		loop struct=versionInfo index="local.k" item="local.item" { 
-			try {
-				local.v=toVersion(item.name).sortable;
-			}
-			catch(e) {
-				continue;
-			}
-			if(v >= vFrom.sortable && v <= vTo.sortable) {
-				if(simple) _getVersionReleaseNotes(item,res);
-				else res[item.name]=_getVersionReleaseNotes(item);
-			}
-		}
-
-		application.releaseNotesData[key]={data:res,date:now()};
-		return application.releaseNotesData[key].data;
-	}
-
-	private struct function _getVersionReleaseNotes( versionInfo ,struct fillHere=structNew("linked")) {
-		if(!isNull(url.abcd)) throw serializeJson(versionInfo);
-		if(versionInfo.id) {
-			if(isNull(application.releaseNotesItem)) 
-				application.releaseNotesItem={};
-			
-			var coll=application.releaseNotesItem;
-			
-			//if(!isNull(coll[versionInfo.id].data) && DateDiff('n',coll[versionInfo.id].date,now())<60) {
-			if(!isNull(coll[versionInfo.id].data)) {
-				loop struct=coll[versionInfo.id].data index="local.k" item="local.v" {
-					fillHere[k]=v;
-				}
-				return coll[versionInfo.id].data;
-			}
-			
-			local.res=structNew("linked");
-			try {
-				http url=replace( jiraNotesURL, "{version-id}", versionInfo.id ) result="Local.http";
-				var raw = http.fileContent;
-				var pos = find( "</textarea>", raw );
-				raw = left( raw, pos - 1 );
-				pos = find( "<textarea", raw );
-				raw = mid( raw, pos );
-				pos = find( ">", raw );
-				raw = trim( mid( raw, pos + 1 ) );
-				//var res = ;
-				loop list=raw delimiters="#chr(13)##chr(10)#" index="Local.li" {
-					pos = find( "[LDEV-", li );
-					if ( pos==0 ) continue;
-					
-					local.v=trim( mid( li, pos ) );
-
-					var i1=find('[',v);
-					var i2=find(']',v);
-					if(i1==0 || i2==0) continue;
-					local.k=mid(v,i1+1,i2-2).replace('##','').trim();
-					v=mid(v,i2+1).trim()
-					if(left(v,1)=='-')v=mid(v,2).trim();
-					//if(!isNumeric(k)) continue;
-					res[k]=v;
-					fillHere[k]=v;
-				}
-				application.releaseNotesItem[versionInfo.id]={data:res,date:now()}
-
-				return application.releaseNotesItem[versionInfo.id].data;
-			}
-			catch ( ex ) {
-				throw SerializeJSON(ex);
-				rethrow;
-			}
-		}
-
-		return {};
-	}	
-	
-
 	private function s3Exists(name) {
 		if(!isNull(application.exists[name])) {
 			return application.exists[name];
@@ -1266,4 +946,55 @@
 	    return res.recordcount==1?res.size:0;
 	}
 
+	private function createArtifactIfNecessary(type,version) {
+		var s3=new S3(variables.s3Root);
+		var versions=s3.getVersions();
+		var vs=toVersionSortable(version);
+		
+		if(structKeyExists(versions,vs) && structKeyExists(versions[vs],type)) return;
+		thread s3=s3 name=createUUID() _type=type _version=version  {
+			try{
+				setting requesttimeout="10000000";
+				s3.add(_type,_version);
+			}
+			catch(e){
+				fileWrite("error.txt",serialize(e));
+			}
+		}
+		s3.reset();
+		throw "artifact #type# for version #version# does not exist yet, but we triggered the build for it. Try again in a couple minutes.";
+		//setting requesttimeout="10000000";
+		//sleep(60000);
+	}
+
+	private function toVersionSortable(string version){
+		local.arr=listToArray(arguments.version,'.');
+		
+		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
+			throw "version number ["&arguments.version&"] is invalid";
+		}
+		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
+
+		// qualifier has an appendix? (BETA,SNAPSHOT)
+		local.qArr=listToArray(arr[4],'-');
+		if(qArr.len()==1 && isNumeric(qArr[1])) local.sct.qualifier=qArr[1]+0;
+		else if(qArr.len()==2 && isNumeric(qArr[1])) {
+			sct.qualifier=qArr[1]+0;
+			sct.qualifier_appendix=qArr[2];
+			if(sct.qualifier_appendix=="SNAPSHOT")sct.qualifier_appendix_nbr=0;
+			else if(sct.qualifier_appendix=="BETA")sct.qualifier_appendix_nbr=50;
+			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
+		}
+		else {
+			sct.qualifier=qArr[1]+0;
+			sct.qualifier_appendix_nbr=75;
+		}
+
+
+		return 		repeatString("0",2-len(sct.major))&sct.major
+					&"."&repeatString("0",3-len(sct.minor))&sct.minor
+					&"."&repeatString("0",3-len(sct.micro))&sct.micro
+					&"."&repeatString("0",4-len(sct.qualifier))&sct.qualifier
+					&"."&repeatString("0",3-len(sct.qualifier_appendix_nbr))&sct.qualifier_appendix_nbr;
+	}
 }

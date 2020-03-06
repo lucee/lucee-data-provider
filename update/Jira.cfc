@@ -81,7 +81,7 @@ component {
 
 		if(result.status_code==200) {
 			var data=deserializeJson(result.fileContent);
-			res=Jira::arrayStruct2query(data.fields.attachment);
+			res=arrayStruct2query(data.fields.attachment);
 			return isNull(res)?queryNew(""):res;
 		}
 		else handleNon200(result,path);
@@ -151,7 +151,7 @@ component {
 
 		if(result.status_code==200) {
 			var data=deserializeJson(result.fileContent);
-			data.comments=Jira::arrayStruct2query(data.comments);
+			data.comments=arrayStruct2query(data.comments);
 			return data;
 		}
 		else handleNon200(result,path);
@@ -309,7 +309,7 @@ component {
 		if(result.status_code==200) {
 			var data=deserializeJson(result.fileContent);
 			if(!isNull(data.worklogs) && arrayLen(data.worklogs)) {
-				return Jira::worklogAsQuery(data.worklogs);
+				return worklogAsQuery(data.worklogs);
 			}
 				
 			return queryNew("");
@@ -338,9 +338,9 @@ component {
 
 		if(result.status_code==200) {
 			var data=deserializeJson(result.fileContent);
-			data.fields.comment.comments=Jira::arrayStruct2query(data.fields.comment.comments);
+			data.fields.comment.comments=arrayStruct2query(data.fields.comment.comments);
 			if(!isNull(data.changelog.histories)) {
-				data.changelog=Jira::arrayStruct2query(data.changelog.histories);
+				data.changelog=arrayStruct2query(data.changelog.histories);
 			}
 
 
@@ -447,23 +447,24 @@ component {
 	} 
 
 
-	public function listIssues(string project="", array fields=[]) {
+	public function listIssues(string project="", array fields=[], array stati=[]) {
 
 			
-
 		// if we have a cached we check when it has changed the last time;
 		var last=lastChanged(project);
 
-		//if(!isNull(application[CACHE_KEY]) && application[CACHE_KEY].lastChange==local.last)
-		//	return application[CACHE_KEY];
+		if(!isNull(application[CACHE_KEY]) && application[CACHE_KEY].lastChange==local.last)
+			return application[CACHE_KEY];
 		
+
+
 
 		var count=0;
 		var startAt=0;
 		var strFields=arrayLen(fields)?","&arrayToList(fields):"";
-		var qry=queryNew("id,key,summary,self,type,created,updated,priority,status"&strFields);
+		var qry=queryNew("id,key,summary,self,type,created,updated,priority,status,fixVersions"&strFields);
 		do {
-			var data=_list(project,startAt,variables.MAX_RECORDS,"issuetype,created,updated,priority,status,summary"&strFields);
+			var data=_list(project,startAt,variables.MAX_RECORDS,"issuetype,created,updated,priority,status,summary,fixVersions"&strFields,stati);
 			// first round
 			/*if(count==0 && !isNull(application[CACHE_KEY]) && application[CACHE_KEY].query.recordcount==data.total && application[CACHE_KEY].last==data.issues[1].id) {
 				// TODO check first and last
@@ -479,6 +480,13 @@ component {
 				querySetCell(qry,"priority",issue.fields.priority.name);
 				querySetCell(qry,"status",issue.fields.status.name);
 				querySetCell(qry,"summary",issue.fields.summary);
+
+				fixVersions=[];
+				loop array=issue.fields.fixVersions item="local.fvData" {
+					arrayAppend(fixVersions,fvData.name);
+				}
+
+				querySetCell(qry,"fixVersions",fixVersions);
 				
 				var created=issue.fields.created;
 				querySetCell(qry,"created",isEmpty(created)?"":parseDateTime(created));
@@ -503,9 +511,11 @@ component {
 	}
 
 
-	private function _list(required string project, required numeric startAt, required numeric max, string fields) {
-		
+	private function _list(required string project, required numeric startAt, 
+		required numeric max, string fields, array stati=[] flush=false) {
+
 		var jql=isEmpty(arguments.project)?'':'project = '&arguments.project;
+		if(arrayLen(stati)) jql&=" AND status in ("&arrayToList(stati,", ")&")";
 		var jql&=' ORDER BY key DESC';
 		var path= (variables.secure?"https":"http")
 			&"://"
@@ -517,7 +527,6 @@ component {
 			&"&fields="&arguments.fields
 			&"&jql="&jql
 		;
-
 		var result=_http(path);
 		
 
@@ -549,14 +558,14 @@ component {
 
 		if(result.status_code==200) {
 			var data=deserializeJson(result.fileContent);
-			return Jira::arrayStruct2query(data); 
+			return arrayStruct2query(data); 
 			return data;
 		}
 		else handleNon200(result,path);
 	}
 
 	public datetime function lastChanged(string project="") {
-			var data=_list(project,0,1,"created,updated");
+			var data=_list(project:project,startAt:0,max:1,fields:"created,updated");
 			if(data.total==0) return createDateTime(2009,4,13,17,06,0);// no issues we return a date in the far past
 			var fields=data.issues[1].fields;
 			var lastChange=isEmpty(fields.updated)?parseDateTime(fields.created):parseDateTime(fields.updated);
@@ -624,7 +633,7 @@ component {
 		if(result.status_code==200) {
 			var data=deserializeJson(result.fileContent);
 
-			return Jira::arrayStruct2query(data); 
+			return arrayStruct2query(data); 
 		}
 		else handleNon200(result,path);
 	}
@@ -671,7 +680,7 @@ component {
 
 		if(result.status_code==200) {
 			var data=deserializeJson(result.fileContent);
-			data=Jira::arrayStruct2query(data.issueLinkTypes);
+			data=arrayStruct2query(data.issueLinkTypes);
 			return data;
 		}
 		else handleNon200(result,path); 
