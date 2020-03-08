@@ -764,10 +764,10 @@
 	* this functions triggers that everything is prepared/build for future requests
 	* @version version to get bundles for
 	*/
-	remote function buildLatest(boolean inclFB=false restargsource="url")
+	remote function buildLatest()
 		httpmethod="GET" restpath="buildLatest" {
 		var s3=new S3(variables.s3Root);
-		s3.addMissing(inclFB);
+		s3.addMissing(true);
 		s3.reset();
 		return "done";
 	}

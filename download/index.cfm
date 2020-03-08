@@ -443,7 +443,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 												}
 											}
 											changelog=getChangelog(prevVersion,dw.version);
-											structDelete(changelog,prevVersion);
+											if(isStruct(changelog))structDelete(changelog,prevVersion);
 											//dump(prevVersion);
 											//dump(dw.version);
 											//dump(changelog);
