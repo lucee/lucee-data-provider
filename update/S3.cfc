@@ -137,7 +137,7 @@ component {
 		}
 		// create the artifact
 		if(type!="jar"){
-			createArtifacts(mr,versions[vs],type);
+			createArtifacts(mr,versions[vs],type,true);
 			SystemOutput("after creating artifact (#type#):"&now(),1,1);
 		}
 		reset();
@@ -206,7 +206,7 @@ component {
 		all[version]['date-jar']=date;
 	}
 
-	private function createArtifacts(mr,s3,specType="",includingForgeBox=false) {
+	private function createArtifacts(mr,s3,specType="",includingForgeBox=true) {
 		if(left(s3.version,1)<5) return;
 
 		var jarRem=variables.s3Root&"lucee-"&s3.version&".jar";
