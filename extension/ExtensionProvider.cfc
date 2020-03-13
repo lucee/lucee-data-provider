@@ -10,6 +10,160 @@
 	variables.columnList='id,version,versionSortable,name,description,image,category,author,created,releaseType,minLoaderVersion,minCoreVersion'
 			&',price,currency,disableFull,trial,older,promotionLevel,promotionText';
 
+
+	// new
+	variables.s3Root=request.s3Root;//"s3:///lucee-downloads/";
+	variables.cdnURL="https://ext.lucee.org/";
+	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
+	
+
+	/**
+	* if there is a update the function is returning a struct like this:
+	* {"type":"info"
+	* ,"language":arguments.language
+	* ,"current":arguments.version
+	* ,"available":"5.0.0.1"
+	* ,"message":"there is a update available for your version"
+	* ,"changelog":{"2010":"eventhandling breaks property inheritance","2020":"SerializeJSON incorrecly outputs date"}
+	* }
+	* if there is no update, you get a struct like this:
+	* {"type":"warning","message":"There is no update available for this version"}
+	* 
+	* @version current version installed
+	* @ioid ioid of the requesting user
+	* @langauage language f the requesting user
+	*/
+	remote struct function getInfo( 
+								string ioid="" restargsource="url",
+								required string language="en" restargsource="url",
+								required boolean withLogo=true restargsource="url",
+								required string coreVersion="" restargsource="url",
+								required type='release' restargsource="url",
+								required boolean flush=false restargsource="url")
+		httpmethod="GET" restpath="info" {
+
+
+		if(findNoCase("beta.",cgi.SERVER_NAME)) arguments.type="abc";
+		
+
+		try{
+
+		if(len(arguments.coreVersion))
+			local.luceeVersion=toVersionSortable(arguments.coreVersion);
+		
+		var rtn.meta={};
+		
+		rtn.meta.title="Lucee Association Switzerland Extension Store ("&cgi.HTTP_HOST&")";
+		rtn.meta.description="";
+		rtn.meta.image="http://extension.lucee.org/extension5/extension-provider.png";
+		rtn.meta.url="http://"&cgi.HTTP_HOST;
+		rtn.meta.mode="production";
+		rtn.extensions=new S3Ext(variables.s3Root)
+			.list(type:arguments.type,flush:arguments.flush,withLogo:arguments.withLogo);
+
+		}
+		catch(e) {
+			return e;
+		}
+		return rtn;
+	}
+
+	/**
+	* if there is a update the function is returning a struct like this:
+	* {"type":"info"
+	* ,"language":arguments.language
+	* ,"current":arguments.version
+	* ,"available":"5.0.0.1"
+	* ,"message":"there is a update available for your version"
+	* ,"changelog":{"2010":"eventhandling breaks property inheritance","2020":"SerializeJSON incorrecly outputs date"}
+	* }
+	* if there is no update, you get a struct like this:
+	* {"type":"warning","message":"There is no update available for this version"}
+	* 
+	* @version current version installed
+	* @ioid ioid of the requesting user
+	* @langauage language f the requesting user
+	*/
+	remote  function getInfoDetail(
+								required string id restargsource="Path",
+								string ioid="" restargsource="url",
+								required string language="en" restargsource="url",
+								required boolean withLogo=true restargsource="url"
+								,string version="" restargsource="url"
+								,string coreVersion="" restargsource="url",
+								string type='release' restargsource="url",
+								boolean flush=false restargsource="url")
+		httpmethod="GET" restpath="info/{id}" {
+
+			return new S3Ext(variables.s3Root)
+			.detail(id:arguments.id,version:arguments.version,flush:arguments.flush,withLogo:arguments.withLogo);
+	
+	}
+
+
+	/**
+	* provides trial versions
+	*/
+	remote function getTrial(
+		required string id restargsource="Path"
+		,string IOid="" restargsource="url"
+		,string version="" restargsource="url"
+		,string coreVersion="" restargsource="url"
+		,string type='release' restargsource="url",
+		boolean flush=false restargsource="url")
+		httpmethod="GET" restpath="trial/{id}" {
+
+
+		var data= new S3Ext(variables.s3Root)
+			.detail(id:arguments.id,version:arguments.version,flush:arguments.flush,withLogo:false);
+
+
+		header statuscode="302" statustext="Found";
+		header name="Location" value=variables.cdnURL&data.filename;
+	}
+
+	/**
+	* provides full versions
+	*/
+	remote function getFull(
+		required string id restargsource="Path"
+		,string IOid="" restargsource="url"
+		,string version="" restargsource="url"
+		,string coreVersion="" restargsource="url"
+		,string type='release' restargsource="url",
+		boolean flush=false restargsource="url")
+		httpmethod="GET" restpath="full/{id}" {
+
+		var data= new S3Ext(variables.s3Root)
+			.detail(id:arguments.id,version:arguments.version,flush:arguments.flush,withLogo:false);
+
+		header statuscode="302" statustext="Found";
+		header name="Location" value=variables.cdnURL&data.filename;
+	}
+
+	remote function reset()
+		httpmethod="GET" restpath="reset" {
+
+		var data= new S3Ext(variables.s3Root).reset();
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	private function init() {
 		
 		
@@ -98,13 +252,13 @@
 	* @ioid ioid of the requesting user
 	* @langauage language f the requesting user
 	*/
-	remote struct function getInfo( 
+	remote struct function getInfoOld( 
 								string ioid="" restargsource="url",
 								required string language="en" restargsource="url",
 								required boolean withLogo=true restargsource="url",
 								required string coreVersion="" restargsource="url",
 								required type='release' restargsource="url")
-		httpmethod="GET" restpath="info" {
+		httpmethod="GET" restpath="info-old" {
 
 		if(findNoCase("beta.",cgi.SERVER_NAME)) arguments.type="abc";
 		
@@ -222,7 +376,7 @@
 	* @ioid ioid of the requesting user
 	* @langauage language f the requesting user
 	*/
-	remote  function getInfoDetail(
+	remote  function getInfoDetailOld(
 								required string id restargsource="Path",
 								string ioid="" restargsource="url",
 								required string language="en" restargsource="url",
@@ -230,7 +384,7 @@
 								,string version="" restargsource="url"
 								,string coreVersion="" restargsource="url",
 								string type='release' restargsource="url")
-		httpmethod="GET" restpath="info/{id}" {
+		httpmethod="GET" restpath="info-old/{id}" {
 
 		if(len(arguments.coreVersion))
 			local.luceeVersion=toVersionSortable(arguments.coreVersion);
@@ -315,13 +469,13 @@
 	/**
 	* provides trial versions
 	*/
-	remote function getTrial(
+	remote function getTrialOld(
 		required string id restargsource="Path"
 		,string IOid="" restargsource="url"
 		,string version="" restargsource="url"
 		,string coreVersion="" restargsource="url"
 		,string type='release' restargsource="url")
-		httpmethod="GET" restpath="trial/{id}" {
+		httpmethod="GET" restpath="trial-old/{id}" {
 
 		if(findNoCase("beta.",cgi.SERVER_NAME)) arguments.type="abc";
 
@@ -331,13 +485,13 @@
 	/**
 	* provides full versions
 	*/
-	remote function getFull(
+	remote function getFullOld(
 		required string id restargsource="Path"
 		,string IOid="" restargsource="url"
 		,string version="" restargsource="url"
 		,string coreVersion="" restargsource="url"
 		,string type='release' restargsource="url")
-		httpmethod="GET" restpath="full/{id}" {
+		httpmethod="GET" restpath="full-old/{id}" {
 
 		if(findNoCase("beta.",cgi.SERVER_NAME)) arguments.type="abc";
 
