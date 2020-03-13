@@ -1,6 +1,7 @@
 
 <cfoutput>
 <cfscript>
+if(isNull(url.type)) url.type="releases";
 doS3={
 	express:true
 	,jar:true
@@ -14,45 +15,57 @@ listURL="https://release.lucee.org/rest/update/provider/list/";
 
 extcacheLiveSpanInMinutes=1000;
 
-EXTENSION_PROVIDER="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=release";
-EXTENSION_PROVIDER_ABC="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=abc";
-EXTENSION_PROVIDER_SNAPSHOT="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=snapshot";
+EXTENSION_PROVIDER="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=all";
+EXTENSION_PROVIDER_REL="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=release&flush=1";
+EXTENSION_PROVIDER_ABC="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=abc&flush=1";
+EXTENSION_PROVIDER_SNAPSHOT="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=snapshot&flush=1";
 EXTENSION_DOWNLOAD="https://extension.lucee.org/rest/extension/provider/{type}/{id}";
 
 
-	function _getExtensions(required string type) localmode=true {
-		if(arguments.type=="snapshot") local.ep=EXTENSION_PROVIDER_SNAPSHOT;
-		else if(arguments.type=="abc") local.ep=EXTENSION_PROVIDER_ABC;
-		else local.ep=EXTENSION_PROVIDER;
-		//dump(type&"-"&ep);abort;
-
-		http url=ep result="http";
+function getExtensions(flush=false) localmode=true {
+	if(flush || isNull(application.extInfo)) {
+		http url=EXTENSION_PROVIDER&"&flush="&arguments.flush result="http";
 		if(isNull(http.status_code) || http.status_code!=200) throw "could not connect to extension provider (#ep#)";
 		data=deSerializeJson(http.fileContent,false);
-		return data.extensions;
+		application.extInfo = data.extensions;
+	}
+	return application.extInfo;
+}
+
+function extractVersions(qry,type) {
+	// first we get the current version
+	var data=structNew("linked");
+	if(is(type,qry.version)) {
+		data[qry.version]={'filename':qry.fileName,'date':qry.created};
 	}
 
-	function getExtensions(required string type) localmode=true {
-		// get data from server
-		if(isNull(application['downloadExtensions_'&type].query) || !isNull(url.reset) || !isNull(url.resetExtension)){
-			application['downloadExtensions_'&type].query=local.downloads=_getExtensions(arguments.type);
-			application['downloadExtensions_'&type].age=now();
+	// now all the older
+	var _older=qry.older;
+	var _olderName=qry.olderName;
+	var _olderDate=qry.olderDate;
+	loop array=_older index="local.i" item="local.version" {
+		if(is(type,version)) {
+			data[version]={'filename':_olderName[i],'date':_olderDate[i]};
 		}
-		// get data from cache (application scope)
-		else {
-			local.downloads=application['downloadExtensions_'&type].query;
-			// update for the next user when older than 5 minutes
-			if(dateDiff("n",application['downloadExtensions_'&type].age,now())>=extcacheLiveSpanInMinutes) {
-				application['downloadExtensions_'&type].age=now();
-				thread {
-					application['downloadExtensions_'&type].query=_getExtensions(arguments.type);
-					systemOutput("done");
-				}
-			}
-		}
-		return downloads;
 	}
-
+	return data;
+}
+function is(type,val) {
+	if(type=="all" || type=="") 
+		return true;
+	if(arguments.type=="snapshot") 
+		return findNoCase('-SNAPSHOT',val);
+	else if(arguments.type=="abc") {
+		if(findNoCase('-ALPHA',val) 
+			|| findNoCase('-BETA',val)
+			|| findNoCase('-RC',val)
+		) 
+			return true;
+		return false;
+	}
+	else if(arguments.type=="release") 
+		return !findNoCase('-',val);
+}
 
 function getVersions(flush) {
 	if(!structKeyExists(application,"extVer") || flush) {
@@ -138,14 +151,9 @@ lang.installer.lin32="Linux (32b)";
 
 
 	cdnURL="https://cdn.lucee.org/";
+	cdnURLExt="https://ext.lucee.org/";
 	MAX=1000;
 
-	if(isNull(url.type)) url.type="releases";
-	if(url.type=='ext') extQry=getExtensions('release');
-	else if(url.type=='extabc') extQry=getExtensions('abc');
-	else if(url.type=='extsnap') extQry=getExtensions('snapshot');
-
-	
 	singular={
 		releases:"Release",snapshots:"Snapshot",abc:'RC / Beta',beta:'Beta',rc:'RC'
 		,ext:"Release",extsnap:"Snapshot",extabc:'RC / Beta'
@@ -261,7 +269,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 				<p>Lucee core and extension downloads.</p>
 			</div>
 
-			<cfif type EQ "releases" or type EQ"snapshots" or type EQ "abc" or type EQ "beta" or type EQ "rc">
+			<cfif type EQ "releases" or type EQ "snapshots" or type EQ "abc" or type EQ "beta" or type EQ "rc">
 				
 				<cfif true>
 					
@@ -486,146 +494,118 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 						</div>
 					</div>
 
-					<div id="ext">
-						<h2>Extensions</h2>
-						<p style="font-size: 1.7rem;font-weight:normal;">Lucee Extensions, simply copy them to /lucee-server/deploy, of a running Lucee installation, to install them.
-						You can also install this Extensions from within your Lucee Administrator under "Extension/Application".</p>
-						<cfset types_ = "release,abc,snapshot">
-						<cfset rows_ = {}>
-						<cfset extQry_ = {}>
-						<cfloop list="#types_#" item="type">
-							<cfset extQry_[type]=getExtensions(type)>
-						</cfloop>
-						<cfset ListID = "">
-						<div id="ext">
-							<cfloop list="#types_#" item="type">
-								<cfloop query=extQry_[type]>
-									<cfif listFindNoCase(ListID, extQry_[type].id) GT 0>
-										<cfcontinue>
-									</cfif>
-									<cfset ListID = listAppend(ListID, extQry_[type].id)>
-									<div class="container">
-										<cfset extVersions = {}>
-										<cfset extVersions[type]= extQry_[type].older>
-										<cfif arrayLen(ArrayFindAllNoCase( extVersions[type], extQry_[type].version ) )  EQ 0>
-											<cfset arrayPrepend(extVersions[type], extQry_[type].version)>
-										</cfif>
-										<cfsavecontent variable="details1">
-											Latest Version: <i>#extQry_[type].version#</i><br>
-											Birth Date: <i>#dateFormat(extQry_[type].created,'mmmm, dd/yyyy')#</i><br>
-											Trial: <i>#yesnoformat(extQry_[type].trial)#</i>
-										</cfsavecontent>
-										<cfset extVersions['_'&type] = details1>
 
-										<cfloop list="#types_#" item="extType">
-											<cfif extType EQ type>
-												<cfcontinue>
-											</cfif>
-											<cfset table = extQry_[extType]>
-											<cfquery dbtype="query" name="_res">
-												select * from table where id = '#extQry_[type].id#'
-											</cfquery>
-											<cfif _res.recordcount>
-												<cfsavecontent variable="details2">
-													Latest Version : <i>#_res.version#</i><br>
-													Birth Date : <i>#dateFormat(_res.created,'mmmm, dd/yyyy')#</i><br>
-													Trial : <i>#yesnoformat(_res.trial)#</i>
-												</cfsavecontent>
-												<cfset extVersions[extType] = _res.older>
-												<cfset extVersions['_'&extType] = details2>
-												<cfif arrayLen(ArrayFindAllNoCase( extVersions[extType], _res.version ) ) EQ 0 >
-													<cfset arrayPrepend(extVersions[extType], _res.version)>
-												</cfif>
-											</cfif>
-										</cfloop>
-										<cfset extQry = extQry_[type]>
-										<div class="col-ms-12 col-xs-12 well well-sm">
-												<span class="head1 title">#extQry.name#</span>
-												<hr>
-											<div class='col-xs-2 col-md-2'>
-												<div>
-													<cfif len(extQry.image)>
-														<img style="max-width: 100%;" src="data:image/png;base64,#extQry.image#">
-													</cfif>
-												</div>
-											</div>
-											<div class='col-md-10 col-xs-10'>
-												<div class="container bg-white mb-2" style="margin-left:-1.7%;">
-													<div class="head1 textStyle" style="font-size:2rem !important;"> ID: #extQry.id# </div>
-													<p class="fontStyle ml-2">#extQry.description#</p>
-												</div>
-												<cfif !isNull(extQry.older) && isArray(extQry.older) && arrayLen(extQry.older)>
-													<div class="row">
-														<cfloop list="#types_#" item="_extType">
-															<cfif !structKeyExists(extVersions, _extType)>
-																<cfcontinue>
-															</cfif>
-																<cftry><cfset arraySort(extVersions[_extType],"textnocase", "desc")><cfcatch></cfcatch></cftry>
-																<div class="mb-0 mt-1 col-xs-4 col-md-4 borderInfo">
-																	<div class="bg-primary jumbotron text-white jumboStyle">
-																		<span class="btn-primary">
-																			<h2 class="fontSize">#multi[_extType]#</h2>
-																		</span>
-																	</div>
-																	<cfset len = 1>
-																	<cfloop array="#extVersions[_extType]#" item="_older">
-																		<cfif len LTE 5>
-																			<div <cfif len MOD 2 eq 0>class="row_alterEven textStyle textWrap"<cfelse>class="row_alterOdd textStyle textWrap"</cfif>>
-																				<a href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',extQry.trial?"trial":"full"),'{id}',extQry.id)#?version=#_older#">download#extQry.trial?" trial":""# version (#_older#)</a>
-																				<span  class="triggerIcon pointer" style="color :##01798A" title="#extVersions['_'&_extType]#">
-																					<span class="glyphicon glyphicon-info-sign"></span>
-																				</span>
-																			</div>
-																		<cfelseif len EQ 6>
-																			<cfset ext_Version = extQry.id&'_'&_extType>
-																			<div style="text-align:center;background-color:##BCBCBC;color:2C3A47;" id="#ext_Version#_id" class="collapse-toggle collapsed textStyle" onclick="return hideToggle('#ext_Version#_id');"  data-toggle="collapse">
-																				<b><i>Show more..</i></b>
-																				<small class="align-middle h6 mb-0">
-																					<i class="icon icon-open"></i>
-																				</small>
-																			</div>
-																			<div  class="clog-detail collapse #ext_Version# row_alter" style="text-align:center;">
-																				<div <cfif len MOD 2 eq 0>class="row_alterEven textStyle textWrap"<cfelse>class="row_alterOdd textStyle textWrap"</cfif>>
-																					<a href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',extQry.trial?"trial":"full"),'{id}',extQry.id)#?version=#_older#">
-																						download#extQry.trial?" trial":""# version (#_older#)
-																					</a>
-																					<span  class="triggerIcon pointer" style="color :##01798A" title="#extVersions['_'&_extType]#">
-																						<span class="glyphicon glyphicon-info-sign"></span>
-																					</span>
-																				</div>
-																		<cfelseif len GT 5>
-																				<div <cfif len MOD 2 eq 0>class="row_alterEven textStyle textWrap"<cfelse>class="row_alterOdd textStyle textWrap"</cfif>>
-																					<a href="#replace(replace(EXTENSION_DOWNLOAD,'{type}',extQry.trial?"trial":"full"),'{id}',extQry.id)#?version=#_older#">
-																						download#extQry.trial?" trial":""# version (#_older#)
-																					</a>
-																					<span  class="triggerIcon pointer" style="color :##01798A" title="#extVersions['_'&_extType]#">
-																						<span class="glyphicon glyphicon-info-sign">
-																						</span>
-																					</span>
-																				</div>
-																		</cfif>
-																		<cfif len GT 5 && len eq arrayLen(extVersions[_extType])>
-																			<div class="showLess pointer textStyle" style="text-align:center;background-color:##BCBCBC;" onclick="return hideData('#ext_Version#');">
-																				<b><i>Show less</i></b>
-																				<small class="align-middle h6 mb-0  hideClick">
-																					<i class="icon icon-collapse"></i>
-																				</small>
-																			</div>
-																			</div>
-																		</cfif>
-																		<cfset len++>
-																	</cfloop>
-																</div>
-														</cfloop>
-													</div>
-												</cfif>
-											</div>
-										</div>
-									</div>
-								</cfloop>
-							</cfloop>
+
+
+
+
+
+
+
+
+<cfscript>
+	
+	extQry=getExtensions(structKeyExists(url,"reset"));
+</cfscript>
+<div id="ext">
+	<h2>Extensions</h2>
+						
+	<p style="font-size: 1.7rem;font-weight:normal;">Lucee Extensions, simply copy them to /lucee-server/deploy, of a running Lucee installation, to install them.
+	You can also install this Extensions from within your Lucee Administrator under "Extension/Application".</p>
+
+	<cfloop query=extQry>
+	<div class="container">
+		<div class="col-ms-12 col-xs-12 well well-sm">
+			<!--- title --->
+			<span class="head1 title">#extQry.name#</span>
+			<hr>
+			<!--- image --->
+			<div class='col-xs-2 col-md-2'>
+				<div>
+				<cfif len(extQry.image)>
+					<img style="max-width: 100%;" src="data:image/png;base64,#extQry.image#">
+				</cfif>
+				</div>
+			</div>
+			<!--- description --->
+			<div class='col-md-10 col-xs-10'>
+				<div class="container bg-white mb-2" style="margin-left:-1.7%;">
+					<div class="head1 textStyle" style="font-size:2rem !important;"> 
+						ID: #extQry.id# 
+						<p class="fontStyle ml-2">#extQry.description#</p>
+					</div>
+				
+			<!--- downloads --->
+			<div class="row">
+			<cfloop list="release,abc,snapshot" item="type">
+				<cfset exts=extractVersions(extQry,type)>
+				<cfif structCount(exts)>
+				<div class="mb-0 mt-1 col-xs-4 col-md-4 borderInfo">
+					<div class="bg-primary jumbotron text-white jumboStyle">
+						<span class="btn-primary">
+							<h2 class="fontSize">#multi[type]#</h2>
+						</span>
+					</div>
+					<cfset ind=0>
+					<cfset uid="">
+					<cfset cnt=structCount(exts)>
+					<cfloop struct="#exts#" index="ver" item="el">
+					<cfset ind++>
+
+					<!--- show more --->
+					<cfif ind EQ 5 and cnt GT 6>
+						<cfset uid=createUniqueId()>
+						<div style="text-align:center;background-color:##BCBCBC;color:2C3A47;" id="#uid#_release_id" class="collapse-toggle collapsed textStyle" onclick="return hideToggle('#uid#_release_id');"  data-toggle="collapse">
+						<b><i>Show more..</i></b>
+						<small class="align-middle h6 mb-0">
+							<i class="icon icon-open"></i>
+						</small>
+						</div>
+						<div  class="clog-detail collapse #uid#_release row_alter" style="text-align:center;">
+					</cfif>
+
+
+					<div <cfif ind MOD 2 eq 0>class="row_alterEven textStyle textWrap"<cfelse>class="row_alterOdd textStyle textWrap"</cfif>>
+						
+						<a href="#cdnURLExt##el.filename#">#ver# (#lsDateFormat(el.date)#)</a>
+						<!--- <span  class="triggerIcon pointer" 
+						style="color :##01798A" title="">
+						<span class="glyphicon glyphicon-info-sign"></span>
+						</span>--->
+
+					</div>
+
+					<!--- show less --->
+					<cfif cnt EQ ind and len(uid)>
+						<div class="showLess pointer textStyle" 
+						style="text-align:center;background-color:##BCBCBC;" onclick="return hideData('#uid#_release');">
+							<b><i>Show less</i></b>
+							<small class="align-middle h6 mb-0  hideClick">
+								<i class="icon icon-collapse"></i>
+							</small>
 						</div>
 					</div>
+					</cfif>
+					</cfloop>
+
+
+
+
+
+				</div>
+				</cfif>
+			</cfloop>
+			</div>
+
+
+		</div>
+	</div>
+	</div>
+	</div>	
+	</cfloop>
+</div>
+
+
 				</cfif>
 			</cfif>
 		<cfhtmlbody action="flush">
