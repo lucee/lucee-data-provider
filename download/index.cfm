@@ -1,6 +1,7 @@
 
 <cfoutput>
 <cfscript>
+	param name="request.changelogs" default="false";
 if(isNull(url.type)) url.type="releases";
 doS3={
 	express:true
@@ -23,7 +24,7 @@ EXTENSION_DOWNLOAD="https://extension.lucee.org/rest/extension/provider/{type}/{
 
 
 function getExtensions(flush=false) localmode=true {
-	if(flush || isNull(application.extInfo)) {
+	if(arguments.flush || isNull(application.extInfo)) {
 		http url=EXTENSION_PROVIDER&"&flush="&arguments.flush result="http";
 		if(isNull(http.status_code) || http.status_code!=200) throw "could not connect to extension provider (#ep#)";
 		data=deSerializeJson(http.fileContent,false);
@@ -32,53 +33,53 @@ function getExtensions(flush=false) localmode=true {
 	return application.extInfo;
 }
 
-function extractVersions(qry,type) {
+function extractVersions(qry, type) localmode=true {
 	// first we get the current version
 	var data=structNew("linked");
-	if(is(type,qry.version)) {
-		data[qry.version]={'filename':qry.fileName,'date':qry.created};
+	if(variables.is(arguments.type,arguments.qry.version)) {
+		data[arguments.qry.version]={'filename':arguments.qry.fileName,'date':arguments.qry.created};
 	}
 
 	// now all the older
-	var _older=qry.older;
-	var _olderName=qry.olderName;
-	var _olderDate=qry.olderDate;
+	var _older=arguments.qry.older;
+	var _olderName=arguments.qry.olderName;
+	var _olderDate=arguments.qry.olderDate;
 	loop array=_older index="local.i" item="local.version" {
-		if(is(type,version)) {
+		if (variables.is(arguments.type,version)) {
 			data[version]={'filename':_olderName[i],'date':_olderDate[i]};
 		}
 	}
 	return data;
 }
-function is(type,val) {
-	if(type=="all" || type=="") 
+function is(type, val) {
+	if (arguments.type=="all" || arguments.type=="") 
 		return true;
-	if(arguments.type=="snapshot") 
-		return findNoCase('-SNAPSHOT',val);
-	else if(arguments.type=="abc") {
-		if(findNoCase('-ALPHA',val) 
-			|| findNoCase('-BETA',val)
-			|| findNoCase('-RC',val)
+	if (arguments.type=="snapshot") 
+		return findNoCase('-SNAPSHOT', arguments.val);
+	else if (arguments.type=="abc") {
+		if(findNoCase('-ALPHA', arguments.val) 
+			|| findNoCase('-BETA', arguments.val)
+			|| findNoCase('-RC', arguments.val)
 		) 
 			return true;
 		return false;
 	}
 	else if(arguments.type=="release") 
-		return !findNoCase('-',val);
+		return !findNoCase('-', arguments.val);
 }
 
 function getVersions(flush) {
-	if(!structKeyExists(application,"extVer") || flush) {
-		http url=listURL&"?extended=true"&(flush?"&flush=true":"") result="local.res";
+	if(!structKeyExists(application,"extVer") || arguments.flush) {
+		http url=listURL&"?extended=true"&(arguments.flush?"&flush=true":"") result="local.res";
 		application.extVer= deserializeJson(res.fileContent);
 	}
 	return application.extVer;
 }
 function getDate(version,flush=false) {
-	if(flush || isNull(application.mavenDates[version])) {
+	if(arguments.flush || isNull(application.mavenDates[arguments.version])) {
 		local.res="";
 		try{
-			http url="https://release.lucee.org/rest/update/provider/getdate/"&version result="local.res";
+			http url="https://release.lucee.org/rest/update/provider/getdate/"&arguments.version result="local.res";
 			var res= trim(deserializeJson(res.fileContent));
 			application.mavenDates[version]= lsDateFormat(parseDateTime(res));
 		}
@@ -86,11 +87,11 @@ function getDate(version,flush=false) {
 		if(len(res)==0) return "";
 		
 	}
-	return application.mavenDates[version]?:"";
+	return application.mavenDates[arguments.version]?:"";
 }
 
 function getInfo(version,flush=false) {
-	if(flush || isNull(application.mavenInfo[version])) {
+	if(arguments.flush || isNull(application.mavenInfo[version])) {
 		local.res="";
 		try{
 			http url="https://release.lucee.org/rest/update/provider/info/"&version result="local.res";
@@ -105,11 +106,11 @@ function getInfo(version,flush=false) {
 }
 
 function getChangelog(versionFrom,versionTo,flush=false) {
-	var id=versionFrom&"-"&versionTo;
-	if(flush || isNull(application.mavenChangeLog[id])) {
+	var id=arguments.versionFrom&"-"&arguments.versionTo;
+	if (arguments.flush || isNull(application.mavenChangeLog[id])) {
 		local.res="";
 		//try{
-			http url="https://release.lucee.org/rest/update/provider/changelog/"&versionFrom&"/"&versionTo result="local.res";
+			http url="https://release.lucee.org/rest/update/provider/changelog/"&arguments.versionFrom&"/"&arguments.versionTo result="local.res";
 			var res= deserializeJson(res.fileContent);
 			application.mavenChangeLog[id]= res;
 		//}catch(e) {}
@@ -200,10 +201,10 @@ lang.installer.lin32="Linux (32b)";
 	<script crossorigin="anonymous" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
 	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
 	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
-	<link href="/res/download.css" rel="stylesheet">
+	<link href="../res/download.css" rel="stylesheet">
 </cfhtmlhead>
 <cfhtmlbody>
-<script src="/res/download.js"></script>
+<script src="../res/download.js"></script>
 </cfhtmlbody>
 <style rel="stylesheet">
 .data-content{ background-color: ##01798a; color: white; min-width: 100%; font-size: 14px; line-height: 15px;}
@@ -238,6 +239,9 @@ lang.installer.lin32="Linux (32b)";
 h2.fontSize{margin-bottom:-1.80rem !important;}
 .title{font-family:  -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol" !important;font-size: 28px !important;}
 .textWrap{text-align:center;overflow:hidden;white-space:nowrap;}
+.bugLink {
+	padding-right: 20px;
+}
 @media only screen and (max-width: 1200px){
 .textWrap{text-align:center !important;overflow:auto !important;white-space:normal !important;}
 }
@@ -254,7 +258,12 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 		<meta charset="utf-8">
 		<meta content="ie=edge" http-equiv="x-ua-compatible">
 		<meta content="initial-scale=1, shrink-to-fit=no, width=device-width" name="viewport">
-		<title>Download Lucee</title>
+		<cfif request.changelogs>
+			<title>Lucee Changelogs - #Ucase(url.type)#</title>
+		<cfelse>
+			<title>Download Lucee</title>
+		</cfif>
+
 		<link rel="shortcut icon" href="/res/images/logo.png">
 		<link rel="apple-touch-icon" href="/res/images/logo.png">
 		<link rel="apple-touch-icon" sizes="72x72" href="/res/images/logo.png">
@@ -262,7 +271,69 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 		<cfhtmlhead action="flush">
 	</head>
 	<body class="container py-3">
+		<cfif request.changelogs>
+			<div class="bg-primary jumbotron text-white">
+				<h1 class="display-3">Lucee Changelogs - #ucase(type)#</h1>
+			</div>
+			<div class="btn-group" role="group">
+			<cfloop list="releases,snapshots,rc,beta" item="_type">
+				<a href="?type=#_type#" class="btn  btn-lg <cfif url.type eq _type>btn-primary<cfelse>btn-default</cfif>" href="?type=#type#">					
+					#ucase(_type)#
+				</a>
+			</cfloop>
+			</div>		
+			<br><br>
+			<cfscript>
+				_versions={};
+				rows = [:];
+			</cfscript>
+			<cfloop list="releases,snapshots,rc,beta" item="_type">			
+				<cfscript>	
+					if (url.type neq _type)
+						continue;
+					_versions[_type] = [];
+					rows[_type] = [:];				
 
+					//dump (var=versions, top=1);
+					loop struct="#versions#" index="vs" item="data"{						
+						if (data.type == _type){
+							StructAppend(data, {"vs":vs});
+							ArrayAppend(_versions[_type], data);
+						}
+					}
+					prevVersion = "0.0.0.0";
+				</cfscript>
+
+				<cfloop array="#_versions[_type]#" item="vv" index="i">
+					<cfscript>
+						changelog = false;						
+						if (i neq ArrayLen(_versions[_type]))
+							prevVersion = _versions[_type][i+1].version;
+							
+						changelog=getChangelog(prevVersion, vv.version);
+						if(isStruct(changelog))
+							structDelete(changelog,prevVersion);
+						//changelog=false;	
+					</cfscript>
+
+					<cfif isstruct(changelog) && structCount(changelog) GT 0>
+						<h4 id="#vv.version#"><a href="index.cfm?#_type#=#vv.vs###Core">Lucee #vv.version#</a></h4>
+						<div class="changelogs desc">
+							<cfloop struct="#changelog#" index="ver" item="tickets">
+								<cfloop struct="#tickets#" index="id" item="subject">
+									<a class="bugLink" href="http://bugs.lucee.org/browse/#id#" target="blank">#id#</a> #htmleditFormat(subject)#
+									<br>
+								</cfloop>
+							</cfloop>
+							<br>
+						</div>
+					</cfif>
+					<cfflush>
+				</cfloop>
+			</cfloop>
+			<cfabort>
+		<cfelse>
+		
 		<!--- output --->
 			<div class="bg-primary jumbotron text-white">
 				<h1 class="display-3">Downloads</h1>
@@ -338,7 +409,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 
 												---><cfset arrayAppend(_versions[_type],data.version)>#data.versionNoAppendix#</option></cfif></cfloop>
 
-										</select>
+										</select>										
 									</div>
 									<cfset dw=versions[rows[_type]]>
 									<!--- desc --->
@@ -456,36 +527,16 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 											//dump(dw.version);
 											//dump(changelog);
 											
-											</cfscript>
-											
-
+											</cfscript>											
 
 										<cfif isstruct(changelog) && structCount(changelog) GT 0>
 											<div class="fontStyle">
-												<p class="collapsed mb-0" data-toggle="modal" data-target="##myModal#_type#">Changelog<small class="align-middle h6 mb-0 ml-1"><i class="icon icon-collapse collapsed"></i></small></p>
-											</div>
-											<div class="modal fade" id="myModal#_type#" role="dialog">
-												<div class="modal-dialog modal-lg">
-													<div class="modal-content">
-														<div class="modal-header">
-															<button type="button" class="close" data-dismiss="modal">&times;</button>
-															<h4 class="modal-title"><b>Version-#dw.version# Changelogs</b></h4>
-														</div>
-														<div class="modal-body desc">
-															<cfloop struct="#changelog#" index="ver" item="tickets">
-																<cfloop struct="#tickets#" index="id" item="subject">
-																<a href="http://bugs.lucee.org/browse/#id#" target="blank">#id#</a>- #subject#
-																<br>
-															</cfloop></cfloop>
-														</div>
-														<div class="modal-footer">
-															<button type="button" class="btn btn-default btn-lg" data-dismiss="modal">Close</button>
-														</div>
-												  	</div>
-												</div>
-											</div>
+												<a href="changelogs.cfm?type=#_type####dw.version#">Changelogs</a>
+											</div>											
 										<cfelse>
-											<div class="fontStyle"></div>
+											<div class="fontStyle">
+												<a href="changelogs.cfm?type=#_type#">Changelogs</a>
+											</div>
 										</cfif>
 									</div>
 									<div><hr></div><!--- --->
@@ -493,16 +544,6 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 							</cfloop>
 						</div>
 					</div>
-
-
-
-
-
-
-
-
-
-
 <cfscript>
 	
 	extQry=getExtensions(structKeyExists(url,"reset"));
@@ -608,6 +649,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 
 				</cfif>
 			</cfif>
+		</cfif>
 		<cfhtmlbody action="flush">
 	</body>
 </html>
