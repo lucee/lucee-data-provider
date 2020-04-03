@@ -32,14 +32,6 @@
 		,'org.mariadb.jdbc':{'group':'org.mariadb.jdbc','artifact':'mariadb-java-client'}
 	};
 
-	variables.extMappings={
-		'hibernate.extension':{lex:'hibernate-orm',jar:'lucee-hibernate'}
-		,'mongodb.extension':{lex:'mongodb-extension',jar:'mongodb-extension'}
-		,'s3.extension':{lex:'s3-extension',jar:'s3-extension'}
-		,'extension-memcached':{lex:'extension-memcached',jar:'lucee-extension-memcached'}
-
-	};
-
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.artDirectory=variables.current&"artifacts/";
 	variables.extDirectory="/var/www/sites/extension/extension5/extensions/"; // TODO make more dynamic
@@ -262,9 +254,31 @@
 	* function to load 3 party Bundle file, for example "/antlr/2.7.6"
 	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
 	*/
-	remote function downloadBundle(required string bundleName restargsource="Path", string bundleVersion restargsource="Path",
+	remote function downloadBundle(required string bundleName restargsource="Path", 
+		string bundleVersion restargsource="Path",
 		string ioid="" restargsource="url",boolean allowRedirect=true restargsource="url")
 		httpmethod="GET" restpath="download/{bundlename}/{bundleversion}" {
+try{
+
+		try {
+			var mm=new MavenMatcher();
+			var bv=isNull(arguments.bundleVersion)?"latest":arguments.bundleVersion;
+			var match=mm.getMatch(arguments.bundleName,bv);
+			
+			FileAppend("log-maven-download-ok.log",arguments.bundleName&":"&bv&"
+");
+			//http url=match.url result="local.cfhttp";
+			//if(cfhttp.status_code!=200) throw match.url&" "&serialize(cfhttp);
+			if(!isNull(url.abc)) throw match.url;
+			header statuscode="302" statustext="Found";
+			header name="Location" value=match.url;
+			return;
+		}catch(e) {
+			FileAppend("log-maven-download.log",
+				arguments.bundleName&":"&arguments.bundleVersion&" "&
+				e.message&"
+");	
+		}
 		
 		if(arguments.bundleVersion=='latest') {
 			arguments.bundleVersion= getLatestBundle(arguments.bundleName);
@@ -326,7 +340,7 @@
 				name=replace(arguments.bundleName,'-','.','all')&"."&replace(arguments.bundleVersion,'-','.','all')&".lex";
 
 			var useMapping=false;
-			if(structKeyExists(variables.extMappings,arguments.bundleName)) {
+			if(!isnull(variables.extMappings) && structKeyExists(variables.extMappings,arguments.bundleName)) {
 				if(!FileExists(variables.extDirectory&name)) {
 					name=variables.extMappings[arguments.bundleName].lex&"-"&arguments.bundleVersion&".lex";
 					useMapping=true;
@@ -352,7 +366,7 @@
 							_fileCopy(jars.directory&jars.name,variables.artDirectory&jars.name);
 							found=true;
 						}
-						if(structKeyExists(variables.extMappings,arguments.bundleName)) {
+						if(!isnull(variables.extMappings) && structKeyExists(variables.extMappings,arguments.bundleName)) {
 							if(isDefined("url.xc10")) throw "we have a mapping "&serialize(variables.extMappings[arguments.bundleName]);
 							var map=variables.extMappings[arguments.bundleName];
 							var trgName=arguments.bundleName&"-"&arguments.bundleVersion&".jar";
@@ -370,12 +384,12 @@
 		}
 		if(len(path)==0 || !FileExists(path) || !isNull(url.ignoreLocal)) {
 			// last try, when the pattrn of the maven name matches the pattern of the osgi name we could be lucky
-			var mvnRep="http://repo1.maven.org/maven2";
+			var mvnRep="https://repo1.maven.org/maven2";
 			var repositories=[
-				mvnRep
-				,"http://raw.githubusercontent.com/lucee/mvn/master/releases"
+				mvnRep,
+				"http://raw.githubusercontent.com/lucee/mvn/master/releases"
 				,"http://oss.sonatype.org/content/repositories/snapshots"
-				,"https://repo1.maven.org/maven2"
+				//,"https://repo1.maven.org/maven2"
 			];
 
 			if(structKeyExists(variables.mavenMappings,arguments.bundleName)) {
@@ -455,6 +469,8 @@
 			header name="Content-disposition" value="attachment;filename=#orgName#";
 	        content variable="#bin#" type="application/zip"; // in future version this should be handled with producer attribute
 		}
+}
+catch(e) { return e;}
 	}
 
 	private function getLatestBundle(required string bundleName) {

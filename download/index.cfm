@@ -15,10 +15,7 @@ listURL="https://release.lucee.org/rest/update/provider/list/";
 
 extcacheLiveSpanInMinutes=1000;
 
-EXTENSION_PROVIDER="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=all";
-EXTENSION_PROVIDER_REL="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=release&flush=1";
-EXTENSION_PROVIDER_ABC="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=abc&flush=1";
-EXTENSION_PROVIDER_SNAPSHOT="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=snapshot&flush=1";
+EXTENSION_PROVIDER="https://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=all";
 EXTENSION_DOWNLOAD="https://extension.lucee.org/rest/extension/provider/{type}/{id}";
 
 
@@ -474,7 +471,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 														<div class="modal-body desc">
 															<cfloop struct="#changelog#" index="ver" item="tickets">
 																<cfloop struct="#tickets#" index="id" item="subject">
-																<a href="http://bugs.lucee.org/browse/#id#" target="blank">#id#</a>- #subject#
+																<a href="https://bugs.lucee.org/browse/#id#" target="blank">#id#</a>- #subject#
 																<br>
 															</cfloop></cfloop>
 														</div>
