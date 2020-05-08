@@ -20,7 +20,7 @@ EXTENSION_DOWNLOAD="https://extension.lucee.org/rest/extension/provider/{type}/{
 
 
 function getExtensions(flush=false) localmode=true {
-	if(flush || isNull(application.extInfo)) {
+	if(arguments.flush || isNull(application.extInfo)) {
 		http url=EXTENSION_PROVIDER&"&flush="&arguments.flush result="http";
 		if(isNull(http.status_code) || http.status_code!=200) throw "could not connect to extension provider (#ep#)";
 		data=deSerializeJson(http.fileContent,false);
@@ -29,53 +29,53 @@ function getExtensions(flush=false) localmode=true {
 	return application.extInfo;
 }
 
-function extractVersions(qry,type) {
+function extractVersions(qry, type) localmode=true {
 	// first we get the current version
 	var data=structNew("linked");
-	if(is(type,qry.version)) {
-		data[qry.version]={'filename':qry.fileName,'date':qry.created};
+	if(variables.is(arguments.type,arguments.qry.version)) {
+		data[arguments.qry.version]={'filename':arguments.qry.fileName,'date':arguments.qry.created};
 	}
 
 	// now all the older
-	var _older=qry.older;
-	var _olderName=qry.olderName;
-	var _olderDate=qry.olderDate;
+	var _older=arguments.qry.older;
+	var _olderName=arguments.qry.olderName;
+	var _olderDate=arguments.qry.olderDate;
 	loop array=_older index="local.i" item="local.version" {
-		if(is(type,version)) {
+		if (variables.is(arguments.type,version)) {
 			data[version]={'filename':_olderName[i],'date':_olderDate[i]};
 		}
 	}
 	return data;
 }
-function is(type,val) {
-	if(type=="all" || type=="") 
+function is(type, val) {
+	if (arguments.type=="all" || arguments.type=="") 
 		return true;
-	if(arguments.type=="snapshot") 
-		return findNoCase('-SNAPSHOT',val);
-	else if(arguments.type=="abc") {
-		if(findNoCase('-ALPHA',val) 
-			|| findNoCase('-BETA',val)
-			|| findNoCase('-RC',val)
+	if (arguments.type=="snapshot") 
+		return findNoCase('-SNAPSHOT', arguments.val);
+	else if (arguments.type=="abc") {
+		if(findNoCase('-ALPHA', arguments.val) 
+			|| findNoCase('-BETA', arguments.val)
+			|| findNoCase('-RC', arguments.val)
 		) 
 			return true;
 		return false;
 	}
 	else if(arguments.type=="release") 
-		return !findNoCase('-',val);
+		return !findNoCase('-', arguments.val);
 }
 
 function getVersions(flush) {
-	if(!structKeyExists(application,"extVer") || flush) {
-		http url=listURL&"?extended=true"&(flush?"&flush=true":"") result="local.res";
+	if(!structKeyExists(application,"extVer") || arguments.flush) {
+		http url=listURL&"?extended=true"&(arguments.flush?"&flush=true":"") result="local.res";
 		application.extVer= deserializeJson(res.fileContent);
 	}
 	return application.extVer;
 }
 function getDate(version,flush=false) {
-	if(flush || isNull(application.mavenDates[version])) {
+	if(arguments.flush || isNull(application.mavenDates[arguments.version])) {
 		local.res="";
 		try{
-			http url="https://release.lucee.org/rest/update/provider/getdate/"&version result="local.res";
+			http url="https://release.lucee.org/rest/update/provider/getdate/"&arguments.version result="local.res";
 			var res= trim(deserializeJson(res.fileContent));
 			application.mavenDates[version]= lsDateFormat(parseDateTime(res));
 		}
@@ -83,11 +83,11 @@ function getDate(version,flush=false) {
 		if(len(res)==0) return "";
 		
 	}
-	return application.mavenDates[version]?:"";
+	return application.mavenDates[arguments.version]?:"";
 }
 
 function getInfo(version,flush=false) {
-	if(flush || isNull(application.mavenInfo[version])) {
+	if(arguments.flush || isNull(application.mavenInfo[version])) {
 		local.res="";
 		try{
 			http url="https://release.lucee.org/rest/update/provider/info/"&version result="local.res";
@@ -102,11 +102,11 @@ function getInfo(version,flush=false) {
 }
 
 function getChangelog(versionFrom,versionTo,flush=false) {
-	var id=versionFrom&"-"&versionTo;
-	if(flush || isNull(application.mavenChangeLog[id])) {
+	var id=arguments.versionFrom&"-"&arguments.versionTo;
+	if(arguments.flush || isNull(application.mavenChangeLog[id])) {
 		local.res="";
 		//try{
-			http url="https://release.lucee.org/rest/update/provider/changelog/"&versionFrom&"/"&versionTo result="local.res";
+			http url="https://release.lucee.org/rest/update/provider/changelog/"&arguments.versionFrom&"/"&arguments.versionTo result="local.res";
 			var res= deserializeJson(res.fileContent);
 			application.mavenChangeLog[id]= res;
 		//}catch(e) {}
