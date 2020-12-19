@@ -20,6 +20,8 @@
   _5_1_0_008=toVersionSortable("5.1.0.008-SNAPSHOT");
   _5_2_1_7=toVersionSortable("5.2.1.7");
   _5_2_1_8=toVersionSortable("5.2.1.8");
+  _6_0_0_12=toVersionSortable("6.0.0.12-SNAPSHOT");
+  _6_0_0_13=toVersionSortable("6.0.0.13-SNAPSHOT");
 
 
 
@@ -471,7 +473,9 @@
 				downloads.v == _5_1_0_31  ||
         downloads.v == _5_1_0_008 ||
         downloads.v == _5_2_1_7 ||
-        downloads.v == _5_2_1_8 
+        downloads.v == _5_2_1_8   ||
+        downloads.v == _6_0_0_12  ||
+        downloads.v == _6_0_0_13 
         
 			>
 				<cfcontinue>

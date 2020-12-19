@@ -18,7 +18,7 @@ component {
 	variables.ignoreVersions=[
 		"5.3.0.34-ALPHA","5.3.0.0-ALPHA-SNAPSHOT","5.2.3.30-RC","5.0.0.22","5.0.0.travis-74435522-SNAPSHOT"
 		,"5.1.0.8-SNAPSHOT","5.1.0.31","5.2.1.7","5.2.1.8","5.1.4.18","5.2.0.11-ALPHA"
-		,"5.3.1.103"];
+		,"5.3.1.103","5.3.7.44","6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT"];
 	variables.majorBeta="5.3";
 
 	public function readDependenciesFromPOM(string pom, boolean extended=false,string specifivDep=""){

@@ -9,6 +9,7 @@
 	
 	ALL_VERSION="0.0.0.0";
 	MIN_UPDATE_VERSION="5.0.0.254";
+	MIN_NEW_CHANGELOG_VERSION="5.3.0.0";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
  	
 	variables.mavenMappings={
@@ -29,6 +30,8 @@
 		,'apache.http.components.client':{'group':'org.apache.httpcomponents','artifact':'httpclient'}
 		,'apache.http.components.mime':{'group':'org.apache.httpcomponents','artifact':'httpmime'}
 		,'apache.http.components.core':{'group':'org.apache.httpcomponents','artifact':'httcore'}
+		,'org.mariadb.jdbc':{'group':'org.mariadb.jdbc','artifact':'mariadb-java-client'}
+		,'javax.websocket-api':{'group':'javax.websocket','artifact':'javax.websocket-api'}
 		,'org.mariadb.jdbc':{'group':'org.mariadb.jdbc','artifact':'mariadb-java-client'}
 	};
 
@@ -102,7 +105,25 @@
 					"otherVersions":latest.otherVersions?:[]
 				};
 
-			try{local.notes=(ALL_VERSION==version.display)?"":getChangeLog(version.display,latestVersion.display);}catch(local.ee){local.notes="";}
+			try {
+				var newChangeLog=isNewer(version,toVersion(MIN_NEW_CHANGELOG_VERSION));
+				local.notes=(ALL_VERSION==version.display)?
+					"":getChangeLog(version.display,latestVersion.display);
+
+				// do we need old layout of changelog?	
+				if(!isNewer(version,toVersion(MIN_NEW_CHANGELOG_VERSION))) {
+					var nn={};
+					loop struct=notes index="local.ver" item="local.dat" {
+					    loop struct=dat index="local.k" item="local.v"{
+					        nn[k]=v;
+					    }
+					} 
+					notes=nn;
+				}
+			}
+			catch(local.ee){
+				local.notes="";
+			}
 			
 			var msgAppendix="";
 			if(ALL_VERSION!=version.display && !isNewer(version,toVersion(MIN_WIN_UPDATE_VERSION))) 
@@ -667,6 +688,11 @@ catch(e) { return e;}
 		try {
 			var s3=new S3(request.s3Root);
 			var versions=s3.getVersions(flush);
+			var ignores=["6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT"];
+			loop array=structKeyArray(versions) item="local.k" {
+				if(arrayFind(ignores,versions[k].version))structDelete(versions,k);
+			}
+			
 			if(extended) return versions;
 			var arr=[];
 			loop struct=versions index="local.vs" item="local.data" {
@@ -675,7 +701,7 @@ catch(e) { return e;}
 			return arr;
 		}
 		catch(e){
-			return {"type":"error","message":e.getMessage()};
+			return {"type":"error","message":e.message};
 		}
 	}
 

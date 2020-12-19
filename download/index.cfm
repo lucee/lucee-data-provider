@@ -331,7 +331,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 										</cfif>
 										<b><h2>#singular[_type]#</h2> <!--- #ldownloads[type].versionNoAppendix#</b> (#lsDateFormat(ldownloads[type].jarDate)#) --->
 										<select onchange="change('#_type#',this, 'core')" style="color:7f8c8d;font-style:normal;" id="lCore" class="form-control" <!--- class="custom-select" --->>
-											<cfloop struct="#versions#" index="vs" item="data"><cfif data.type==_type><option <cfif url[_type]==vs><cfset rows[_type]=vs> selected="selected"</cfif> value="#vs#"><!---
+											<cfloop struct="#versions#" index="vs" item="data"><cfif vs=="05.003.007.0044.100"><cfcontinue></cfif><cfif data.type==_type><option <cfif url[_type]==vs><cfset rows[_type]=vs> selected="selected"</cfif> value="#vs#"><!---
 
 												---><cfset arrayAppend(_versions[_type],data.version)>#data.versionNoAppendix#</option></cfif></cfloop>
 
@@ -511,6 +511,9 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 	You can also install this Extensions from within your Lucee Administrator under "Extension/Application".</p>
 
 	<cfloop query=extQry>
+		<cfif extQry.id=="1E12B23C-5B38-4764-8FF41B7FD9428468">
+			<cfcontinue>
+		</cfif>
 	<div class="container">
 		<div class="col-ms-12 col-xs-12 well well-sm">
 			<!--- title --->
