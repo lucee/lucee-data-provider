@@ -730,7 +730,7 @@ catch(e) { return e;}
 			return arr;
 		}
 		catch(e){
-			return {"type":"error","message":e.getMessage()};
+			return {"type":"error","message":e.message};
 		}
 	}*/
 
