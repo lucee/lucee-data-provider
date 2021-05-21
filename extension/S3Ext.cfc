@@ -5,7 +5,7 @@ component {
 	variables.cacheAppendix="s3Files1_";
 
 	variables.columnList='id,version,versionSortable,name,description,filename,image,category,author,created,releaseType,minLoaderVersion,minCoreVersion'
-			&',price,currency,disableFull,trial,older,olderName,olderDate,promotionLevel,promotionText';
+			&',price,currency,disableFull,trial,older,olderName,olderDate,promotionLevel,promotionText,projectUrl,sourceUrl,documentionUrl';
 
 	public function init(s3Root) {
 		variables.s3Root=arguments.s3Root;
