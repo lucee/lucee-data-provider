@@ -47,7 +47,8 @@ component {
 			}
 			else if(ext=='exe') {
 				var version=mid(qry.name,7,len(qry.name)-10);
-				version=replace(version,'-windows-installer','');
+				version=replace(version,'-windows-x64-installer','');
+				version=replace(version,'-windows-installer','');				
 				version=replace(version,'-pl0','');
 				version=replace(version,'-pl1','');
 				version=replace(version,'-pl2','');
