@@ -10,7 +10,7 @@ The repository mainly consists of the following directories:
 
 ## Installation for local development
 
-This documentation shows one quick example how to setup and run this repository locally, including the setup of the RESTful services to be served locally at [http://localhost:8888](http://localhost:8888) with Lucee Express for development.  
+This documentation shows one quick example how to setup and run this repository locally, including the setup of the RESTful services to be served locally at [http://localhost:8888/rest/](http://localhost:8888/rest/) with Lucee Express for development.  
 
 **1. Step:** Download a **Lucee Express Release** version at [https://download.lucee.org](https://download.lucee.org) and unpack it, run and see if it's serving content at [http://localhost:8888](http://localhost:8888). For more information about downloading and running **Lucee Express (ZIP)** please visit [https://docs.lucee.org/guides/installing-lucee/download-and-install.html](https://docs.lucee.org/guides/installing-lucee/download-and-install.html).
 
