@@ -1,6 +1,6 @@
-# Home of Lucee Download Web Application and its RestServices dependencies
+# Home Of Lucee Download Web Application and its RESTful Service Dependencies
 
-This repository contains the web application and the REST Service dependencies to provide the main distribution files, such as installers, snapshots, servlet containers, extensions and more.
+This repository contains the web application and the RESTful service dependencies that provide the main distribution files, such as installers, snapshots, servlet containers, beta, extensions and more.
 
 The repository mainly consists of the following directories:
 
@@ -10,15 +10,15 @@ The repository mainly consists of the following directories:
 
 ## Installation for local development
 
-This documentation shows a quick example how to setup and run the repository locally. including the setup of the RESTful services for development with [http://localhost:8888](http://localhost:8888) with Lucee Express.  
+This documentation shows one quick example how to setup and run this repository locally. including the setup of the RESTful services served locally at [http://localhost:8888](http://localhost:8888) with Lucee Express for development.  
 
-**1. Step:** Download a Lucee Express Release version at [https://download.lucee.org](https://download.lucee.org) and unpack it, run it and see if it's serving content at [http://localhost:8888](http://localhost:8888). For more information about downloading and running **Lucee Express (ZIP)** please visit [https://docs.lucee.org/guides/installing-lucee/download-and-install.html](https://docs.lucee.org/guides/installing-lucee/download-and-install.html).
+**1. Step:** Download a **Lucee Express Release** version at [https://download.lucee.org](https://download.lucee.org) and unpack it, run and see if it's serving content at [http://localhost:8888](http://localhost:8888). For more information about downloading and running **Lucee Express (ZIP)** please visit [https://docs.lucee.org/guides/installing-lucee/download-and-install.html](https://docs.lucee.org/guides/installing-lucee/download-and-install.html).
 
-**2. Step:** Create a local directory to serve as workspace for your development, e.g. `C:\workspace-lucee-data-provider\`
+**2. Step:** Create a local directory to serve as development workspace. We will use e.g. `C:\workspace-lucee-data-provider\`.
 
-**3. Step:** Go to the Github repository site at [https://github.com/lucee/lucee-data-provider](https://github.com/lucee/lucee-data-provider) and download the master branch by clicking the **Code**-button and **Download ZIP**. Unpack it to your `C:\workspace-lucee-data-provider\`, so that the content of the downloaded and unpacked repository will be located at `C:\workspace-lucee-data-provider\lucee-data-provider-master\`.
+**3. Step:** Go to the Github repository site at [https://github.com/lucee/lucee-data-provider](https://github.com/lucee/lucee-data-provider) and download the master branch by clicking the **Code**-button and **Download ZIP**. Unpack it to your workspace from 2.Step at `C:\workspace-lucee-data-provider\`, so that the content of the downloaded and unpacked repository will be located at `C:\workspace-lucee-data-provider\lucee-data-provider-master\`.
 
-**4. Step:** Configure **"Lucee Express"** by creating a file named *ROOT.xml* pointing to your local repository with the following content:
+**4. Step:** Configure **"Lucee Express"** by creating a file named *ROOT.xml* at `C:\path-to-your-lucee-express\conf\Catalina\localhost\ROOT.xml`, containing the docBase attribute pointing to your local repository of your workspace as follows:
 
 ```xml
 <?xml version='1.0' encoding='utf-8'?>
@@ -28,11 +28,11 @@ This documentation shows a quick example how to setup and run the repository loc
 </Context>
 ```
 
-Save that file to `C:\path-to-your-lucee-express\conf\Catalina\localhost\ROOT.xml` and restart **Lucee Express**.
+After saving the file to `C:\path-to-your-lucee-express\conf\Catalina\localhost\ROOT.xml` restart **Lucee Express**.
 
-**5. Step:** The lucee-data-provider requires distribution files to be read and create content. Thus, you need to download at least one distribution file (e.g. lucee.jar) manually of each category "Release", "RC", "Snapshot", "Beta" from [https://download.lucee.org](https://download.lucee.org). The same applies to **Extension** distribution files. Download them and save them for example to a directory named `C:\lucee-downloads\`.
+**5. Step:** The **lucee-data-provider** requires distribution files to be read and create content dynamically. Thus, you need to download at least one distribution file (e.g. lucee.jar) manually of each category "Release", "RC", "Snapshot", "Beta" from [https://download.lucee.org](https://download.lucee.org) to a local directory (we will use e.g. `C:\lucee-downloads\`). The same dynamic content creation applies to Lucee **Extension** distribution files. Download some *Extension* to `C:\lucee-downloads\` also, just to provide content.
 
-**6. Step:** Next step is to feed the web application with the correct configuration values to serve the content from your local development machine (e.g. using the RESTful service of your localhost instead of the Lucees online distribution and RESTful services sites). This can be easily done within Lucee Express by setting **environment variables** that will override the default settings. The **environment variables**  can be set as follows:
+**6. Step:** Next step is to feed the web application with the correct configuration values to serve the content from your local development machine (e.g. using the RESTful service of your localhost instead of the Lucees online distribution and RESTful services sites). This can be easily done within *Lucee Express* by setting **environment variables**. These will override the default settings to setup a local development context. The **environment variables** can be set as follows:
 
 For **Lucee Express** in *Windows*, create a file named *setenv.bat*  with the following content:
 
