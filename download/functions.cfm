@@ -21,12 +21,12 @@ _url={
 };
 
 
-
-UPDATE_PROVIDER="http://update.lucee.org/rest/update/provider/list?extended=true";
-EXTENSION_PROVIDER="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=release";
-EXTENSION_PROVIDER_ABC="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=abc";
-EXTENSION_PROVIDER_SNAPSHOT="http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=snapshot";
-EXTENSION_DOWNLOAD="https://extension.lucee.org/rest/extension/provider/{type}/{id}";
+// Populate configuration with env variables or fallback to default settings
+UPDATE_PROVIDER             = server.system.environment["LUCEE_DATA_PROVIDER_UPDATE_PROVIDER"] ?: "http://update.lucee.org/rest/update/provider/list?extended=true";
+EXTENSION_PROVIDER_RELEASE  = server.system.environment["LUCEE_DATA_PROVIDER_EXTENSION_PROVIDER_RELEASE"] ?: "http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=release";
+EXTENSION_PROVIDER_ABC      = server.system.environment["LUCEE_DATA_PROVIDER_EXTENSION_PROVIDER_ABC"] ?: "http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=abc";
+EXTENSION_PROVIDER_SNAPSHOT = server.system.environment["LUCEE_DATA_PROVIDER_EXTENSION_PROVIDER_SNAPSHOT"] ?: "http://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=snapshot";
+EXTENSION_DOWNLOAD          = server.system.environment["LUCEE_DATA_PROVIDER_EXTENSION_DOWNLOAD"] ?: "https://extension.lucee.org/rest/extension/provider/{type}/{id}";
 
 // texts
 
@@ -299,7 +299,7 @@ lang.installer.lin32="Linux (32b)";
 				
 				http url=UPDATE_PROVIDER result="local.res";
 				var arr=deserializeJSON(res.fileContent);
-				var qry=queryNew('id,groupId,artifactId,version,vs,type,jarDate,src,s3War,s3Express,s3Light,s3Core,state,t');
+                var qry=queryNew('id,groupId,artifactId,version,vs,type,jarDate,src,s3War,s3Express,s3Light,s3Core,state,t');
 				for(var r=arrayLen(arr);r>=1;r--) {
 					row=arr[r];
 					
@@ -435,7 +435,7 @@ lang.installer.lin32="Linux (32b)";
 	function _getExtensions(required string type) localmode=true {
 		if(arguments.type=="snapshot") local.ep=EXTENSION_PROVIDER_SNAPSHOT;
 		else if(arguments.type=="abc") local.ep=EXTENSION_PROVIDER_ABC;
-		else local.ep=EXTENSION_PROVIDER;
+		else local.ep=EXTENSION_PROVIDER_RELEASE;
 		//dump(type&"-"&ep);abort;
 
 		http url=ep result="http";

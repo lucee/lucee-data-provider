@@ -1,9 +1,8 @@
 ﻿component restpath="/provider"  rest="true" {
 
-
-	variables.s3Root=request.s3Root;//"s3:///lucee-downloads/";
-	variables.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
-	variables.cdnURL="https://cdn.lucee.org/";
+    request.s3Root  = server.system.environment["LUCEE_DATA_PROVIDER_S3ROOT"] ?: "s3:///lucee-downloads/";
+	request.s3URL   = server.system.environment["LUCEE_DATA_PROVIDER_S3URL"] ?: "https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
+    variables.cdnURL="https://cdn.lucee.org/";
 
 	jiraDomain="luceeserver.atlassian.net";
 	
@@ -38,6 +37,11 @@
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.artDirectory=variables.current&"artifacts/";
 	variables.extDirectory="/var/www/sites/extension/extension5/extensions/"; // TODO make more dynamic
+
+    remote struct function showVars()
+    httpmethod="GET" restpath="vars"{
+        return {"variables": variables};
+    }
 
 		/**
 	* if there is a update the function is returning a struct like this:

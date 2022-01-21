@@ -10,13 +10,30 @@ doS3={
 	,war:true
 };
 
-listURL="https://release.lucee.org/rest/update/provider/list/";
-
 
 extcacheLiveSpanInMinutes=1000;
 
-EXTENSION_PROVIDER="https://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=all";
-EXTENSION_DOWNLOAD="https://extension.lucee.org/rest/extension/provider/{type}/{id}";
+
+/**********************
+* dump all LUCEE_DATA_PROVIDER system env variables for control
+***********************/
+// dump(   server.system.environment.filter( function( key, value) {
+//             if( left( key, len("LUCEE_DATA_PROVIDER_") ) == "LUCEE_DATA_PROVIDER_"){
+//                 return true;
+//             }
+//             return false;
+//         }) 
+// );abort;
+
+
+// Populate configuration with env variables or fallback to default settings
+EXTENSION_PROVIDER          = server.system.environment["LUCEE_DATA_PROVIDER_EXTENSION_PROVIDER"] ?: "https://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=all";
+EXTENSION_DOWNLOAD          = server.system.environment["LUCEE_DATA_PROVIDER_EXTENSION_DOWNLOAD"] ?: "https://extension.lucee.org/rest/extension/provider/{type}/{id}";
+UPDATE_PROVIDER_BASEURL     = server.system.environment["LUCEE_DATA_PROVIDER_UPDATE_PROVIDER_BASEURL"] ?: "https://release.lucee.org/rest/update/provider/";
+
+baseurl= UPDATE_PROVIDER_BASEURL;
+listURL= baseurl & "list/";
+
 
 
 function getExtensions(flush=false) localmode=true {
@@ -66,7 +83,7 @@ function is(type, val) {
 
 function getVersions(flush) {
 	if(!structKeyExists(application,"extVer") || arguments.flush) {
-		http url=listURL&"?extended=true"&(arguments.flush?"&flush=true":"") result="local.res";
+    	http url=listURL&"?extended=true"&(arguments.flush?"&flush=true":"") result="local.res";
 		application.extVer= deserializeJson(res.fileContent);
 	}
 	return application.extVer;
@@ -75,7 +92,7 @@ function getDate(version,flush=false) {
 	if(arguments.flush || isNull(application.mavenDates[arguments.version])) {
 		local.res="";
 		try{
-			http url="https://release.lucee.org/rest/update/provider/getdate/"&arguments.version result="local.res";
+			http url= UPDATE_PROVIDER_BASEURL & "getdate/"&arguments.version result="local.res";
 			var res= trim(deserializeJson(res.fileContent));
 			application.mavenDates[version]= lsDateFormat(parseDateTime(res));
 		}
@@ -90,7 +107,7 @@ function getInfo(version,flush=false) {
 	if(arguments.flush || isNull(application.mavenInfo[version])) {
 		local.res="";
 		try{
-			http url="https://release.lucee.org/rest/update/provider/info/"&version result="local.res";
+			http url= UPDATE_PROVIDER_BASEURL & "info/"&version result="local.res";
 			var res= deserializeJson(res.fileContent);
 			application.mavenInfo[version]= res;
 		}
@@ -106,7 +123,7 @@ function getChangelog(versionFrom,versionTo,flush=false) {
 	if(arguments.flush || isNull(application.mavenChangeLog[id])) {
 		local.res="";
 		//try{
-			http url="https://release.lucee.org/rest/update/provider/changelog/"&arguments.versionFrom&"/"&arguments.versionTo result="local.res";
+			http url= UPDATE_PROVIDER_BASEURL & "changelog/"&arguments.versionFrom&"/"&arguments.versionTo result="local.res";
 			var res= deserializeJson(res.fileContent);
 			application.mavenChangeLog[id]= res;
 		//}catch(e) {}
@@ -116,8 +133,6 @@ function getChangelog(versionFrom,versionTo,flush=false) {
 	return application.mavenChangeLog[id]?:"";
 }
 
-
-baseURL="https://release.lucee.org/rest/update/provider/";
 
 
 jarInfo='(Java ARchive, read more about <a target="_blank" href="https://en.wikipedia.org/wiki/JAR_(file_format)">here</a>)';
