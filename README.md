@@ -1,12 +1,12 @@
 # Home of Lucee Download Web Application and its RestServices dependencies
 
-This repository contains the web application and its REST Service dependencies to provide it's distribution files.
+This repository contains the web application and the REST Service dependencies to provide the main distribution files, such as installers, snapshots, servlet containers, extensions and more.
 
-The repository mainly contains the following directories:
+The repository mainly consists of the following directories:
 
-**/download**: for hosting [http://stable.lucee.org/](http://stable.lucee.org/) and [https://downloads.lucee.org](https://downloads.lucee.org)
-**/update**: serves the update provider as RESTful service hosted at [http://update.lucee.org](http://update.lucee.org)
-**/extension**: serves the extension provider as RESTful service hosted at [http://extension.lucee.org](http://extension.lucee.org)
+- **/download**: for hosting [http://stable.lucee.org/](http://stable.lucee.org/) and [https://downloads.lucee.org](https://downloads.lucee.org)
+- **/update**: serves the update provider as RESTful service hosted at [http://update.lucee.org](http://update.lucee.org)
+- **/extension**: serves the extension provider as RESTful service hosted at [http://extension.lucee.org](http://extension.lucee.org)
 
 ## Installation for local development
 
