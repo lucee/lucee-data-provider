@@ -32,7 +32,7 @@ Save that file to `C:\path-to-your-lucee-express\conf\Catalina\localhost\ROOT.xm
 
 **5. Step:** The lucee-data-provider requires distribution files to be read and create content. Thus, you need to download at least one distribution file (e.g. lucee.jar) manually of each category "Release", "RC", "Snapshot", "Beta" from [https://download.lucee.org](https://download.lucee.org). The same applies to **Extension** distribution files. Download them and save them for example to a directory named `C:\lucee-downloads\`.
 
-**6. Step:** Next step is to feed the web application with the correct configuration values to serve the content from your local development machine (e.g. using the RESTful service of your localhost) instead of the Lucees online distribution and RESTful services sites. This can be easily done within Lucee Express by setting **environment variables** that will override the default settings. The **environment variables**  can be set as follows:
+**6. Step:** Next step is to feed the web application with the correct configuration values to serve the content from your local development machine (e.g. using the RESTful service of your localhost instead of the Lucees online distribution and RESTful services sites). This can be easily done within Lucee Express by setting **environment variables** that will override the default settings. The **environment variables**  can be set as follows:
 
 For **Lucee Express** in *Windows*, create a file named *setenv.bat*  with the following content:
 
@@ -82,6 +82,14 @@ Save that file to `\path-to-your-lucee-express\bin\setenv.sh` and restart **Luce
 
 Of course, the environment variables can be set in many other ways, e.g. from within your OS (as an alternative to setenv.bat/setenv.sh)
 
-**7. Step:**: Set up and add the RestFull Services by running the *updateRestMappings.cfm* template located at [http://localhost:8888/download/updateRestMappings.cfm](http://localhost:8888/download/updateRestMappings.cfm). This template is physically loacted at `/download/updateRestMappings.cfm` and contains the [restInitApplication() function](https://docs.lucee.org/reference/functions/restinitapplication.html) to add RESTful mappings to serve restpaths "extension" and "update" restpaths to your localhost context. Note that you MUST provide your Lucee Web Administration password to run restInitApplication().
+**7. Step:** Set up and add the RestFull Services by running the *updateRestMappings.cfm* template located at [http://localhost:8888/download/updateRestMappings.cfm](http://localhost:8888/download/updateRestMappings.cfm). This template is physically loacted at `/download/updateRestMappings.cfm` and contains the [restInitApplication() function](https://docs.lucee.org/reference/functions/restinitapplication.html) to add RESTful mappings to serve restpaths "extension" and "update" restpaths to your localhost context. Note that you MUST provide your Lucee Web Administration password to run restInitApplication().
 
 To make sure the RESTful mappings are correclty being served, log into your *Lucee Web Administrator* -&gt; *Archives & Resources* -&gt; *Rest*, and activate *"List services"*. Then navigate to [http://localhost:8888/rest/](http://localhost:8888/rest/) to see them listed.
+
+**8. Step:** Open the **download web application** at  [http://localhost:8888/download/](http://localhost:8888/download/)
+
+**IMPORTANT NOTE**: 
+
+- When working with this repository locally, some changes made to the components serving RESTful services (e.g. UpdateProvider.cfc or ExtensionProvider.cfc ) may need to have the mappings updated for the changes to take effect. For this purpose simply run the *updateRestMappings.cfm* by calling it at [http://localhost:8888/download/updateRestMappings.cfm](http://localhost:8888/download/updateRestMappings.cfm).
+
+- To update/refresh/reset the download site, run [http://localhost:8888/download/?reset](http://localhost:8888/download/?reset).
