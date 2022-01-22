@@ -54,6 +54,9 @@ set "LUCEE_DATA_PROVIDER_EXTENSION_PROVIDER_SNAPSHOT=http://localhost:8888/rest/
 
 REM set "LUCEE_DATA_PROVIDER_S3URL=https://s3-eu-west-1.amazonaws.com/lucee-downloads/"
 
+REM exit from setenv.bat
+exit /b 0
+
 ```
 
 Save that file to `C:\path-to-your-lucee-express\bin\setenv.bat` and restart **Lucee Express**.
