@@ -85,7 +85,7 @@ Save that file to `\path-to-your-lucee-express\bin\setenv.sh` and restart **Luce
 
 Of course, the environment variables can be set in many other ways, e.g. from within your OS (as an alternative to setenv.bat/setenv.sh)
 
-**7. Step:** Set up and add the RESTful Services by running the *updateRestMappings.cfm* template located at [http://localhost:8888/download/updateRestMappings.cfm](http://localhost:8888/download/updateRestMappings.cfm). This template is physically loacted at `/download/updateRestMappings.cfm` and contains the [restInitApplication() function](https://docs.lucee.org/reference/functions/restinitapplication.html) to add RESTful mappings to serve restpaths "extension" and "update" restpaths to your localhost context. Note that you MUST provide your Lucee Web Administration password to run restInitApplication().
+**7. Step:** Set up and add the RESTful Services by running the *updateRestMappings.cfm* template located at [http://localhost:8888/download/updateRestMappings.cfm](http://localhost:8888/download/updateRestMappings.cfm). This template is physically loacted at `/download/updateRestMappings.cfm` and contains the [restInitApplication() function](https://docs.lucee.org/reference/functions/restinitapplication.html) to add RESTful mappings to serve restpaths "extension" and "update" restpaths to your localhost context. Note that you MUST provide your Lucee Web Administration password to run *restInitApplication()*.
 
 To make sure the RESTful mappings are correclty being served, log into your *Lucee Web Administrator* -&gt; *Archives & Resources* -&gt; *Rest*, and activate *"List services"*. Then navigate to [http://localhost:8888/rest/](http://localhost:8888/rest/) to see them listed.
 
