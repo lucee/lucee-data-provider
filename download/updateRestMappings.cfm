@@ -6,7 +6,7 @@
     ***/
 
     if( cgi.SERVER_NAME=="localhost") {
-        basePath=getDirectoryFromPath( getTemplatePath() );
+        basePath=getDirectoryFromPath(  GetBaseTemplatePath() );
         restInitApplication( 
             dirPath= basePath & "/../extension", 
             serviceMapping="extension", 
