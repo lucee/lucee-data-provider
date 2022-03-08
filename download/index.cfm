@@ -2,6 +2,7 @@
 <cfoutput>
 <cfscript>
 if(isNull(url.type)) url.type="releases";
+else if(url.type != "releases" || url.type != "snapshots" || url.type != "rc" || url.type != "beta" || url.type != "abc") url.type="releases";
 doS3={
 	express:true
 	,jar:true
@@ -29,24 +30,56 @@ function getExtensions(flush=false) localmode=true {
 	return application.extInfo;
 }
 
-function extractVersions(qry, type) localmode=true {
+function extractVersions(qry) localmode=true {
+	// To make a call this function once per extension rather than three times
+	var data["release"]=structNew("linked");
+	var data["abc"]=structNew("linked");
+	var data["snapshot"]=structNew("linked");
+
 	// first we get the current version
-	var data=structNew("linked");
-	if(variables.is(arguments.type,arguments.qry.version)) {
-		data[arguments.qry.version]={'filename':arguments.qry.fileName,'date':arguments.qry.created};
+	// if(variables.is(arguments.type,arguments.qry.version)) {
+	// 	data[arguments.qry.version]={'filename':arguments.qry.fileName,'date':arguments.qry.created};
+	// }
+
+	var _other = arguments.qry.older;
+	var _otherName = arguments.qry.olderName;
+	var _otherDate = arguments.qry.olderDate;
+
+	var arrExt = [];
+	loop array=_other index="local.i" item="local.version" {
+		arrExt[i] = {'version':version,'filename':_otherName[i],'date':_otherDate[i]}
 	}
 
-	// now all the older
-	var _older=arguments.qry.older;
-	var _olderName=arguments.qry.olderName;
-	var _olderDate=arguments.qry.olderDate;
-	loop array=_older index="local.i" item="local.version" {
-		if (variables.is(arguments.type,version)) {
-			data[version]={'filename':_olderName[i],'date':_olderDate[i]};
-		}
+	// appends current into other because some current version is not newer.
+	arrayAppend(arrExt, {'version':arguments.qry.version,'filename':arguments.qry.fileName,'date':arguments.qry.created});
+
+	// sorts by version
+	arraySort(arrExt, function(e1, e2){
+		return compare(toSort(e2.version), toSort(e1.version));
+	});
+
+	loop array=arrExt index="i" item="local.ext" {
+		if (variables.is("release",ext.version)) data["release"][ext.version]={'filename':ext.filename,'date':ext.date};
+		else if (variables.is("abc",ext.version)) data["abc"][ext.version]={'filename':ext.filename,'date':ext.date};
+		else if (variables.is("snapshot",ext.version)) data["snapshot"][ext.version]={'filename':ext.filename,'date':ext.date};
 	}
 	return data;
 }
+
+function toSort( required String version) localmode=true {
+	listLength = listLen(arguments.version, "-");
+
+	if (listLength == 3) arr = listToArray(listDeleteAt(arguments.version, listLength, "-"), ".,-"); // ESAPI extension has 5 parameters
+	else arr  = listToArray(listFirst(arguments.version, "-"), ".");
+
+	rtn="";
+	loop array=arr index="i" item="v" {
+		if(len(v)<5) rtn&="."&repeatString("0",5-len(v))&v;
+		else rtn&="."&v;
+	}
+	return rtn;
+}
+
 function is(type, val) {
 	if (arguments.type=="all" || arguments.type=="") 
 		return true;
@@ -517,7 +550,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 	<div class="container">
 		<div class="col-ms-12 col-xs-12 well well-sm">
 			<!--- title --->
-			<span class="head1 title">#extQry.name#</span>
+			<div class="permalinkHover"  id="#extQry.id#" ><span class="head1 title">#extQry.name# <span data-id="#extQry.id#" class="permalink"><img src="test.ico"></span></span></div>
 			<hr>
 			<!--- image --->
 			<div class='col-xs-2 col-md-2'>
@@ -537,9 +570,10 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 				
 			<!--- downloads --->
 			<div class="row">
+			<!--- call extractVersions function once per extension rather than three times --->
+			<cfset exts=extractVersions(extQry)>
 			<cfloop list="release,abc,snapshot" item="type">
-				<cfset exts=extractVersions(extQry,type)>
-				<cfif structCount(exts)>
+				<cfif structCount(exts[type])>
 				<div class="mb-0 mt-1 col-xs-4 col-md-4 borderInfo">
 					<div class="bg-primary jumbotron text-white jumboStyle">
 						<span class="btn-primary">
@@ -548,8 +582,8 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 					</div>
 					<cfset ind=0>
 					<cfset uid="">
-					<cfset cnt=structCount(exts)>
-					<cfloop struct="#exts#" index="ver" item="el">
+					<cfset cnt=structCount(exts[type])>
+					<cfloop struct="#exts[type]#" index="ver" item="el">
 					<cfset ind++>
 
 					<!--- show more --->
@@ -609,6 +643,18 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 				</cfif>
 			</cfif>
 		<cfhtmlbody action="flush">
+		<script>
+			$('.permalink').each(function() {
+				var anchor = document.createElement('a')
+				anchor.href = '##' + $(this).attr('data-id')
+				$(this).wrapInner(anchor)
+			});
+			$('span.permalink').hide();
+			$('div.permalinkHover').hover(
+				function() { $(this).find('span.permalink').show(); },
+				function() { $(this).find('span.permalink').hide(); }
+			);
+		</script>
 	</body>
 </html>
 </cfoutput>
