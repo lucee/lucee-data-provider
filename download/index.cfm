@@ -443,7 +443,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 												<cfset uri="#baseURL#light/#dw.version#">
 											</cfif>
 											
-											<div class="fontStyle"><a href="#(uri)#">lucee.jar(without Extension)</a><span  class="triggerIcon pointer" style="color :##01798A" title="Lucee Jar file without Extension bundled">
+											<div class="fontStyle"><a href="#(uri)#">lucee-light.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled, "Lucee light"'>
 												<span class="glyphicon glyphicon-info-sign"></span>
 											</span></div></cfif>
 
