@@ -304,7 +304,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 				<cfif true>
 					
 					<h2>Lucee Core</h2>
-					<p style="font-size: 1.7rem;">Get releases, release candidates, beta or snapshots from Lucee.</p>
+					<p style="font-size: 1.7rem;">Get releases, release candidates, beta or snapshots from Lucee. Official Lucee Docker images are available via <a href="https://hub.docker.com/r/lucee/lucee">Docker Hub</a></p>
 					<script type="text/javascript">
 						$(document).ready(function () {
 							isSafari = !!navigator.userAgent.match(/Version\/[\d\.]+.*Safari/)
