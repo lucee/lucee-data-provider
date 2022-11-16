@@ -211,65 +211,72 @@ component {
 		if(left(s3.version,1)<5) return;
 
 		var jarRem=variables.s3Root&"lucee-"&s3.version&".jar";
-		
+
 		try {
-			// check and if necessary create other artifacts 
-			var list="lco,war,light,express";
-			if(includingForgeBox)list&=",fb,fbl";
+			lock name="build-lucee-artifacts" timeout="1" {
+				try {
+					// check and if necessary create other artifacts 
+					var list="lco,war,light,express";
+					if(includingForgeBox)list&=",fb,fbl";
 
-			loop list=list item="local.type" {
-				if(len(specType) && specType!=type) continue;
-				if(structKeyExists(s3,type)) continue;
+					loop list=list item="local.type" {
+						if(len(specType) && specType!=type) continue;
+						if(structKeyExists(s3,type)) continue;
 
 
-				systemOutput("check(#type#):"&s3.version,1,1);
-				// first we need a local copy of the jar
-				var lcl=expandPath("{temp-directory}/lucee-"&s3.version&".jar");
-				try{
-					if(!fileExists(lcl))fileCopy(jarRem,lcl);
-				}
-				catch(e) {
-					systemOutput(e,1,1);
-					continue;
-				}
-				
+						systemOutput("check(#type#):"&s3.version,1,1);
+						// first we need a local copy of the jar
+						var lcl=expandPath("{temp-directory}/lucee-"&s3.version&".jar");
+						try{
+							if(!fileExists(lcl))fileCopy(jarRem,lcl);
+						}
+						catch(e) {
+							systemOutput(e,1,1);
+							continue;
+						}
+						
 
-				// extract lco and copy to S3
-				if(type=="lco") {
-					var result=createLCO(lcl,s3.version);
-					systemOutput("lco:"&result,1,1);
+						// extract lco and copy to S3
+						if(type=="lco") {
+							var result=createLCO(lcl,s3.version);
+							systemOutput("lco:"&result,1,1);
+						}
+						// create war and copy to S3
+						else if(type=="war") {
+							var result=createWar(lcl,s3.version);
+							systemOutput("war:"&result,1,1);
+						}
+						// create war and copy to S3
+						else if(type=="light") {
+							var result=createLight(lcl,s3.version);
+							systemOutput("light:"&result,1,1);
+						}
+						else if(type=="express") {
+							var result=createExpress(lcl,s3.version);
+							systemOutput("express:"&result,1,1);
+						}
+						else if(type=="fb") {
+							var result=createForgeBox(lcl,s3.version,false);
+							systemOutput("forgebox:"&result,1,1);
+							//abort;
+						}
+						else if(type=="fbl") {
+							var result=createForgeBox(lcl,s3.version,true);
+							systemOutput("forgebox-light:"&result,1,1);
+							//abort;
+						}
+						else {
+							//systemOutput(type&":"&s3.version,1,1);
+						}
+					}
 				}
-				// create war and copy to S3
-				else if(type=="war") {
-					var result=createWar(lcl,s3.version);
-					systemOutput("war:"&result,1,1);
-				}
-				// create war and copy to S3
-				else if(type=="light") {
-					var result=createLight(lcl,s3.version);
-					systemOutput("light:"&result,1,1);
-				}
-				else if(type=="express") {
-					var result=createExpress(lcl,s3.version);
-					systemOutput("express:"&result,1,1);
-				}
-				else if(type=="fb") {
-					var result=createForgeBox(lcl,s3.version,false);
-					systemOutput("forgebox:"&result,1,1);
-					//abort;
-				}
-				else if(type=="fbl") {
-					var result=createForgeBox(lcl,s3.version,true);
-					systemOutput("forgebox-light:"&result,1,1);
-					//abort;
-				}
-				else {
-					//systemOutput(type&":"&s3.version,1,1);
+				finally {
+					if(!isNull(lcl) && fileExists(lcl))fileDelete(lcl);
 				}
 			}
-		}
-		finally {
-			if(!isNull(lcl) && fileExists(lcl))fileDelete(lcl);
+		} catch(e) {
+			systemOutput(e,1,1);
+			rethrow;
 		}
 	}
 
