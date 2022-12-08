@@ -17,7 +17,7 @@
 		,'javax.mail.activation':{'group':'javax.mail','artifact':'mail'}
 		,'apache.http.components.client':{'group':'org.apache.httpcomponents','artifact':'httpclient'}
 		,'apache.http.components.mime':{'group':'org.apache.httpcomponents','artifact':'httpmime'}
-		,'apache.http.components.core':{'group':'org.apache.httpcomponents','artifact':'httcore'}
+		,'apache.http.components.core':{'group':'org.apache.httpcomponents','artifact':'httpcore'}
 		,'org.mariadb.jdbc':{'group':'org.mariadb.jdbc','artifact':'mariadb-java-client'}
 		,'org.apache.commons.codec':{'group':'commons-codec','artifact':'commons-codec'}
 		
