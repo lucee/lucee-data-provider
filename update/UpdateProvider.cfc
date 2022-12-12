@@ -33,6 +33,14 @@
 		,'org.mariadb.jdbc':{'group':'org.mariadb.jdbc','artifact':'mariadb-java-client'}
 		,'javax.websocket-api':{'group':'javax.websocket','artifact':'javax.websocket-api'}
 		,'org.mariadb.jdbc':{'group':'org.mariadb.jdbc','artifact':'mariadb-java-client'}
+		,'com.fasterxml.jackson.core.jackson-databind':{'group':'com.fasterxml.jackson.core','artifact':'jackson-databind'}
+		,'com.fasterxml.jackson.core.jackson-annotations':{'group':'com.fasterxml.jackson.core','artifact':'jackson-annotations'}
+		,'com.fasterxml.jackson.core.jackson-core':{'group':'com.fasterxml.jackson.core','artifact':'jackson-core'}
+		,'com.fasterxml.jackson.dataformat.jackson-dataformat-cbor':{'group':'com.fasterxml.jackson.dataformat','artifact':'jackson-dataformat-cbor'}
+		,'joda-time':{'group':'joda-time','artifact':'joda-time'}
+		,'joda-convert':{'group':'org.joda','artifact':'joda-convert'}
+		,'software.amazon.ion.java':{'group':'software.amazon.ion','artifact':'ion-java'}
+		
 	};
 
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
@@ -698,11 +706,12 @@ catch(e) { return e;}
 			var ignores=["6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT"];
 			loop array=structKeyArray( versions ) item="local.k" {
 				if ( !structKeyExists( versions[ k ], "version" ) 
-						|| arrayFind( ignores, versions[k].version ) )
+						|| arrayFind( ignores, versions[k].version )
+						|| left( versions[ k ].version, 2 ) == "6." )
 					structDelete( versions, k );
 			}
 			
-			if(extended) return versions;
+			if ( extended ) return versions;
 			var arr=[];
 			loop struct=versions index="local.vs" item="local.data" {
 				arrayAppend(arr,{'vs':vs,'version':data.version});
