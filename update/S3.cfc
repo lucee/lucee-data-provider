@@ -48,7 +48,7 @@ component {
 			else if(ext=='exe') {
 				var version=mid(qry.name,7,len(qry.name)-10);
 				version=replace(version,'-windows-x64-installer','');
-				version=replace(version,'-windows-installer','');				
+				version=replace(version,'-windows-installer','');
 				version=replace(version,'-pl0','');
 				version=replace(version,'-pl1','');
 				version=replace(version,'-pl2','');
@@ -111,7 +111,8 @@ component {
 		arraySort(keys,"textnocase");
 		_data=structNew("linked");
 		loop array=keys item="local.k" {
-			_data[k]=data[k];
+			if ( structKeyExists( data[ k ], "version" ) && !isEmpty( data[k][ "version" ] ) )
+				_data[k] = data[k];
 		}
 
 		return application.s3VersionData=_data;
