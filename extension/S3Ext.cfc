@@ -20,7 +20,7 @@ component {
 		var appName=variables.cacheAppendix&(withLogo?"wl":"nl")&"_"&arguments.type&(all?"_all":"");
 		if(!flush && !isNull(application[appName])) return application[appName];
 		setting requesttimeout="1000";
-	
+		systemOutput("s3Ext.list START #now()#",1,1);
 		var qry=directoryList(path:variables.s3Root,listInfo:"query",filter:function (path){
 			return listLast(path,'.')=='lex';
 		});
@@ -156,6 +156,7 @@ component {
 			}
 			extensions=ext;
 		}
+		systemOutput("s3Ext.list FINISHED #now()#",1,1);
 		return application[appName]=extensions;
 	}
 
@@ -302,7 +303,7 @@ component {
 
 	private function toVersionSortable(string version){
 		local.arr=listToArray(arguments.version,'.');
-		systemOutput(version,1,1);
+		//systemOutput("s3Ext.toVersionSortable #version#",1,1);
 
 		// OSGi compatible version
 		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {

@@ -8,7 +8,15 @@ component {
 		structDelete(application,"s3VersionData",false);
 	}
 	public function getVersions(boolean flush=false) {
-		if(!flush && !isNull(application.s3VersionData)) return application.s3VersionData;
+		if(!flush && !isNull(application.s3VersionData)) 
+			return application.s3VersionData;
+		setting requesttimeout="1000";
+
+		var runid = createUniqueID();
+		var start = getTickCount();
+
+		systemOutput("s3Versions.list [#runId#] START #numberFormat(getTickCount()-start)#ms",1,1);
+
 		var qry=directoryList(path:variables.s3Root,listInfo:"query",filter:function (path){
 			var ext=listLast(path,'.');
 			var name=listLast(path,'\/');
@@ -25,10 +33,11 @@ component {
 			}*/
 			return false;
 		});
+		systemOutput("s3Versions.list [#runId#] FETCHED #numberFormat(getTickCount()-start)#ms, #qry.recordcount# files on s3 found",1,1);
 		//dump(qry);
 		var data=structNew("linked");
 		// first we get all 
-		patterns=structNew('linked');
+		var patterns=structNew('linked');
 		patterns['express']='lucee-express-';
 		patterns['light']='lucee-light-';
 		patterns['fbl']='forgebox-light-';
@@ -105,16 +114,16 @@ component {
 			//data[version]['date-'&type]=qry.dateLastModified;
 			//data[version]['size-'&type]=qry.size;
 		}
-		
+		systemOutput("s3Versions.list [#runId#] SORT #numberFormat(getTickCount()-start)#ms, #len(data)# versions found ",1,1);
 		// sort
 		var keys=structKeyArray(data);
 		arraySort(keys,"textnocase");
-		_data=structNew("linked");
+		var _data=structNew("linked");
 		loop array=keys item="local.k" {
-			if ( structKeyExists( data[ k ], "version" ) && !isEmpty( data[k][ "version" ] ) )
+			if ( structKeyExists( data[ k ], "version" ) && !isEmpty( data[k][ 'version' ] ) )
 				_data[k] = data[k];
 		}
-
+		systemOutput("s3Versions.list [#runId#] END #numberFormat(getTickCount()-start)#ms, #len(_data)# versions found ",1,1);
 		return application.s3VersionData=_data;
 	}
 

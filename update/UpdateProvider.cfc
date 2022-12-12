@@ -706,9 +706,10 @@ catch(e) { return e;}
 			var ignores=["6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT"];
 			loop array=structKeyArray( versions ) item="local.k" {
 				if ( !structKeyExists( versions[ k ], "version" ) 
-						|| arrayFind( ignores, versions[k].version )
-						|| left( versions[ k ].version, 2 ) == "6." )
+						|| arrayFind( ignores, versions[k].version ) 
+						 || left( versions[ k ].version, 2 ) == "6." ) {
 					structDelete( versions, k );
+				}
 			}
 			
 			if ( extended ) return versions;
@@ -719,6 +720,7 @@ catch(e) { return e;}
 			return arr;
 		}
 		catch(e){
+			systemOutput( e.message, 1, 1 );
 			return {"type":"error","message":e.message};
 		}
 	}
