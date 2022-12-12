@@ -295,6 +295,8 @@ try{
 			header name="Location" value=match.url;
 			return;
 		}catch(e) {
+			if(!isNull(url.abc))
+				rethrow;
 			FileAppend("log-maven-download.log",
 				arguments.bundleName&":"&arguments.bundleVersion&" "&
 				e.message&"
@@ -688,9 +690,16 @@ catch(e) { return e;}
 		try {
 			var s3=new S3(request.s3Root);
 			var versions=s3.getVersions(flush);
+
+			if(!isNull(url.abc)){
+				return versions;
+			}
+
 			var ignores=["6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT"];
-			loop array=structKeyArray(versions) item="local.k" {
-				if(arrayFind(ignores,versions[k].version))structDelete(versions,k);
+			loop array=structKeyArray( versions ) item="local.k" {
+				if ( !structKeyExists( versions[ k ], "version" ) 
+						|| arrayFind( ignores, versions[k].version ) )
+					structDelete( versions, k );
 			}
 			
 			if(extended) return versions;
