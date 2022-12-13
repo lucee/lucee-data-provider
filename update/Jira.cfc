@@ -512,12 +512,13 @@ component {
 
 
 	private function _list(required string project, required numeric startAt, 
-		required numeric max, string fields, array stati=[] flush=false) {
+		required numeric max, string fields, array stati=[], flush=false) {
 
 		var jql=isEmpty(arguments.project)?'':'project = '&arguments.project;
-		if(arrayLen(stati)) jql&=" AND status in ("&arrayToList(stati,", ")&")";
-		var jql&=' ORDER BY key DESC';
-		var path= (variables.secure?"https":"http")
+		if (arrayLen( stati ) ) 
+			jql &= " AND status in (" & arrayToList(stati,", ") &" )";
+		var jql &= ' ORDER BY key DESC';
+		var path= (variables.secure ? "https" : "http" )
 			&"://"
 			&variables.domain
 			&variables.apiPath
@@ -528,19 +529,14 @@ component {
 			&"&jql="&jql
 		;
 		var result=_http(path);
-		
 
-		if(result.status_code==200) {
-			var data=deserializeJson(result.fileContent);
+		if (result.status_code==200) {
+			var data=deserializeJson( result.fileContent );
 			return data;
+		} else {
+			handleNon200( result, path );
 		}
-		else handleNon200(result,path);
 	}
-
-
-
-
-
 
 ///////////////////////////////////////////////////////////////////////////
 //////////////////////////////// OTHERS ////////////////////////////////////
@@ -686,8 +682,6 @@ component {
 		else handleNon200(result,path); 
 	}
 
-	
-	
 	public function hasCredentials() {
 		return !isNull(variables.credentials.username);
 	}
