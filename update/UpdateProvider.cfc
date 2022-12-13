@@ -211,21 +211,36 @@
 		return downloadCoreNew(version,ioid);
 	}
 
-
-	remote function echoGET() httpmethod="GET" restpath="echoGet" {return _echo();}
+	remote function echoGET(
+				string statusCode="" restargsource="url",
+				string mimeType="" restargsource="url",
+				string charset="" restargsource="url") 
+			httpmethod="GET"
+			restpath="echoGet" {
+		return _echo(arguments.statusCode, arguments.mimeType, arguments.charset);
+	}
 	remote function echoPOST() httpmethod="POST" restpath="echoPost" {return _echo();}
 	remote function echoPUT() httpmethod="PUT" restpath="echoPut" {return _echo();}
 	remote function echoDELETE() httpmethod="DELETE" restpath="echoDelete" {return _echo();}
 
 
-	private function _echo() {
-		sct={
+	private function _echo(statusCode="", mimeType="", charset="") {
+		var sct={
 			'httpRequestData':getHTTPRequestData()
 			,'form':form
 			,'url':url
 			,'cgi':cgi
 			,'session':session
 		};
+		if ( !isEmpty( arguments.statusCode ) )
+			header statuscode=arguments.statusCode;
+		if ( !isEmpty( arguments.mimeType ) ){
+			if ( !isEmpty( arguments.charset ) ){
+				header name="Content-Type" value="#arguments.mimeType#;charset=#arguments.charset#";
+			} else {
+				header name="Content-Type" value="#arguments.mimeType#";
+			}
+		}
 		//sct.ser=serialize(sct);
 		return sct;
 	}
@@ -285,7 +300,8 @@
 	*/
 	remote function downloadBundle(required string bundleName restargsource="Path", 
 		string bundleVersion restargsource="Path",
-		string ioid="" restargsource="url",boolean allowRedirect=true restargsource="url")
+		string ioid="" restargsource="url",
+		boolean allowRedirect=true restargsource="url")
 		httpmethod="GET" restpath="download/{bundlename}/{bundleversion}" {
 try{
 
