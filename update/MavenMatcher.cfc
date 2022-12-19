@@ -97,10 +97,12 @@
 		,"openamf":{"group":"openamf","artifact":"openamf"}
 		,"w3c.dom":{"group":"w3c","artifact":"dom"}
 		,"org.apache.commons.io":{"group":"commons-io","artifact":"commons-io"}
+		,"org.apache.commons.commons-io":{"group":"commons-io","artifact":"commons-io"}
 		,"lowagie.itext":{"group":"lowagie","artifact":"itext"}
 		,"org.lucee.xalan.serializer":{"group":"org.lucee","artifact":"xalan-serializer"}
 		,"bcprov.jdk14":{"group":"bcprov","artifact":"jdk14"}
 		,"org.lucee.commons.fileupload":{"group":"org.lucee","artifact":"commons-fileupload"}
+		,"org.apache.commons.commons-fileupload":{"group":"commons-fileupload","artifact":"commons-fileupload"}
 		,"serializer":{"group":"serializer","artifact":"serializer"}
 		,"org.lucee.jsch":{"group":"org.lucee","artifact":"jsch"}
 		,"org.apache.commons.collections":{"group":"commons-collections","artifact":"commons-collections"}
@@ -109,6 +111,7 @@
 		,"jta":{"group":"jta","artifact":"jta"}
 		,"hsqldb":{"group":"hsqldb","artifact":"hsqldb"}
 		,"org.apache.commons.compress":{"group":"org.apache.commons","artifact":"commons-compress"}
+		,"org.apache.commons.commons-compress":{"group":"org.apache.commons","artifact":"commons-compress"}
 		,"xml.apis":{"group":"xml","artifact":"apis"}
 		,"org.lucee.xalan":{"group":"org.lucee","artifact":"xalan"}
 		,"sun.xml.jaxrpc":{"group":"sun.xml","artifact":"jaxrpc"}
@@ -116,6 +119,9 @@
 		,"ojdbc14":{"group":"ojdbc14","artifact":"ojdbc14"}
 		,"org.apache.commons.collections4":{"group":"org.apache.commons","artifact":"commons-collections4"}
 		,"org.lucee.commons.lang":{"group":"org.lucee","artifact":"commons-lang"}
+		,"org.apache.commons.commons-lang":{"group":"commons-lang","artifact":"commons-lang"}
+		,"org.apache.commons.lang3":{"group":"org.apache.commons","artifact":"commons-lang3"}
+		,"org.apache.commons.commons-text":{"group":"org.apache.commons","artifact":"commons-text"}
 		,"sun.jai.codec":{"group":"sun.jai","artifact":"codec"}
 		,"ESAPI":{"group":"ESAPI","artifact":"ESAPI"}
 		,"org.lucee.saaj":{"group":"org.lucee","artifact":"saaj"}
@@ -130,6 +136,7 @@
 		,"org.lucee.commons.sanselan":{"group":"org.lucee","artifact":"commons-sanselan"}
 		,"PDFRenderer":{"group":"PDFRenderer","artifact":"PDFRenderer"}
 		,"org.apache.commons.net":{"group":"commons-net","artifact":"commons-net"}
+		,"org.apache.commons.commons-net":{"group":"commons-net","artifact":"commons-net"}
 		,"org.lucee.esapi":{"group":"org.lucee","artifact":"esapi"}
 		,"sun.mail":{"group":"sun","artifact":"mail"}
 		,"jfreechart.patch":{"group":"jfreechart","artifact":"patch"}
