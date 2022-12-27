@@ -13,3 +13,6 @@ target/*
 *.DS_Store
 /settings.xml
 /.settings
+/extension/cache
+/extension/extension-meta
+/extension/extension

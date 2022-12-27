@@ -4,97 +4,38 @@ component {
 
 	variables.cacheAppendix="s3Files1_";
 
-	variables.columnList='id,version,versionSortable,name,description,filename,image,category,author,created,releaseType,minLoaderVersion,minCoreVersion'
-			&',price,currency,disableFull,trial,older,olderName,olderDate,promotionLevel,promotionText,projectUrl,sourceUrl,documentionUrl';
+	variables.columnList='id,version,versionSortable,name,description,filename,image,category,author,created,'
+		& 'releaseType,minLoaderVersion,minCoreVersion,price,currency,disableFull,trial,older,olderName,olderDate,'
+		& 'promotionLevel,promotionText,projectUrl,sourceUrl,documentionUrl';
 
 	public function init(s3Root) {
 		variables.s3Root=arguments.s3Root;
 	}
+
 	public void function reset() {
 		loop struct=application index="local.k" item="local.v" {
 			if(findNoCase(variables.cacheAppendix,k))
 				structDelete(application,k,false);
 		}
+		readExtensions(flush=true);
 	}
+
 	public function list(required string type="all",boolean flush=false,boolean withLogo=false,boolean all=false) {
 		var appName=variables.cacheAppendix&(withLogo?"wl":"nl")&"_"&arguments.type&(all?"_all":"");
-		if(!flush && !isNull(application[appName])) return application[appName];
+		if(!flush && !isNull(application[appName])) 
+			return application[appName];
 		setting requesttimeout="1000";
-		systemOutput("s3Ext.list START #now()#",1,1);
-		var qry=directoryList(path:variables.s3Root,listInfo:"query",filter:function (path){
-			return listLast(path,'.')=='lex';
-		});
-		queryAddColumn(qry,"versionSortable");
-		loop query=qry {
-			qry.versionSortable=qry.name;
-		}
-		var c=0;
-		var jsonDir=getDirectoryFromPath(getCurrentTemplatePath())&"extensions/";
-		if(!directoryExists(jsonDir)) directoryCreate(jsonDir);
-		var tmpDir=expandPath("{temp-directory}/extensions/");
-		if(!directoryExists(tmpDir)) directoryCreate(tmpDir);
 		
-		var extensions= querynew(variables.columnList);
-		loop query=qry {
-			var jsonFile=jsonDir&qry.name&".json";
-			var logo=jsonDir&qry.name&".png";
-			var mf="";
-			var hasJson=fileExists(jsonFile);
-			var hasLogo=fileExists(logo);
-			if(!hasJson || !hasLogo) {
-				var src=qry.directory&"/"&qry.name;
-				var tmpFile=tmpDir&"/"&qry.name;
-				if(!fileExists(tmpFile)) { 
-					fileCopy(src,tmpFile);
-				}
-				if(!hasJson) {
-					var mf=readManifest(tmpFile);
-					fileWrite(jsonFile,serializeJson(mf));
-				}
-				if(!hasLogo) {
-					var tmp="zip://"&tmpFile&"!/META-INF/logo.png";
-					if(fileExists(tmp)) {
-						fileCopy(tmp,logo);
-						hasLogo=true;
-					}
-				}
-			}
-			if(len(mf)==0)mf=deserializeJson(fileRead(jsonFile));
+		var extensions = readExtensions(arguments.flush);
 
-			var row=queryAddRow(extensions);
-
-			loop list=variables.columnList item="local.col" {
-				querySetCell(extensions,col,structKeyExists(mf.main,col)?mf.main[col]:'',row);
-			}
-			querySetCell(extensions,"filename",qry.name,row);
-			querySetCell(extensions,"versionSortable",structKeyExists(mf.main,"version")?toVersionSortable(mf.main["version"]):'',row);
-			
-			if(!len(extensions["created"][row]) && structKeyExists(mf.main,"Built-Date")) 
-				querySetCell(extensions,"created",dateAdd('s',0,mf.main['Built-Date']),row);
-			if(!len(extensions["minCoreVersion"][row]) && structKeyExists(mf.main,"lucee-core-version")) 
-				querySetCell(extensions,"minCoreVersion",mf.main['lucee-core-version'],row);
-			if(!len(extensions["minLoaderVersion"][row]) && structKeyExists(mf.main,"lucee-loader-version")) 
-				querySetCell(extensions,"minLoaderVersion",mf.main['lucee-loader-version'],row);
-
-			if(isNull(extensions["releaseType"][row]) || len(extensions["releaseType"][row])==0) { 
-				if(structKeyExists(mf.main,"release-type")) 
-					querySetCell(extensions,"releaseType",mf.main['release-type'],row);
-				else if(structKeyExists(mf.main,"Release-Type")) 
-					querySetCell(extensions,"releaseType",mf.main['Release-Type'],row);
-				else querySetCell(extensions,"releaseType","all",row);
-			}
-
-			querySetCell(extensions,"trial",false,row); // TODO
-
-			if(arguments.withLogo && hasLogo) {
-				querySetCell(extensions,"image",toBase64(fileReadBinary(logo)),row);
+		if ( !arguments.withLogo ) {
+			for (var row=extensions.recordcount; row >= 1; row-- ) {
+				querySetCell( extensions, "image", "" , row );
 			}
 		}
-
-		querySort(extensions,"name,id,versionSortable","asc,asc,desc");
 
 		// type
-		if(arguments.type!="all") {
+		if ( arguments.type!="all" ) {
 			for(var row=extensions.recordcount;row>=1;row--) {
 				if(arguments.type=="snapshot") {
 					if(!findNoCase('-SNAPSHOT',extensions.version[row])) {
@@ -113,11 +54,11 @@ component {
 					if(findNoCase('-',extensions.version[row])) {
 						queryDeleteRow(extensions,row);
 					}
-				}				
+				}
 			}
 		}
 		
-		if(!all) {
+		if ( !arguments.all ) {
 			var last="";
 			var collist=queryColumnList(extensions);
 			var ext=queryNew(collist);
@@ -156,7 +97,6 @@ component {
 			}
 			extensions=ext;
 		}
-		systemOutput("s3Ext.list FINISHED #now()#",1,1);
 		return application[appName]=extensions;
 	}
 
@@ -181,6 +121,131 @@ component {
 		throw msg;
 	}
 
+	private query function readExtensions(boolean flush){
+		var rootDir = getDirectoryFromPath(getCurrentTemplatePath());
+		var cacheDir=rootDir & "cache/";
+		var cacheFile = "extensions.json";
+		if (!directoryExists(cacheDir)) 
+			directoryCreate(cacheDir);
+		if ( !arguments.flush && fileExists( cacheDir & cacheFile ) ){
+			return deserializeJSON( fileRead(cacheDir & cacheFile), false );
+		}
+
+		lock name="read-extension-metadata" timeout="5" throwOnTimeout="false" {
+			systemOutput("s3Ext.list START #now()#",1,1);
+			var c=0;
+			var jsonDir=rootDir & "extension-meta/";
+			if (!directoryExists(jsonDir)) directoryCreate(jsonDir);
+			var tmpDir=rootDir & "extension/";
+			if (!directoryExists(tmpDir)) directoryCreate(tmpDir);
+
+			var qry=directoryList(path:variables.s3Root,listInfo:"query",filter:function (path){
+				return listLast(path,'.')=='lex';
+			});
+			queryAddColumn(qry,"versionSortable");
+			loop query=qry {
+				qry.versionSortable=qry.name;
+			}
+			
+			var extensions= querynew(variables.columnList);
+			loop query=qry {
+				var jsonFile=jsonDir&qry.name&".json";
+				var logo=jsonDir&qry.name&".png";
+				var thumb=jsonDir&qry.name&"-thumb.png";
+				var mf="";
+				var hasJson=fileExists(jsonFile);
+				var hasLogo=fileExists(logo);
+				var hasThumb=fileExists(thumb);
+				if (!hasJson || !hasLogo) {
+					var src=qry.directory&"/"&qry.name;
+					var tmpFile=tmpDir&"/"&qry.name;
+					if (!fileExists(tmpFile)) { 
+						fileCopy(src,tmpFile);
+					}
+					if (!hasJson) {
+						var mf=readManifest(tmpFile);
+						fileWrite(jsonFile,serializeJson(mf));
+					}
+					if (!hasLogo) {
+						var tmp="zip://"&tmpFile&"!/META-INF/logo.png";
+						if(fileExists(tmp)) {
+							fileCopy(tmp,logo);
+							hasLogo=true;
+						}
+					}
+				}
+				try {
+					if (!hasThumb && hasLogo){
+						var tmpLogo  = ImageRead( logo );
+						if ( false && imageInfo( logo ).width gt 130 ) {
+							imageResize( tmpLogo, 130 );
+						}
+						// reduce colour depth to 8 bit by writing to gif
+						// TODO when update provider is 5.3.8 or better use new getTempFile ext option
+						var tmpGif = getTempFile( getTempDirectory(), "logo");
+						var tmpGifThumb = getTempFile( getTempDirectory(), "logo") & ".gif";
+						imageWrite( tmpLogo, tmpGifThumb );
+						imageWrite( ImageRead( tmpGifThumb ), thumb );
+						// imageWrite( tmpLogo, thumb );
+						try {
+							fileDelete( tmpGif );
+							fileDelete( tmpGifThumb );
+						} catch( e ) {
+							// ignore file locking
+						}
+						hasThumb = true;
+					}
+				} catch( e ) {
+					echo(e);
+					// ignore image problems 
+				}
+
+				if(len(mf)==0)mf=deserializeJson(fileRead(jsonFile));
+
+				var row=queryAddRow(extensions);
+
+				loop list=variables.columnList item="local.col" {
+					querySetCell(extensions,col,structKeyExists(mf.main,col)?mf.main[col]:'',row);
+				}
+				querySetCell(extensions,"filename",qry.name,row);
+				querySetCell(extensions,"versionSortable",structKeyExists(mf.main,"version")?toVersionSortable(mf.main["version"]):'',row);
+				
+				if(!len(extensions["created"][row]) && structKeyExists(mf.main,"Built-Date")) 
+					querySetCell(extensions,"created",dateAdd('s',0,mf.main['Built-Date']),row);
+				if(!len(extensions["minCoreVersion"][row]) && structKeyExists(mf.main,"lucee-core-version")) 
+					querySetCell(extensions,"minCoreVersion",mf.main['lucee-core-version'],row);
+				if(!len(extensions["minLoaderVersion"][row]) && structKeyExists(mf.main,"lucee-loader-version")) 
+					querySetCell(extensions,"minLoaderVersion",mf.main['lucee-loader-version'],row);
+
+				if(isNull(extensions["releaseType"][row]) || len(extensions["releaseType"][row])==0) { 
+					if(structKeyExists(mf.main,"release-type")) 
+						querySetCell(extensions,"releaseType",mf.main['release-type'],row);
+					else if(structKeyExists(mf.main,"Release-Type")) 
+						querySetCell(extensions,"releaseType",mf.main['Release-Type'],row);
+					else querySetCell(extensions,"releaseType","all",row);
+				}
+
+				querySetCell(extensions,"trial",false,row); // TODO
+
+				if( hasThumb ) {
+					querySetCell(extensions,"image",toBase64(fileReadBinary(thumb)),row);
+				}
+			}
+
+			querySort(extensions,"name,id,versionSortable","asc,asc,desc");
+			fileWrite(cacheDir & cacheFile, serializeJSON(extensions, true) );
+			systemOutput("s3Ext.list FINISHED #now()#",1,1);
+		}
+		if ( !structKeyExists( local, "extensions" ) ){
+			// lock timed out, still use cache if found
+			if ( fileExists( cacheDir & cacheFile ) ){
+				var extensions = deserializeJSON( fileRead(cacheDir & cacheFile), false );
+			} else {
+				throw "lock timeout readExtensions()";
+			}
+		}
+		return extensions;
+	}
 
 	private function readManifest(required string path) {
 		// Lucee >5 is supporting this build in
