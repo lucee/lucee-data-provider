@@ -141,6 +141,22 @@
 		header name="Location" value=variables.cdnURL&data.filename;
 	}
 
+	
+	remote struct function updateCache()
+		httpmethod="GET" restpath="updateCache" {
+
+		try{
+		
+		var rtn.meta={};
+		rtn.extensions=new S3Ext(variables.s3Root).readExtensions(flush=true);
+
+		}
+		catch(e) {
+			return e;
+		}
+		return rtn;
+	}
+
 	remote function reset()
 		httpmethod="GET" restpath="reset" {
 

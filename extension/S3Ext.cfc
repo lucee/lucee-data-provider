@@ -121,7 +121,7 @@ component {
 		throw msg;
 	}
 
-	private query function readExtensions(boolean flush){
+	public query function readExtensions(boolean flush){
 		var rootDir = getDirectoryFromPath(getCurrentTemplatePath());
 		var cacheDir=rootDir & "cache/";
 		var cacheFile = "extensions.json";
@@ -130,7 +130,7 @@ component {
 		if ( !arguments.flush && fileExists( cacheDir & cacheFile ) ){
 			return deserializeJSON( fileRead(cacheDir & cacheFile), false );
 		}
-
+		setting requesttimeout="2000";
 		lock name="read-extension-metadata" timeout="5" throwOnTimeout="false" {
 			systemOutput("s3Ext.list START #now()#",1,1);
 			var c=0;
