@@ -178,7 +178,7 @@ component {
 					if (!hasThumb && hasLogo){
 						var tmpLogo  = ImageRead( logo );
 						if ( false && imageInfo( logo ).width gt 130 ) {
-							imageResize( tmpLogo, 130 );
+							imageResize( name=tmpLogo, width=130 );
 						}
 						// reduce colour depth to 8 bit by writing to gif
 						// TODO when update provider is 5.3.8 or better use new getTempFile ext option
