@@ -45,7 +45,7 @@
 
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.artDirectory=variables.current&"artifacts/";
-	variables.extDirectory="/var/www/sites/extension/extension5/extensions/"; // TODO make more dynamic
+	variables.extDirectory="/var/www/sites/extension/extension5/extension/"; // TODO make more dynamic
 
 		/**
 	* if there is a update the function is returning a struct like this:
