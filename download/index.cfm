@@ -502,10 +502,14 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 															<h4 class="modal-title"><b>Version-#dw.version# Changelogs</b></h4>
 														</div>
 														<div class="modal-body desc">
+															<!--- <cfset uniqueKey = ""> --->
 															<cfloop struct="#changelog#" index="ver" item="tickets">
 																<cfloop struct="#tickets#" index="id" item="subject">
-																<a href="https://bugs.lucee.org/browse/#id#" target="blank">#id#</a>- #subject#
-																<br>
+																	<cfif !listFindNoCase(uniqueKey, id)>
+																		<a href="https://bugs.lucee.org/browse/#id#" target="blank">#id#</a>- #subject#
+																		<br>
+																		<cfset uniqueKey = listAppend(uniqueKey, id)>
+																	</cfif>
 															</cfloop></cfloop>
 														</div>
 														<div class="modal-footer">
