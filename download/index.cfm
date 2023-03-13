@@ -93,8 +93,15 @@ function is(type, val) {
 			return true;
 		return false;
 	}
-	else if(arguments.type=="release") 
-		return !findNoCase('-', arguments.val);
+	else if(arguments.type=="release")  {
+		if(!findNoCase('-ALPHA', arguments.val) 
+		&& !findNoCase('-BETA', arguments.val)
+		&& !findNoCase('-RC', arguments.val)
+		&& !findNoCase('-SNAPSHOT', arguments.val)
+	) 
+		return true;
+	return false;
+	}
 }
 
 function getVersions(flush) {
@@ -331,20 +338,20 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 								var _this = this;
 								setTimeout(function () {
 									if (!$(".popover:hover").length) {
-									  $(_this).popover("hide");
+										$(_this).popover("hide");
 									}
 								})
 							});
 						});
 						function hideData (a) {
-						  $('.'+a).removeClass('show');
-						  $('##'+a+'_id').show();
+							$('.'+a).removeClass('show');
+							$('##'+a+'_id').show();
 						}
 						function hideToggle (a) {
-						  $('##'+a).hide();
+							$('##'+a).hide();
 						}
 						function change(type,field,id) {
-						  window.location="?"+type+"="+field.value+"##"+id;
+							window.location="?"+type+"="+field.value+"##"+id;
 						}
 					</script>
 					<cfscript>
@@ -376,9 +383,9 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 										<cfset res=getDate(dw.version)>
 										<span style="font-weight:600">#dw.version#</span><cfif len(res)>
 	
- <span style="font-size:12px">(#res#)</span></cfif><br><br>
+	<span style="font-size:12px">(#res#)</span></cfif><br><br>
 
-									 #lang.desc[_type]#</div>
+										#lang.desc[_type]#</div>
 									
 									<!--- Express --->
 									<cfif structKeyExists(dw,"express")><div class="row_odd divHeight">
@@ -662,3 +669,4 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 	</body>
 </html>
 </cfoutput>
+	
