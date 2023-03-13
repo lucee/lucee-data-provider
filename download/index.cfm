@@ -502,7 +502,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 															<h4 class="modal-title"><b>Version-#dw.version# Changelogs</b></h4>
 														</div>
 														<div class="modal-body desc">
-															<!--- <cfset uniqueKey = ""> --->
+															<cfset uniqueKey = "">
 															<cfloop struct="#changelog#" index="ver" item="tickets">
 																<cfloop struct="#tickets#" index="id" item="subject">
 																	<cfif !listFindNoCase(uniqueKey, id)>
