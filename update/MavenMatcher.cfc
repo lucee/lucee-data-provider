@@ -213,9 +213,9 @@
 			}
 		}
 		// at this point we haven't been able to match the requested bundle from the cached meta data
-		var metaInfo = FileInfo( metaFile );
+		var metaInfo = GetFileInfo( metaFile );
 		// only retry meta data once per hour
-		if ( arguments.retry && dateDiff("n", metaInfo.dateLastModified, now() ) gt 60 ){
+		if ( arguments.retry && dateDiff("n", metaInfo.LastModified, now() ) gt 60 ){
 			log text="Maven fetch meta data RETRY [#metafile#]" type="error";
 			// maybe the local cache is out of date
 			fetchMavenMetaData( metaFile, base );
