@@ -296,15 +296,18 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 		<!--- output --->
 			<div class="bg-primary jumbotron text-white">
 				<h1 class="display-3">Downloads</h1>
-				<p>Lucee core and extension downloads.</p>
+				<p>Lucee Server and Extension downloads</p>
 			</div>
 
 			<cfif type EQ "releases" or type EQ "snapshots" or type EQ "abc" or type EQ "beta" or type EQ "rc">
 				
 				<cfif true>
 					
-					<h2>Lucee Core</h2>
-					<p style="font-size: 1.7rem;">Get releases, release candidates, beta or snapshots from Lucee. Official Lucee Docker images are available via <a href="https://hub.docker.com/r/lucee/lucee">Docker Hub</a></p>
+					<h2>Lucee Server</h2>
+					<p style="font-size: 1.6rem;">Lucee Release Announcements, including changelogs are available via <a href="https://dev.lucee.org/c/news/release/8">Releases Category</a></p>
+					<p style="font-size: 1.6rem;">Extension updates and changelogs are posted under the <a href="https://dev.lucee.org/c/hacking/extensions/5">Extensions Category</a></p>
+					<p style="font-size: 1.6rem;">Official Lucee Docker images are available via <a href="https://hub.docker.com/r/lucee/lucee">Docker Hub</a></p>
+					<p style="font-size: 1.6rem;">Commandbox Lucee engines/releases are listed at <a href="https://www.forgebox.io/view/lucee">Forgebox</a></p>
 					<script type="text/javascript">
 						$(document).ready(function () {
 							isSafari = !!navigator.userAgent.match(/Version\/[\d\.]+.*Safari/)
