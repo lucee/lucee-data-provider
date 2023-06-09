@@ -1,7 +1,7 @@
 ﻿component {
 
 	variables.mavenMappings={
-		'com.mysql.cj':{'group':'mysql','artifact':'mysql-connector-java'}
+		'com.mysql.cj':{'group':'com.mysql','artifact':'mysql-connector-j'}
 		,'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
 		,'aws-java-sdk-osgi':{'group':'com.amazonaws','artifact':'aws-java-sdk-osgi'}
 		,'com.sun.jna':{'group':'net.java.dev.jna','artifact':'jna'}
@@ -98,7 +98,7 @@
 		,"w3c.dom":{"group":"w3c","artifact":"dom"}
 		,"org.apache.commons.io":{"group":"commons-io","artifact":"commons-io"}
 		,"org.apache.commons.commons-io":{"group":"commons-io","artifact":"commons-io"}
-		,"lowagie.itext":{"group":"lowagie","artifact":"itext"}
+		,"lowagie.itext":{"group":"com.lowagie","artifact":"itext"}
 		,"org.lucee.xalan.serializer":{"group":"org.lucee","artifact":"xalan-serializer"}
 		,"bcprov.jdk14":{"group":"bcprov","artifact":"jdk14"}
 		,"org.lucee.commons.fileupload":{"group":"org.lucee","artifact":"commons-fileupload"}
@@ -163,6 +163,7 @@
 		,"org.lucee.antlr":{"group":"org.lucee","artifact":"antlr"}
 		,"org.lucee.jets3t":{"group":"org.lucee","artifact":"jets3t"}
 		,"org.lucee.postgresql":{"group":"org.lucee","artifact":"postgresql"}
+		,"org.postgresql.jdbc":{"group":"org.postgresql","artifact":"postgresql"}
 		,"org.hsqldb.hsqldb":{"group":"org.hsqldb","artifact":"hsqldb"}
 		,"org.apache.commons.pool":{"group":"commons-pool","artifact":"commons-pool"}
 		,"com.github.mwiede.jsch":{"group":"com.github.mwiede","artifact":"jsch"}
