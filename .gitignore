@@ -2,6 +2,8 @@ temp
 /update/artifacts/
 /update/index/
 /update/detail/
+/extension/extensions/
+**/WEB-INF/
 **/.DS_Store
 **/.svn/
 /*.project

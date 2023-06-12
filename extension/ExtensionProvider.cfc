@@ -12,7 +12,7 @@
 
 
 	// new
-	variables.s3Root=request.s3Root;//"s3:///lucee-downloads/";
+	variables.s3Root= server.system.environment["LUCEE_DATA_PROVIDER_S3ROOT"] ?: "s3:///lucee-downloads/";
 	variables.cdnURL="https://ext.lucee.org/";
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	
