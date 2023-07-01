@@ -167,6 +167,8 @@
 		,"org.hsqldb.hsqldb":{"group":"org.hsqldb","artifact":"hsqldb"}
 		,"org.apache.commons.pool":{"group":"commons-pool","artifact":"commons-pool"}
 		,"com.github.mwiede.jsch":{"group":"com.github.mwiede","artifact":"jsch"}
+		,"org.lucee.janino":{"group":"org.lucee","artifact":"janino"}
+		,"org.lucee.janinocc":{"group":"org.lucee","artifact":"janino-commons-compiler"}
 	};
 
 	public function getMatch(required string bundleName, string bundleVersion, boolean retry=true) {
