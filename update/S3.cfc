@@ -40,6 +40,7 @@ component {
 		var patterns=structNew('linked');
 		patterns['express']='lucee-express-';
 		patterns['light']='lucee-light-';
+		patterns['zero']='lucee-zero-';
 		patterns['fbl']='forgebox-light-';
 		patterns['fb']='forgebox-';
 		patterns['jars']='lucee-jars-';

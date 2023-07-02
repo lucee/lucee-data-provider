@@ -8,6 +8,7 @@ doS3={
 	,jar:true
 	,lco:true
 	,light:true
+	,zero:true
 	,war:true
 };
 
@@ -447,15 +448,28 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 												<span class="glyphicon glyphicon-info-sign"></span>
 											</span></div></cfif>
 											<cfif structKeyExists(dw,"light")>
-											<cfif doS3.light>
-												<cfset uri="#cdnURL##dw.light#">
-											<cfelse>
-												<cfset uri="#baseURL#light/#dw.version#">
+												<cfif doS3.light>
+													<cfset uri="#cdnURL##dw.light#">
+												<cfelse>
+													<cfset uri="#baseURL#light/#dw.version#">
+												</cfif>
+												
+												<div class="fontStyle"><a href="#(uri)#">lucee-light.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled, "Lucee light"'>
+													<span class="glyphicon glyphicon-info-sign"></span>
+												</span></div>
 											</cfif>
-											
-											<div class="fontStyle"><a href="#(uri)#">lucee-light.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled, "Lucee light"'>
-												<span class="glyphicon glyphicon-info-sign"></span>
-											</span></div></cfif>
+											<cfif structKeyExists(dw,"zero")>
+												<cfif doS3.zero>
+													<cfset uri="#cdnURL##dw.zero#">
+												<cfelse>
+													<cfset uri="#baseURL#zero/#dw.version#">
+												</cfif>
+												
+												<div class="fontStyle"><a href="#(uri)#">lucee-zero.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled or doc and admin bundles, "Lucee zero"'>
+													<span class="glyphicon glyphicon-info-sign"></span>
+												</span></div>
+											</cfif>
+
 
 									</div>
 									<!--- core --->
