@@ -8,9 +8,14 @@ component {
 		structDelete(application,"s3VersionData",false);
 	}
 	public function getVersions(boolean flush=false) {
+		var rootDir = getDirectoryFromPath(getCurrentTemplatePath());
+		var cacheDir=rootDir & "cache/";
+		var cacheFile = "versions.json";
+		if (!directoryExists(cacheDir)) 
+			directoryCreate(cacheDir);
 		if(!flush && !isNull(application.s3VersionData)) 
 			return application.s3VersionData;
-
+		
 		lock name="read-version-metadata" timeout="2" throwOnTimeout="false" {
 
 		
@@ -133,13 +138,21 @@ component {
 				if ( structKeyExists( data[ k ], "version" ) && !isEmpty( data[k][ 'version' ] ) )
 					_data[k] = data[k];
 			}
+			fileWrite(cacheDir & cacheFile, serializeJSON(data, true) );
 			systemOutput("s3Versions.list [#runId#] END #numberFormat(getTickCount()-start)#ms, #len(_data)# versions found ",1,1);
 			if ( structCount(_data) eq 0 && !isNull(application.s3VersionData) )
 				return application.s3VersionData; // emergency hotfix
 			return application.s3VersionData=_data;
 		}
-		if(!isNull(application.s3VersionData))
-			return application.s3VersionData;
+		if ( !structKeyExists( application, "s3VersionData" ) ){
+			// lock timed out, still use cache if found
+			if ( fileExists( cacheDir & cacheFile ) ){
+				application.s3VersionData = deserializeJSON( fileRead(cacheDir & cacheFile), false );
+			} else {
+				throw "lock timeout readExtensions()";
+			}
+		}
+		return application.s3VersionData;
 	}
 
 	public function getLatestVersion(boolean flush=false) {
