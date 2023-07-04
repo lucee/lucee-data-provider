@@ -20,23 +20,28 @@ component {
 			var start = getTickCount();
 
 			systemOutput("s3Versions.list [#runId#] START #numberFormat(getTickCount()-start)#ms",1,1);
-
-			var qry=directoryList(path:variables.s3Root,listInfo:"query",filter:function (path){
-				var ext=listLast(path,'.');
-				var name=listLast(path,'\/');
-		
-				if(ext=='lco') return true;
-				if(ext=='war' && left(name,6)=='lucee-') return true; 
-				if(ext=='exe' && left(name,6)=='lucee-') return true; // lucee-4.5.3.020-pl0-windows-installer.exe
-				if(ext=='run' && left(name,6)=='lucee-') return true; // lucee-4.5.3.020-pl0-windows-installer.exe
-				if(ext=='jar' && left(name,6)=='lucee-') return true; 
-				if(ext=='zip' && (left(name,6)=='lucee-' || left(name,9)=='forgebox-')) return true; 
-				/*
-				if(ext=='jar' && left(name,6)=='lucee-' || left(name,12)!='lucee-light-') {
-					return true;
-				}*/
-				return false;
-			});
+			try {
+				var qry=directoryList(path:variables.s3Root,listInfo:"query",filter:function (path){
+					var ext=listLast(path,'.');
+					var name=listLast(path,'\/');
+			
+					if(ext=='lco') return true;
+					if(ext=='war' && left(name,6)=='lucee-') return true; 
+					if(ext=='exe' && left(name,6)=='lucee-') return true; // lucee-4.5.3.020-pl0-windows-installer.exe
+					if(ext=='run' && left(name,6)=='lucee-') return true; // lucee-4.5.3.020-pl0-windows-installer.exe
+					if(ext=='jar' && left(name,6)=='lucee-') return true; 
+					if(ext=='zip' && (left(name,6)=='lucee-' || left(name,9)=='forgebox-')) return true; 
+					/*
+					if(ext=='jar' && left(name,6)=='lucee-' || left(name,12)!='lucee-light-') {
+						return true;
+					}*/
+					return false;
+				});
+			} catch (e){
+				systemOutput("error directory listing versions on s3", true);
+				systemOutput(e, true);
+				throw "cannot read s3 directory";
+			}
 			systemOutput("s3Versions.list [#runId#] FETCHED #numberFormat(getTickCount()-start)#ms, #qry.recordcount# files on s3 found",1,1);
 			//dump(qry);
 			var data=structNew("linked");
