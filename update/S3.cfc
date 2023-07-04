@@ -10,124 +10,131 @@ component {
 	public function getVersions(boolean flush=false) {
 		if(!flush && !isNull(application.s3VersionData)) 
 			return application.s3VersionData;
-		setting requesttimeout="1000";
 
-		var runid = createUniqueID();
-		var start = getTickCount();
+		lock name="read-version-metadata" timeout="2" throwOnTimeout="false" {
 
-		systemOutput("s3Versions.list [#runId#] START #numberFormat(getTickCount()-start)#ms",1,1);
+		
+			setting requesttimeout="1000";
 
-		var qry=directoryList(path:variables.s3Root,listInfo:"query",filter:function (path){
-			var ext=listLast(path,'.');
-			var name=listLast(path,'\/');
+			var runid = createUniqueID();
+			var start = getTickCount();
 
-			if(ext=='lco') return true;
-			if(ext=='war' && left(name,6)=='lucee-') return true; 
-			if(ext=='exe' && left(name,6)=='lucee-') return true; // lucee-4.5.3.020-pl0-windows-installer.exe
-			if(ext=='run' && left(name,6)=='lucee-') return true; // lucee-4.5.3.020-pl0-windows-installer.exe
-			if(ext=='jar' && left(name,6)=='lucee-') return true; 
-			if(ext=='zip' && (left(name,6)=='lucee-' || left(name,9)=='forgebox-')) return true; 
-			/*
-			if(ext=='jar' && left(name,6)=='lucee-' || left(name,12)!='lucee-light-') {
-				return true;
-			}*/
-			return false;
-		});
-		systemOutput("s3Versions.list [#runId#] FETCHED #numberFormat(getTickCount()-start)#ms, #qry.recordcount# files on s3 found",1,1);
-		//dump(qry);
-		var data=structNew("linked");
-		// first we get all 
-		var patterns=structNew('linked');
-		patterns['express']='lucee-express-';
-		patterns['light']='lucee-light-';
-		patterns['zero']='lucee-zero-';
-		patterns['fbl']='forgebox-light-';
-		patterns['fb']='forgebox-';
-		patterns['jars']='lucee-jars-';
-		patterns['jar']='lucee-';
+			systemOutput("s3Versions.list [#runId#] START #numberFormat(getTickCount()-start)#ms",1,1);
 
-		loop query=qry {
-			var ext=listLast(qry.name,'.');
-			var version="";
-			// core (.lco)
-			var name=qry.name;
-			if(ext=='lco') {
-				var version=mid(qry.name,1,len(qry.name)-4);
-				var type="lco";
-			}
-			else if(ext=='exe') {
-				var version=mid(qry.name,7,len(qry.name)-10);
-				version=replace(version,'-windows-x64-installer','');
-				version=replace(version,'-windows-installer','');
-				version=replace(version,'-pl0','');
-				version=replace(version,'-pl1','');
-				version=replace(version,'-pl2','');
-				var type="win";
-			}
-			else if(ext=='run') {
-				var version=mid(qry.name,7,len(qry.name)-10);
-				var type=findNoCase('-x64-',version)?'lin64':'lin32';
-				version=replace(version,'-linux-x64-installer','');
-				version=replace(version,'-linux-installer','');
-				version=replace(version,'-pl0','');
-				version=replace(version,'-pl1','');
-				version=replace(version,'-pl2','');
-			}
-			else if(ext=='war') {
-				var version=mid(qry.name,7,len(qry.name)-10);
-				var type="war";
-			}
-			// all others
-			else {
-				loop struct=patterns index="local.t" item="local.prefix" {
-					var l=len(prefix);
-					if(left(qry.name,l)==prefix) {
-						var version=mid(qry.name,l+1,len(qry.name)-4-l);
-						var type=t;
-						if(type=="jars") type="jar";
-						break;
+			var qry=directoryList(path:variables.s3Root,listInfo:"query",filter:function (path){
+				var ext=listLast(path,'.');
+				var name=listLast(path,'\/');
+		
+				if(ext=='lco') return true;
+				if(ext=='war' && left(name,6)=='lucee-') return true; 
+				if(ext=='exe' && left(name,6)=='lucee-') return true; // lucee-4.5.3.020-pl0-windows-installer.exe
+				if(ext=='run' && left(name,6)=='lucee-') return true; // lucee-4.5.3.020-pl0-windows-installer.exe
+				if(ext=='jar' && left(name,6)=='lucee-') return true; 
+				if(ext=='zip' && (left(name,6)=='lucee-' || left(name,9)=='forgebox-')) return true; 
+				/*
+				if(ext=='jar' && left(name,6)=='lucee-' || left(name,12)!='lucee-light-') {
+					return true;
+				}*/
+				return false;
+			});
+			systemOutput("s3Versions.list [#runId#] FETCHED #numberFormat(getTickCount()-start)#ms, #qry.recordcount# files on s3 found",1,1);
+			//dump(qry);
+			var data=structNew("linked");
+			// first we get all 
+			var patterns=structNew('linked');
+			patterns['express']='lucee-express-';
+			patterns['light']='lucee-light-';
+			patterns['zero']='lucee-zero-';
+			patterns['fbl']='forgebox-light-';
+			patterns['fb']='forgebox-';
+			patterns['jars']='lucee-jars-';
+			patterns['jar']='lucee-';
+
+			loop query=qry {
+				var ext=listLast(qry.name,'.');
+				var version="";
+				// core (.lco)
+				var name=qry.name;
+				if(ext=='lco') {
+					var version=mid(qry.name,1,len(qry.name)-4);
+					var type="lco";
+				}
+				else if(ext=='exe') {
+					var version=mid(qry.name,7,len(qry.name)-10);
+					version=replace(version,'-windows-x64-installer','');
+					version=replace(version,'-windows-installer','');
+					version=replace(version,'-pl0','');
+					version=replace(version,'-pl1','');
+					version=replace(version,'-pl2','');
+					var type="win";
+				}
+				else if(ext=='run') {
+					var version=mid(qry.name,7,len(qry.name)-10);
+					var type=findNoCase('-x64-',version)?'lin64':'lin32';
+					version=replace(version,'-linux-x64-installer','');
+					version=replace(version,'-linux-installer','');
+					version=replace(version,'-pl0','');
+					version=replace(version,'-pl1','');
+					version=replace(version,'-pl2','');
+				}
+				else if(ext=='war') {
+					var version=mid(qry.name,7,len(qry.name)-10);
+					var type="war";
+				}
+				// all others
+				else {
+					loop struct=patterns index="local.t" item="local.prefix" {
+						var l=len(prefix);
+						if(left(qry.name,l)==prefix) {
+							var version=mid(qry.name,l+1,len(qry.name)-4-l);
+							var type=t;
+							if(type=="jars") type="jar";
+							break;
+						}
 					}
 				}
+
+				// check version
+				var arrVersion=listToArray(version,'.');
+				if( arrayLen(arrVersion)!=4 || 
+					!isNumeric(arrVersion[1]) || 
+					!isNumeric(arrVersion[2]) || 
+					!isNumeric(arrVersion[3])) continue;
+				
+				var arrPatch=listToArray(arrVersion[4],'-');
+				if( arrayLen(arrPatch)>2 || 
+					arrayLen(arrPatch)==0 || 
+					!isNumeric(arrPatch[1])) continue;
+				
+				if(arrayLen(arrPatch)==2 && 
+					arrPatch[2]!="SNAPSHOT" && 
+					arrPatch[2]!="BETA" && 
+					arrPatch[2]!="RC" && 
+					arrPatch[2]!="ALPHA") continue;
+
+				var vs=toVersionSortable(version);
+				//if(isNull(data[version])) data[version]={};
+				data[vs]['version']=version;
+				data[vs][type]=name;
+				//data[version]['date-'&type]=qry.dateLastModified;
+				//data[version]['size-'&type]=qry.size;
 			}
-
-			// check version
-			var arrVersion=listToArray(version,'.');
-			if( arrayLen(arrVersion)!=4 || 
-				!isNumeric(arrVersion[1]) || 
-				!isNumeric(arrVersion[2]) || 
-				!isNumeric(arrVersion[3])) continue;
-			
-			var arrPatch=listToArray(arrVersion[4],'-');
-			if( arrayLen(arrPatch)>2 || 
-				arrayLen(arrPatch)==0 || 
-				!isNumeric(arrPatch[1])) continue;
-			
-			if(arrayLen(arrPatch)==2 && 
-				arrPatch[2]!="SNAPSHOT" && 
-				arrPatch[2]!="BETA" && 
-				arrPatch[2]!="RC" && 
-				arrPatch[2]!="ALPHA") continue;
-
-			var vs=toVersionSortable(version);
-			//if(isNull(data[version])) data[version]={};
-			data[vs]['version']=version;
-			data[vs][type]=name;
-			//data[version]['date-'&type]=qry.dateLastModified;
-			//data[version]['size-'&type]=qry.size;
+			systemOutput("s3Versions.list [#runId#] SORT #numberFormat(getTickCount()-start)#ms, #len(data)# versions found ",1,1);
+			// sort
+			var keys=structKeyArray(data);
+			arraySort(keys,"textnocase");
+			var _data=structNew("linked");
+			loop array=keys item="local.k" {
+				if ( structKeyExists( data[ k ], "version" ) && !isEmpty( data[k][ 'version' ] ) )
+					_data[k] = data[k];
+			}
+			systemOutput("s3Versions.list [#runId#] END #numberFormat(getTickCount()-start)#ms, #len(_data)# versions found ",1,1);
+			if ( structCount(_data) eq 0 && !isNull(application.s3VersionData) )
+				return application.s3VersionData; // emergency hotfix
+			return application.s3VersionData=_data;
 		}
-		systemOutput("s3Versions.list [#runId#] SORT #numberFormat(getTickCount()-start)#ms, #len(data)# versions found ",1,1);
-		// sort
-		var keys=structKeyArray(data);
-		arraySort(keys,"textnocase");
-		var _data=structNew("linked");
-		loop array=keys item="local.k" {
-			if ( structKeyExists( data[ k ], "version" ) && !isEmpty( data[k][ 'version' ] ) )
-				_data[k] = data[k];
-		}
-		systemOutput("s3Versions.list [#runId#] END #numberFormat(getTickCount()-start)#ms, #len(_data)# versions found ",1,1);
-		if ( structCount(_data) eq 0 && !isNull(application.s3VersionData) )
-			return application.s3VersionData; // emergency hotfix
-		return application.s3VersionData=_data;
+		if(!isNull(application.s3VersionData))
+			return application.s3VersionData;
 	}
 
 	public function getLatestVersion(boolean flush=false) {
