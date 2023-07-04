@@ -13,6 +13,9 @@ component {
 		var cacheFile = "versions.json";
 		if (!directoryExists(cacheDir)) 
 			directoryCreate(cacheDir);
+		if ( isNull(application.s3VersionData) && fileExists( cacheDir & cacheFile ) )
+			application.s3VersionData = deserializeJSON( fileRead(cacheDir & cacheFile), false );
+
 		if(!flush && !isNull(application.s3VersionData)) 
 			return application.s3VersionData;
 		
@@ -45,7 +48,9 @@ component {
 			} catch (e){
 				systemOutput("error directory listing versions on s3", true);
 				systemOutput(e, true);
-				throw "cannot read s3 directory";
+				if(isNull(application.s3VersionData)) 
+					return application.s3VersionData;
+				throw "cannot read versions from s3 directory";
 			}
 			systemOutput("s3Versions.list [#runId#] FETCHED #numberFormat(getTickCount()-start)#ms, #qry.recordcount# files on s3 found",1,1);
 			//dump(qry);
@@ -138,7 +143,8 @@ component {
 				if ( structKeyExists( data[ k ], "version" ) && !isEmpty( data[k][ 'version' ] ) )
 					_data[k] = data[k];
 			}
-			fileWrite(cacheDir & cacheFile, serializeJSON(data, true) );
+			if ( len(_data) gt 0 ) // only cache good data
+				fileWrite(cacheDir & cacheFile, serializeJSON(data, true) );
 			systemOutput("s3Versions.list [#runId#] END #numberFormat(getTickCount()-start)#ms, #len(_data)# versions found ",1,1);
 			if ( structCount(_data) eq 0 && !isNull(application.s3VersionData) )
 				return application.s3VersionData; // emergency hotfix
