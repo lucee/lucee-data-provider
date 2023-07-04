@@ -27,7 +27,7 @@ component {
 		setting requesttimeout="1000";
 		
 		var extensions = readExtensions(arguments.flush);
-
+		if(structKeyExists(url,"raw")) return extensions;
 		if ( !arguments.withLogo ) {
 			for (var row=extensions.recordcount; row >= 1; row-- ) {
 				querySetCell( extensions, "image", "" , row );
@@ -51,12 +51,17 @@ component {
 					}
 				}
 				else if(arguments.type=="release") {
-					if(findNoCase('-',extensions.version[row])) {
+					if(findNoCase('-ALPHA',extensions.version[row]) 
+						|| findNoCase('-BETA',extensions.version[row])
+						|| findNoCase('-RC',extensions.version[row])
+						|| findNoCase('-SNAPSHOT',extensions.version[row])
+					) {
 						queryDeleteRow(extensions,row);
 					}
 				}
 			}
 		}
+		if(structKeyExists(url,"raw2")) return extensions;
 		
 		if ( !arguments.all ) {
 			var last="";
@@ -138,10 +143,15 @@ component {
 			if (!directoryExists(jsonDir)) directoryCreate(jsonDir);
 			var tmpDir=rootDir & "extension/";
 			if (!directoryExists(tmpDir)) directoryCreate(tmpDir);
-
-			var qry=directoryList(path:variables.s3Root,listInfo:"query",filter:function (path){
-				return listLast(path,'.')=='lex';
-			});
+			try {
+				var qry=directoryList(path:variables.s3Root,listInfo:"query",filter:function (path){
+					return listLast(path,'.')=='lex';
+				});
+			} catch (e) {
+				systemOutput("error directory listing extensions on s3", true);
+				systemOutput(e, true);
+				throw "cannot read s3 directory";
+			}
 			queryAddColumn(qry,"versionSortable");
 			loop query=qry {
 				qry.versionSortable=qry.name;
@@ -159,8 +169,17 @@ component {
 				if (!hasJson || !hasLogo) {
 					var src=qry.directory&"/"&qry.name;
 					var tmpFile=tmpDir&"/"&qry.name;
-					if (!fileExists(tmpFile)) { 
-						fileCopy(src,tmpFile);
+					if (!fileExists(src)) { 
+						systemOutput("error reading extension #qry.name# from s3, [#src#]", true);
+						throw "error reading extension #qry.name# from s3";
+					} else if (!fileExists(tmpFile)) { 
+						try {
+							fileCopy(src,tmpFile);
+						} catch (e) {
+							systemOutput("error copying extension  [" & qry.name & "] threw error [" & e.message & "]", true );
+							systemOutput(e, true);
+							throw "error copying extension #qry.name#";
+						}
 					}
 					if (!hasJson) {
 						var mf=readManifest(tmpFile);
@@ -263,8 +282,8 @@ component {
 			var res = ResourceUtil.toResourceExisting(getPageContext(), path);
 		}
 		catch (e) {
-
-		/* no jar or invalid jar */}
+			/* no jar or invalid jar */
+		}
 
 		// is a file!
 		if(!isNull(res)){

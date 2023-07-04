@@ -163,27 +163,7 @@
 		var data= new S3Ext(variables.s3Root).reset();
 	}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 	private function init() {
-		
-		
-
 
 		if(application._extensionLast>getTickCount()-variables.EXPIRE) return;
 				
@@ -196,9 +176,6 @@
 		var tmpAll.trial=structNew('linked');
 		var tmpAll.full=structNew('linked');
 		var tmpAll.all=structNew('linked');
-
-
-
 
 		try{
 		loop query="#local.dir#" {
@@ -233,8 +210,6 @@
 					version:toVersionSortable(main.version),
 					rawversion:main.version
 				};
-
-
 
 				// next round at it to all
 				local.type="all";
@@ -277,9 +252,6 @@
 		httpmethod="GET" restpath="info-old" {
 
 		if(findNoCase("beta.",cgi.SERVER_NAME)) arguments.type="abc";
-		
-
-
 
 		if(len(arguments.coreVersion))
 			local.luceeVersion=toVersionSortable(arguments.coreVersion);
@@ -313,8 +285,6 @@
 			}
 
 			querySetCell(rtn.extensions,"versionSortable",structKeyExists(main,"version")?toVersionSortable(main["version"]):'',row);
-			
-
 
 			if(arguments.withLogo) {
 				local.logo="zip://"&variables.extensionDir&filename&"!/META-INF/logo.png";
@@ -518,7 +488,6 @@
 
 		if(len(arguments.coreVersion))
 			local.luceeVersion=toVersionSortable(arguments.coreVersion);
-		
 
 		// init all extensions
 		init();
@@ -539,7 +508,6 @@
 				local.data=_getLatest(application.extensions[type][arguments.id],isNull(local.luceeVersion)?"":local.luceeVersion,arguments.verType);
 				local.found=!isSimpleValue(data);
 			}
-
 
 			// write the extension to the response stream
 			if(found) {
@@ -738,9 +706,5 @@
 
 		return sct;
 	}
-
-
-
-
 
 }
