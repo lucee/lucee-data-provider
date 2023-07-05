@@ -59,6 +59,7 @@ component {
 						|| findNoCase('-RC',extensions.version[row])
 						|| findNoCase('-SNAPSHOT',extensions.version[row])
 					) {
+						//systemOutput("delete #extensions.name[row]# #extensions.version[row]# #findNoCase('-SNAPSHOT',extensions.version[row])#", true)
 						queryDeleteRow(extensions,row);
 					}
 				}
@@ -94,6 +95,7 @@ component {
 						arrayAppend(olderName,extensions.filename);
 						arrayAppend(olderDate,extensions.created);
 					}
+					//systemOutput("------------------------ #extensions.name# #extensions.version# -------------",true)
 				}
 				last=extensions.id;
 			}
@@ -139,6 +141,7 @@ component {
 		if (!directoryExists(cacheDir)) 
 			directoryCreate(cacheDir);
 		if ( !arguments.flush && fileExists( cacheDir & cacheFile ) ){
+			systemOutput("s3Ext.list readCache",1,1);
 			return deserializeJSON( fileRead(cacheDir & cacheFile), false );
 		}
 		setting requesttimeout="2000";
@@ -150,7 +153,7 @@ component {
 			var tmpDir=rootDir & "extension/";
 			if (!directoryExists(tmpDir)) directoryCreate(tmpDir);
 			try {
-				var qry=directoryList(path:variables.s3Root,listInfo:"query",filter:function (path){
+				var qry=directoryList(path:variables.s3Root,sort:"name",listInfo:"query",filter:function (path){
 					return listLast(path,'.')=='lex';
 				});
 			} catch (e) {
@@ -165,6 +168,7 @@ component {
 			
 			var extensions= querynew(variables.columnList);
 			loop query=qry {
+				//systemOutput(qry.name, true);
 				var jsonFile=jsonDir&qry.name&".json";
 				var logo=jsonDir&qry.name&".png";
 				var thumb=jsonDir&qry.name&"-thumb.png";
@@ -172,15 +176,19 @@ component {
 				var hasJson=fileExists(jsonFile);
 				var hasLogo=fileExists(logo);
 				var hasThumb=fileExists(thumb);
-				if (!hasJson || !hasLogo) {
-					var src=expandPath(qry.directory& server.separator.file & qry.name);
-					var tmpFile=expandPath(tmpDir&server.separator.file & qry.name);
+				var src = qry.directory & server.separator.file & qry.name;
+				var tmpFile = tmpDir & server.separator.file & qry.name;
+					
+				if (!hasJson || !hasLogo || !fileExists(tmpFile)) {
 					if (!fileExists(src)) { 
 						systemOutput("error reading extension #qry.name# from s3, [#src#]", true);
 						throw "error reading extension #qry.name# from s3";
 					} else if (!fileExists(tmpFile)) { 
 						try {
+							systemOutput("downloading ext: #qry.name#", true);
 							fileCopy(src,tmpFile);
+							hasLogo=false;
+							hasJson=false;
 						} catch (e) {
 							systemOutput("error copying extension  [" & qry.name & "] threw error [" & e.message & "]", true );
 							systemOutput(e, true);
@@ -216,11 +224,13 @@ component {
 							fileDelete( tmpGif );
 							fileDelete( tmpGifThumb );
 						} catch( e ) {
+							systemOutput(e, true);
 							// ignore file locking
 						}
 						hasThumb = true;
 					}
 				} catch( e ) {
+					systemOutput(e, true);
 					echo(e);
 					// ignore image problems 
 				}
@@ -228,7 +238,7 @@ component {
 				if(len(mf)==0)mf=deserializeJson(fileRead(jsonFile));
 
 				var row=queryAddRow(extensions);
-
+				//systemOutput("   " & row & " " & qry.name, true);
 				loop list=variables.columnList item="local.col" {
 					querySetCell(extensions,col,structKeyExists(mf.main,col)?mf.main[col]:'',row);
 				}
@@ -264,6 +274,7 @@ component {
 		if ( !structKeyExists( local, "extensions" ) ){
 			// lock timed out, still use cache if found
 			if ( fileExists( cacheDir & cacheFile ) ){
+				systemOutput("s3Ext.list readCache (after lock)",1,1);
 				var extensions = deserializeJSON( fileRead(cacheDir & cacheFile), false );
 			} else {
 				throw "lock timeout readExtensions()";
@@ -296,7 +307,9 @@ component {
 			// is it a jar?
 			try {
 				var zip = ZipFile.init(FileWrapper.toFile(res));
-			}catch (e) {/* no jar or invalid jar */}
+			}catch (e) {
+				/* no jar or invalid jar */
+			}
 			
 			// it is a jar
 			if(!isNull(zip)) {
