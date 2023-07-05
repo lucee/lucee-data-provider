@@ -25,8 +25,16 @@ function getExtensions(flush=false) localmode=true {
 	if(arguments.flush || isNull(application.extInfo)) {
 		http url=EXTENSION_PROVIDER&"&flush="&arguments.flush result="http";
 		if(isNull(http.status_code) || http.status_code!=200) throw "could not connect to extension provider (#ep#)";
-		data=deSerializeJson(http.fileContent,false);
-		application.extInfo = data.extensions;
+		var data=deSerializeJson(http.fileContent,false);
+		if (!structKeyExists( data, "meta" ) ) {
+			systemOutput("error fetching extensions, falling back on cache", true);
+			http url=EXTENSION_PROVIDER result="http";
+			if(isNull(http.status_code) || http.status_code!=200) throw "could not connect to extension provider (#ep#)";
+			data=deSerializeJson(http.fileContent,false);
+			application.extInfo = data.extensions;
+		} else {
+			application.extInfo = data.extensions;
+		}
 	}
 	return application.extInfo;
 }
@@ -108,7 +116,13 @@ function is(type, val) {
 function getVersions(flush) {
 	if(!structKeyExists(application,"extVer") || arguments.flush) {
 		http url=listURL&"?extended=true"&(arguments.flush?"&flush=true":"") result="local.res";
-		application.extVer= deserializeJson(res.fileContent);
+		var versions = deserializeJson(res.fileContent);
+		if ( isStruct(versions) && structKeyExists(versions, "message") ) {
+			systemOutput("download page falling back on cached versions", true);
+			http url=listURL&"?extended=true" result="local.res";
+			versions = deserializeJson(res.fileContent);
+		}
+		application.extVer = versions;
 	}
 	return application.extVer;
 }
@@ -205,9 +219,7 @@ lang.installer.lin32="Linux (32b)";
 	};
 
 	noVersion="There are currently no downloads available in this category.";
-
 	versions=getVersions(structKeyExists(url,"reset"));
-	
 	keys=structKeyArray(versions);
 	tmp=structNew('linked');
 	for(i=arrayLen(keys);i>0;i--) {
@@ -215,8 +227,6 @@ lang.installer.lin32="Linux (32b)";
 		tmp[k]=versions[k];
 	}
 	versions=tmp;
-
-
 	// add types
 	//releases,snapshots,rc,beta
 	loop struct=versions index="vs" item="data" {
@@ -224,7 +234,7 @@ lang.installer.lin32="Linux (32b)";
 		else if(findNoCase("-rc",data.version)) data['type']="rc";
 		else if(findNoCase("-beta",data.version)) data['type']="beta";
 		else if(findNoCase("-alpha",data.version)) data['type']="alpha";
-		else  data['type']="releases";
+		else data['type']="releases";
 
 		data['versionNoAppendix']=data.version;
 	}
@@ -551,15 +561,6 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 							</cfloop>
 						</div>
 					</div>
-
-
-
-
-
-
-
-
-
 
 <cfscript>
 	

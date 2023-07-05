@@ -144,8 +144,9 @@ component {
 					_data[k] = data[k];
 			}
 			if ( len(_data) gt 0 ) // only cache good data
-				fileWrite(cacheDir & cacheFile, serializeJSON(data, true) );
-			systemOutput("s3Versions.list [#runId#] END #numberFormat(getTickCount()-start)#ms, #len(_data)# versions found ",1,1);
+				fileWrite(cacheDir & cacheFile, serializeJSON(_data, false) );
+			systemOutput("s3Versions.list [#runId#] END #numberFormat(getTickCount()-start)#ms, #len(_data)# versions found",1,1);
+
 			if ( structCount(_data) eq 0 && !isNull(application.s3VersionData) )
 				return application.s3VersionData; // emergency hotfix
 			return application.s3VersionData=_data;
