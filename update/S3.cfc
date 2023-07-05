@@ -11,10 +11,15 @@ component {
 		var rootDir = getDirectoryFromPath(getCurrentTemplatePath());
 		var cacheDir=rootDir & "cache/";
 		var cacheFile = "versions.json";
-		if (!directoryExists(cacheDir)) 
-			directoryCreate(cacheDir);
-		if ( isNull(application.s3VersionData) && fileExists( cacheDir & cacheFile ) )
-			application.s3VersionData = deserializeJSON( fileRead(cacheDir & cacheFile), false );
+
+		lock name="check-version-cache" timeout="2" throwOnTimeout="false" {
+			if (!directoryExists(cacheDir)) 
+				directoryCreate(cacheDir);
+			if ( isNull(application.s3VersionData) && fileExists( cacheDir & cacheFile ) ){
+				application.s3VersionData = 
+				sortVersions(deserializeJSON( fileRead(cacheDir & cacheFile), false ));
+			}
+		}
 
 		if(!flush && !isNull(application.s3VersionData)) 
 			return application.s3VersionData;
