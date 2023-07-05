@@ -16,6 +16,7 @@ component {
 			if (!directoryExists(cacheDir)) 
 				directoryCreate(cacheDir);
 			if ( isNull(application.s3VersionData) && fileExists( cacheDir & cacheFile ) ){
+				systemOutput("s3List.versions load from cache", true);
 				application.s3VersionData = 
 				sortVersions(deserializeJSON( fileRead(cacheDir & cacheFile), false ));
 			}
@@ -153,6 +154,7 @@ component {
 		if ( !structKeyExists( application, "s3VersionData" ) ){
 			// lock timed out, still use cache if found
 			if ( fileExists( cacheDir & cacheFile ) ){
+				systemOutput("s3List.versions load from cache (after lock)", true);
 				var _data = deserializeJSON( fileRead(cacheDir & cacheFile), false );
 				application.s3VersionData = sortVersions(_data);
 			} else {

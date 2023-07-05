@@ -736,7 +736,7 @@ catch(e) { return e;}
 			return arr;
 		}
 		catch(e){
-			systemOutput( e.message, 1, 1 );
+			systemOutput( e, 1, 1 );
 			return {"type":"error","message":e.message};
 		}
 	}
