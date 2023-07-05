@@ -131,7 +131,8 @@ component {
 		var msg="there is no extension with id [#arguments.id#]";
 		if(hasVersion) msg&=" in version [#arguments.version#].";
 		else msg&=".";
-		throw msg;
+		header statuscode="404" statustext="#msg#";
+		return msg; // otherwise this creates a stack trace for forgebox stuff
 	}
 
 	public query function readExtensions(boolean flush){
