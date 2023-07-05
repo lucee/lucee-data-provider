@@ -136,13 +136,7 @@ component {
 			}
 			systemOutput("s3Versions.list [#runId#] SORT #numberFormat(getTickCount()-start)#ms, #len(data)# versions found ",1,1);
 			// sort
-			var keys=structKeyArray(data);
-			arraySort(keys,"textnocase");
-			var _data=structNew("linked");
-			loop array=keys item="local.k" {
-				if ( structKeyExists( data[ k ], "version" ) && !isEmpty( data[k][ 'version' ] ) )
-					_data[k] = data[k];
-			}
+			var _data = sortVersions(data);
 			if ( len(_data) gt 0 ) // only cache good data
 				fileWrite(cacheDir & cacheFile, serializeJSON(_data, false) );
 			systemOutput("s3Versions.list [#runId#] END #numberFormat(getTickCount()-start)#ms, #len(_data)# versions found",1,1);
@@ -154,12 +148,24 @@ component {
 		if ( !structKeyExists( application, "s3VersionData" ) ){
 			// lock timed out, still use cache if found
 			if ( fileExists( cacheDir & cacheFile ) ){
-				application.s3VersionData = deserializeJSON( fileRead(cacheDir & cacheFile), false );
+				var _data = deserializeJSON( fileRead(cacheDir & cacheFile), false );
+				application.s3VersionData = sortVersions(_data);
 			} else {
 				throw "lock timeout readExtensions()";
 			}
 		}
 		return application.s3VersionData;
+	}
+
+	private function sortVersions(data){
+		var keys=structKeyArray(data);
+		arraySort(keys,"textnocase");
+		var _data=structNew("linked");
+		loop array=keys item="local.k" {
+			if ( structKeyExists( data[ k ], "version" ) && !isEmpty( data[k][ 'version' ] ) )
+				_data[k] = data[k];
+		}
+		return _data;
 	}
 
 	public function getLatestVersion(boolean flush=false) {
