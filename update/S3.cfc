@@ -292,12 +292,20 @@ component {
 							systemOutput(e,1,1);
 							continue;
 						}
-						
-
 						// extract lco and copy to S3
 						if(type=="lco") {
 							var result=createLCO(lcl,s3.version);
 							systemOutput("lco:"&result,1,1);
+						}
+						else if(type=="fb") {
+							var result=createForgeBox(lcl,s3.version,false);
+							systemOutput("forgebox:"&result,1,1);
+							//abort;
+						}
+						else if(type=="fbl") {
+							var result=createForgeBox(lcl,s3.version,true);
+							systemOutput("forgebox-light:"&result,1,1);
+							//abort;
 						}
 						// create war and copy to S3
 						else if(type=="war") {
@@ -312,16 +320,6 @@ component {
 						else if(type=="express") {
 							var result=createExpress(lcl,s3.version);
 							systemOutput("express:"&result,1,1);
-						}
-						else if(type=="fb") {
-							var result=createForgeBox(lcl,s3.version,false);
-							systemOutput("forgebox:"&result,1,1);
-							//abort;
-						}
-						else if(type=="fbl") {
-							var result=createForgeBox(lcl,s3.version,true);
-							systemOutput("forgebox-light:"&result,1,1);
-							//abort;
 						}
 						else {
 							//systemOutput(type&":"&s3.version,1,1);
