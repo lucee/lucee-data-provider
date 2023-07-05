@@ -13,9 +13,12 @@ component {
 	}
 
 	public void function reset() {
-		loop struct=application index="local.k" item="local.v" {
-			if(findNoCase(variables.cacheAppendix,k))
-				structDelete(application,k,false);
+		lock name="cache-extension-info" timeout="5" throwOnTimeout="false" {
+			var keys = structKeyArray(application);
+			loop array=keys item="local.v" {
+				if (findNoCase(variables.cacheAppendix,v))
+					structDelete(application,v,false);
+			}
 		}
 		readExtensions(flush=true);
 	}
@@ -102,7 +105,10 @@ component {
 			}
 			extensions=ext;
 		}
-		return application[appName]=extensions;
+		lock name="cache-extension-info" timeout="5" throwOnTimeout="false" {
+			application[appName]=extensions;
+		}
+		return extensions;
 	}
 
 	public function detail(id,version="latest",flush=false,boolean withLogo=false) {
@@ -150,7 +156,7 @@ component {
 			} catch (e) {
 				systemOutput("error directory listing extensions on s3", true);
 				systemOutput(e, true);
-				throw "cannot read s3 directory";
+				throw "cannot read s3 directory for extensions";
 			}
 			queryAddColumn(qry,"versionSortable");
 			loop query=qry {
@@ -167,8 +173,8 @@ component {
 				var hasLogo=fileExists(logo);
 				var hasThumb=fileExists(thumb);
 				if (!hasJson || !hasLogo) {
-					var src=qry.directory&"/"&qry.name;
-					var tmpFile=tmpDir&"/"&qry.name;
+					var src=expandPath(qry.directory& server.separator.file & qry.name);
+					var tmpFile=expandPath(tmpDir&server.separator.file & qry.name);
 					if (!fileExists(src)) { 
 						systemOutput("error reading extension #qry.name# from s3, [#src#]", true);
 						throw "error reading extension #qry.name# from s3";
