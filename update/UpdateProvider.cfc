@@ -636,7 +636,7 @@ catch(e) { return e;}
 		var to=toVersionSortable(versionTo);
 
 		var jira=new Jira("luceeserver.atlassian.net");
-		var issues=jira.listIssues(project:"LDEV",stati:["Deployed","Done"]).issues;
+		var issues=jira.listIssues(project:"LDEV",stati:["Deployed","Done","QA"]).issues;
 		var sct=structNew("linked");
 		loop query=issues {
 			loop array=issues.fixVersions item="local.fv" {
