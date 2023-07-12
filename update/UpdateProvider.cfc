@@ -120,7 +120,7 @@
 
 				// do we need old layout of changelog?	
 				if(!isNewer(version,toVersion(MIN_NEW_CHANGELOG_VERSION))) {
-					var nn={};
+					var nn=structNew("linked");
 					loop struct=notes index="local.ver" item="local.dat" {
 					    loop struct=dat index="local.k" item="local.v"{
 					        nn[k]=v;
@@ -638,16 +638,25 @@ catch(e) { return e;}
 		var jira=new Jira("luceeserver.atlassian.net");
 		var issues=jira.listIssues(project:"LDEV",stati:["Deployed","Done","QA"]).issues;
 		var sct=structNew("linked");
+		var sorted = queryNew("ver,sort");
+
 		loop query=issues {
 			loop array=issues.fixVersions item="local.fv" {
 				try{var fvs=toVersionSortable(fv);}catch(e) {continue;}
 				if(fvs<from || fvs>to) continue;
 				if(!structKeyExists(sct,fv)) sct[fv]=structNew("linked");
 				sct[fv][issues.key]=issues.summary;
+				var row = queryAddRow(sorted);
+				querySetCell(sorted, "ver", fv, row);
+				querySetCell(sorted, "sort", fvs, row);
 			}
-			
 		}
-		return sct;
+		QuerySort(sorted, 'sort', 'desc');
+		var result = structNew("linked");
+		loop query=sorted {
+			result[sorted.ver] = sct[sorted.ver];
+		}
+		return result;
 	}
 
 
