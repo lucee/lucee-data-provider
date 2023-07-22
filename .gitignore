@@ -17,3 +17,8 @@ target/*
 /extension/extension-meta
 /extension/extension
 extension/Application.cfc
+update/Application.cfc
+/update/meta
+update/cache/versions.json
+update/Application.cfc
+download/Application.cfc
