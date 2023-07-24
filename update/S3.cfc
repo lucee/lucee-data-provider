@@ -33,7 +33,7 @@ component {
 
 			systemOutput("s3Versions.list [#runId#] START #numberFormat(getTickCount()-start)#ms",1,1);
 
-			systemOutput(variables.s3Root,1,1);
+			// systemOutput(variables.s3Root,1,1);
 			try {
 				var qry=directoryList(path:variables.s3Root,listInfo:"query",filter:function (path){
 					var ext=listLast(path,'.');
