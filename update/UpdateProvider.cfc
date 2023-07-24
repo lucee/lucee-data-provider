@@ -789,7 +789,7 @@ catch(e) { return e;}
 			else if(!isNull(info.sources.jar.date))
 				return parseDateTime(info.sources.jar.date);
 		} catch(e) {
-			systemOutput("maven.getDate() threw " + cfcatch.message );
+			systemOutput("maven.getDate() threw " & cfcatch.message, true, true );
 		}
 		
 		return "";
