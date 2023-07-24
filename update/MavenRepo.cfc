@@ -195,13 +195,13 @@ component {
 
 	private function getArtifactDirectory(){
 		local.dir=getDirectoryFromPath(getCurrenttemplatePath())&"artifacts/";
-		if(!directoryExists(dir))directoryCreate(dir);
+		if(!directoryExists(dir)) directoryCreate(dir);
 		return dir
 	}
 
 	private function getTempDir(){
 		local.dir=getDirectoryFromPath(getCurrenttemplatePath())&"temp#getTickCount()#/";
-		if(!directoryExists(dir))directoryCreate(dir);
+		if(!directoryExists(dir)) directoryCreate(dir);
 		return dir
 	}
 
@@ -328,7 +328,7 @@ component {
 
             // remove extensions
             var extDir=tmpLoader&sep&"extensions";
-            if(directoryExists(extDir))directoryDelete(extDir,true); // deletes directory with all files inside
+            if(directoryExists(extDir)) directoryDelete(extDir,true); // deletes directory with all files inside
             directoryCreate(extDir); // create empty dir again (maybe Lucee expect this directory to exist)
 
             // unzip core
@@ -408,7 +408,7 @@ component {
 				}
 			}
 			catch(e) {
-				if(fileExists(jar))fileDelete(jar);
+				if(fileExists(jar)) fileDelete(jar);
 				rethrow;
 			}
 		}
@@ -463,19 +463,19 @@ component {
 
 			// extension directory
 			local.extDir=local.curr&("build/extensions/");
-			if(!directoryExists(extDir))directoryCreate(extDir);
+			if(!directoryExists(extDir)) directoryCreate(extDir);
 
 			// common directory
 			local.commonDir=local.curr&("build/common/");
-			if(!directoryExists(commonDir))directoryCreate(commonDir);
+			if(!directoryExists(commonDir)) directoryCreate(commonDir);
 
 			// website directory
 			local.webDir=local.curr&("build/website/");
-			if(!directoryExists(webDir))directoryCreate(webDir);
+			if(!directoryExists(webDir)) directoryCreate(webDir);
 
 			// get the jars for that release
 			//local.jarsDir="#temp#jars";
-			//if(!directoryExists(jarsDir))directoryCreate(jarsDir);
+			//if(!directoryExists(jarsDir)) directoryCreate(jarsDir);
 			//zip action="unzip" file="#getDependencies(version)#" destination=jarsDir;
 			//throw getTempDirectory();
 
@@ -509,7 +509,7 @@ component {
 			}
 		}
 		finally {
-			if(!isNull(temp) && directoryExists(temp))directoryDelete(temp,true);
+			if(!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
 		}
 
 		fileMove(zipTmp,zip);
@@ -535,19 +535,19 @@ component {
 
 					// extension directory
 					local.extDir=("build/extensions/");
-					if(!directoryExists(extDir))directoryCreate(extDir);
+					if(!directoryExists(extDir)) directoryCreate(extDir);
 
 					// common directory
 					local.commonDir=ExpandPath("build/common/");
-					if(!directoryExists(commonDir))directoryCreate(commonDir);
+					if(!directoryExists(commonDir)) directoryCreate(commonDir);
 
 					// website directory
 					local.webDir=ExpandPath("build/website/");
-					if(!directoryExists(webDir))directoryCreate(webDir);
+					if(!directoryExists(webDir)) directoryCreate(webDir);
 
 					// war directory
 					local.warDir=ExpandPath("build/war/");
-					if(!directoryExists(warDir))directoryCreate(warDir);
+					if(!directoryExists(warDir)) directoryCreate(warDir);
 
 					// get the jars for that release
 					//local.jarsDir=temp&"jars";
@@ -581,11 +581,11 @@ component {
 					}
 				}
 				finally {
-					if(directoryExists(temp))directoryDelete(temp,true);
+					if(directoryExists(temp)) directoryDelete(temp,true);
 				}
 
 				// rename to permanent file
-				if(fileSize(warTmp)>30000000)fileMove(warTmp,war);
+				if(fileSize(warTmp)>30000000) fileMove(warTmp,war);
 			}
 			finally {
 				if(fileExists(warTmp)) fileDelete(warTmp);
@@ -616,15 +616,15 @@ component {
 
 				// extension directory
 				local.extDir=("build/extensions/");
-				if(!directoryExists(extDir))directoryCreate(extDir);
+				if(!directoryExists(extDir)) directoryCreate(extDir);
 
 				// common directory
 				local.commonDir=ExpandPath("build/common/");
-				if(!directoryExists(commonDir))directoryCreate(commonDir);
+				if(!directoryExists(commonDir)) directoryCreate(commonDir);
 
 				// war directory
 				local.warDir=ExpandPath("build/war/");
-				if(!directoryExists(warDir))directoryCreate(warDir);
+				if(!directoryExists(warDir)) directoryCreate(warDir);
 
 				// create the war
 				local.war=temp&"engine.war";
@@ -659,7 +659,7 @@ component {
 
 			}
 			finally {
-				if(directoryExists(temp))directoryDelete(temp,true);
+				if(directoryExists(temp)) directoryDelete(temp,true);
 			}
 
 			fileMove(zipTmp,zip);
