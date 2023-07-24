@@ -411,8 +411,11 @@ component {
         local.temp=getTempDirectory();
 		local.trg=variables.s3Root&"lucee-light-"&version&".jar";
 		if ( fileExists( trg ) ) {
+			// avoid double handling for forgebox light builds
 			systemOutput("--- " & trg & " already built, skipping", true);
-			return trg;
+			var tempLight = getTempFile(getTempDirectory(), "lucee-light-"& version, "jar");
+			fileCopy( trg, tempLight); // create a local temp file from s3
+			return tempLight;
 		}
 		local.s = getTickCount();
         try {
@@ -541,6 +544,7 @@ component {
 			// create the war
 			local.war=temp&"engine.war";
 			if ( light ) local.lightJar=createLight(jar, version, false);
+
 			zip action="zip" file=war overwrite=true {
 				zipparam source=extDir filter="*.lex" prefix="WEB-INF/lucee-server/context/deploy";
 				zipparam source=( light ? lightJar: jar) entrypath="WEB-INF/lib/lucee#( light ? '-light' : '' )#.jar";
@@ -571,10 +575,7 @@ component {
 			fileMove( zipTmp, trg );
 		}
 		finally {
-			if(!isNull(lightJar) && fileExists(lightJar)){
-				if ( left( lightJar, 2 ) neq "s3" )
-					fileDelete(lightJar);
-			} 
+			if(!isNull(lightJar) && fileExists(lightJar)) fileDelete(lightJar);
 			if(!isNull(zipTmp) && fileExists(zipTmp)) fileDelete(zipTmp);
 			if(!isNull(tmpTom) && directoryExists(tmpTom)) directoryDelete(tmpTom,true);
 		}
