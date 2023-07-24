@@ -793,10 +793,6 @@ catch(e) { return e;}
 		return "";
 	}
 
-
-
-	
-
 	remote function readGetOnlyForDebugging(
 		required string version restargsource="Path"
 		,boolean extended restargsource="url")
@@ -810,7 +806,6 @@ catch(e) { return e;}
 		catch(e){
 			return {"type":"error","message":e.message};
 		}
- 
 	}
 
 	remote function downloadExpress(
@@ -854,11 +849,8 @@ catch(e) { return e;}
 		httpmethod="GET" restpath="buildLatest" {
 		var s3=new S3(variables.s3Root);
 		s3.addMissing(true);
-		s3.reset();
 		return "done";
 	}
-
-
 
 	private boolean function isVersion(required string version) { 
 		try{
@@ -906,12 +898,7 @@ catch(e) { return e;}
 					&"."&repeatString("0",3-len(sct.micro))&sct.micro
 					&"."&repeatString("0",4-len(sct.qualifier))&sct.qualifier
 					&"."&repeatString("0",3-len(sct.qualifier_appendix_nbr))&sct.qualifier_appendix_nbr;
-
-
-
 		return sct;
-
-
 	}
 
 	private boolean function isNewer(required struct left, required struct right ){
@@ -962,7 +949,6 @@ catch(e) { return e;}
 		application.exists[name]=false;
 		return false;
 	}
-	
 
 	/**
 	* checks if file exists on S3 and if so redirect to it, if not it copies it to S3 and the next one will have it there.
@@ -1047,10 +1033,13 @@ catch(e) { return e;}
 				fileWrite("error.txt",serialize(e));
 			}
 		}
-		s3.reset();
-		throw "artifact #type# for version #version# does not exist yet, but we triggered the build for it. Try again in a couple minutes.";
-		//setting requesttimeout="10000000";
-		//sleep(60000);
+		sleep(20000);
+		versions=s3.getVersions();
+		if(structKeyExists(versions,vs) && structKeyExists(versions[vs],type)) return; // all good, was built in the meantime
+		content type="text/plain";
+		header statuscode="429" statustext="Still Building";
+		echo("artifact #encodeForHtml(type)# for version #encodeForHtml(version)# does not exist yet, but we triggered the build for it. Try again in a couple minutes.");
+		abort;
 	}
 
 	private function toVersionSortable(string version){

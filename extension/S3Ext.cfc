@@ -128,11 +128,14 @@ component {
 				
 			}
 		}
-		var msg="there is no extension with id [#arguments.id#]";
-		if(hasVersion) msg&=" in version [#arguments.version#].";
+		var msg="There is no extension at this provider with id [#encodeForHtml(arguments.id)#]";
+		if (hasVersion) msg&=" in version [#encodeForHtml(arguments.version)#].";
 		else msg&=".";
+		systemOutput(msg,1,1);
+		content type="text/plain";
 		header statuscode="404" statustext="#msg#";
-		return msg; // otherwise this creates a stack trace for forgebox stuff
+		echo(msg); // otherwise this creates a stack trace for forgebox stuff
+		abort;
 	}
 
 	public query function readExtensions(boolean flush){
