@@ -571,7 +571,10 @@ component {
 			fileMove( zipTmp, trg );
 		}
 		finally {
-			if(!isNull(lightJar) && fileExists(lightJar)) fileDelete(lightJar);
+			if(!isNull(lightJar) && fileExists(lightJar)){
+				if ( left( lightJar, 2 ) neq "s3" )
+					fileDelete(lightJar);
+			} 
 			if(!isNull(zipTmp) && fileExists(zipTmp)) fileDelete(zipTmp);
 			if(!isNull(tmpTom) && directoryExists(tmpTom)) directoryDelete(tmpTom,true);
 		}
