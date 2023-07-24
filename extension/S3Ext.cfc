@@ -113,7 +113,7 @@ component {
 		return extensions;
 	}
 
-	public function detail(id,version="latest",flush=false,boolean withLogo=false) {
+	public function detail(id,version="latest",flush=false,boolean withLogo=false) output=true {
 		var list=list(flush:arguments.flush,withLogo:withLogo,all:true);
 		var data=structNew("linked");
 		var hasVersion=!isNull(arguments.version) &&  arguments.version!="" && arguments.version!="latest";

@@ -117,9 +117,12 @@
 		var data= new S3Ext(variables.s3Root)
 			.detail(id:arguments.id,version:arguments.version,flush:arguments.flush,withLogo:false);
 
-
-		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&data.filename;
+		if (!isStruct(data)){
+			header statuscode="404" statustext="Not Found";
+		} else {
+			header statuscode="302" statustext="Found";
+			header name="Location" value=variables.cdnURL&data.filename;
+		}
 	}
 
 	/**
@@ -137,8 +140,12 @@
 		var data= new S3Ext(variables.s3Root)
 			.detail(id:arguments.id,version:arguments.version,flush:arguments.flush,withLogo:false);
 
-		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&data.filename;
+		if (!isStruct(data)){
+			header statuscode="404" statustext="Not Found";
+		} else {
+			header statuscode="302" statustext="Found";
+			header name="Location" value=variables.cdnURL&data.filename;
+		}
 	}
 
 	
