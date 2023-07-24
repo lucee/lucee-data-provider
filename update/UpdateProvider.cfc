@@ -1033,10 +1033,13 @@ catch(e) { return e;}
 				fileWrite("error.txt",serialize(e));
 			}
 		}
-		//s3.reset();
-		throw "artifact #type# for version #version# does not exist yet, but we triggered the build for it. Try again in a couple minutes.";
-		//setting requesttimeout="10000000";
-		//sleep(60000);
+		sleep(20000);
+		versions=s3.getVersions();
+		if(structKeyExists(versions,vs) && structKeyExists(versions[vs],type)) return; // all good, was built in the meantime
+		content type="text/plain";
+		header statuscode="429" statustext="Still Building";
+		echo("artifact #encodeForHtml(type)# for version #encodeForHtml(version)# does not exist yet, but we triggered the build for it. Try again in a couple minutes.");
+		abort;
 	}
 
 	private function toVersionSortable(string version){

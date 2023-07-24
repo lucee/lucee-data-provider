@@ -3,8 +3,6 @@ component {
 ";
 	public function init(s3Root) {
 		variables.s3Root=arguments.s3Root;
-
-		variables.s3Root="c:\temp\lucee-downloads\";
 	}
 	public void function reset() {
 		structDelete(application,"s3VersionData",false);
@@ -193,42 +191,52 @@ component {
 		// move the jar to maven if necessary
 		if(!structKeyExists(versions,vs) || !structKeyExists(versions[vs],'jar')) {
 			maven2S3(mr,version,versions);
-			SystemOutput("after creating jar:"&now(),1,1);
+			SystemOutput("add: downloaded jar from maven:"&now(),1,1);
+			versions = getVersions(true);
 		}
 		// create the artifact
-		if(type!="jar"){
-			createArtifacts(mr,versions[vs],type,true);
-			SystemOutput("after creating artifact (#type#):"&now(),1,1);
+
+		try {
+			if( type != "jar" ){
+				SystemOutput("add: createArtifacts (#type#):"&now(),1,1);
+				createArtifacts(mr,versions[vs],type,true);
+				versions = getVersions(true);
+				SystemOutput("add: after creating artifact (#type#):"&now(),1,1);
+			}
+		} catch(e){
+			SystemOutput(e.stacktrace,1,1);
 		}
-		reset();
-		SystemOutput("reset:"&now(),1,1);
 	}
 
 	public function addMissing(includingForgeBox=false) {
 		setting requesttimeout="1000000";
 		systemOutput("start:"&now(),1,1);
+		var started = getTickCount();
 
 		var s3List=getVersions(true);
 		systemOutput("build: getting data from S3:"&now(),1,1);
 		local.mr=new MavenRepo();
 		var missing={};
-
-		var arr=mr.list('all',false);
 		systemOutput("build: getting data from Maven:"&now(),1,1);
+		var arr=mr.list('all',false);
 
+		systemOutput("build: downloading jars:"&now(),1,1);
+		var resetRequired = false;
 		// get the jar if missing
 		loop array=arr item="local.el" {
 			if (!isNull(s3List[el.vs].jar)) continue;
 			//maven2S3(mr,el.version,s3List);
+			resetRequired = true;
 		}
-		systemOutput("build: downloading jars:"&now(),1,1);
+		if (resetRequired) 
+			s3List = getVersions(true); //force reset();
 
 		// create the missing artifacts
 		loop struct=s3List index="local.vs" item="local.el" {
 			createArtifacts(mr,el,"",includingForgeBox);
 		}
-		systemOutput("build complete, all artifacts created in #number(getTickCount()-s)#,s",1,1);
-		reset();
+		systemOutput("build complete, all artifacts created in #numberFormat(getTickCount()-started)#,s",1,1);
+		getVersions(true); //force reset();
 	}
 
 	private function maven2S3(mr,version,all) {
@@ -242,6 +250,7 @@ component {
 		var trg=variables.s3Root&"lucee-"&version&".jar";
 
 		lock name="download from maven-#version#" timeout="1" {
+			systemOutput("downloading from maven-#version#",1,1);
 			// add the jar
 			var info=mr.get(version, true);
 			if(isNull(info.sources.jar.src)) {
@@ -279,11 +288,12 @@ component {
 					if(includingForgeBox)list&=",fb,fbl";
 
 					systemOutput("Starting ( #s3.version# )",1,1);
+					var c= 0;
 
 					loop list=list item="local.type" {
 						if ( len( specType ) && specType!=type ) continue;
 						if ( structKeyExists( s3, type ) ) continue;
-
+						c++;
 						var s = getTickCount();
 						// first we need a local copy of the jar
 						var lcl=getTempDirectory() & "/lucee-"&s3.version&".jar";
@@ -310,7 +320,9 @@ component {
 						}
 						// create war and copy to S3
 						else if(type=="war") {
-							var result=createWar(lcl,s3.version);
+							lock name="build-lucee-war" timeout="10" {
+								var result=createWar(lcl,s3.version);
+							}
 							systemOutput("war: " & result & " " & numberFormat(getTickCount()-s),1,1);
 						}
 						// create war and copy to S3
@@ -319,13 +331,21 @@ component {
 							systemOutput("light: " & result & " " & numberFormat(getTickCount()-s),1,1);
 						}
 						else if(type=="express") {
-							var result=createExpress(lcl,s3.version);
+							lock name="build-lucee-express" timeout="10" {
+								var result=createExpress(lcl,s3.version);
+							}
 							systemOutput("express: " & result & " " & numberFormat(getTickCount()-s),1,1);
 						}
 						else {
-							//systemOutput(type&":"&s3.version,1,1);
+							systemOutput("unsupported: " & type &":"&s3.version,1,1);
+							c--;
 						}
 					}
+					systemOutput( "--- " & s3.version & " done #c# artifacts built",1,1);
+				}
+				catch (e){
+					systemOutput("----------------------------------------------",1,1);
+					systemOutput(cfcatch.stacktrace,1,1);
 				}
 				finally {
 					if(!isNull(lcl) && fileExists(lcl)) fileDelete(lcl);
