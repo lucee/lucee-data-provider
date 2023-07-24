@@ -782,13 +782,15 @@ catch(e) { return e;}
 	remote function getDate(required string version restargsource="Path")
 		httpmethod="GET" restpath="getdate/{version}" {
 		var mr=new MavenRepo();
-		var info=mr.get(version,true);
 		try{
+			var info=mr.get(version,true);
 			if(!isNull(info.sources.pom.date))
 				return parseDateTime(info.sources.pom.date);
 			else if(!isNull(info.sources.jar.date))
 				return parseDateTime(info.sources.jar.date);
-		}catch(e) {}
+		} catch(e) {
+			systemOutput("maven.getDate() threw " + cfcatch.message );
+		}
 		
 		return "";
 	}
