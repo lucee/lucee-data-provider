@@ -710,6 +710,77 @@ catch(e) { return e;}
 		new S3(variables.s3Root).reset();
 	}
 
+	remote function getLatest(
+		string type="" restargsource="url",
+		string version="" restargsource="url",
+		string distribution="jar" restargsource="url",
+		string format="redirect" ) 
+		httpmethod="GET" restpath="getLatest/{version}/{type}/{distribution}" {
+		
+		try {
+			var s3 = new S3( request.s3Root );
+			var versions = s3.getVersions();
+			var arrVersions = structKeyArray( versions ).reverse();
+			var version = "";
+			loop array=arrVersions index="local.i" value="local.v" {
+				local.version = versions[local.v].version;
+				local.type = listToArray(version, "-" );
+				if ( arrayLen( type ) eq 2 && arguments.type eq "stable" ){
+					version = "";
+					continue;
+				} else if ( len( arguments.type ) gt 0 && arguments.type neq "stable"){
+					if ( arrayLen( type ) eq 1
+						|| (type[ 2 ] neq arguments.type) ){
+						version = "";
+						continue;
+					}
+				}
+				if ( len( arguments.version ) eq 0 ) {
+					if ( structKeyExists( versions[local.v], arguments.distribution ) )
+						break;
+				} else if ( findNoCase(arguments.version, version ) neq 1) {
+					version="";
+					continue;
+				} else {
+					if ( structKeyExists( versions[ local.v ], arguments.distribution ) )
+						break;
+				}
+			}
+			if ( len(version) eq 0){
+				header statuscode="404";
+				return "Requested version not found";
+			}
+			if ( len(arguments.format) eq 0)
+				arguments.format = "redirect";
+			
+			var versionUrl = "https://cdn.lucee.org/#versions[local.v][arguments.distribution]#";
+
+			switch (arguments.format){
+				case "redirect":
+					location url=versionUrl addtoken=false;
+				case "string":
+					return version;
+				case "url":
+					return versionUrl;
+				case "info":
+					return {
+						"url": versionUrl,
+						"version": version,
+						"filename": versions[local.v][arguments.distribution]
+					};
+				default:
+					header statuscode="500";
+					return "error: supported formats are [ redirect, string, url, info ]";
+			}	
+		}
+		catch(e){
+			systemOutput( e, 1, 1 );
+			header statuscode="500";
+			echo (e.message);
+		}
+	}
+
+
 	remote function readList(
 		boolean force=false restargsource="url",
 		string type='all' restargsource="url",
