@@ -711,17 +711,21 @@ catch(e) { return e;}
 	}
 
 	remote function getLatest(
-		string type="" restargsource="url",
-		string version="" restargsource="url",
-		string distribution="jar" restargsource="url",
-		string format="redirect" ) 
-		httpmethod="GET" restpath="latest/{version}" {
-		
+		string version restargsource="path",
+		string type restargsource="path",
+		string distribution restargsource="path",
+		string format restargsource="path" ) 
+		httpmethod="GET" restpath="latest/{version}/{type}/{distribution}/{format}" {
+
 		try {
 			var s3 = new S3( request.s3Root );
 			var versions = s3.getVersions();
 			var arrVersions = structKeyArray( versions ).reverse();
 			var version = "";
+
+			if ( arguments.type eq "all" )
+				arguments.type ="";
+
 			loop array=arrVersions index="local.i" value="local.v" {
 				local.version = versions[local.v].version;
 				local.type = listToArray(version, "-" );
@@ -746,11 +750,11 @@ catch(e) { return e;}
 						break;
 				}
 			}
-			if ( len(version) eq 0){
+			if ( len( version ) eq 0 ){
 				header statuscode="404";
 				return "Requested version not found";
 			}
-			if ( len(arguments.format) eq 0)
+			if ( len( arguments.format ) eq 0)
 				arguments.format = "redirect";
 			
 			var versionUrl = "https://cdn.lucee.org/#versions[local.v][arguments.distribution]#";
