@@ -725,6 +725,8 @@ catch(e) { return e;}
 
 			if ( arguments.type eq "all" )
 				arguments.type ="";
+			if ( arguments.version eq 0 )
+				arguments.version = "";
 
 			loop array=arrVersions index="local.i" value="local.v" {
 				local.version = versions[local.v].version;
@@ -766,6 +768,8 @@ catch(e) { return e;}
 					return;
 				case "string":
 					return version;
+				case "filename":
+					return versions[local.v][arguments.distribution];
 				case "url":
 					return versionUrl;
 				case "info":
