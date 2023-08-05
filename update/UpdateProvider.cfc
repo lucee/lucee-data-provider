@@ -715,7 +715,7 @@ catch(e) { return e;}
 		string version="" restargsource="url",
 		string distribution="jar" restargsource="url",
 		string format="redirect" ) 
-		httpmethod="GET" restpath="getLatest/{version}/{type}/{distribution}" {
+		httpmethod="GET" restpath="latest/{version}" {
 		
 		try {
 			var s3 = new S3( request.s3Root );
@@ -757,7 +757,9 @@ catch(e) { return e;}
 
 			switch (arguments.format){
 				case "redirect":
-					location url=versionUrl addtoken=false;
+					header statuscode="302" statustext="Found";
+					header name="Location" value=versionUrl;
+					return;
 				case "string":
 					return version;
 				case "url":
