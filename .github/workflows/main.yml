@@ -29,11 +29,6 @@ jobs:
       with:
         path: _actions/lucee/script-runner/main/lucee-download-cache
         key: lucee-downloads
-    - name: Checkout Lucee
-      uses: actions/checkout@v3
-      with:
-        repository: lucee/lucee
-        path: lucee
     - name: Compile CFML
       uses: lucee/script-runner@main
       with:
@@ -42,6 +37,11 @@ jobs:
         luceeVersionQuery: 6/all/jar
         execute: /compile.cfm
         compile: true
+    - name: Checkout Lucee
+      uses: actions/checkout@v3
+      with:
+        repository: lucee/lucee
+        path: lucee
     - name: Run Lucee Test Suite (testLabels="data-provider")
       uses: lucee/script-runner@main
       with:
