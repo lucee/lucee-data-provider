@@ -39,7 +39,7 @@ jobs:
       with:
         webroot: ${{ github.workspace }}
         luceeVersion: ${{ env.luceeVersion }}
-        luceeVersionQuery: 5.4/stable/jar
+        luceeVersionQuery: 6/all/jar
         execute: /compile.cfm
         compile: true
     - name: Run Lucee Test Suite (testLabels="data-provider")
