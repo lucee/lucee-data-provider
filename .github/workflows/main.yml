@@ -28,7 +28,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: _actions/lucee/script-runner/main/lucee-download-cache
-        key: lucee-downloads
+        key: lucee-downloads2
     - name: Compile CFML
       uses: lucee/script-runner@main
       with:
