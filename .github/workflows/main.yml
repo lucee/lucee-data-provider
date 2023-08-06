@@ -28,20 +28,26 @@ jobs:
       uses: actions/cache@v3
       with:
         path: _actions/lucee/script-runner/main/lucee-download-cache
-        key: lucee-downloads-${{ env.luceeVersion }}
-        restore-keys: |
-          lucee-downloads
+        key: lucee-downloads
     - name: Checkout Lucee
       uses: actions/checkout@v3
       with:
         repository: lucee/lucee
         path: lucee
+    - name: Compile CFML
+      uses: lucee/script-runner@main
+      with:
+        webroot: ${{ github.workspace }}
+        luceeVersion: ${{ env.luceeVersion }}
+        LuceeVersionQuery: 5.4/stable/jar
+        compile: true
     - name: Run Lucee Test Suite (testLabels="data-provider")
       uses: lucee/script-runner@main
       with:
         webroot: ${{ github.workspace }}/lucee/test
         execute: /bootstrap-tests.cfm
         luceeVersion: ${{ env.luceeVersion }}
+        LuceeVersionQuery: 5.4/stable/jar
         extensionDir: ${{ github.workspace }}/
       env:
         testLabels: data-provider
