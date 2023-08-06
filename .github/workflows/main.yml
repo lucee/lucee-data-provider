@@ -39,7 +39,8 @@ jobs:
       with:
         webroot: ${{ github.workspace }}
         luceeVersion: ${{ env.luceeVersion }}
-        LuceeVersionQuery: 5.4/stable/jar
+        luceeVersionQuery: 5.4/stable/jar
+        execute: /compile.cfm
         compile: true
     - name: Run Lucee Test Suite (testLabels="data-provider")
       uses: lucee/script-runner@main
@@ -47,7 +48,7 @@ jobs:
         webroot: ${{ github.workspace }}/lucee/test
         execute: /bootstrap-tests.cfm
         luceeVersion: ${{ env.luceeVersion }}
-        LuceeVersionQuery: 5.4/stable/jar
+        luceeVersionQuery: 5.4/stable/jar
         extensionDir: ${{ github.workspace }}/
       env:
         testLabels: data-provider
