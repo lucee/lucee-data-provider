@@ -110,7 +110,11 @@ component {
 					}
 				}
 				else if(arguments.type=="release") {
-					if(findNoCase('-',extensions.version[row])) {
+					if(findNoCase('-ALPHA',extensions.version[row]) 
+						|| findNoCase('-BETA',extensions.version[row])
+						|| findNoCase('-RC',extensions.version[row])
+						|| findNoCase('-SNAPSHOT',extensions.version[row])
+					) {
 						queryDeleteRow(extensions,row);
 					}
 				}				

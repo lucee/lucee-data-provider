@@ -18,7 +18,7 @@ component {
 	variables.ignoreVersions=[
 		"5.3.0.34-ALPHA","5.3.0.0-ALPHA-SNAPSHOT","5.2.3.30-RC","5.0.0.22","5.0.0.travis-74435522-SNAPSHOT"
 		,"5.1.0.8-SNAPSHOT","5.1.0.31","5.2.1.7","5.2.1.8","5.1.4.18","5.2.0.11-ALPHA"
-		,"5.3.1.103","5.3.7.44","6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT"];
+		,"5.3.1.103","5.3.7.44","6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT","6.0.1.82"];
 	variables.majorBeta="5.3";
 
 	public function readDependenciesFromPOM(string pom, boolean extended=false,string specifivDep=""){
@@ -457,21 +457,21 @@ component {
 		// Create the express zip
 		try {
 			// temp directory
-			local.temp=getTempDir();
+			local.temp = getTempDir();
 
-			local.curr=getDirectoryFromPath(getCurrenttemplatePath());
+			local.curr = getDirectoryFromPath(getCurrenttemplatePath());
 
 			// extension directory
-			local.extDir=local.curr&("build/extensions/");
-			if(!directoryExists(extDir))directoryCreate(extDir);
+			local.extDir = local.curr & ("build/extensions/");
+			if(!directoryExists(extDir)) directoryCreate(extDir);
 
 			// common directory
 			local.commonDir=local.curr&("build/common/");
-			if(!directoryExists(commonDir))directoryCreate(commonDir);
+			if(!directoryExists(commonDir)) directoryCreate(commonDir);
 
 			// website directory
 			local.webDir=local.curr&("build/website/");
-			if(!directoryExists(webDir))directoryCreate(webDir);
+			if(!directoryExists(webDir)) directoryCreate(webDir);
 
 			// get the jars for that release
 			//local.jarsDir="#temp#jars";
@@ -535,19 +535,19 @@ component {
 
 					// extension directory
 					local.extDir=("build/extensions/");
-					if(!directoryExists(extDir))directoryCreate(extDir);
+					if(!directoryExists(extDir)) directoryCreate(extDir);
 
 					// common directory
 					local.commonDir=ExpandPath("build/common/");
-					if(!directoryExists(commonDir))directoryCreate(commonDir);
+					if(!directoryExists(commonDir)) directoryCreate(commonDir);
 
 					// website directory
 					local.webDir=ExpandPath("build/website/");
-					if(!directoryExists(webDir))directoryCreate(webDir);
+					if(!directoryExists(webDir)) directoryCreate(webDir);
 
 					// war directory
 					local.warDir=ExpandPath("build/war/");
-					if(!directoryExists(warDir))directoryCreate(warDir);
+					if(!directoryExists(warDir)) directoryCreate(warDir);
 
 					// get the jars for that release
 					//local.jarsDir=temp&"jars";
@@ -616,15 +616,15 @@ component {
 
 				// extension directory
 				local.extDir=("build/extensions/");
-				if(!directoryExists(extDir))directoryCreate(extDir);
+				if(!directoryExists(extDir)) directoryCreate(extDir);
 
 				// common directory
 				local.commonDir=ExpandPath("build/common/");
-				if(!directoryExists(commonDir))directoryCreate(commonDir);
+				if(!directoryExists(commonDir)) directoryCreate(commonDir);
 
 				// war directory
 				local.warDir=ExpandPath("build/war/");
-				if(!directoryExists(warDir))directoryCreate(warDir);
+				if(!directoryExists(warDir)) directoryCreate(warDir);
 
 				// create the war
 				local.war=temp&"engine.war";
@@ -669,13 +669,15 @@ component {
 
 	public function get(required string version, boolean extended=false) localmode=true {
 		arr=list();
+		var checks=[];
 		loop array=arr item="sct" {
+			arrayAppend(checks, sct.version);
 			if(sct.version==arguments.version) {
 				if(extended) sct.sources=getSources(sct.repository,sct.version);
 				return sct;
 			}
 		}
-		throw "version [#arguments.version#] is not available";
+		throw "version [#arguments.version#] is not available [#arrayToList(checks)#]";
 	}
 
 	public function list(string type='all', boolean extended=false) localmode=true {
@@ -697,7 +699,7 @@ component {
 				httpparam type="header" name="accept" value="application/json";
 			}
 			info=deserializeJSON(res.fileContent);
-
+			info.url=infoURL;
 			var fi=dir&"info.json";
 			if(!fileExists(fi) || fileRead(fi)!=info.totalCount) update=true;
 			

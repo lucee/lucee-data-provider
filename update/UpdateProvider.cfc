@@ -29,15 +29,23 @@
 		,'javax.mail.activation':{'group':'javax.mail','artifact':'mail'}
 		,'apache.http.components.client':{'group':'org.apache.httpcomponents','artifact':'httpclient'}
 		,'apache.http.components.mime':{'group':'org.apache.httpcomponents','artifact':'httpmime'}
-		,'apache.http.components.core':{'group':'org.apache.httpcomponents','artifact':'httcore'}
+		,'apache.http.components.core':{'group':'org.apache.httpcomponents','artifact':'httpcore'}
 		,'org.mariadb.jdbc':{'group':'org.mariadb.jdbc','artifact':'mariadb-java-client'}
 		,'javax.websocket-api':{'group':'javax.websocket','artifact':'javax.websocket-api'}
 		,'org.mariadb.jdbc':{'group':'org.mariadb.jdbc','artifact':'mariadb-java-client'}
+		,'com.fasterxml.jackson.core.jackson-databind':{'group':'com.fasterxml.jackson.core','artifact':'jackson-databind'}
+		,'com.fasterxml.jackson.core.jackson-annotations':{'group':'com.fasterxml.jackson.core','artifact':'jackson-annotations'}
+		,'com.fasterxml.jackson.core.jackson-core':{'group':'com.fasterxml.jackson.core','artifact':'jackson-core'}
+		,'com.fasterxml.jackson.dataformat.jackson-dataformat-cbor':{'group':'com.fasterxml.jackson.dataformat','artifact':'jackson-dataformat-cbor'}
+		,'joda-time':{'group':'joda-time','artifact':'joda-time'}
+		,'joda-convert':{'group':'org.joda','artifact':'joda-convert'}
+		,'software.amazon.ion.java':{'group':'software.amazon.ion','artifact':'ion-java'}
+		
 	};
 
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.artDirectory=variables.current&"artifacts/";
-	variables.extDirectory="/var/www/sites/extension/extension5/extensions/"; // TODO make more dynamic
+	variables.extDirectory="/var/www/sites/extension/extension5/extension/"; // TODO make more dynamic
 
 		/**
 	* if there is a update the function is returning a struct like this:
@@ -112,7 +120,7 @@
 
 				// do we need old layout of changelog?	
 				if(!isNewer(version,toVersion(MIN_NEW_CHANGELOG_VERSION))) {
-					var nn={};
+					var nn=structNew("linked");
 					loop struct=notes index="local.ver" item="local.dat" {
 					    loop struct=dat index="local.k" item="local.v"{
 					        nn[k]=v;
@@ -203,21 +211,36 @@
 		return downloadCoreNew(version,ioid);
 	}
 
-
-	remote function echoGET() httpmethod="GET" restpath="echoGet" {return _echo();}
+	remote function echoGET(
+				string statusCode="" restargsource="url",
+				string mimeType="" restargsource="url",
+				string charset="" restargsource="url") 
+			httpmethod="GET"
+			restpath="echoGet" {
+		return _echo(arguments.statusCode, arguments.mimeType, arguments.charset);
+	}
 	remote function echoPOST() httpmethod="POST" restpath="echoPost" {return _echo();}
 	remote function echoPUT() httpmethod="PUT" restpath="echoPut" {return _echo();}
 	remote function echoDELETE() httpmethod="DELETE" restpath="echoDelete" {return _echo();}
 
 
-	private function _echo() {
-		sct={
+	private function _echo(statusCode="", mimeType="", charset="") {
+		var sct={
 			'httpRequestData':getHTTPRequestData()
 			,'form':form
 			,'url':url
 			,'cgi':cgi
 			,'session':session
 		};
+		if ( !isEmpty( arguments.statusCode ) )
+			header statuscode=arguments.statusCode;
+		if ( !isEmpty( arguments.mimeType ) ){
+			if ( !isEmpty( arguments.charset ) ){
+				header name="Content-Type" value="#arguments.mimeType#;charset=#arguments.charset#";
+			} else {
+				header name="Content-Type" value="#arguments.mimeType#";
+			}
+		}
 		//sct.ser=serialize(sct);
 		return sct;
 	}
@@ -277,7 +300,8 @@
 	*/
 	remote function downloadBundle(required string bundleName restargsource="Path", 
 		string bundleVersion restargsource="Path",
-		string ioid="" restargsource="url",boolean allowRedirect=true restargsource="url")
+		string ioid="" restargsource="url",
+		boolean allowRedirect=true restargsource="url")
 		httpmethod="GET" restpath="download/{bundlename}/{bundleversion}" {
 try{
 
@@ -295,6 +319,8 @@ try{
 			header name="Location" value=match.url;
 			return;
 		}catch(e) {
+			if(!isNull(url.abc))
+				rethrow;
 			FileAppend("log-maven-download.log",
 				arguments.bundleName&":"&arguments.bundleVersion&" "&
 				e.message&"
@@ -610,18 +636,27 @@ catch(e) { return e;}
 		var to=toVersionSortable(versionTo);
 
 		var jira=new Jira("luceeserver.atlassian.net");
-		var issues=jira.listIssues(project:"LDEV",stati:["Deployed","Done"]).issues;
+		var issues=jira.listIssues(project:"LDEV",stati:["Deployed","Done","QA"]).issues;
 		var sct=structNew("linked");
+		var sorted = queryNew("ver,sort");
+
 		loop query=issues {
 			loop array=issues.fixVersions item="local.fv" {
 				try{var fvs=toVersionSortable(fv);}catch(e) {continue;}
 				if(fvs<from || fvs>to) continue;
 				if(!structKeyExists(sct,fv)) sct[fv]=structNew("linked");
 				sct[fv][issues.key]=issues.summary;
+				var row = queryAddRow(sorted);
+				querySetCell(sorted, "ver", fv, row);
+				querySetCell(sorted, "sort", fvs, row);
 			}
-			
 		}
-		return sct;
+		QuerySort(sorted, 'sort', 'desc');
+		var result = structNew("linked");
+		loop query=sorted {
+			result[sorted.ver] = sct[sorted.ver];
+		}
+		return result;
 	}
 
 
@@ -675,6 +710,87 @@ catch(e) { return e;}
 		new S3(variables.s3Root).reset();
 	}
 
+	remote function getLatest(
+		string version restargsource="path",
+		string type restargsource="path",
+		string distribution restargsource="path",
+		string format restargsource="path" ) 
+		httpmethod="GET" restpath="latest/{version}/{type}/{distribution}/{format}" {
+
+		try {
+			var s3 = new S3( request.s3Root );
+			var versions = s3.getVersions();
+			var arrVersions = structKeyArray( versions ).reverse();
+			var version = "";
+
+			if ( arguments.type eq "all" )
+				arguments.type ="";
+			if ( arguments.version eq 0 )
+				arguments.version = "";
+
+			loop array=arrVersions index="local.i" value="local.v" {
+				local.version = versions[local.v].version;
+				local.type = listToArray(version, "-" );
+				if ( arrayLen( type ) eq 2 && arguments.type eq "stable" ){
+					version = "";
+					continue;
+				} else if ( len( arguments.type ) gt 0 && arguments.type neq "stable"){
+					if ( arrayLen( type ) eq 1
+						|| (type[ 2 ] neq arguments.type) ){
+						version = "";
+						continue;
+					}
+				}
+				if ( len( arguments.version ) eq 0 ) {
+					if ( structKeyExists( versions[local.v], arguments.distribution ) )
+						break;
+				} else if ( findNoCase(arguments.version, version ) neq 1) {
+					version="";
+					continue;
+				} else {
+					if ( structKeyExists( versions[ local.v ], arguments.distribution ) )
+						break;
+				}
+			}
+			if ( len( version ) eq 0 ){
+				header statuscode="404";
+				return "Requested version not found";
+			}
+			if ( len( arguments.format ) eq 0)
+				arguments.format = "redirect";
+			
+			var versionUrl = "https://cdn.lucee.org/#versions[local.v][arguments.distribution]#";
+
+			switch (arguments.format){
+				case "redirect":
+					header statuscode="302" statustext="Found";
+					header name="Location" value=versionUrl;
+					return;
+				case "string":
+					return version;
+				case "filename":
+					return versions[local.v][arguments.distribution];
+				case "url":
+					return versionUrl;
+				case "info":
+					return {
+						"url": versionUrl,
+						"version": version,
+						"filename": versions[local.v][arguments.distribution]
+					};
+				default:
+					header statuscode="500";
+					return "error: supported formats are [ redirect, string, url, info ]";
+			}	
+		}
+		catch(e){
+			systemOutput( e, 1, 1 );
+			header statuscode="500";
+			echo (e.message);
+		}
+	}
+
+
 	remote function readList(
 		boolean force=false restargsource="url",
 		string type='all' restargsource="url",
@@ -682,18 +798,27 @@ catch(e) { return e;}
 		boolean flush=false restargsource="url"
 		)
 		httpmethod="GET" restpath="list" {
-
+		
 		setting requesttimeout="1000";
 
 		try {
+			
 			var s3=new S3(request.s3Root);
 			var versions=s3.getVersions(flush);
-			var ignores=["6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT"];
-			loop array=structKeyArray(versions) item="local.k" {
-				if(arrayFind(ignores,versions[k].version))structDelete(versions,k);
+
+			if(!isNull(url.abc)){
+				return versions;
+			}
+
+			var ignores=["6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT","6.0.1.82"];
+			loop array=structKeyArray( versions ) item="local.k" {
+				if ( !structKeyExists( versions[ k ], "version" ) 
+						|| arrayFind( ignores, versions[k].version ) ){
+					structDelete( versions, k );
+				}
 			}
 			
-			if(extended) return versions;
+			if ( extended ) return versions;
 			var arr=[];
 			loop struct=versions index="local.vs" item="local.data" {
 				arrayAppend(arr,{'vs':vs,'version':data.version});
@@ -701,6 +826,7 @@ catch(e) { return e;}
 			return arr;
 		}
 		catch(e){
+			systemOutput( e, 1, 1 );
 			return {"type":"error","message":e.message};
 		}
 	}
@@ -738,20 +864,18 @@ catch(e) { return e;}
 	remote function getDate(required string version restargsource="Path")
 		httpmethod="GET" restpath="getdate/{version}" {
 		var mr=new MavenRepo();
-		var info=mr.get(version,true);
 		try{
+			var info=mr.get(version,true);
 			if(!isNull(info.sources.pom.date))
 				return parseDateTime(info.sources.pom.date);
 			else if(!isNull(info.sources.jar.date))
 				return parseDateTime(info.sources.jar.date);
-		}catch(e) {}
+		} catch(e) {
+			systemOutput("maven.getDate() threw " & cfcatch.message, true, true );
+		}
 		
 		return "";
 	}
-
-
-
-	
 
 	remote function readGetOnlyForDebugging(
 		required string version restargsource="Path"
@@ -766,7 +890,6 @@ catch(e) { return e;}
 		catch(e){
 			return {"type":"error","message":e.message};
 		}
- 
 	}
 
 	remote function downloadExpress(
@@ -808,13 +931,17 @@ catch(e) { return e;}
 	*/
 	remote function buildLatest()
 		httpmethod="GET" restpath="buildLatest" {
-		var s3=new S3(variables.s3Root);
+		
+		if(arguments.flush) {
+			var indexDir=getDirectoryFromPath(getCurrentTemplatePath())&"index/";
+			if(directoryExists(indexDir)) directoryDelete(indexDir, true);
+		}
+		
+		
+			var s3=new S3(variables.s3Root);
 		s3.addMissing(true);
-		s3.reset();
 		return "done";
 	}
-
-
 
 	private boolean function isVersion(required string version) { 
 		try{
@@ -862,12 +989,7 @@ catch(e) { return e;}
 					&"."&repeatString("0",3-len(sct.micro))&sct.micro
 					&"."&repeatString("0",4-len(sct.qualifier))&sct.qualifier
 					&"."&repeatString("0",3-len(sct.qualifier_appendix_nbr))&sct.qualifier_appendix_nbr;
-
-
-
 		return sct;
-
-
 	}
 
 	private boolean function isNewer(required struct left, required struct right ){
@@ -918,7 +1040,6 @@ catch(e) { return e;}
 		application.exists[name]=false;
 		return false;
 	}
-	
 
 	/**
 	* checks if file exists on S3 and if so redirect to it, if not it copies it to S3 and the next one will have it there.
@@ -1003,10 +1124,13 @@ catch(e) { return e;}
 				fileWrite("error.txt",serialize(e));
 			}
 		}
-		s3.reset();
-		throw "artifact #type# for version #version# does not exist yet, but we triggered the build for it. Try again in a couple minutes.";
-		//setting requesttimeout="10000000";
-		//sleep(60000);
+		sleep(20000);
+		versions=s3.getVersions();
+		if(structKeyExists(versions,vs) && structKeyExists(versions[vs],type)) return; // all good, was built in the meantime
+		content type="text/plain";
+		header statuscode="429" statustext="Still Building";
+		echo("artifact #encodeForHtml(type)# for version #encodeForHtml(version)# does not exist yet, but we triggered the build for it. Try again in a couple minutes.");
+		abort;
 	}
 
 	private function toVersionSortable(string version){

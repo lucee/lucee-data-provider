@@ -1,7 +1,7 @@
 ﻿component {
 
 	variables.mavenMappings={
-		'com.mysql.cj':{'group':'mysql','artifact':'mysql-connector-java'}
+		'com.mysql.cj':{'group':'com.mysql','artifact':'mysql-connector-j'}
 		,'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
 		,'aws-java-sdk-osgi':{'group':'com.amazonaws','artifact':'aws-java-sdk-osgi'}
 		,'com.sun.jna':{'group':'net.java.dev.jna','artifact':'jna'}
@@ -17,7 +17,7 @@
 		,'javax.mail.activation':{'group':'javax.mail','artifact':'mail'}
 		,'apache.http.components.client':{'group':'org.apache.httpcomponents','artifact':'httpclient'}
 		,'apache.http.components.mime':{'group':'org.apache.httpcomponents','artifact':'httpmime'}
-		,'apache.http.components.core':{'group':'org.apache.httpcomponents','artifact':'httcore'}
+		,'apache.http.components.core':{'group':'org.apache.httpcomponents','artifact':'httpcore'}
 		,'org.mariadb.jdbc':{'group':'org.mariadb.jdbc','artifact':'mariadb-java-client'}
 		,'org.apache.commons.codec':{'group':'commons-codec','artifact':'commons-codec'}
 		
@@ -97,10 +97,12 @@
 		,"openamf":{"group":"openamf","artifact":"openamf"}
 		,"w3c.dom":{"group":"w3c","artifact":"dom"}
 		,"org.apache.commons.io":{"group":"commons-io","artifact":"commons-io"}
-		,"lowagie.itext":{"group":"lowagie","artifact":"itext"}
+		,"org.apache.commons.commons-io":{"group":"commons-io","artifact":"commons-io"}
+		,"lowagie.itext":{"group":"com.lowagie","artifact":"itext"}
 		,"org.lucee.xalan.serializer":{"group":"org.lucee","artifact":"xalan-serializer"}
 		,"bcprov.jdk14":{"group":"bcprov","artifact":"jdk14"}
 		,"org.lucee.commons.fileupload":{"group":"org.lucee","artifact":"commons-fileupload"}
+		,"org.apache.commons.commons-fileupload":{"group":"commons-fileupload","artifact":"commons-fileupload"}
 		,"serializer":{"group":"serializer","artifact":"serializer"}
 		,"org.lucee.jsch":{"group":"org.lucee","artifact":"jsch"}
 		,"org.apache.commons.collections":{"group":"commons-collections","artifact":"commons-collections"}
@@ -109,6 +111,7 @@
 		,"jta":{"group":"jta","artifact":"jta"}
 		,"hsqldb":{"group":"hsqldb","artifact":"hsqldb"}
 		,"org.apache.commons.compress":{"group":"org.apache.commons","artifact":"commons-compress"}
+		,"org.apache.commons.commons-compress":{"group":"org.apache.commons","artifact":"commons-compress"}
 		,"xml.apis":{"group":"xml","artifact":"apis"}
 		,"org.lucee.xalan":{"group":"org.lucee","artifact":"xalan"}
 		,"sun.xml.jaxrpc":{"group":"sun.xml","artifact":"jaxrpc"}
@@ -116,6 +119,9 @@
 		,"ojdbc14":{"group":"ojdbc14","artifact":"ojdbc14"}
 		,"org.apache.commons.collections4":{"group":"org.apache.commons","artifact":"commons-collections4"}
 		,"org.lucee.commons.lang":{"group":"org.lucee","artifact":"commons-lang"}
+		,"org.apache.commons.commons-lang":{"group":"commons-lang","artifact":"commons-lang"}
+		,"org.apache.commons.lang3":{"group":"org.apache.commons","artifact":"commons-lang3"}
+		,"org.apache.commons.commons-text":{"group":"org.apache.commons","artifact":"commons-text"}
 		,"sun.jai.codec":{"group":"sun.jai","artifact":"codec"}
 		,"ESAPI":{"group":"ESAPI","artifact":"ESAPI"}
 		,"org.lucee.saaj":{"group":"org.lucee","artifact":"saaj"}
@@ -130,6 +136,7 @@
 		,"org.lucee.commons.sanselan":{"group":"org.lucee","artifact":"commons-sanselan"}
 		,"PDFRenderer":{"group":"PDFRenderer","artifact":"PDFRenderer"}
 		,"org.apache.commons.net":{"group":"commons-net","artifact":"commons-net"}
+		,"org.apache.commons.commons-net":{"group":"commons-net","artifact":"commons-net"}
 		,"org.lucee.esapi":{"group":"org.lucee","artifact":"esapi"}
 		,"sun.mail":{"group":"sun","artifact":"mail"}
 		,"jfreechart.patch":{"group":"jfreechart","artifact":"patch"}
@@ -158,65 +165,86 @@
 		,"org.lucee.postgresql":{"group":"org.lucee","artifact":"postgresql"}
 		,"org.hsqldb.hsqldb":{"group":"org.hsqldb","artifact":"hsqldb"}
 		,"org.apache.commons.pool":{"group":"commons-pool","artifact":"commons-pool"}
+		,"com.github.mwiede.jsch":{"group":"com.github.mwiede","artifact":"jsch"}
 	};
 
-	public function getMatch(required string bundleName, string bundleVersion) {
+	public function getMatch(required string bundleName, string bundleVersion, boolean retry=true) {
 		
-		if(structKeyExists(variables.mavenMappings,arguments.bundleName)) {
-			var mvnId=variables.mavenMappings[arguments.bundleName];
-			var base="https://repo1.maven.org/maven2/";
-			var base=base&replace(mvnId.group,'.','/','all')&"/"&mvnId.artifact&"/";
-			
-			var metaDir=getDirectoryFromPath(getCurrentTemplatePath())&"meta/";
-			if(!directoryExists(metaDir)) directoryCreate(metaDir);
+		if ( !structKeyExists( variables.mavenMappings, arguments.bundleName ) ) {
+			throw "no maven information for OSGi id [#arguments.bundleName#] found";
+		}
+		var mvnId=variables.mavenMappings[arguments.bundleName];
+		var base="https://repo1.maven.org/maven2/";
+		var base=base&replace(mvnId.group,'.','/','all')&"/"&mvnId.artifact&"/";
+		
+		var metaDir=getDirectoryFromPath(getCurrentTemplatePath())&"meta/";
+		if(!directoryExists(metaDir)) directoryCreate(metaDir);
 
-			var metaFile=metaDir&arguments.bundleName&".json";
+		var metaFile=metaDir&arguments.bundleName&".json";
+		var meta = "";
+		if( !fileExists(metaFile) ) {
+			meta = fetchMavenMetaData( metaFile, base );
+			arguments.retry = false;
+		} else {
+			meta = deserializeJson( fileRead( metaFile ) );
+		}
 
-			if(!fileExists(metaFile)) {
-				var metaUrl=base&"maven-metadata.xml";
-				http url=metaUrl result="local.res";
-				var xml=xmlParse(res.filecontent);
-				var meta['versions']=[];
-				meta['groupId']=xml.XmlRoot.groupId.XmlText;
-				meta['artifactId']=xml.XmlRoot.artifactId.XmlText;
-				meta['latest']=xml.XmlRoot.versioning.latest.XmlText;
-				loop array=xml.XmlRoot.versioning.versions.XmlChildren item="local.node" {
-					arrayAppend(meta.versions,node.XmlText);
-				}
-				fileWrite(metaFile,serializeJson(meta));
-			}
-			else meta=deserializeJson(fileRead(metaFile));
+		// no specific version defined
+		if(isNull(arguments.bundleVersion) || isEmpty(arguments.bundleVersion) || arguments.bundleVersion=="latest") {
+			return {'groupid':meta.groupId,'artifactid':meta.artifactid,'version':meta.latest
+					,'url':base&meta.latest&"/"&meta.artifactid&"-"&meta.latest&".jar"
+			};
+		}
 
-			// no specific version defined
-			if(isNull(arguments.bundleVersion) || isEmpty(arguments.bundleVersion) || arguments.bundleVersion=="latest") {
-				return {'groupid':meta.groupId,'artifactid':meta.artifactid,'version':meta.latest
-						,'url':base&meta.latest&"/"&meta.artifactid&"-"&meta.latest&".jar"
+		// 1 to 1 match
+		loop array=meta.versions item="local.version" {
+			if(version==arguments.bundleVersion) {
+				return {'groupid':meta.groupId,'artifactid':meta.artifactid,'version':version
+				,'url':base&version&"/"&meta.artifactid&"-"&version&".jar"
+				};
+			}	
+		}
+		// removed last 0 (sometime a zero is added for osgi version numbers)
+		loop array=meta.versions item="local.version" {
+			if(version&".0"==arguments.bundleVersion) {
+				return {'groupid':meta.groupId,'artifactid':meta.artifactid,'version':version
+				,'url':base&version&"/"&meta.artifactid&"-"&version&".jar"
 				};
 			}
-			else {
-				// 1 to 1 match
-				loop array=meta.versions item="local.version" {
-					if(version==arguments.bundleVersion) {
-						return {'groupid':meta.groupId,'artifactid':meta.artifactid,'version':version
-						,'url':base&version&"/"&meta.artifactid&"-"&version&".jar"
-						};
-					}	
-				}
-				// removed last 0 (sometime a zero is added for osgi version numbers)
-				loop array=meta.versions item="local.version" {
-					if(version&".0"==arguments.bundleVersion) {
-						return {'groupid':meta.groupId,'artifactid':meta.artifactid,'version':version
-						,'url':base&version&"/"&meta.artifactid&"-"&version&".jar"
-						};
-					}
-				}
-
-				throw "No matching maven version for OSGi version [#arguments.bundleVersion#] found, for [mvn:#meta.groupId#:#meta.artifactId#,OSGi:#arguments.bundleName#], available maven versions are [#arrayToList(meta.versions)#]";
-			}
-
-			//var targetURL=base&mvnVersion&"/"&mvnId.artifact&"-"&mvnVersion&".jar";
-			//return targetURL;
 		}
-		else throw "no maven information for OSGi id [#arguments.bundleName#] found";
+		// at this point we haven't been able to match the requested bundle from the cached meta data
+		var metaInfo = GetFileInfo( metaFile );
+		// only retry meta data once per hour
+		if ( arguments.retry && dateDiff("n", metaInfo.LastModified, now() ) gt 60 ){
+			log text="Maven fetch meta data RETRY [#metafile#]" type="error";
+			// maybe the local cache is out of date
+			fetchMavenMetaData( metaFile, base );
+			getMatch( bundleName=arguments.bundleName, bundleVersion=arguments.bundleVersion, retry=false );
+		} else {
+			throw "No matching maven version for OSGi version [#arguments.bundleVersion#] found, "
+				& "for [mvn:#meta.groupId#:#meta.artifactId#,OSGi:#arguments.bundleName#], "
+				& " available maven versions are [#arrayToList(meta.versions, ", ")#]";
+		}
+		//var targetURL=base&mvnVersion&"/"&mvnId.artifact&"-"&mvnVersion&".jar";
+		//return targetURL;
+	}
+
+	private struct function fetchMavenMetaData( required string metaFile, required string baseUrl ){
+		var metaUrl = arguments.baseUrl & "maven-metadata.xml";
+		http url=metaUrl result="local.res";
+		if ( res.status_code neq 200 || !isXml( res.filecontent ) ){
+			log text="fetchMavenMetaData [#metaUrl#] returned [#res.statuscode#]" type="error";
+			throw "fetchMavenMetaData [#metaUrl#] returned [#res.statuscode#]";
+		}
+		var xml = xmlParse(res.filecontent);
+		var meta['versions'] = [];
+		meta['groupId'] = xml.XmlRoot.groupId.XmlText;
+		meta['artifactId'] = xml.XmlRoot.artifactId.XmlText;
+		meta['latest'] = xml.XmlRoot.versioning.latest.XmlText;
+		loop array=xml.XmlRoot.versioning.versions.XmlChildren item="local.node" {
+			arrayAppend( meta.versions,node.XmlText );
+		}
+		fileWrite( arguments.metaFile, serializeJson(meta) );
+		return meta;
 	}
 }
