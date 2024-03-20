@@ -932,10 +932,8 @@ catch(e) { return e;}
 	remote function buildLatest()
 		httpmethod="GET" restpath="buildLatest" {
 		
-		if(arguments.flush) {
-			var indexDir=getDirectoryFromPath(getCurrentTemplatePath())&"index/";
-			if(directoryExists(indexDir)) directoryDelete(indexDir, true);
-		}
+		var indexDir=getDirectoryFromPath(getCurrentTemplatePath())&"index/";
+		if(directoryExists(indexDir)) directoryDelete(indexDir, true);
 		
 		
 			var s3=new S3(variables.s3Root);
