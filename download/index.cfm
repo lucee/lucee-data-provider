@@ -2,11 +2,13 @@
 <cfoutput>
 <cfscript>
 if(isNull(url.type)) url.type="releases";
+else if(url.type != "releases" || url.type != "snapshots" || url.type != "rc" || url.type != "beta" || url.type != "abc") url.type="releases";
 doS3={
 	express:true
 	,jar:true
 	,lco:true
 	,light:true
+	,zero:true
 	,war:true
 };
 
@@ -23,30 +25,70 @@ function getExtensions(flush=false) localmode=true {
 	if(arguments.flush || isNull(application.extInfo)) {
 		http url=EXTENSION_PROVIDER&"&flush="&arguments.flush result="http";
 		if(isNull(http.status_code) || http.status_code!=200) throw "could not connect to extension provider (#ep#)";
-		data=deSerializeJson(http.fileContent,false);
-		application.extInfo = data.extensions;
+		var data=deSerializeJson(http.fileContent,false);
+		if (!structKeyExists( data, "meta" ) ) {
+			systemOutput("error fetching extensions, falling back on cache", true);
+			http url=EXTENSION_PROVIDER result="http";
+			if(isNull(http.status_code) || http.status_code!=200) throw "could not connect to extension provider (#ep#)";
+			data=deSerializeJson(http.fileContent,false);
+			application.extInfo = data.extensions;
+		} else {
+			application.extInfo = data.extensions;
+		}
 	}
 	return application.extInfo;
 }
 
-function extractVersions(qry, type) localmode=true {
+function extractVersions(qry) localmode=true {
+	// To make a call this function once per extension rather than three times
+	var data["release"]=structNew("linked");
+	var data["abc"]=structNew("linked");
+	var data["snapshot"]=structNew("linked");
+
 	// first we get the current version
-	var data=structNew("linked");
-	if(variables.is(arguments.type,arguments.qry.version)) {
-		data[arguments.qry.version]={'filename':arguments.qry.fileName,'date':arguments.qry.created};
+	// if(variables.is(arguments.type,arguments.qry.version)) {
+	// 	data[arguments.qry.version]={'filename':arguments.qry.fileName,'date':arguments.qry.created};
+	// }
+
+	var _other = arguments.qry.older;
+	var _otherName = arguments.qry.olderName;
+	var _otherDate = arguments.qry.olderDate;
+
+	var arrExt = [];
+	loop array=_other index="local.i" item="local.version" {
+		arrExt[i] = {'version':version,'filename':_otherName[i],'date':_otherDate[i]}
 	}
 
-	// now all the older
-	var _older=arguments.qry.older;
-	var _olderName=arguments.qry.olderName;
-	var _olderDate=arguments.qry.olderDate;
-	loop array=_older index="local.i" item="local.version" {
-		if (variables.is(arguments.type,version)) {
-			data[version]={'filename':_olderName[i],'date':_olderDate[i]};
-		}
+	// appends current into other because some current version is not newer.
+	arrayAppend(arrExt, {'version':arguments.qry.version,'filename':arguments.qry.fileName,'date':arguments.qry.created});
+
+	// sorts by version
+	arraySort(arrExt, function(e1, e2){
+		return compare(toSort(e2.version), toSort(e1.version));
+	});
+
+	loop array=arrExt index="i" item="local.ext" {
+		if (variables.is("release",ext.version)) data["release"][ext.version]={'filename':ext.filename,'date':ext.date};
+		else if (variables.is("abc",ext.version)) data["abc"][ext.version]={'filename':ext.filename,'date':ext.date};
+		else if (variables.is("snapshot",ext.version)) data["snapshot"][ext.version]={'filename':ext.filename,'date':ext.date};
 	}
 	return data;
 }
+
+function toSort( required String version) localmode=true {
+	listLength = listLen(arguments.version, "-");
+
+	if (listLength == 3) arr = listToArray(listDeleteAt(arguments.version, listLength, "-"), ".,-"); // ESAPI extension has 5 parameters
+	else arr  = listToArray(listFirst(arguments.version, "-"), ".");
+
+	rtn="";
+	loop array=arr index="i" item="v" {
+		if(len(v)<5) rtn&="."&repeatString("0",5-len(v))&v;
+		else rtn&="."&v;
+	}
+	return rtn;
+}
+
 function is(type, val) {
 	if (arguments.type=="all" || arguments.type=="") 
 		return true;
@@ -60,14 +102,27 @@ function is(type, val) {
 			return true;
 		return false;
 	}
-	else if(arguments.type=="release") 
-		return !findNoCase('-', arguments.val);
+	else if(arguments.type=="release")  {
+		if(!findNoCase('-ALPHA', arguments.val) 
+		&& !findNoCase('-BETA', arguments.val)
+		&& !findNoCase('-RC', arguments.val)
+		&& !findNoCase('-SNAPSHOT', arguments.val)
+	) 
+		return true;
+	return false;
+	}
 }
 
 function getVersions(flush) {
 	if(!structKeyExists(application,"extVer") || arguments.flush) {
 		http url=listURL&"?extended=true"&(arguments.flush?"&flush=true":"") result="local.res";
-		application.extVer= deserializeJson(res.fileContent);
+		var versions = deserializeJson(res.fileContent);
+		if ( isStruct(versions) && structKeyExists(versions, "message") ) {
+			systemOutput("download page falling back on cached versions", true);
+			http url=listURL&"?extended=true" result="local.res";
+			versions = deserializeJson(res.fileContent);
+		}
+		application.extVer = versions;
 	}
 	return application.extVer;
 }
@@ -164,9 +219,7 @@ lang.installer.lin32="Linux (32b)";
 	};
 
 	noVersion="There are currently no downloads available in this category.";
-
 	versions=getVersions(structKeyExists(url,"reset"));
-	
 	keys=structKeyArray(versions);
 	tmp=structNew('linked');
 	for(i=arrayLen(keys);i>0;i--) {
@@ -174,8 +227,6 @@ lang.installer.lin32="Linux (32b)";
 		tmp[k]=versions[k];
 	}
 	versions=tmp;
-
-
 	// add types
 	//releases,snapshots,rc,beta
 	loop struct=versions index="vs" item="data" {
@@ -183,7 +234,7 @@ lang.installer.lin32="Linux (32b)";
 		else if(findNoCase("-rc",data.version)) data['type']="rc";
 		else if(findNoCase("-beta",data.version)) data['type']="beta";
 		else if(findNoCase("-alpha",data.version)) data['type']="alpha";
-		else  data['type']="releases";
+		else data['type']="releases";
 
 		data['versionNoAppendix']=data.version;
 	}
@@ -263,15 +314,18 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 		<!--- output --->
 			<div class="bg-primary jumbotron text-white">
 				<h1 class="display-3">Downloads</h1>
-				<p>Lucee core and extension downloads.</p>
+				<p>Lucee Server and Extension downloads</p>
 			</div>
 
 			<cfif type EQ "releases" or type EQ "snapshots" or type EQ "abc" or type EQ "beta" or type EQ "rc">
 				
 				<cfif true>
 					
-					<h2>Lucee Core</h2>
-					<p style="font-size: 1.7rem;">Get releases, release candidates, beta or snapshots from Lucee.</p>
+					<h2>Lucee Server</h2>
+					<p style="font-size: 1.6rem;">Lucee Release Announcements, including changelogs are available via <a href="https://dev.lucee.org/c/news/release/8">Releases Category</a></p>
+					<p style="font-size: 1.6rem;">Extension updates and changelogs are posted under the <a href="https://dev.lucee.org/c/hacking/extensions/5">Extensions Category</a></p>
+					<p style="font-size: 1.6rem;">Official Lucee Docker images are available via <a href="https://hub.docker.com/r/lucee/lucee">Docker Hub</a></p>
+					<p style="font-size: 1.6rem;">Commandbox Lucee engines/releases are listed at <a href="https://www.forgebox.io/view/lucee">Forgebox</a></p>
 					<script type="text/javascript">
 						$(document).ready(function () {
 							isSafari = !!navigator.userAgent.match(/Version\/[\d\.]+.*Safari/)
@@ -298,20 +352,20 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 								var _this = this;
 								setTimeout(function () {
 									if (!$(".popover:hover").length) {
-									  $(_this).popover("hide");
+										$(_this).popover("hide");
 									}
 								})
 							});
 						});
 						function hideData (a) {
-						  $('.'+a).removeClass('show');
-						  $('##'+a+'_id').show();
+							$('.'+a).removeClass('show');
+							$('##'+a+'_id').show();
 						}
 						function hideToggle (a) {
-						  $('##'+a).hide();
+							$('##'+a).hide();
 						}
 						function change(type,field,id) {
-						  window.location="?"+type+"="+field.value+"##"+id;
+							window.location="?"+type+"="+field.value+"##"+id;
 						}
 					</script>
 					<cfscript>
@@ -343,9 +397,9 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 										<cfset res=getDate(dw.version)>
 										<span style="font-weight:600">#dw.version#</span><cfif len(res)>
 	
- <span style="font-size:12px">(#res#)</span></cfif><br><br>
+	<span style="font-size:12px">(#res#)</span></cfif><br><br>
 
-									 #lang.desc[_type]#</div>
+										#lang.desc[_type]#</div>
 									
 									<!--- Express --->
 									<cfif structKeyExists(dw,"express")><div class="row_odd divHeight">
@@ -404,15 +458,28 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 												<span class="glyphicon glyphicon-info-sign"></span>
 											</span></div></cfif>
 											<cfif structKeyExists(dw,"light")>
-											<cfif doS3.light>
-												<cfset uri="#cdnURL##dw.light#">
-											<cfelse>
-												<cfset uri="#baseURL#light/#dw.version#">
+												<cfif doS3.light>
+													<cfset uri="#cdnURL##dw.light#">
+												<cfelse>
+													<cfset uri="#baseURL#light/#dw.version#">
+												</cfif>
+												
+												<div class="fontStyle"><a href="#(uri)#">lucee-light.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled, "Lucee light"'>
+													<span class="glyphicon glyphicon-info-sign"></span>
+												</span></div>
 											</cfif>
-											
-											<div class="fontStyle"><a href="#(uri)#">lucee.jar(without Extension)</a><span  class="triggerIcon pointer" style="color :##01798A" title="Lucee Jar file without Extension bundled">
-												<span class="glyphicon glyphicon-info-sign"></span>
-											</span></div></cfif>
+											<cfif structKeyExists(dw,"zero")>
+												<cfif doS3.zero>
+													<cfset uri="#cdnURL##dw.zero#">
+												<cfelse>
+													<cfset uri="#baseURL#zero/#dw.version#">
+												</cfif>
+												
+												<div class="fontStyle"><a href="#(uri)#">lucee-zero.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled or doc and admin bundles, "Lucee zero"'>
+													<span class="glyphicon glyphicon-info-sign"></span>
+												</span></div>
+											</cfif>
+
 
 									</div>
 									<!--- core --->
@@ -469,10 +536,14 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 															<h4 class="modal-title"><b>Version-#dw.version# Changelogs</b></h4>
 														</div>
 														<div class="modal-body desc">
+															<cfset changelogTicketList = "">
 															<cfloop struct="#changelog#" index="ver" item="tickets">
 																<cfloop struct="#tickets#" index="id" item="subject">
-																<a href="https://bugs.lucee.org/browse/#id#" target="blank">#id#</a>- #subject#
-																<br>
+																	<cfif !listFindNoCase(changelogTicketList, id)>
+																		<a href="https://bugs.lucee.org/browse/#id#" target="blank">#id#</a>- #subject#
+																		<br>
+																		<cfset changelogTicketList = listAppend(changelogTicketList, id)>
+																	</cfif>
 															</cfloop></cfloop>
 														</div>
 														<div class="modal-footer">
@@ -491,15 +562,6 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 						</div>
 					</div>
 
-
-
-
-
-
-
-
-
-
 <cfscript>
 	
 	extQry=getExtensions(structKeyExists(url,"reset"));
@@ -517,7 +579,7 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 	<div class="container">
 		<div class="col-ms-12 col-xs-12 well well-sm">
 			<!--- title --->
-			<span class="head1 title">#extQry.name#</span>
+			<div class="permalinkHover"  id="#extQry.id#" ><span class="head1 title">#extQry.name# <span data-id="#extQry.id#" class="permalink"><img src="test.ico"></span></span></div>
 			<hr>
 			<!--- image --->
 			<div class='col-xs-2 col-md-2'>
@@ -537,9 +599,10 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 				
 			<!--- downloads --->
 			<div class="row">
+			<!--- call extractVersions function once per extension rather than three times --->
+			<cfset exts=extractVersions(extQry)>
 			<cfloop list="release,abc,snapshot" item="type">
-				<cfset exts=extractVersions(extQry,type)>
-				<cfif structCount(exts)>
+				<cfif structCount(exts[type])>
 				<div class="mb-0 mt-1 col-xs-4 col-md-4 borderInfo">
 					<div class="bg-primary jumbotron text-white jumboStyle">
 						<span class="btn-primary">
@@ -548,8 +611,8 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 					</div>
 					<cfset ind=0>
 					<cfset uid="">
-					<cfset cnt=structCount(exts)>
-					<cfloop struct="#exts#" index="ver" item="el">
+					<cfset cnt=structCount(exts[type])>
+					<cfloop struct="#exts[type]#" index="ver" item="el">
 					<cfset ind++>
 
 					<!--- show more --->
@@ -609,6 +672,19 @@ h2.fontSize{margin-bottom:-1.80rem !important;}
 				</cfif>
 			</cfif>
 		<cfhtmlbody action="flush">
+		<script>
+			$('.permalink').each(function() {
+				var anchor = document.createElement('a')
+				anchor.href = '##' + $(this).attr('data-id')
+				$(this).wrapInner(anchor)
+			});
+			$('span.permalink').hide();
+			$('div.permalinkHover').hover(
+				function() { $(this).find('span.permalink').show(); },
+				function() { $(this).find('span.permalink').hide(); }
+			);
+		</script>
 	</body>
 </html>
 </cfoutput>
+	
