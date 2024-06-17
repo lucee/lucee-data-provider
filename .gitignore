@@ -18,3 +18,4 @@ target/*
 /extension/extension
 /update/meta
 update/cache/versions.json
+update/WEB-INF
