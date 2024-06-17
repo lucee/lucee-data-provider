@@ -1,0 +1,5 @@
+# syntax = edrevo/dockerfile-plus
+INCLUDE+ ./devops/Dockerfile.base
+COPY ./update /var/www
+ENV S3_UPDATE_ACCESS_KEY_ID=REPLACE_ME
+ENV S3_UPDATE_SECRET_KEY=REPLACE_ME

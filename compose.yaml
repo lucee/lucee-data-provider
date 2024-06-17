@@ -1,0 +1,61 @@
+# Comments are provided throughout this file to help you get started.
+# If you need more help, visit the Docker Compose reference guide at
+# https://docs.docker.com/go/compose-spec-reference/
+
+# Here the instructions define your application as a service called "app".
+# This service is built from the Dockerfile in the current directory.
+# You can add other services your application may depend on here, such as a
+# database or a cache. For examples, see the Awesome Compose repository:
+# https://github.com/docker/awesome-compose
+services:
+
+  entrypoint:
+    image: jwilder/nginx-proxy
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+
+  download:
+    build:
+      context: .
+      dockerfile: devops/Dockerfile.download
+    volumes:
+      - ./download:/var/www/
+    expose:
+      - 8888
+    ports:
+      - 8888:8888
+    environment:
+      - VIRTUAL_HOST=download.lucee.local
+      - S3_DOWNLOAD_ACCESS_KEY_ID=${S3_DOWNLOAD_ACCESS_KEY_ID:-xxxxxx}
+      - S3_DOWNLOAD_SECRET_KEY=${S3_DOWNLOAD_SECRET_KEY:-xxxxxx}
+
+  extension:
+    build:
+      context: .
+      dockerfile: devops/Dockerfile.extension
+    volumes:
+      - ./extension/:/var/www/
+    expose:
+      - 8888
+    ports:
+      - 8889:8888
+    environment:
+      - VIRTUAL_HOST=extension.lucee.local
+      - S3_DOWNLOAD_ACCESS_KEY_ID=${S3_DOWNLOAD_ACCESS_KEY_ID:-xxxxxx}
+      - S3_EXTENSION_ACCESS_KEY_ID=${S3_EXTENSION_ACCESS_KEY_ID:-xxxxxx}
+
+  # update:
+  #   build:
+  #     context: .
+  #     dockerfile: devops/Dockerfile.update
+  #   volumes:
+  #     - ./update:/var/www/
+  #   expose:
+  #     - 8888
+  #   ports:
+  #     - 8890:8888
+  #   environment:
+  #     - VIRTUAL_HOST=update.lucee.local
+  #     - S3_DOWNLOAD_ACCESS_KEY_ID=${S3_DOWNLOAD_ACCESS_KEY_ID}

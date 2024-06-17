@@ -1,0 +1,5 @@
+# syntax = edrevo/dockerfile-plus
+INCLUDE+ ./devops/Dockerfile.base
+COPY ./download /var/www
+ENV S3_DOWNLOAD_ACCESS_KEY_ID=REPLACE_ME
+ENV S3_DOWNLOAD_SECRET_KEY=REPLACE_ME
