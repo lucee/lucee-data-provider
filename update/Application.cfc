@@ -2,8 +2,8 @@ component {
 
 	this.name="lucee-update-provider";
 
-	this.s3.accessKeyId = "...";
-	this.s3.awsSecretKey = "...";
+	this.s3.accessKeyId = server.system.environment.S3_UPDATE_ACCESS_KEY_ID;
+	this.s3.awsSecretKey = server.system.environment.S3_UPDATE_SECRET_KEY;
 
 	this.xmlFeatures = {
 		externalGeneralEntities: false,
