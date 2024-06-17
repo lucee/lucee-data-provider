@@ -8,8 +8,8 @@ component {
 	};
 
 
-	this.s3.accessKeyId = server.system.environment.S3_DOWNLOAD_ACCESS_KEY_ID;
-	this.s3.awsSecretKey = server.system.environment.S3_DOWNLOAD_SECRET_KEY;
+	//this.s3.accessKeyId = server.system.environment.S3_DOWNLOAD_ACCESS_KEY_ID;
+	//this.s3.awsSecretKey = server.system.environment.S3_DOWNLOAD_SECRET_KEY;
 
 	request.s3Root="s3:///extension-downloads/";
 	request.s3URL="https://s3-eu-west-1.amazonaws.com/extension-downloads/";

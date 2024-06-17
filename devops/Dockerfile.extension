@@ -1,5 +1,4 @@
 # syntax = edrevo/dockerfile-plus
 INCLUDE+ ./devops/Dockerfile.base
 COPY ./extension /var/www
-ENV S3_EXTENSION_ACCESS_KEY_ID=REPLACE_ME
-ENV S3_EXTENSION_SECRET_KEY=REPLACE_ME
+COPY ./devops/.CFconfig-extension.json /opt/lucee/server/lucee-server/context/.CFConfig.json

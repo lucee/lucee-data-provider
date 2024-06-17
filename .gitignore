@@ -19,3 +19,4 @@ target/*
 /update/meta
 update/cache/versions.json
 update/WEB-INF
+.env
