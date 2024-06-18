@@ -385,7 +385,7 @@ try{
 
 				// extract jars
 				var dir="zip://"&variables.extDirectory&name&"!jars/";
-				
+
 				if(directoryExists(dir)) {
 					directory filter="*.jar" name="local.jars" action="list" directory=dir;
 					local.fff="";
@@ -394,6 +394,7 @@ try{
 							_fileCopy(jars.directory&jars.name,variables.artDirectory&jars.name);
 							found=true;
 						}
+						// TODO variables.extMappings is never defined!
 						if(!isnull(variables.extMappings) && structKeyExists(variables.extMappings,arguments.bundleName)) {
 							if(isDefined("url.xc10")) throw "we have a mapping "&serialize(variables.extMappings[arguments.bundleName]);
 							var map=variables.extMappings[arguments.bundleName];
@@ -404,11 +405,17 @@ try{
 								found=true;
 							}
 						}
+						// found is never used?
 					}
 				}
-				
 			}
-			var path=checkForJar(arguments.bundleName,arguments.bundleVersion);
+			
+			if ( fileExists( variables.extDirectory & name ) ) {
+				path = variables.extDirectory & name;
+			} else {
+				path = checkForJar( arguments.bundleName, arguments.bundleVersion ); // eh, last arg defaults to .lex
+			}
+			
 		}
 		if(len(path)==0 || !FileExists(path) || !isNull(url.ignoreLocal)) {
 			// last try, when the pattrn of the maven name matches the pattern of the osgi name we could be lucky
