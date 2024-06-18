@@ -1,4 +1,0 @@
-# syntax = edrevo/dockerfile-plus
-INCLUDE+ ./devops/Dockerfile.base
-COPY ./extension /var/www
-COPY ./devops/.CFconfig-extension.json /opt/lucee/server/lucee-server/context/.CFConfig.json

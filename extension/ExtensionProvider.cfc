@@ -1,5 +1,8 @@
 ﻿component restpath="/provider"  rest="true" {
 
+	request.s3Root="s3:///extension-downloads/";
+	request.s3URL="https://ext.lucee.org/";
+
 	variables.EXPIRE=300*1000; // MS
 
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
