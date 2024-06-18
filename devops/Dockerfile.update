@@ -10,4 +10,4 @@ COPY ./extension /var/www/extension
 COPY ./root/Application.cfc /var/www/Application.cfc
 COPY ./devops/.CFconfig-update.json /opt/lucee/server/lucee-server/context/.CFConfig.json
 
-# RUN LUCEE_ENABLE_WARMUP=true ${CATALINA_HOME}/bin/catalina.sh run
+RUN LUCEE_ENABLE_WARMUP=true ${CATALINA_HOME}/bin/catalina.sh run
