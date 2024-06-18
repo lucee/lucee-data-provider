@@ -1,4 +1,9 @@
 # syntax = edrevo/dockerfile-plus
 INCLUDE+ ./devops/Dockerfile.base
+ARG SENTRY_ENV
+ARG SENTRY_DSN
+ENV SENTRY_ENV=${SENTRY_ENV}
+ENV SENTRY_DSN=${SENTRY_DSN}
 COPY ./download /var/www
 COPY ./devops/.CFconfig-download.json /opt/lucee/server/lucee-server/context/.CFConfig.json
+RUN LUCEE_ENABLE_WARMUP=true ${CATALINA_HOME}/bin/catalina.sh run

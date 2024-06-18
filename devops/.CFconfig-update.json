@@ -130,7 +130,7 @@
             "appenderArguments": "path:{lucee-config}/logs/thread.log",
             "level": "error",
             "layout": "classic"
-        },/*
+        },
         "exception": {
             "appenderArguments": {
                 "environment": "{env:SENTRY_ENV}",
@@ -156,19 +156,19 @@
             "appenderBundleVersion": "5.5.2.12-BETA",
             "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
             "layoutArguments": ""
-        }, */
-        "exception": {
-            "appender": "resource",
-            "appenderArguments": "path:{lucee-config}/logs/exception.log",
-            "level": "error",
-            "layout": "classic"
-          },
-          "application": {
-            "appender": "resource",
-            "appenderArguments": "path:{lucee-config}/logs/application.log",
-            "level": "info",
-            "layout": "classic"
-          },
+        },
+        // "exception": {
+        //     "appender": "resource",
+        //     "appenderArguments": "path:{lucee-config}/logs/exception.log",
+        //     "level": "error",
+        //     "layout": "classic"
+        //   },
+        //   "application": {
+        //     "appender": "resource",
+        //     "appenderArguments": "path:{lucee-config}/logs/application.log",
+        //     "level": "info",
+        //     "layout": "classic"
+        //   },
         "scope": {
             "appender": "resource",
             "appenderArguments": "path:{lucee-config}/logs/scope.log",
@@ -322,12 +322,12 @@
             "id": "8D7FB0DF-08BB-1589-FE3975678F07DB17",
             "name": "Compress Tags",
             "version": "1.0.0.15"
-        },/*
+        },
         {
             "id": "83062C18-FA1F-4647-815BB663BCF98AC0",
             "name": "Sentry",
             "version": "5.5.2.12-BETA"
-        },*/
+        },
         {
             "id": "CED6227E-0F49-6367-A68D21AACA6B07E8",
             "name": "Lucee Administrator",

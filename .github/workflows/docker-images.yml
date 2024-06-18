@@ -27,8 +27,8 @@ jobs:
 
     - name: Build and push Docker images
       run: |
-        docker buildx build --platform linux/amd64,linux/arm64 -t markdrew/lucee-downloads:latest -t markdrew/lucee-downloads:${{ github.sha }} -f devops/Dockerfile.download . --push
-        docker buildx build --platform linux/amd64,linux/arm64 -t markdrew/lucee-update:latest -t markdrew/lucee-update:${{ github.sha }} -f devops/Dockerfile.update . --push
+        docker buildx build --platform linux/amd64,linux/arm64 --build-arg SENTRY_ENV=UAT --build-arg SENTRY_DSN=:${{ env.SENTRY_DSN }} -t markdrew/lucee-downloads:latest -t markdrew/lucee-downloads:${{ github.sha }} -f devops/Dockerfile.download . --push
+        docker buildx build --platform linux/amd64,linux/arm64 --build-arg SENTRY_ENV=UAT --build-arg SENTRY_DSN=:${{ env.SENTRY_DSN }} -t markdrew/lucee-update:latest -t markdrew/lucee-update:${{ github.sha }} -f devops/Dockerfile.update . --push
 
     - name: Trigger deployments
       run: |
