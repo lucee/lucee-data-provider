@@ -48,7 +48,9 @@
 
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.artDirectory=variables.current&"artifacts/";
-	variables.extDirectory="/var/www/extension/extension"; // TODO make more dynamic
+	if (!directoryExists(variables.artDirectory))
+		directoryCreate(variables.artDirectory);
+	variables.extDirectory="/var/www/extension/extension/"; // TODO make more dynamic
 
 		/**
 	* if there is a update the function is returning a struct like this:
@@ -315,6 +317,7 @@ try{
 			
 			FileAppend("log-maven-download-ok.log",arguments.bundleName&":"&bv&"
 ");
+			WriteLog(text="Maven matcher: " & arguments.bundleName&":"&arguments.bundleVersion&" "& e.message, type="info", log="application" );
 			//http url=match.url result="local.cfhttp";
 			//if(cfhttp.status_code!=200) throw match.url&" "&serialize(cfhttp);
 			if(!isNull(url.abc)) throw match.url;
@@ -327,7 +330,9 @@ try{
 			FileAppend("log-maven-download.log",
 				arguments.bundleName&":"&arguments.bundleVersion&" "&
 				e.message&"
-");	
+");			
+			WriteLog(text="Maven matcher missing bundle: " & arguments.bundleName&":"&arguments.bundleVersion&" "& e.message, type="error", log="application" );
+			
 		}
 		
 		if(arguments.bundleVersion=='latest') {
@@ -372,6 +377,7 @@ try{
 
 		// extension jar?
 		if(len(path)==0) {
+			systemOutput(variables.extDirectory&name, true);
 			// get the extension
 			var name=arguments.bundleName&"-"&arguments.bundleVersion&".lex"
 			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
@@ -510,8 +516,9 @@ try{
 			echo(text);
 			// TODO write to a log
 			file action="append" addnewline="yes" file="#variables.current#missing-bundles.txt"
-			output="#arguments.bundleName#-#arguments.bundleVersion#->#path#" fixnewline="no";
-            
+				output="#arguments.bundleName#-#arguments.bundleVersion#->#path#" fixnewline="no";
+
+			WriteLog(text="No Jar available: #arguments.bundleName#-#arguments.bundleVersion#->#path#", type="error", log="application" );
 		}
 		else {
 			

@@ -1,11 +1,29 @@
 FROM lucee/lucee:6.0.3.1-tomcat9.0-jdk11-temurin-jammy
 ADD https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.20.0/jmx_prometheus_javaagent-0.20.0.jar /opt/lucee/bin/prometheus-java-agent.jar
 ENV JAVA_OPTS="-javaagent:/opt/lucee/bin/prometheus-java-agent.jar=9090:/opt/lucee/conf/prometheus/config.yml"
+ENV LUCEE_ADMIN_ENABLED=false
 RUN  mkdir -p /opt/lucee/server/lucee-server/deploy && \
 mkdir -p /opt/lucee/server/lucee-server/context && \
-wget -nv https://ext.lucee.org/sentry-extension-5.5.2.12-BETA.lex -O /opt/lucee/server/lucee-server/deploy/sentry-extension.lex && \
-echo "sommer ize" > /opt/lucee/server/lucee-server/context/password.txt
-ENV LUCEE_ADMIN_ENABLED=true
+wget -nv https://ext.lucee.org/sentry-extension-5.5.2.12-BETA.lex -O /opt/lucee/server/lucee-server/deploy/sentry-extension.lex
+
+RUN mkdir -p /var/www && mkdir -p /var/www/logs \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/application.log \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/datasource.log \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/deploy.log \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/felix.log \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/gateway.log \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/global.log \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/mapping.log \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/memory.log \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/orm.log \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/remoteclient.log \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/rest.log \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/scope.log \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/search.log \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/thread.log
+
+
+ENV LUCEE_ADMIN_ENABLED=false
 ENV LUCEE_SECURITY_LIMITEVALUATION=true
 COPY devops/conf/prometheus/config.yml /opt/lucee/conf/prometheus/config.yml
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 CMD [ "curl", "-f", "http://localhost:8888/update/healthcheck/index.cfm" ]
