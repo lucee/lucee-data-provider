@@ -16,7 +16,7 @@
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
  	
 	variables.mavenMappings= new MavenMatcher().getMavenMappings();
-	
+
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.artDirectory=variables.current&"artifacts/";
 	if (!directoryExists(variables.artDirectory))
@@ -346,12 +346,14 @@ try{
 			_fileCopy(data.jar,orgPath);
 			path=orgPath;
 		}
-
+		systemOutput( "path:" & path, true);
+		systemOutput( "name:" & name, true);
+		systemOutput( arguments, true);
 		// extension jar?
 		if(len(path)==0) {
 			systemOutput(variables.extDirectory&name, true);
 			// get the extension
-			var name=arguments.bundleName&"-"&arguments.bundleVersion&".lex"
+			var name=arguments.bundleName&"-"&arguments.bundleVersion&".lex";
 			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
 				name=replace(arguments.bundleName,'.','-','all')&"-"&arguments.bundleVersion&".lex";
 			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
@@ -378,7 +380,7 @@ try{
 					useMapping=true;
 				}
 			}
-			
+			systemOutput( "name 2:" & name, true);
 
 			var found=false;
 			if(FileExists(variables.extDirectory&name)) {
@@ -417,6 +419,7 @@ try{
 			}
 			
 		}
+		systemOutput( "path 2:" & path, true);
 		if(len(path)==0 || !FileExists(path) || !isNull(url.ignoreLocal)) {
 			// last try, when the pattrn of the maven name matches the pattern of the osgi name we could be lucky
 			var mvnRep="https://repo1.maven.org/maven2";
@@ -427,17 +430,17 @@ try{
 				//,"https://repo1.maven.org/maven2"
 			];
 			
-			//systemOutput(arguments, true);
+			systemOutput(arguments, true);
 			if(structKeyExists(variables.mavenMappings,arguments.bundleName)) {
 				
 				var mvnId=variables.mavenMappings[arguments.bundleName];
-				//systemOutput(mvnId, true);
+				systemOutput(mvnId, true);
 				var uri="/"&replace(mvnId.group,'.','/','all')&"/"&mvnId.artifact&
 						"/"&arguments.bundleVersion&
 						"/"&mvnId.artifact&"-"&arguments.bundleVersion&".jar";
 			}
 			else {
-				//systemOutput("no maven mappings, sad face", true);
+				systemOutput("no maven mappings, sad face", true);
 				var uri="/"
 					&replace(arguments.bundleName,'.','/','all')&"/"
 					&arguments.bundleVersion&"/"
@@ -445,8 +448,8 @@ try{
 					&arguments.bundleVersion&".jar";
 			}
 
-			//systemOutput("---------------------------------------------", true);
-			//systemOutput(uri, true);
+			systemOutput("---------------------------------------------", true);
+			systemOutput(uri, true);
 					
 
 			loop array=repositories item="local.rep" {
@@ -456,9 +459,9 @@ try{
 					local.redirectURL=rep&uri;
 					break;
 				}
-				//systemOutput("", true);
-				//systemOutput( tmp.status_code &rep&uri, true);
-				//systemOutput(local.tmp, true);
+				systemOutput("", true);
+				systemOutput( tmp.status_code & " " &rep&uri, true);
+				// systemOutput(local.tmp, true);
 			}
 			
 			// ok an other last try, when "org.lucee" we know more about the pattern
@@ -471,7 +474,7 @@ try{
 					,mvnRep&"/org/lucee/"&art2&"/"&arguments.bundleVersion&"/"&art2&"-"&arguments.bundleVersion&".jar"
 				];
 				loop array=urls item="local._url" {
-					//systemOutput(_url, true);
+					systemOutput(_url, true);
 					if(fileExists(_url)) {
 						local.redirectURL=_url;
 						break;
@@ -543,7 +546,7 @@ catch(e) { return e;}
 				left(children.name,lbn)==bn3) {
 
 		
-				v=mid(children.name,lbn+1);
+				var v=mid(children.name,lbn+1);
 				v=left(v,len(v)- (right(v,4)==".jar"?4:5)); // remove .jar
 				//str&="-"&v&isVersion(v);
 				if(isVersion(v)) {
