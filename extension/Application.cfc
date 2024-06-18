@@ -9,7 +9,7 @@ component {
 	request.s3Root="s3:///extension-downloads/";
 	request.s3URL="https://ext.lucee.org/";
 
-	if ( left( cgi.script_name, 5 ) neq "/rest" and false ) {
+	if ( left( cgi.script_name, 5 ) neq "/rest" ) {
 		location url="https://www.lucee.org" addtoken=false;
 	}
 }

@@ -502,7 +502,7 @@ try{
 			}
 
 
-			var text="no jar available for bundle "&arguments.bundleName&" in Version "&arguments.bundleVersion;
+			var text=" no jar available for bundle "&arguments.bundleName&" in Version "&arguments.bundleVersion;
 			header statuscode="404" statustext="#text#";
 			echo(text);
 			// TODO write to a log
