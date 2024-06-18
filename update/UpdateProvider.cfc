@@ -15,7 +15,8 @@
 	MIN_NEW_CHANGELOG_VERSION="5.3.0.0";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
  	
-	variables.mavenMappings={
+	variables.mavenMappings= new MavenMatcher().getMavenMappings();
+	/*{
 		'com.mysql.cj':{'group':'mysql','artifact':'mysql-connector-java'}
 		,'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
 		,'aws-java-sdk-osgi':{'group':'com.amazonaws','artifact':'aws-java-sdk-osgi'}
@@ -45,7 +46,7 @@
 		,'software.amazon.ion.java':{'group':'software.amazon.ion','artifact':'ion-java'}
 		
 	};
-
+*/
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.artDirectory=variables.current&"artifacts/";
 	if (!directoryExists(variables.artDirectory))
@@ -317,7 +318,7 @@ try{
 			
 			FileAppend("log-maven-download-ok.log",arguments.bundleName&":"&bv&"
 ");
-			WriteLog(text="Maven matcher: " & arguments.bundleName&":"&arguments.bundleVersion&" "& e.message, type="info", log="application" );
+			WriteLog(text="Maven matcher: " & arguments.bundleName&":"&arguments.bundleVersion&" "& match.url, type="info", log="application" );
 			//http url=match.url result="local.cfhttp";
 			//if(cfhttp.status_code!=200) throw match.url&" "&serialize(cfhttp);
 			if(!isNull(url.abc)) throw match.url;
@@ -331,7 +332,8 @@ try{
 				arguments.bundleName&":"&arguments.bundleVersion&" "&
 				e.message&"
 ");			
-			WriteLog(text="Maven matcher missing bundle: " & arguments.bundleName&":"&arguments.bundleVersion&" "& e.message, type="error", log="application" );
+
+			WriteLog(text="Maven matcher missing bundle: " & arguments.bundleName&":"&arguments.bundleVersion&" "& e.stacktrace, type="error", log="application" );
 			
 		}
 		
@@ -443,24 +445,33 @@ try{
 			var mvnRep="https://repo1.maven.org/maven2";
 			var repositories=[
 				mvnRep,
-				"http://raw.githubusercontent.com/lucee/mvn/master/releases"
-				,"http://oss.sonatype.org/content/repositories/snapshots"
+				"https://raw.githubusercontent.com/lucee/mvn/master/releases"
+				,"https://oss.sonatype.org/content/repositories/snapshots"
 				//,"https://repo1.maven.org/maven2"
 			];
-
+			
+			//systemOutput(arguments, true);
 			if(structKeyExists(variables.mavenMappings,arguments.bundleName)) {
+				
 				var mvnId=variables.mavenMappings[arguments.bundleName];
+				//systemOutput(mvnId, true);
 				var uri="/"&replace(mvnId.group,'.','/','all')&"/"&mvnId.artifact&
 						"/"&arguments.bundleVersion&
 						"/"&mvnId.artifact&"-"&arguments.bundleVersion&".jar";
 			}
 			else {
+				//systemOutput("no maven mappings, sad face", true);
 				var uri="/"
 					&replace(arguments.bundleName,'.','/','all')&"/"
 					&arguments.bundleVersion&"/"
 					&listLast(arguments.bundleName,'.')&"-"
 					&arguments.bundleVersion&".jar";
 			}
+
+			//systemOutput("---------------------------------------------", true);
+			//systemOutput(uri, true);
+					
+
 			loop array=repositories item="local.rep" {
 				http url=rep&uri result="local.tmp";
 				if(isNull(tmp.status_code)) tmp.status_code=404;
@@ -468,6 +479,9 @@ try{
 					local.redirectURL=rep&uri;
 					break;
 				}
+				//systemOutput("", true);
+				//systemOutput( tmp.status_code &rep&uri, true);
+				//systemOutput(local.tmp, true);
 			}
 			
 			// ok an other last try, when "org.lucee" we know more about the pattern
@@ -480,6 +494,7 @@ try{
 					,mvnRep&"/org/lucee/"&art2&"/"&arguments.bundleVersion&"/"&art2&"-"&arguments.bundleVersion&".jar"
 				];
 				loop array=urls item="local._url" {
+					//systemOutput(_url, true);
 					if(fileExists(_url)) {
 						local.redirectURL=_url;
 						break;

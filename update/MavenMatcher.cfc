@@ -171,6 +171,10 @@
 		,"org.lucee.janinocc":{"group":"org.lucee","artifact":"janino-commons-compiler"}
 	};
 
+	public function getMavenMappings(){
+		return variables.mavenMappings;
+	}
+
 	public function getMatch(required string bundleName, string bundleVersion, boolean retry=true) {
 		
 		if ( !structKeyExists( variables.mavenMappings, arguments.bundleName ) ) {
