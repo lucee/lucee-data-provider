@@ -173,6 +173,7 @@
 		"xdb": { "artifact": "xdb", "group": "xdb" },
 		"xml.apis": { "artifact": "apis", "group": "xml" },
 		"xmlbeans": { "artifact": "xmlbeans", "group": "xmlbeans" },
+		"xmpcore": { "artifact": "xmpcore", "group": "com.adobe.xmp" },
 		"xmlparserv2": { "artifact": "xmlparserv2", "group": "xmlparserv2" }
 	};
 
