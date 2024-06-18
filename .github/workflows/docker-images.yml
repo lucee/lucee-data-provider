@@ -1,34 +1,36 @@
 name: Build and Push Docker Images
 
 on:
-    push:
-      branches:
-        - master
+  push:
+    branches:
+      - master
 jobs:
-    build-and-push:
-        runs-on: ubuntu-latest
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
 
-        steps:
-        - name: Checkout repository
-          uses: actions/checkout@v2
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
 
-        - name: Set up Docker Buildx
-          uses: docker/setup-buildx-action@v2
+    - name: Log into Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
 
-        - name: Log into Docker Hub
-          uses: docker/login-action@v2
-          with:
-            username: ${{ secrets.DOCKER_USERNAME }}
-            password: ${{ secrets.DOCKER_PASSWORD }}
+    - name: Create Docker Buildx builder
+      run: |
+         docker buildx create --name lucee_builder
+         docker buildx inspect lucee_builder --bootstrap
 
-        - name: Create Docker Buildx builder
-          run: |
-             docker buildx create --name lucee_builder
-             docker buildx inspect lucee_builder --bootstrap
-        
-        - name: Build and push Docker images
-          run: |
-            docker buildx build --platform linux/amd64,linux/arm64 -t markdrew/lucee-downloads:latest -t markdrew/lucee-downloads:${{ github.sha }} -f devops/Dockerfile.download . --push
-            docker buildx build --platform linux/amd64,linux/arm64 -t markdrew/lucee-extension:latest -t markdrew/lucee-extension:${{ github.sha }} -f devops/Dockerfile.extension . --push
-            docker buildx build --platform linux/amd64,linux/arm64 -t markdrew/lucee-update:latest -t markdrew/lucee-update:${{ github.sha }} -f devops/Dockerfile.update . --push
-    
+    - name: Build and push Docker images
+      run: |
+        docker buildx build --platform linux/amd64,linux/arm64 -t markdrew/lucee-downloads:latest -t markdrew/lucee-downloads:${{ github.sha }} -f devops/Dockerfile.download . --push
+        docker buildx build --platform linux/amd64,linux/arm64 -t markdrew/lucee-update:latest -t markdrew/lucee-update:${{ github.sha }} -f devops/Dockerfile.update . --push
+
+    - name: Trigger deployments
+      run: |
+        curl -XPOST -u ${{ secrets.DEPLOY_API_TOKEN }}:${{ secrets.DEPLOY_API_TOKEN }} "${{ secrets.DEPLOY_API_ENDPOINT }}/download/"
+        curl -XPOST -u ${{ secrets.DEPLOY_API_TOKEN }}:${{ secrets.DEPLOY_API_TOKEN }} "${{ secrets.DEPLOY_API_ENDPOINT }}/update/"
