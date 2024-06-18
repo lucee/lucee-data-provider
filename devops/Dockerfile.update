@@ -1,5 +1,10 @@
 # syntax = edrevo/dockerfile-plus
 INCLUDE+ ./devops/Dockerfile.base
+
+ARG SENTRY_ENV
+ARG SENTRY_DSN
+ENV SENTRY_ENV=${SENTRY_ENV}
+ENV SENTRY_DSN=${SENTRY_DSN}
 COPY ./update /var/www/update
 COPY ./extension /var/www/extension
 COPY ./root/Application.cfc /var/www/Application.cfc

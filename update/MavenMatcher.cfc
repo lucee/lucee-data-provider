@@ -1,174 +1,171 @@
 ﻿component {
 
 	variables.mavenMappings={
-		'com.mysql.cj':{'group':'com.mysql','artifact':'mysql-connector-j'}
-		,'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
-		,'aws-java-sdk-osgi':{'group':'com.amazonaws','artifact':'aws-java-sdk-osgi'}
-		,'com.sun.jna':{'group':'net.java.dev.jna','artifact':'jna'}
-		,'org.apache.commons.pool2':{'group':'org.apache.commons','artifact':'commons-pool2'}
-		,'org.jgroups':{'group':'org.jgroups','artifact':'jgroups'}
-		,'com.microsoft.sqlserver.mssql-jdbc':{'group':'com.microsoft.sqlserver','artifact':'mssql-jdbc'}
-		,'org.apache.tika.parsers':{'group':'org.apache.tika','artifact':'tika-parsers'}
-		,'activiti-osgi':{'group':'org.activiti','artifact':'activiti-osgi'}
-		,'activiti-engine':{'group':'org.activiti','artifact':'activiti-engine'}
-		,'org.apache.tika.core':{'group':'org.apache.tika','artifact':'tika-core'}
-		,'org.apache.tika.parsers':{'group':'org.apache.tika','artifact':'tika-parsers'}
-		,'org.apache.commons.commons-text':{'group':'org.apache.commons','artifact':'commons-text'}
-		,'javax.mail.activation':{'group':'javax.mail','artifact':'mail'}
-		,'apache.http.components.client':{'group':'org.apache.httpcomponents','artifact':'httpclient'}
-		,'apache.http.components.mime':{'group':'org.apache.httpcomponents','artifact':'httpmime'}
-		,'apache.http.components.core':{'group':'org.apache.httpcomponents','artifact':'httpcore'}
-		,'org.mariadb.jdbc':{'group':'org.mariadb.jdbc','artifact':'mariadb-java-client'}
-		,'org.apache.commons.codec':{'group':'commons-codec','artifact':'commons-codec'}
-		
-		,"sun.jndi.ldapsec":{"group":"sun.jndi","artifact":"ldapsec"}
-		,"org.joda.time":{"group":"org.joda","artifact":"time"}
-		,"apache.http.components.core":{"group":"apache.http.components","artifact":"core"}
-		,"metadata.extractor":{"group":"metadata","artifact":"extractor"}
-		,"org.apache.poi":{"group":"org.apache","artifact":"poi"}
-		,"apache.ws.axis":{"group":"apache.ws","artifact":"axis"}
-		,"org.lucee.xml":{"group":"org.lucee","artifact":"xml"}
-		,"org.lucee.xml.resolver":{"group":"org.lucee","artifact":"xml-resolver"}
-		,"backport.util.concurrent":{"group":"backport.util","artifact":"concurrent"}
-		,"org.lucee.httpcomponents.httpcore":{"group":"org.lucee","artifact":"httpcomponents-httpcore"}
-		,"org.apache.pdfbox.fontbox":{"group":"org.apache.pdfbox","artifact":"fontbox"}
-		,"apache.xml.xalan":{"group":"apache.xml","artifact":"xalan"}
-		,"org.apache.pdfbox":{"group":"org.apache.pdfbox","artifact":"pdfbox"}
-		,"org.lucee.commons.logging":{"group":"org.lucee","artifact":"commons-logging"}
-		,"org.lucee.httpcomponents.httpclient":{"group":"org.lucee","artifact":"httpcomponents-httpclient"}
-		,"jencrypt":{"group":"jencrypt","artifact":"jencrypt"}
-		,"org.lucee.jta":{"group":"org.lucee","artifact":"jta"}
-		,"apache.xml.xalan.serializer":{"group":"apache.xml.xalan","artifact":"serializer"}
-		,"flex.messaging.common":{"group":"flex.messaging","artifact":"common"}
-		,"xmlbeans":{"group":"xmlbeans","artifact":"xmlbeans"}
-		,"org.lucee.commons.httpclient":{"group":"org.lucee","artifact":"commons-httpclient"}
-		,"jcommon":{"group":"jcommon","artifact":"jcommon"}
-		,"javax.mail.activation":{"group":"javax.mail","artifact":"activation"}
-		,"sun.activation":{"group":"sun","artifact":"activation"}
-		,"org.lucee.ehcache":{"group":"org.lucee","artifact":"ehcache"}
-		,"stax.api":{"group":"stax","artifact":"api"}
-		,"org.apache.tika.core":{"group":"org.apache.tika","artifact":"tika-core"}
-		,"apache.xml.xerces":{"group":"apache.xml","artifact":"xerces"}
-		,"org.objectweb.asm.all":{"group":"org.objectweb.asm","artifact":"all"}
-		,"org.apache.commons.email":{"group":"org.apache.commons","artifact":"email"}
-		,"org.lucee.commons.email":{"group":"org.lucee","artifact":"commons-email"}
-		,"sun.xml.wsdl4j":{"group":"sun.xml","artifact":"wsdl4j"}
-		,"sun.jai.core":{"group":"sun.jai","artifact":"core"}
-		,"resolver":{"group":"resolver","artifact":"resolver"}
-		,"jffmpeg":{"group":"jffmpeg","artifact":"jffmpeg"}
-		,"sun.jndi.providerutil":{"group":"sun.jndi","artifact":"providerutil"}
-		,"xmpcore":{"group":"xmpcore","artifact":"xmpcore"}
-		,"org.lucee.commons.logging.adapters":{"group":"org.lucee","artifact":"commons-logging-adapters"}
-		,"apache.http.components.client":{"group":"apache.http.components","artifact":"client"}
-		,"org.lucee.httpcomponents.httpmime":{"group":"org.lucee","artifact":"httpcomponents-httpmime"}
-		,"sun.jndi.ldapbp":{"group":"sun.jndi","artifact":"ldapbp"}
-		,"org.apache.commons.codec":{"group":"commons-codec","artifact":"commons-codec"}
-		,"jmimemagic":{"group":"jmimemagic","artifact":"jmimemagic"}
-		,"flex.messaging.proxy":{"group":"flex.messaging","artifact":"proxy"}
-		,"sun.xml.saaj":{"group":"sun.xml","artifact":"saaj"}
-		,"xmlparserv2":{"group":"xmlparserv2","artifact":"xmlparserv2"}
-		,"org.apache.commons.logging":{"group":"commons-logging","artifact":"commons-logging"}
-		,"jfreechart":{"group":"jfreechart","artifact":"jfreechart"}
-		,"apache.poi.tm.extractors":{"group":"apache.poi.tm","artifact":"extractors"}
-		,"apache.poi.ooxml.schemas":{"group":"apache.poi.ooxml","artifact":"schemas"}
-		,"ss.css2":{"group":"ss","artifact":"css2"}
-		,"flex.messaging.opt":{"group":"flex.messaging","artifact":"opt"}
-		,"org.lucee.axis.ant":{"group":"org.lucee","artifact":"axis-ant"}
-		,"org.apache.pdfbox.jempbox":{"group":"org.apache.pdfbox","artifact":"jempbox"}
-		,"slf4j.nop":{"group":"org.slf4j","artifact":"slf4j-nop"}
-		,"fusiondebug.api.server":{"group":"fusiondebug.api","artifact":"server"}
-		,"javasysmon":{"group":"javasysmon","artifact":"javasysmon"}
-		,"sun.security.jaas":{"group":"sun.security","artifact":"jaas"}
-		,"org.apache.commons.logging.adapters":{"group":"org.apache.commons.logging","artifact":"adapters"}
-		,"org.lucee.axis":{"group":"org.lucee","artifact":"axis"}
-		,"flex.messaging.remoting":{"group":"flex.messaging","artifact":"remoting"}
-		,"org.apache.commons.lang":{"group":"commons-lang","artifact":"commons-lang"}
-		,"org.lucee.oswego-concurrent":{"group":"org.lucee","artifact":"oswego-concurrent"}
-		,"org.jfree.common":{"group":"org.jfree","artifact":"common"}
-		,"log4j":{"group":"log4j","artifact":"log4j"}
-		,"org.jfree.chart":{"group":"org.jfree","artifact":"chart"}
-		,"org.lucee.jaxrpc":{"group":"org.lucee","artifact":"jaxrpc"}
-		,"javaparser":{"group":"javaparser","artifact":"javaparser"}
-		,"org.lucee.commons.io":{"group":"org.lucee","artifact":"commons-io"}
-		,"org.apache.commons.logging.api":{"group":"org.apache.commons.logging","artifact":"api"}
-		,"org.apache.sanselan.sanselan":{"group":"org.apache.sanselan","artifact":"sanselan"}
-		,"org.lucee.commons.logging.api":{"group":"org.lucee","artifact":"commons-logging-api"}
-		,"org.lucee.xml.apis":{"group":"org.lucee","artifact":"xml-apis"}
-		,"openamf":{"group":"openamf","artifact":"openamf"}
-		,"w3c.dom":{"group":"w3c","artifact":"dom"}
-		,"org.apache.commons.io":{"group":"commons-io","artifact":"commons-io"}
-		,"org.apache.commons.commons-io":{"group":"commons-io","artifact":"commons-io"}
-		,"lowagie.itext":{"group":"com.lowagie","artifact":"itext"}
-		,"org.lucee.xalan.serializer":{"group":"org.lucee","artifact":"xalan-serializer"}
-		,"bcprov.jdk14":{"group":"bcprov","artifact":"jdk14"}
-		,"org.lucee.commons.fileupload":{"group":"org.lucee","artifact":"commons-fileupload"}
-		,"org.apache.commons.commons-fileupload":{"group":"commons-fileupload","artifact":"commons-fileupload"}
-		,"serializer":{"group":"serializer","artifact":"serializer"}
-		,"org.lucee.jsch":{"group":"org.lucee","artifact":"jsch"}
-		,"org.apache.commons.collections":{"group":"commons-collections","artifact":"commons-collections"}
-		,"slf4j.api":{"group":"org.slf4j","artifact":"slf4j-api"}
-		,"concurrent":{"group":"concurrent","artifact":"concurrent"}
-		,"jta":{"group":"jta","artifact":"jta"}
-		,"hsqldb":{"group":"hsqldb","artifact":"hsqldb"}
-		,"org.apache.commons.compress":{"group":"org.apache.commons","artifact":"commons-compress"}
-		,"org.apache.commons.commons-compress":{"group":"org.apache.commons","artifact":"commons-compress"}
-		,"xml.apis":{"group":"xml","artifact":"apis"}
-		,"org.lucee.xalan":{"group":"org.lucee","artifact":"xalan"}
-		,"sun.xml.jaxrpc":{"group":"sun.xml","artifact":"jaxrpc"}
-		,"apache.ws.axis.ant":{"group":"apache.ws.axis","artifact":"ant"}
-		,"ojdbc14":{"group":"ojdbc14","artifact":"ojdbc14"}
-		,"org.apache.commons.collections4":{"group":"org.apache.commons","artifact":"commons-collections4"}
-		,"org.lucee.commons.lang":{"group":"org.lucee","artifact":"commons-lang"}
-		,"org.apache.commons.commons-lang":{"group":"commons-lang","artifact":"commons-lang"}
-		,"org.apache.commons.lang3":{"group":"org.apache.commons","artifact":"commons-lang3"}
-		,"org.apache.commons.commons-text":{"group":"org.apache.commons","artifact":"commons-text"}
-		,"sun.jai.codec":{"group":"sun.jai","artifact":"codec"}
-		,"ESAPI":{"group":"ESAPI","artifact":"ESAPI"}
-		,"org.lucee.saaj":{"group":"org.lucee","artifact":"saaj"}
-		,"org.apache.poi.ooxml":{"group":"org.apache.poi","artifact":"ooxml"}
-		,"org.lucee.portlet":{"group":"org.lucee","artifact":"portlet"}
-		,"sun.jndi.ldap":{"group":"sun.jndi","artifact":"ldap"}
-		,"flex.messaging.core":{"group":"flex.messaging","artifact":"core"}
-		,"jpedal.gpl":{"group":"jpedal","artifact":"gpl"}
-		,"tagsoup":{"group":"tagsoup","artifact":"tagsoup"}
-		,"org.lucee.wsdl4j":{"group":"org.lucee","artifact":"wsdl4j"}
-		,"jacob":{"group":"jacob","artifact":"jacob"}
-		,"org.lucee.commons.sanselan":{"group":"org.lucee","artifact":"commons-sanselan"}
-		,"PDFRenderer":{"group":"PDFRenderer","artifact":"PDFRenderer"}
-		,"org.apache.commons.net":{"group":"commons-net","artifact":"commons-net"}
-		,"org.apache.commons.commons-net":{"group":"commons-net","artifact":"commons-net"}
-		,"org.lucee.esapi":{"group":"org.lucee","artifact":"esapi"}
-		,"sun.mail":{"group":"sun","artifact":"mail"}
-		,"jfreechart.patch":{"group":"jfreechart","artifact":"patch"}
-		,"org.apache.commons.fileupload":{"group":"org.apache.commons","artifact":"fileupload"}
-		,"org.apache.commons.discovery":{"group":"commons-discovery","artifact":"commons-discovery"}
-		,"nu.xom":{"group":"xom","artifact":"xom"}
-		,"icepdf.core":{"group":"icepdf","artifact":"core"}
-		,"xdb":{"group":"xdb","artifact":"xdb"}
-		,"net.sf.ehcache":{"group":"net.sf.ehcache","artifact":"ehcache"}
-		,"org.lucee.jzlib":{"group":"org.lucee","artifact":"jzlib"}
-		,"org.apache.oro":{"group":"org.apache","artifact":"oro"}
-		,"javax.mail":{"group":"javax.mail","artifact":"mail"}
-		,"openamf.astranslator":{"group":"openamf","artifact":"astranslator"}
-		,"org.lucee.xml.xerces":{"group":"org.lucee","artifact":"xml-xerces"}
-		,"jcifs":{"group":"org.samba","artifact":"jcifs"}
-		,"org.apache.commons.codec.json":{"group":"commons-codec","artifact":"commons-codec"}
-		,"org.lucee.commons.compress":{"group":"org.lucee","artifact":"commons-compress"}
-		,"apache.http.components.mime":{"group":"apache.http.components","artifact":"mime"}
-		,"org.lucee.commons-httpclient":{"group":"org.lucee","artifact":"commons-httpclient"}
-		,"javax.activation":{"group":"javax","artifact":"activation"}
-		,"apache.http.components.mime":{"group":"apache.http.components","artifact":"mime"}
-		,"org.lucee.javassist":{"group":"org.lucee","artifact":"javassist"}
-		,"org.lucee.dom4j":{"group":"org.lucee","artifact":"dom4j"}
-		,"org.lucee.antlr":{"group":"org.lucee","artifact":"antlr"}
-		,"org.lucee.jets3t":{"group":"org.lucee","artifact":"jets3t"}
-		,"org.lucee.postgresql":{"group":"org.lucee","artifact":"postgresql"}
-		,"org.postgresql.jdbc":{"group":"org.postgresql","artifact":"postgresql"}
-		,"org.hsqldb.hsqldb":{"group":"org.hsqldb","artifact":"hsqldb"}
-		,"org.apache.commons.pool":{"group":"commons-pool","artifact":"commons-pool"}
-		,"com.github.mwiede.jsch":{"group":"com.github.mwiede","artifact":"jsch"}
-		,"org.lucee.janino":{"group":"org.lucee","artifact":"janino"}
-		,"org.lucee.janinocc":{"group":"org.lucee","artifact":"janino-commons-compiler"}
+		"ESAPI": { "artifact": "ESAPI", "group": "ESAPI" },
+		"PDFRenderer": { "artifact": "PDFRenderer", "group": "PDFRenderer" },
+		"activiti-engine": { "artifact": "activiti-engine", "group": "org.activiti" },
+		"activiti-osgi": { "artifact": "activiti-osgi", "group": "org.activiti" },
+		"apache.http.components.client": { "artifact": "client", "group": "apache.http.components" },
+		"apache.http.components.core": { "artifact": "core", "group": "apache.http.components" },
+		"apache.http.components.mime": { "artifact": "mime", "group": "apache.http.components" },
+		"apache.poi.ooxml.schemas": { "artifact": "schemas", "group": "apache.poi.ooxml" },
+		"apache.poi.tm.extractors": { "artifact": "extractors", "group": "apache.poi.tm" },
+		"apache.ws.axis": { "artifact": "axis", "group": "apache.ws" },
+		"apache.ws.axis.ant": { "artifact": "ant", "group": "apache.ws.axis" },
+		"apache.xml.xalan": { "artifact": "xalan", "group": "apache.xml" },
+		"apache.xml.xalan.serializer": { "artifact": "serializer", "group": "apache.xml.xalan" },
+		"apache.xml.xerces": { "artifact": "xerces", "group": "apache.xml" },
+		"aws-java-sdk-osgi": { "artifact": "aws-java-sdk-osgi", "group": "com.amazonaws" },
+		"backport.util.concurrent": { "artifact": "concurrent", "group": "backport.util" },
+		"bcprov.jdk14": { "artifact": "jdk14", "group": "bcprov" },
+		"com.fasterxml.jackson.core.jackson-annotations": { "artifact": "jackson-annotations", "group": "com.fasterxml.jackson.core" },
+		"com.fasterxml.jackson.core.jackson-core": { "artifact": "jackson-core", "group": "com.fasterxml.jackson.core" },
+		"com.fasterxml.jackson.core.jackson-databind": { "artifact": "jackson-databind", "group": "com.fasterxml.jackson.core" },
+		"com.fasterxml.jackson.dataformat.jackson-dataformat-cbor": { "artifact": "jackson-dataformat-cbor", "group": "com.fasterxml.jackson.dataformat" },
+		"com.github.mwiede.jsch": { "artifact": "jsch", "group": "com.github.mwiede" },
+		"com.microsoft.sqlserver.mssql-jdbc": { "artifact": "mssql-jdbc", "group": "com.microsoft.sqlserver" },
+		"com.mysql.cj": { "artifact": "mysql-connector-j", "group": "com.mysql" },
+		"com.mysql.jdbc": { "artifact": "mysql-connector-java", "group": "mysql" },
+		"com.sun.jna": { "artifact": "jna", "group": "net.java.dev.jna" },
+		"concurrent": { "artifact": "concurrent", "group": "concurrent" },
+		"flex.messaging.common": { "artifact": "common", "group": "flex.messaging" },
+		"flex.messaging.core": { "artifact": "core", "group": "flex.messaging" },
+		"flex.messaging.opt": { "artifact": "opt", "group": "flex.messaging" },
+		"flex.messaging.proxy": { "artifact": "proxy", "group": "flex.messaging" },
+		"flex.messaging.remoting": { "artifact": "remoting", "group": "flex.messaging" },
+		"fusiondebug.api.server": { "artifact": "server", "group": "fusiondebug.api" },
+		"hsqldb": { "artifact": "hsqldb", "group": "hsqldb" },
+		"icepdf.core": { "artifact": "core", "group": "icepdf" },
+		"jacob": { "artifact": "jacob", "group": "jacob" },
+		"javaparser": { "artifact": "javaparser", "group": "javaparser" },
+		"javasysmon": { "artifact": "javasysmon", "group": "javasysmon" },
+		"javax.activation": { "artifact": "activation", "group": "javax" },
+		"javax.mail": { "artifact": "mail", "group": "javax.mail" },
+		"javax.mail.activation": { "artifact": "activation", "group": "javax.mail" },
+		"javax.websocket-api": { "artifact": "javax.websocket-api", "group": "javax.websocket" },
+		"jcifs": { "artifact": "jcifs", "group": "org.samba" },
+		"jcommon": { "artifact": "jcommon", "group": "jcommon" },
+		"jencrypt": { "artifact": "jencrypt", "group": "jencrypt" },
+		"jffmpeg": { "artifact": "jffmpeg", "group": "jffmpeg" },
+		"jfreechart": { "artifact": "jfreechart", "group": "jfreechart" },
+		"jfreechart.patch": { "artifact": "patch", "group": "jfreechart" },
+		"jmimemagic": { "artifact": "jmimemagic", "group": "jmimemagic" },
+		'joda-convert':{'group':'org.joda','artifact':'joda-convert'},
+		"joda-time": { "artifact": "joda-time", "group": "joda-time" },
+		"jpedal.gpl": { "artifact": "gpl", "group": "jpedal" },
+		"jta": { "artifact": "jta", "group": "jta" },
+		"log4j": { "artifact": "log4j", "group": "log4j" },
+		"lowagie.itext": { "artifact": "itext", "group": "com.lowagie" },
+		"metadata.extractor": { "artifact": "extractor", "group": "metadata" },
+		"net.sf.ehcache": { "artifact": "ehcache", "group": "net.sf.ehcache" },
+		"nu.xom": { "artifact": "xom", "group": "xom" },
+		"ojdbc14": { "artifact": "ojdbc14", "group": "ojdbc14" },
+		"openamf": { "artifact": "openamf", "group": "openamf" },
+		"openamf.astranslator": { "artifact": "astranslator", "group": "openamf" },
+		"org.apache.commons.codec": { "artifact": "commons-codec", "group": "commons-codec" },
+		"org.apache.commons.codec.json": { "artifact": "commons-codec", "group": "commons-codec" },
+		"org.apache.commons.collections": { "artifact": "commons-collections", "group": "commons-collections" },
+		"org.apache.commons.collections4": { "artifact": "commons-collections4", "group": "org.apache.commons" },
+		"org.apache.commons.commons-compress": { "artifact": "commons-compress", "group": "org.apache.commons" },
+		"org.apache.commons.commons-fileupload": { "artifact": "commons-fileupload", "group": "commons-fileupload" },
+		"org.apache.commons.commons-io": { "artifact": "commons-io", "group": "commons-io" },
+		"org.apache.commons.commons-lang": { "artifact": "commons-lang", "group": "commons-lang" },
+		"org.apache.commons.commons-net": { "artifact": "commons-net", "group": "commons-net" },
+		"org.apache.commons.commons-text": { "artifact": "commons-text", "group": "org.apache.commons" },
+		"org.apache.commons.compress": { "artifact": "commons-compress", "group": "org.apache.commons" },
+		"org.apache.commons.discovery": { "artifact": "commons-discovery", "group": "commons-discovery" },
+		"org.apache.commons.email": { "artifact": "email", "group": "org.apache.commons" },
+		"org.apache.commons.fileupload": { "artifact": "fileupload", "group": "org.apache.commons" },
+		"org.apache.commons.io": { "artifact": "commons-io", "group": "commons-io" },
+		"org.apache.commons.lang": { "artifact": "commons-lang", "group": "commons-lang" },
+		"org.apache.commons.lang3": { "artifact": "commons-lang3", "group": "org.apache.commons" },
+		"org.apache.commons.logging": { "artifact": "commons-logging", "group": "commons-logging" },
+		"org.apache.commons.logging.adapters": { "artifact": "adapters", "group": "org.apache.commons.logging" },
+		"org.apache.commons.logging.api": { "artifact": "api", "group": "org.apache.commons.logging" },
+		"org.apache.commons.net": { "artifact": "commons-net", "group": "commons-net" },
+		"org.apache.commons.pool": { "artifact": "commons-pool", "group": "commons-pool" },
+		"org.apache.commons.pool2": { "artifact": "commons-pool2", "group": "org.apache.commons" },
+		"org.apache.oro": { "artifact": "oro", "group": "org.apache" },
+		"org.apache.pdfbox": { "artifact": "pdfbox", "group": "org.apache.pdfbox" },
+		"org.apache.pdfbox.fontbox": { "artifact": "fontbox", "group": "org.apache.pdfbox" },
+		"org.apache.pdfbox.jempbox": { "artifact": "jempbox", "group": "org.apache.pdfbox" },
+		"org.apache.poi": { "artifact": "poi", "group": "org.apache" },
+		"org.apache.poi.ooxml": { "artifact": "ooxml", "group": "org.apache.poi" },
+		"org.apache.sanselan.sanselan": { "artifact": "sanselan", "group": "org.apache.sanselan" },
+		"org.apache.tika.core": { "artifact": "tika-core", "group": "org.apache.tika" },
+		"org.apache.tika.parsers": { "artifact": "tika-parsers", "group": "org.apache.tika" },
+		"org.hsqldb.hsqldb": { "artifact": "hsqldb", "group": "org.hsqldb" },
+		"org.jfree.chart": { "artifact": "chart", "group": "org.jfree" },
+		"org.jfree.common": { "artifact": "common", "group": "org.jfree" },
+		"org.jgroups": { "artifact": "jgroups", "group": "org.jgroups" },
+		"org.joda.time": { "artifact": "time", "group": "org.joda" },
+		"org.lucee.antlr": { "artifact": "antlr", "group": "org.lucee" },
+		"org.lucee.axis": { "artifact": "axis", "group": "org.lucee" },
+		"org.lucee.axis.ant": { "artifact": "axis-ant", "group": "org.lucee" },
+		"org.lucee.commons-httpclient": { "artifact": "commons-httpclient", "group": "org.lucee" },
+		"org.lucee.commons.compress": { "artifact": "commons-compress", "group": "org.lucee" },
+		"org.lucee.commons.email": { "artifact": "commons-email", "group": "org.lucee" },
+		"org.lucee.commons.fileupload": { "artifact": "commons-fileupload", "group": "org.lucee" },
+		"org.lucee.commons.httpclient": { "artifact": "commons-httpclient", "group": "org.lucee" },
+		"org.lucee.commons.io": { "artifact": "commons-io", "group": "org.lucee" },
+		"org.lucee.commons.lang": { "artifact": "commons-lang", "group": "org.lucee" },
+		"org.lucee.commons.logging": { "artifact": "commons-logging", "group": "org.lucee" },
+		"org.lucee.commons.logging.adapters": { "artifact": "commons-logging-adapters", "group": "org.lucee" },
+		"org.lucee.commons.logging.api": { "artifact": "commons-logging-api", "group": "org.lucee" },
+		"org.lucee.commons.sanselan": { "artifact": "commons-sanselan", "group": "org.lucee" },
+		"org.lucee.dom4j": { "artifact": "dom4j", "group": "org.lucee" },
+		"org.lucee.ehcache": { "artifact": "ehcache", "group": "org.lucee" },
+		"org.lucee.esapi": { "artifact": "esapi", "group": "org.lucee" },
+		"org.lucee.httpcomponents.httpclient": { "artifact": "httpcomponents-httpclient", "group": "org.lucee" },
+		"org.lucee.httpcomponents.httpcore": { "artifact": "httpcomponents-httpcore", "group": "org.lucee" },
+		"org.lucee.httpcomponents.httpmime": { "artifact": "httpcomponents-httpmime", "group": "org.lucee" },
+		"org.lucee.janino": { "artifact": "janino", "group": "org.lucee" },
+		"org.lucee.janinocc": { "artifact": "janino-commons-compiler", "group": "org.lucee" },
+		"org.lucee.javassist": { "artifact": "javassist", "group": "org.lucee" },
+		"org.lucee.jaxrpc": { "artifact": "jaxrpc", "group": "org.lucee" },
+		"org.lucee.jets3t": { "artifact": "jets3t", "group": "org.lucee" },
+		"org.lucee.jsch": { "artifact": "jsch", "group": "org.lucee" },
+		"org.lucee.jta": { "artifact": "jta", "group": "org.lucee" },
+		"org.lucee.jzlib": { "artifact": "jzlib", "group": "org.lucee" },
+		"org.lucee.oswego-concurrent": { "artifact": "oswego-concurrent", "group": "org.lucee" },
+		"org.lucee.portlet": { "artifact": "portlet", "group": "org.lucee" },
+		"org.lucee.postgresql": { "artifact": "postgresql", "group": "org.lucee" },
+		"org.lucee.saaj": { "artifact": "saaj", "group": "org.lucee" },
+		"org.lucee.wsdl4j": { "artifact": "wsdl4j", "group": "org.lucee" },
+		"org.lucee.xalan": { "artifact": "xalan", "group": "org.lucee" },
+		"org.lucee.xalan.serializer": { "artifact": "xalan-serializer", "group": "org.lucee" },
+		"org.lucee.xml": { "artifact": "xml", "group": "org.lucee" },
+		"org.lucee.xml.apis": { "artifact": "xml-apis", "group": "org.lucee" },
+		"org.lucee.xml.resolver": { "artifact": "xml-resolver", "group": "org.lucee" },
+		"org.lucee.xml.xerces": { "artifact": "xml-xerces", "group": "org.lucee" },
+		"org.mariadb.jdbc": { "artifact": "mariadb-java-client", "group": "org.mariadb.jdbc" },
+		"org.objectweb.asm.all": { "artifact": "all", "group": "org.objectweb.asm" },
+		"org.postgresql.jdbc": { "artifact": "postgresql", "group": "org.postgresql" },
+		"resolver": { "artifact": "resolver", "group": "resolver" },
+		"serializer": { "artifact": "serializer", "group": "serializer" },
+		"slf4j.api": { "artifact": "slf4j-api", "group": "org.slf4j" },
+		"slf4j.nop": { "artifact": "slf4j-nop", "group": "org.slf4j" },
+		"software.amazon.ion.java": { "artifact": "ion-java", "group": "software.amazon.ion" },
+		"ss.css2": { "artifact": "css2", "group": "ss" },
+		"stax.api": { "artifact": "api", "group": "stax" },
+		"sun.activation": { "artifact": "activation", "group": "sun" },
+		"sun.jai.codec": { "artifact": "codec", "group": "sun.jai" },
+		"sun.jai.core": { "artifact": "core", "group": "sun.jai" },
+		"sun.jndi.ldap": { "artifact": "ldap", "group": "sun.jndi" },
+		"sun.jndi.ldapbp": { "artifact": "ldapbp", "group": "sun.jndi" },
+		"sun.jndi.ldapsec": { "artifact": "ldapsec", "group": "sun.jndi" },
+		"sun.jndi.providerutil": { "artifact": "providerutil", "group": "sun.jndi" },
+		"sun.mail": { "artifact": "mail", "group": "sun" },
+		"sun.security.jaas": { "artifact": "jaas", "group": "sun.security" },
+		"sun.xml.jaxrpc": { "artifact": "jaxrpc", "group": "sun.xml" },
+		"sun.xml.saaj": { "artifact": "saaj", "group": "sun.xml" },
+		"sun.xml.wsdl4j": { "artifact": "wsdl4j", "group": "sun.xml" },
+		"tagsoup": { "artifact": "tagsoup", "group": "tagsoup" },
+		"w3c.dom": { "artifact": "dom", "group": "w3c" },
+		"xdb": { "artifact": "xdb", "group": "xdb" },
+		"xml.apis": { "artifact": "apis", "group": "xml" },
+		"xmlbeans": { "artifact": "xmlbeans", "group": "xmlbeans" },
+		"xmlparserv2": { "artifact": "xmlparserv2", "group": "xmlparserv2" }
 	};
 
 	public function getMavenMappings(){

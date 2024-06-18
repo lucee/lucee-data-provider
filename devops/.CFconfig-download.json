@@ -130,23 +130,19 @@
             "appenderArguments": "path:{lucee-config}/logs/thread.log",
             "level": "error",
             "layout": "classic"
-        }, 
+        },
         "exception": {
-            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags:",
+            "appender": "resource",
+            "appenderArguments": "path:{lucee-config}/logs/exception.log",
             "level": "error",
-            "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
-            "appenderBundleName": "sentry.extension",
-            "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
-            "layoutArguments": ""
-          },
-          "application": {
-            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags:",
+            "layout": "classic"
+        },
+        "application": {
+            "appender": "resource",
+            "appenderArguments": "path:{lucee-config}/logs/application.log",
             "level": "info",
-            "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
-            "appenderBundleName": "sentry.extension",
-            "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
-            "layoutArguments": ""
-          },
+            "layout": "classic"
+        },
         "scope": {
             "appender": "resource",
             "appenderArguments": "path:{lucee-config}/logs/scope.log",
@@ -270,7 +266,7 @@
         {
             "id": "8D7FB0DF-08BB-1589-FE3975678F07DB17",
             "name": "Compress Tags",
-            "version": "1.0.0.1,5"
+            "version": "1.0.0.15"
         },
         {
             "id": "83062C18-FA1F-4647-815BB663BCF98AC0",
