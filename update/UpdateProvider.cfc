@@ -16,37 +16,7 @@
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
  	
 	variables.mavenMappings= new MavenMatcher().getMavenMappings();
-	/*{
-		'com.mysql.cj':{'group':'mysql','artifact':'mysql-connector-java'}
-		,'com.mysql.jdbc':{'group':'mysql','artifact':'mysql-connector-java'}
-		,'aws-java-sdk-osgi':{'group':'com.amazonaws','artifact':'aws-java-sdk-osgi'}
-		,'com.sun.jna':{'group':'net.java.dev.jna','artifact':'jna'}
-		,'org.apache.commons.pool2':{'group':'org.apache.commons','artifact':'commons-pool2'}
-		,'org.jgroups':{'group':'org.jgroups','artifact':'jgroups'}
-		,'com.microsoft.sqlserver.mssql-jdbc':{'group':'com.microsoft.sqlserver','artifact':'mssql-jdbc'}
-		,'org.apache.tika.parsers':{'group':'org.apache.tika','artifact':'tika-parsers'}
-		,'activiti-osgi':{'group':'org.activiti','artifact':'activiti-osgi'}
-		,'activiti-engine':{'group':'org.activiti','artifact':'activiti-engine'}
-		,'org.apache.tika.core':{'group':'org.apache.tika','artifact':'tika-core'}
-		,'org.apache.tika.parsers':{'group':'org.apache.tika','artifact':'tika-parsers'}
-		,'org.apache.commons.commons-text':{'group':'org.apache.commons','artifact':'commons-text'}
-		,'javax.mail.activation':{'group':'javax.mail','artifact':'mail'}
-		,'apache.http.components.client':{'group':'org.apache.httpcomponents','artifact':'httpclient'}
-		,'apache.http.components.mime':{'group':'org.apache.httpcomponents','artifact':'httpmime'}
-		,'apache.http.components.core':{'group':'org.apache.httpcomponents','artifact':'httpcore'}
-		,'org.mariadb.jdbc':{'group':'org.mariadb.jdbc','artifact':'mariadb-java-client'}
-		,'javax.websocket-api':{'group':'javax.websocket','artifact':'javax.websocket-api'}
-		,'org.mariadb.jdbc':{'group':'org.mariadb.jdbc','artifact':'mariadb-java-client'}
-		,'com.fasterxml.jackson.core.jackson-databind':{'group':'com.fasterxml.jackson.core','artifact':'jackson-databind'}
-		,'com.fasterxml.jackson.core.jackson-annotations':{'group':'com.fasterxml.jackson.core','artifact':'jackson-annotations'}
-		,'com.fasterxml.jackson.core.jackson-core':{'group':'com.fasterxml.jackson.core','artifact':'jackson-core'}
-		,'com.fasterxml.jackson.dataformat.jackson-dataformat-cbor':{'group':'com.fasterxml.jackson.dataformat','artifact':'jackson-dataformat-cbor'}
-		,'joda-time':{'group':'joda-time','artifact':'joda-time'}
-		,'joda-convert':{'group':'org.joda','artifact':'joda-convert'}
-		,'software.amazon.ion.java':{'group':'software.amazon.ion','artifact':'ion-java'}
-		
-	};
-*/
+	
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.artDirectory=variables.current&"artifacts/";
 	if (!directoryExists(variables.artDirectory))
