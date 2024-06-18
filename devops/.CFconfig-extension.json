@@ -15,7 +15,7 @@
     "debuggingQueryUsage": false,
     "developMode": false,
     "domainCookies": false,
-    "listenerMode": "root",
+    "listenerMode": "curr2root",
     "listenerType": "modern",
     "mailConnectionTimeout": 30,
     "mailSpoolEnable": true,
