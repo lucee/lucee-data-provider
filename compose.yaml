@@ -31,32 +31,20 @@ services:
       - S3_DOWNLOAD_ACCESS_KEY_ID=${S3_DOWNLOAD_ACCESS_KEY_ID:-xxxxxx}
       - S3_DOWNLOAD_SECRET_KEY=${S3_DOWNLOAD_SECRET_KEY:-xxxxxx}
 
-  extension:
-    build:
-      context: .
-      dockerfile: devops/Dockerfile.extension
-    volumes:
-      - ./extension/:/var/www/
-    expose:
-      - 8888
-    ports:
-      - 8889:8888
-    environment:
-      - VIRTUAL_HOST=extension.lucee.local
-      - S3_EXTENSION_SECRET_KEY=${S3_EXTENSION_SECRET_KEY:-xxxxxx}
-      - S3_EXTENSION_ACCESS_KEY_ID=${S3_EXTENSION_ACCESS_KEY_ID:-xxxxxx}
-
   update:
     build:
       context: .
       dockerfile: devops/Dockerfile.update
     volumes:
-      - ./update:/var/www/
+      - ./extension/:/var/www/extension
+      - ./update/:/var/www/update
     expose:
       - 8888
     ports:
-      - 8890:8888
+      - 8889:8888
     environment:
       - VIRTUAL_HOST=update.lucee.local
+      - S3_EXTENSION_SECRET_KEY=${S3_EXTENSION_SECRET_KEY:-xxxxxx}
+      - S3_EXTENSION_ACCESS_KEY_ID=${S3_EXTENSION_ACCESS_KEY_ID:-xxxxxx}
       - S3_DOWNLOAD_SECRET_KEY=${S3_DOWNLOAD_SECRET_KEY:-xxxxxx}
       - S3_DOWNLOAD_ACCESS_KEY_ID=${S3_DOWNLOAD_ACCESS_KEY_ID:-xxxxxx}

@@ -1,6 +1,9 @@
 ﻿component restpath="/provider"  rest="true" {
 
 
+	request.s3Root="s3:///lucee-downloads/";
+	request.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
+
 	variables.s3Root=request.s3Root;//"s3:///lucee-downloads/";
 	variables.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
 	variables.cdnURL="https://cdn.lucee.org/";
@@ -45,7 +48,7 @@
 
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.artDirectory=variables.current&"artifacts/";
-	variables.extDirectory="/var/www/sites/extension/extension5/extension/"; // TODO make more dynamic
+	variables.extDirectory="/var/www/extension/extension"; // TODO make more dynamic
 
 		/**
 	* if there is a update the function is returning a struct like this:

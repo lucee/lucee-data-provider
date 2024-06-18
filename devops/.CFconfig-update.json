@@ -130,23 +130,45 @@
             "appenderArguments": "path:{lucee-config}/logs/thread.log",
             "level": "error",
             "layout": "classic"
-        },
+        },/*
         "exception": {
-            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags:",
+            "appenderArguments": {
+                "environment": "{env:SENTRY_ENV}",
+                "dsn": "{env:SENTRY_DSN}",
+                "debug": true
+            },
             "level": "error",
             "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
             "appenderBundleName": "sentry.extension",
+            "appenderBundleVersion": "5.5.2.12-BETA",
             "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
             "layoutArguments": ""
         },
         "application": {
-            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags:",
+            "appenderArguments": {
+                "environment": "{env:SENTRY_ENV}",
+                "dsn": "{env:SENTRY_DSN}",
+                "debug": true
+            },
             "level": "info",
             "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
             "appenderBundleName": "sentry.extension",
+            "appenderBundleVersion": "5.5.2.12-BETA",
             "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
             "layoutArguments": ""
-        },
+        }, */
+        "exception": {
+            "appender": "resource",
+            "appenderArguments": "path:{lucee-config}/logs/exception.log",
+            "level": "error",
+            "layout": "classic"
+          },
+          "application": {
+            "appender": "resource",
+            "appenderArguments": "path:{lucee-config}/logs/application.log",
+            "level": "info",
+            "layout": "classic"
+          },
         "scope": {
             "appender": "resource",
             "appenderArguments": "path:{lucee-config}/logs/scope.log",
@@ -202,7 +224,36 @@
             "layout": "classic"
         }
     },
-    "mappings": {},
+    "mappings": {
+        "/lucee/": {
+            "readonly": "yes",
+            "physical": "{lucee-config}/context/",
+            "archive": "{lucee-config}/context/lucee-context.lar",
+            "primary": "physical",
+            "listenerMode": "modern",
+            "listenerType": "curr2root",
+            "inspectTemplate": "once"
+        },
+        "/lucee-server/": {
+            "readonly": "yes",
+            "physical": "{lucee-server}/context/",
+            "archive": "",
+            "primary": "physical",
+            "listenerMode": "modern",
+            "listenerType": "curr2root",
+            "inspectTemplate": "once"
+        },
+        "/lucee/admin": {
+            "physical": "{lucee-config}/context/admin",
+            "archive": "{lucee-config}/context/lucee-admin.lar",
+            "primary": "physical",
+            "listenerType": "modern",
+            "listenerMode": "curr2root",
+            "inspectTemplate": "once",
+            "topLevel": "true",
+            "readOnly": "true"
+        }
+    },
     "remoteClients": {
         "directory": "{lucee-config}remote-client/"
     },
@@ -258,6 +309,11 @@
             "version": "2.0.1.25"
         },
         {
+            "id": "B737ABC4-D43F-4D91-8E8E973E37C40D1B",
+            "name": "Image extension",
+            "version": "2.0.0.26"
+        },
+        {
             "id": "37C61C0A-5D7E-4256-8572639BE0CF5838",
             "name": "ESAPI extension",
             "version": "2.2.4.15"
@@ -266,18 +322,28 @@
             "id": "8D7FB0DF-08BB-1589-FE3975678F07DB17",
             "name": "Compress Tags",
             "version": "1.0.0.15"
-        },
+        },/*
         {
             "id": "83062C18-FA1F-4647-815BB663BCF98AC0",
             "name": "Sentry",
             "version": "5.5.2.12-BETA"
+        },*/
+        {
+            "id": "CED6227E-0F49-6367-A68D21AACA6B07E8",
+            "name": "Lucee Administrator",
+            "version": "1.0.0.5"
         }
     ],
     "rest": {
         "mapping": [
             {
+                "virtual": "/extension",
+                "physical": "/var/www/extension",
+                "default": "false"
+            },
+            {
                 "virtual": "/update",
-                "physical": "/var/www/",
+                "physical": "/var/www/update",
                 "default": "false"
             }
         ],
