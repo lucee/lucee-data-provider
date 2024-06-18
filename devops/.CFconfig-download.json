@@ -130,7 +130,7 @@
             "appenderArguments": "path:{lucee-config}/logs/thread.log",
             "level": "error",
             "layout": "classic"
-        },
+        }, 
         "exception": {
             "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags:",
             "level": "error",
@@ -138,15 +138,15 @@
             "appenderBundleName": "sentry.extension",
             "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
             "layoutArguments": ""
-        },
-        "application": {
+          },
+          "application": {
             "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags:",
             "level": "info",
             "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
             "appenderBundleName": "sentry.extension",
             "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
             "layoutArguments": ""
-        },
+          },
         "scope": {
             "appender": "resource",
             "appenderArguments": "path:{lucee-config}/logs/scope.log",
@@ -258,6 +258,11 @@
             "version": "2.0.1.25"
         },
         {
+            "id": "B737ABC4-D43F-4D91-8E8E973E37C40D1B",
+            "name": "Image extension",
+            "version": "2.0.0.26"
+        },
+        {
             "id": "37C61C0A-5D7E-4256-8572639BE0CF5838",
             "name": "ESAPI extension",
             "version": "2.2.4.15"
@@ -265,7 +270,7 @@
         {
             "id": "8D7FB0DF-08BB-1589-FE3975678F07DB17",
             "name": "Compress Tags",
-            "version": "1.0.0.15"
+            "version": "1.0.0.1,5"
         },
         {
             "id": "83062C18-FA1F-4647-815BB663BCF98AC0",
@@ -273,16 +278,6 @@
             "version": "5.5.2.12-BETA"
         }
     ],
-    "rest": {
-        "mapping": [
-            {
-                "virtual": "/update",
-                "physical": "/var/www/",
-                "default": "false"
-            }
-        ],
-        "list": "true"
-    },
     "errorGeneralTemplate": "/lucee/templates/error/error-public.cfm",
     "errorMissingTemplate": "/lucee/templates/error/error-public.cfm",
     "errorStatusCode": "true",
