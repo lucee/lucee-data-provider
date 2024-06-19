@@ -1,8 +1,9 @@
 component accessors=true {
 
-	property name="s3root"            type="string" default="";
-	property name="extensionMeta"     type="query";
-	property name="extensionVersions" type="struct";
+	property name="s3root"                type="string" default="";
+	property name="extensionMeta"         type="query";
+	property name="extensionVersions"     type="struct";
+	property name="bundleDownloadService" type="any";
 
 	variables._simpleCache = {};
 
@@ -159,7 +160,7 @@ component accessors=true {
 			var extMeta  = _initExtensionMetaFromManifest( tmpFile, qryCols );
 
 			extMeta.filename        = arguments.fileName;
-			extMeta.versionSortable = Len( extMeta.version ) ? Util::sortableVersionString( extMeta.version ) : "";
+			extMeta.versionSortable = Len( extMeta.version ) ? VersionUtils::sortableVersionString( extMeta.version ) : "";
 			extMeta.trial           = false; // "TODO"???
 			extMeta.releaseType     = Len( extMeta.releaseType ) ? extMeta.releaseType : "all";
 			extMeta.image           = _getLogoThumbnail( tmpFile );
@@ -254,18 +255,13 @@ component accessors=true {
 	}
 
 	private function _processExtensionJars( lexFile ){
-		// TODO!
-		// var lexFileJarsDir = "zip://" & arguments.lexFile & "!jars/";
+		var lexFileJarsDir = "zip://" & arguments.lexFile & "!jars/";
 
-		// if ( DirectoryExists( lexFileJarsDir )) {
-		// 	for( var jarPath in DirectoryList( path=lexFileJarsDir, listInfo="path", filter="*.jar" ) ) {
-		// 		_processExtensionJar( jarPath );
-		// 	}
-		// }
-	}
-
-	private function _processExtensionJar( jarPath ) {
-
+		if ( DirectoryExists( lexFileJarsDir )) {
+			for( var jar in DirectoryList( path=lexFileJarsDir, listInfo="query", filter="*.jar" ) ) {
+				getBundleDownloadService().registerBundleFromExtensionJar( jar.directory, jar.filename );
+			}
+		}
 	}
 
 	private function _filterExtensionTypes( extensions, type ) {

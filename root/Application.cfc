@@ -3,15 +3,15 @@ component {
 	this.name            = "lucee-provider";
 	this.s3.accessKeyId  = server.system.environment.S3_EXTENSION_ACCESS_KEY_ID;
 	this.s3.awsSecretKey = server.system.environment.S3_EXTENSION_SECRET_KEY;
+	this.allowReload     = IsBoolean( server.system.environment.ALLOW_RELOAD ?: "" ) && server.system.environment.ALLOW_RELOAD;
 
 	function onApplicationStart() {
-		application.cdnUrl = server.system.environment.S3_CDN_URL ?: "https://ext.lucee.org/";
-		_loadReader();
+		_loadServices();
 	}
 
 	function onRequestStart() {
-		if ( StructKeyExists( url, "fwreinit" ) ) {
-			_loadReader();
+		if ( this.allowReload && StructKeyExists( url, "fwreinit" ) ) {
+			_loadServices();
 		}
 
 		if ( Left( cgi.script_name, 5 ) != "/rest" ) {
@@ -19,13 +19,26 @@ component {
 		}
 	}
 
-	function _loadReader() {
-		var extMetaReader = new extension.services.ExtensionMetadataReader(
-			s3root = server.system.environment.S3_BUCKET_ROOT ?: "s3:///extension-downloads/"
+	function _loadServices() {
+		var extS3Root = server.system.environment.S3_EXTENSIONS_ROOT    ?: "s3:///extension-downloads/";
+		var extCdnUrl = server.system.environment.S3_EXTENSIONS_CDN_URL ?: "https://ext.lucee.org/";
+
+		var extMetaReader = new services.ExtensionMetadataReader(
+			s3root = extS3Root
 		);
+		var bundleDownloadService = new services.BundleDownloadService(
+			  extensionsS3root    = extS3Root
+			, extensionsCdnUrl    = extCdnUrl
+			, extensionMetaReader = extMetaReader
+			, mavenMatcher        = new update.MavenMatcher()
+		);
+
+		extMetaReader.setBundleDownloadservice( bundleDownloadService );
 		extMetaReader.loadMeta();
 
-		application.extMetaReader = extMetaReader;
+		application.extensionsCdnUrl      = extCdnUrl;
+		application.extMetaReader         = extMetaReader;
+		application.bundleDownloadService = bundleDownloadService;
 	}
 
 }

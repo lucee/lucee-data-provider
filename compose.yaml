@@ -40,6 +40,7 @@ services:
     volumes:
       - ./extension/:/var/www/extension
       - ./update/:/var/www/update
+      - ./services/:/var/www/services
     expose:
       - 8888
     ports:

@@ -5,7 +5,7 @@
 component {
 
 	variables.metaReader = application.extMetaReader;
-	variables.cdnURL     = application.cdnUrl;
+	variables.cdnURL     = application.extensionsCdnUrl;
 
 	/**
 	 * @httpmethod GET

@@ -4,8 +4,7 @@
 	request.s3Root="s3:///lucee-downloads/";
 	request.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
 
-	variables.extensionMetaReader = application.extMetaReader;
-	variables.cdnURL              = application.cdnUrl;
+	variables.bundleDownloadService = application.bundleDownloadService;
 
 	variables.providerLog = "update-provider";
 	variables.s3Root=request.s3Root;//"s3:///lucee-downloads/";
@@ -296,25 +295,15 @@
 			return downloadCore( arguments.bundleVersion );
 		}
 
-		/*
-			var bundle = bundleDownloadService.findBundle( argumentCollection=arguments );
-			if ( !StructIsEmpty( bundle ) ) {
-				if ( arguments.allowRedirect ){
-					return _relocateForDowload( bundle.url );
-				}
-
+		var bundle = bundleDownloadService.findBundle( argumentCollection=arguments );
+		if ( StructCount( bundle ) ) {
+			if ( arguments.allowRedirect ){
+				return _relocateForDowload( bundle.url );
 			}
-			_doBundle404( argumentCollection=arguments );
 
-		*/
-
-		var bundleUrl = _findBundleUrl( argumentCollection=arguments );
-
-		if ( Len( bundleUrl ) ) {
-			return arguments.allowRedirect ? _relocateForDowload( bundleUrl ) : _serveBundleUrlLocally( bundleUrl );
+			return _serveBundleUrlLocally( bundle.url, bundle.cache, bundle.cacheTimeout );
 		}
-
-		return _doBundle404( argumentCollection=arguments );
+		_doBundle404( argumentCollection=arguments );
 	}
 
 	private function _relocateForDowload( bundleUrl ) {
@@ -368,25 +357,6 @@
 		bundleUrl = mm.findBundleUrl( argumentCollection=arguments, rawSearch=true );
 		if ( Len( Trim( bundleUrl ) ) ) {
 			return bundleUrl;
-		}
-
-		return "";
-	}
-
-	private function _findBundleUrlInStoredJsonArtifacts( bundleName, bundleVersion ) {
-		// TODO: convert this to S3 storage...
-
-		var name = arguments.bundleName & "-" & arguments.bundleVersion & ".json";
-		var path = variables.artDirectory & name;
-
-		if( FileExists( path )) {
-			try {
-				var data=DeserializeJson( FileRead( path ) );
-			} catch( any e ) {
-				return "";
-			}
-
-			return data.jar ?: "";
 		}
 
 		return "";
