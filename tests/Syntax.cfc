@@ -14,7 +14,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 					type="server"
 					password=request.SERVERADMINPASSWORD
 					virtual="/tmpUpdate"
-					physical=variables.root & "update"
+					physical=variables.root & "app/updateserver"
 					archive=""
 					primary="resource";
 
@@ -28,33 +28,13 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 
 			});
 
-			it(title="compile all extension CFML/CFC files in CFML", body=function(){
-				
-				admin action="updateMapping"
-					type="server"
-					password=request.SERVERADMINPASSWORD
-					virtual="/tmpExtension"
-					physical=variables.root & "extension"
-					archive=""
-					primary="resource";
-			
-				expect( len( directoryList("/tmpExtension") ) ).toBeGT( 0 );
-
-				admin action="compileMapping"
-					type="server"
-					password=request.SERVERADMINPASSWORD
-					virtual="/tmpExtension"
-					stoponerror="true";
-
-			});
-
 			it(title="compile all download CFML/CFC files in CFML", body=function(){
 				
 				admin action="updateMapping"
 					type="server"
 					password=request.SERVERADMINPASSWORD
 					virtual="/tmpDownload"
-					physical=variables.root & "download"
+					physical=variables.root & "app/download"
 					archive=""
 					primary="resource";
 				
