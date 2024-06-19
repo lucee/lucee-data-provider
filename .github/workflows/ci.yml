@@ -49,6 +49,7 @@ jobs:
       env:
         testLabels: data-provider
         testAdditional: ${{ github.workspace }}/tests
+        testSevices: mysql
 
 
   build-and-push:
