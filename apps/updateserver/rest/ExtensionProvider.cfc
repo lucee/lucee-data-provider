@@ -1,5 +1,5 @@
 ﻿/**
- * @restpath /provider
+ * @restpath /extension/provider
  * @rest     true
  */
 component {

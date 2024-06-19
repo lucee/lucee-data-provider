@@ -10,12 +10,18 @@ component {
 	}
 
 	function onRequestStart() output=true {
-		if ( StructKeyExists( url, "fwreinit" ) ) {
+		if ( this.allowReload && StructKeyExists( url, "fwreinit" ) ) {
 			_loadServices();
 		}
 
-		if ( Left( cgi.script_name, 5 ) != "/rest" ) {
-			location url="https://www.lucee.org" addtoken=false;
+		var allowedPaths = [ "rest", "healtcheck" ];
+		var requestedPath = ListFirst( Trim( cgi.script_name ), "/" );
+
+		if ( !ArrayFindNoCase( allowedPaths, requestedPath ) ) {
+			content reset=true;
+			header statuscode=404;
+			echo( "not found" );
+			abort;
 		}
 	}
 
@@ -33,7 +39,7 @@ component {
 			, bundleS3Root        = bundleS3Root
 			, bundleCdnUrl        = bundleCdnUrl
 			, extensionMetaReader = extMetaReader
-			, mavenMatcher        = new update.MavenMatcher()
+			, mavenMatcher        = new services.legacy.MavenMatcher()
 		);
 
 		extMetaReader.setBundleDownloadservice( bundleDownloadService );

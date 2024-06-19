@@ -1,3 +1,7 @@
-# lucee-data-provider
+# Lucee "Data provider"
 
-Home of http://stable.lucee.org/download/
+This repo contains the application code for:
+
+* https://download.lucee.org
+* https://update.lucee.org
+* https://extension.lucee.org

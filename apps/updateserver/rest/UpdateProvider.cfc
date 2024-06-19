@@ -1,4 +1,8 @@
-﻿component restpath="/provider"  rest="true" {
+﻿/**
+ * @rest     true
+ * @restPath /update/provider
+ */
+component {
 
 	variables.bundleDownloadService = application.bundleDownloadService;
 	variables.s3Root=application.extensionsS3Root
@@ -52,7 +56,7 @@
 			
 
 
-			local.s3=new S3(variables.s3Root);
+			local.s3=new services.legacy.S3(variables.s3Root);
 			var versions=s3.getVersions();
 			var keys=structKeyArray(versions);
 			arraySort(keys,"textnocase");
@@ -349,7 +353,7 @@
 		var from=toVersionSortable(versionFrom);
 		var to=toVersionSortable(versionTo);
 
-		var jira=new Jira("luceeserver.atlassian.net");
+		var jira=new services.legacy.Jira("luceeserver.atlassian.net");
 		var issues=jira.listIssues(project:"LDEV",stati:["Deployed","Done","QA"]).issues;
 		var sct=structNew("linked");
 		var sorted = queryNew("ver,sort");
@@ -384,7 +388,7 @@
 		httpmethod="GET" restpath="dependencies/{version}" {
 
 		setting requesttimeout="1000";
-		local.mr=new MavenRepo();
+		local.mr=new services.legacy.MavenRepo();
 		try {
 			local.path=mr.getDependencies(version);
 		}
@@ -408,7 +412,7 @@
 		httpmethod="GET" restpath="dependencies-read/{version}" {
 
 		setting requesttimeout="1000";
-		local.mr=new MavenRepo();
+		local.mr=new services.legacy.MavenRepo();
 		try {
 			return mr.getOSGiDependencies(version,true);
 		}
@@ -420,8 +424,8 @@
 
 	remote function reset()
 		httpmethod="GET" restpath="reset" {
-		new MavenRepo().reset();
-		new S3(variables.s3Root).reset();
+		new services.legacy.MavenRepo().reset();
+		new services.legacy.S3(variables.s3Root).reset();
 	}
 
 	remote function getLatest(
@@ -432,7 +436,7 @@
 		httpmethod="GET" restpath="latest/{version}/{type}/{distribution}/{format}" {
 
 		try {
-			var s3 = new S3( request.s3Root );
+			var s3 = new services.legacy.S3( request.s3Root );
 			var versions = s3.getVersions();
 			var arrVersions = structKeyArray( versions ).reverse();
 			var version = "";
@@ -518,7 +522,7 @@
 
 		try {
 			
-			var s3=new S3(request.s3Root);
+			var s3=new services.legacy.S3(request.s3Root);
 			var versions=s3.getVersions(flush);
 
 			if(!isNull(url.abc)){
@@ -555,7 +559,7 @@
 		httpmethod="GET" restpath="listAsync" {
 
 		setting requesttimeout="1000";
-		local.mr=new MavenRepo();
+		local.mr=new services.legacy.MavenRepo();
 		try {
 
 			var arr=mr.list(arguments.type,arguments.extended);
@@ -579,7 +583,7 @@
 
 	remote function getDate(required string version restargsource="Path")
 		httpmethod="GET" restpath="getdate/{version}" {
-		var mr=new MavenRepo();
+		var mr=new services.legacy.MavenRepo();
 		try{
 			var info=mr.get(version,true);
 			if(!isNull(info.sources.pom.date))
@@ -601,7 +605,7 @@
 		httpmethod="GET" restpath="get/{version}" {
 
 		setting requesttimeout="1000";
-		local.mr=new MavenRepo();
+		local.mr=new services.legacy.MavenRepo();
 		try {
 			return mr.get(arguments.version,arguments.extended);
 		}
@@ -625,7 +629,7 @@
 	remote function listMissing(boolean inclFB=false restargsource="url")
 		httpmethod="GET" restpath="list-missing" {
 		setting requesttimeout="100";
-		var s3=new S3(variables.s3Root);
+		var s3=new services.legacy.S3(variables.s3Root);
 		var versions=s3.getVersions(true);
 
 		var rtn=structNew("linked");
@@ -654,7 +658,7 @@
 		if(directoryExists(indexDir)) directoryDelete(indexDir, true);
 		
 		
-			var s3=new S3(variables.s3Root);
+			var s3=new services.legacy.S3(variables.s3Root);
 		s3.addMissing(true);
 		return "done";
 	}
@@ -829,7 +833,7 @@
 	}
 
 	private function createArtifactIfNecessary(type,version) {
-		var s3=new S3(variables.s3Root);
+		var s3=new services.legacy.S3(variables.s3Root);
 		var versions=s3.getVersions();
 		var vs=toVersionSortable(version);
 		
