@@ -14,7 +14,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 					type="server"
 					password=request.SERVERADMINPASSWORD
 					virtual="/tmpUpdate"
-					physical=variables.root & "app/updateserver"
+					physical=variables.root & "apps/updateserver"
 					archive=""
 					primary="resource";
 
@@ -34,7 +34,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 					type="server"
 					password=request.SERVERADMINPASSWORD
 					virtual="/tmpDownload"
-					physical=variables.root & "app/download"
+					physical=variables.root & "apps/download"
 					archive=""
 					primary="resource";
 				
