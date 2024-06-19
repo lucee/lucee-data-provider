@@ -311,17 +311,12 @@
     "rest": {
         "mapping": [
             {
-                "virtual": "/extension",
-                "physical": "/var/www/extension",
-                "default": "false"
-            },
-            {
-                "virtual": "/update",
-                "physical": "/var/www/update",
-                "default": "false"
+                "virtual": "",
+                "physical": "/var/www/rest",
+                "default": "true"
             }
         ],
-        "list": "true"
+        "list": "false"
     },
     "errorGeneralTemplate": "/lucee/templates/error/error-public.cfm",
     "errorMissingTemplate": "/lucee/templates/error/error-public.cfm",

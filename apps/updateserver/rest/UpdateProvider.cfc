@@ -1,29 +1,19 @@
-﻿component restpath="/provider"  rest="true" {
+﻿/**
+ * @rest     true
+ * @restPath /update/provider
+ */
+component {
 
-
-	request.s3Root="s3:///lucee-downloads/";
-	request.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
+	variables.bundleDownloadService = application.bundleDownloadService;
+	variables.s3Root=application.extensionsS3Root
 
 	variables.providerLog = "update-provider";
-	variables.s3Root=request.s3Root;//"s3:///lucee-downloads/";
-	variables.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
-	variables.cdnURL="https://cdn.lucee.org/";
-
-	jiraDomain="luceeserver.atlassian.net";
 	
 	ALL_VERSION="0.0.0.0";
 	MIN_UPDATE_VERSION="5.0.0.254";
 	MIN_NEW_CHANGELOG_VERSION="5.3.0.0";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
  	
-	variables.mavenMappings= new MavenMatcher().getMavenMappings();
-
-	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
-	variables.artDirectory=variables.current&"artifacts/";
-	if (!directoryExists(variables.artDirectory))
-		directoryCreate(variables.artDirectory);
-	variables.extDirectory="/var/www/extension/extension/"; // TODO make more dynamic
-
 	private function logger( string text, any exception, type="info" ){
 		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
 		if ( !isNull(arguments.exception ) )
@@ -32,7 +22,7 @@
 			WriteLog( text=log, type=arguments.type, log=variables.providerLog );
 	}
 
-		/**
+	/**
 	* if there is a update the function is returning a struct like this:
 	* {"type":"info"
 	* ,"language":arguments.language
@@ -66,7 +56,7 @@
 			
 
 
-			local.s3=new S3(variables.s3Root);
+			local.s3=new services.legacy.S3(variables.s3Root);
 			var versions=s3.getVersions();
 			var keys=structKeyArray(versions);
 			arraySort(keys,"textnocase");
@@ -281,354 +271,63 @@
 	}
 
 	/**
-	* function to load 3 party Bundle file, for example "/antlr/2.7.6"
-	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
-	*/
-	remote function downloadBundle(required string bundleName restargsource="Path", 
-		string bundleVersion restargsource="Path",
-		string ioid="" restargsource="url",
-		boolean allowRedirect=true restargsource="url")
-		httpmethod="GET" restpath="download/{bundlename}/{bundleversion}" {
-try{
-
-		try {
-			var mm=new MavenMatcher();
-			var bv=isNull(arguments.bundleVersion)?"latest":arguments.bundleVersion;
-			var match=mm.getMatch(arguments.bundleName,bv);
-			
-			FileAppend("log-maven-download-ok.log",arguments.bundleName&":"&bv&"
-");
-			logger(text="Maven matcher: " & arguments.bundleName & ":" & arguments.bundleVersion & " " & match.url, type="info");
-			//http url=match.url result="local.cfhttp";
-			//if(cfhttp.status_code!=200) throw match.url&" "&serialize(cfhttp);
-			if(!isNull(url.abc)) throw match.url;
-			header statuscode="302" statustext="Found";
-			header name="Location" value=match.url;
-			return;
-		}catch(e) {
-			if(!isNull(url.abc))
-				rethrow;
-			FileAppend("log-maven-download.log",
-				arguments.bundleName&":"&arguments.bundleVersion&" "&
-				e.message&"
-");			
-
-			logger(text="Maven matcher missing bundle: " & arguments.bundleName & ":" & arguments.bundleVersion, exception=e, type="error" );
-			
-		}
-		
-		if(arguments.bundleVersion=='latest') {
-			arguments.bundleVersion= getLatestBundle(arguments.bundleName);
-
+	 * function to load 3rd party Bundle file, for example "/antlr/2.7.6"
+	 * relocate to a download URL or directly serve the download as a binary (application/zip).
+	 *
+	 * @httpmethod GET
+	 * @restpath   download/{bundlename}/{bundleversion}
+	 */
+	remote function downloadBundle(
+		  required string  bundleName           restargsource="Path"
+		,          string  bundleVersion        restargsource="Path"
+		,          boolean allowRedirect = true restargsource="url"
+	) {
+		if ( arguments.bundleName == 'lucee.core' ) {
+			return downloadCore( arguments.bundleVersion );
 		}
 
-		// request for a core
-		if(arguments.bundleName=='lucee.core') {
-			return downloadCore(arguments.bundleVersion,arguments.ioid,arguments.allowRedirect);
-		}
+		var bundle = bundleDownloadService.findBundle( argumentCollection=arguments );
 
-		// read json 
-		var name=arguments.bundleName&"-"&arguments.bundleVersion&".json";
-		var path=variables.artDirectory&name;
-		var jsonPath=path;
-		if(fileExists(path)) {
-			var data=deserializeJson(fileRead(path));
-		}
-
-		// redirect to maven repo
-		if(arguments.allowRedirect && !isNull(data.jar)) {
-			var jarPath=variables.artDirectory&arguments.bundleName&"-"&arguments.bundleVersion&".jar";
-			if(fileExists(jarPath)) {
-				fileDelete(jarPath);
-			}
-			header statuscode="302" statustext="Found";
-			header name="Location" value=data.jar;
-			return;
-		}
-
-		// first of all we look at the artifacts directory (lucee dependecies download automatically)
-		var orgName=arguments.bundleName&"-"&arguments.bundleVersion&".jar";
-		var orgPath=variables.artDirectory&orgName;
-		var path=checkForJar(arguments.bundleName,arguments.bundleVersion);
-
-		// download from Maven if we have a .json file
-		if(len(path)==0 && !isNull(data.jar)) {
-			_fileCopy(data.jar,orgPath);
-			path=orgPath;
-		}
-		systemOutput( "path:" & path, true);
-		systemOutput( "name:" & name, true);
-		systemOutput( arguments, true);
-		// extension jar?
-		if(len(path)==0) {
-			systemOutput(variables.extDirectory&name, true);
-			// get the extension
-			var name=arguments.bundleName&"-"&arguments.bundleVersion&".lex";
-			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
-				name=replace(arguments.bundleName,'.','-','all')&"-"&arguments.bundleVersion&".lex";
-			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
-				name=arguments.bundleName&"-"&replace(arguments.bundleVersion,'.','-','all')&".lex";
-			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
-				name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".lex";
-			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
-				name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".lex";
-			if(!FileExists(variables.extDirectory&name)) // bundle.name-bundle-version
-				name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".lex";
-			if(!FileExists(variables.extDirectory&name)) // bundle.name-bundle.version
-				name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".lex";
-			if(!FileExists(variables.extDirectory&name)) // bundle.name.bundle.version
-				name=replace(arguments.bundleName,'-','.','all')&"."&replace(arguments.bundleVersion,'-','.','all')&".lex";
-
-			var useMapping=false;
-			if(!isnull(variables.extMappings) && structKeyExists(variables.extMappings,arguments.bundleName)) {
-				if(!FileExists(variables.extDirectory&name)) {
-					name=variables.extMappings[arguments.bundleName].lex&"-"&arguments.bundleVersion&".lex";
-					useMapping=true;
-				}	
-				if(!FileExists(variables.extDirectory&name)) {
-					name=variables.extMappings[arguments.bundleName].lex&"-"&replace(arguments.bundleVersion,'.','-','all')&".lex";
-					useMapping=true;
-				}
-			}
-			systemOutput( "name 2:" & name, true);
-
-			var found=false;
-			if(FileExists(variables.extDirectory&name)) {
-
-				// extract jars
-				var dir="zip://"&variables.extDirectory&name&"!jars/";
-
-				if(directoryExists(dir)) {
-					directory filter="*.jar" name="local.jars" action="list" directory=dir;
-					local.fff="";
-					loop query=jars {
-						if(!FileExists(variables.artDirectory&jars.name)) {
-							_fileCopy(jars.directory&jars.name,variables.artDirectory&jars.name);
-							found=true;
-						}
-						// TODO variables.extMappings is never defined!
-						if(!isnull(variables.extMappings) && structKeyExists(variables.extMappings,arguments.bundleName)) {
-							if(isDefined("url.xc10")) 
-								throw ("we have a mapping "&serialize(variables.extMappings[arguments.bundleName]));
-							var map=variables.extMappings[arguments.bundleName];
-							var trgName=arguments.bundleName&"-"&arguments.bundleVersion&".jar";
-							fff&=jars.name&":"&(len(jars.name)>len(map.jar))&":"&left(jars.name,len(map.jar))&" :: "&jars.name&">"&map.jar&";";
-							if(len(jars.name)>len(map.jar) && left(jars.name,len(map.jar))==map.jar && !FileExists(variables.artDirectory&trgName)) {
-								_fileCopy(jars.directory&jars.name,variables.artDirectory&trgName);
-								found=true;
-							}
-						}
-						// found is never used?
-					}
-				}
-			}
-			
-			if ( fileExists( variables.extDirectory & name ) ) {
-				path = variables.extDirectory & name;
-			} else {
-				path = checkForJar( arguments.bundleName, arguments.bundleVersion ); // eh, last arg defaults to .lex
-			}
-			
-		}
-		systemOutput( "path 2:" & path, true);
-		if(len(path)==0 || !FileExists(path) || !isNull(url.ignoreLocal)) {
-			// last try, when the pattrn of the maven name matches the pattern of the osgi name we could be lucky
-			var mvnRep="https://repo1.maven.org/maven2";
-			var repositories=[
-				mvnRep,
-				"https://raw.githubusercontent.com/lucee/mvn/master/releases"
-				,"https://oss.sonatype.org/content/repositories/snapshots"
-				//,"https://repo1.maven.org/maven2"
-			];
-			
-			systemOutput(arguments, true);
-			if(structKeyExists(variables.mavenMappings,arguments.bundleName)) {
-				
-				var mvnId=variables.mavenMappings[arguments.bundleName];
-				systemOutput(mvnId, true);
-				var uri="/"&replace(mvnId.group,'.','/','all')&"/"&mvnId.artifact&
-						"/"&arguments.bundleVersion&
-						"/"&mvnId.artifact&"-"&arguments.bundleVersion&".jar";
-			}
-			else {
-				systemOutput("no maven mappings, sad face", true);
-				var uri="/"
-					&replace(arguments.bundleName,'.','/','all')&"/"
-					&arguments.bundleVersion&"/"
-					&listLast(arguments.bundleName,'.')&"-"
-					&arguments.bundleVersion&".jar";
+		if ( StructCount( bundle ) ) {
+			if ( arguments.allowRedirect ){
+				return _relocateForDowload( bundle.url );
 			}
 
-			systemOutput("---------------------------------------------", true);
-			systemOutput(uri, true);
-					
-
-			loop array=repositories item="local.rep" {
-				http url=rep&uri result="local.tmp";
-				if(isNull(tmp.status_code)) tmp.status_code=404;
-				if(tmp.status_code>=200 && tmp.status_code<300) {
-					local.redirectURL=rep&uri;
-					break;
-				}
-				systemOutput("", true);
-				systemOutput( tmp.status_code & " " & rep & uri, true);
-			}
-			
-			// ok an other last try, when "org.lucee" we know more about the pattern
-			if(isNull(redirectURL) && left(arguments.bundleName,10)=='org.lucee.'){
-				var art1=mid(arguments.bundleName,11);
-				var art2=replace(art1,'.','-','all');
-				
-				var urls=[
-					 mvnRep&"/org/lucee/"&art1&"/"&arguments.bundleVersion&"/"&art1&"-"&arguments.bundleVersion&".jar"
-					,mvnRep&"/org/lucee/"&art2&"/"&arguments.bundleVersion&"/"&art2&"-"&arguments.bundleVersion&".jar"
-				];
-				loop array=urls item="local._url" {
-					systemOutput(_url, true);
-					if(fileExists(_url)) {
-						local.redirectURL=_url;
-						break;
-					}
-				}
-			}
-
-				
-			if(!isNull(redirectURL)){
-				if(isDefined("url.xa1")) 
-					throw (jsonPath&":"&redirectURL);
-				filewrite(
-					jsonPath,
-					serialize({"jar":redirectURL,"local":path}));
-
-				if(arguments.allowRedirect) {
-					header statuscode="302" statustext="Found";
-					header name="Location" value=redirectURL;
-					return;
-				}
-				else {
-					_fileCopy(redirectURL,orgPath);
-					
-					file action="readBinary" file="#orgPath#" variable="local.bin";
-					header name="Content-disposition" value="attachment;filename=#orgName#";
-			        content variable="#bin#" type="application/zip";
-
-			        return;
-				}
-			}
-
-
-			var text=" no jar available for bundle "&arguments.bundleName&" in Version "&arguments.bundleVersion;
-			header statuscode="404" statustext="#text#";
-			echo(text);
-			// TODO write to a log
-			file action="append" addnewline="yes" file="#variables.current#missing-bundles.txt"
-				output="#arguments.bundleName#-#arguments.bundleVersion#->#path#" fixnewline="no";
-
-			logger(text="No Jar available: #arguments.bundleName#-#arguments.bundleVersion#->#path#", type="error");
+			return _serveBundleUrlLocally( bundle.url, bundle.cacheExpires );
 		}
-		else {
-			
-			file action="readBinary" file="#path#" variable="local.bin";
-			header name="Content-disposition" value="attachment;filename=#orgName#";
-	        content variable="#bin#" type="application/zip"; // in future version this should be handled with producer attribute
-		}
-}
-catch(e) { 
-	logger(text=e.message, exception=e, type="error");
-	return e;
-}
-		}
-
-	private function getLatestBundle(required string bundleName) {
-
-		// first we get all matching bundles
-		var file="";
-		//var str="";
-		local.dir=variables.artDirectory;
-		
-		directory action="list" name="local.children" directory=dir filter=function(path) {
-			var ext=listLast(arguments.path,'.');
-			return ext=='jar' || ext=='json';
-		};
-		var bn1=arguments.bundleName&"-";
-		var bn2=replace(arguments.bundleName,'-','.','all')&"-";
-		var bn3=replace(arguments.bundleName,'.','-','all')&"-";
-		var lbn=len(bn1);
-		loop query=children {
-			if(left(children.name,lbn)==bn1 || 
-				left(children.name,lbn)==bn2 || 
-				left(children.name,lbn)==bn3) {
-
-		
-				var v=mid(children.name,lbn+1);
-				v=left(v,len(v)- (right(v,4)==".jar"?4:5)); // remove .jar
-				//str&="-"&v&isVersion(v);
-				if(isVersion(v)) {
-
-					var vs=toVersion(v);
-					if(!isStruct(file) || isNewer(vs,file.version)) {
-						file={
-							dir:dir
-							,filename:children.name
-							,name:left(children.name,lbn)
-							,version:vs
-							,v:v
-						};
-					}
-				}
-			}
-		}
-		
-
-		if(isStruct(file)) {
-			return file.v;
-			//if(!isNull(url.test))throw ""&serialize(file);
-			//file action="readBinary" file="#file.dir#/#file.filename#" variable="local.bin";
-			//header name="Content-disposition" value="attachment;filename=#file.filename#";
-	        //content variable="#bin#" type="application/zip"; 
-		}
-		else {
-			var text="no jar available for bundle "&arguments.bundleName;
-			header statuscode="404" statustext="#text#";
-			echo(text);
-			logger (text=text, type="error");
-			file action="append" addnewline="yes" file="#variables.current#missing-bundles.txt"
-				output="#arguments.bundleName#-latest-version" fixnewline="no";
-		}
+		_doBundle404( argumentCollection=arguments );
 	}
 
-	private function checkForJar(bundleName,bundleVersion, ext='jar') {
-		
-		var name=arguments.bundleName&"-"&arguments.bundleVersion&"."&ext;
-		if(isDefined("url.xc3"))throw name;
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-
-		// try different name patterns
-		name=replace(arguments.bundleName,'.','-','all')&"-"&arguments.bundleVersion&".jar";
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-		
-		name=arguments.bundleName&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-		
-
-		name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-		
-		name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".jar";
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-		
-		name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-		
-		name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".jar";
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-		
-		name=replace(arguments.bundleName,'-','.','all')&"."&replace(arguments.bundleVersion,'-','.','all')&".jar";
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-		
-		return "";
+	private function _relocateForDowload( bundleUrl ) {
+		header statuscode="302" statustext="Found";
+		header name="Location" value=arguments.bundleUrl;
 	}
 
+	private function _serveBundleUrlLocally( bundleUrl, cacheExpires ) {
+		var expires = IsDate( arguments.cacheExpires ) ? arguments.cacheExpires : DateAdd( "d", 30, Now() );
+		var tmpFile = GetTempFile( GetTempDirectory(), "bundledownload" ) & "." & ListLast( bundleUrl, "." );
+		var fileName = ListLast( arguments.bundleUrl, "/" );
+
+		http url=arguments.bundleUrl file=tmpFile getasbinary=true;
+
+		header name="cache-control" value="public, max-age=#DateDiff( "s", Now(), expires )#";
+		header name="Content-Disposition" value="attachment; filename=""#fileName#""";
+		content
+			reset      = true
+			file       = tmpFile
+			type       = "application/x-zip-compressed"
+			deletefile = true;
+	}
+
+	private function _doBundle404( bundleName, bundleVersion ) {
+		var text = "No jar available for bundle " & arguments.bundleName & " in Version " & arguments.bundleVersion;
+
+		logger( text=text, type="warn" );
+
+		content reset=true;
+		header statuscode="404" statustext=text;
+		echo( text );
+	}
 
 	/**
 	* if there is a update the function is returning a sting with the available version, if not a empty string is returned
@@ -654,7 +353,7 @@ catch(e) {
 		var from=toVersionSortable(versionFrom);
 		var to=toVersionSortable(versionTo);
 
-		var jira=new Jira("luceeserver.atlassian.net");
+		var jira=new services.legacy.Jira("luceeserver.atlassian.net");
 		var issues=jira.listIssues(project:"LDEV",stati:["Deployed","Done","QA"]).issues;
 		var sct=structNew("linked");
 		var sorted = queryNew("ver,sort");
@@ -689,7 +388,7 @@ catch(e) {
 		httpmethod="GET" restpath="dependencies/{version}" {
 
 		setting requesttimeout="1000";
-		local.mr=new MavenRepo();
+		local.mr=new services.legacy.MavenRepo();
 		try {
 			local.path=mr.getDependencies(version);
 		}
@@ -713,7 +412,7 @@ catch(e) {
 		httpmethod="GET" restpath="dependencies-read/{version}" {
 
 		setting requesttimeout="1000";
-		local.mr=new MavenRepo();
+		local.mr=new services.legacy.MavenRepo();
 		try {
 			return mr.getOSGiDependencies(version,true);
 		}
@@ -725,8 +424,8 @@ catch(e) {
 
 	remote function reset()
 		httpmethod="GET" restpath="reset" {
-		new MavenRepo().reset();
-		new S3(variables.s3Root).reset();
+		new services.legacy.MavenRepo().reset();
+		new services.legacy.S3(variables.s3Root).reset();
 	}
 
 	remote function getLatest(
@@ -737,7 +436,7 @@ catch(e) {
 		httpmethod="GET" restpath="latest/{version}/{type}/{distribution}/{format}" {
 
 		try {
-			var s3 = new S3( request.s3Root );
+			var s3 = new services.legacy.S3( request.s3Root );
 			var versions = s3.getVersions();
 			var arrVersions = structKeyArray( versions ).reverse();
 			var version = "";
@@ -823,7 +522,7 @@ catch(e) {
 
 		try {
 			
-			var s3=new S3(request.s3Root);
+			var s3=new services.legacy.S3(request.s3Root);
 			var versions=s3.getVersions(flush);
 
 			if(!isNull(url.abc)){
@@ -860,7 +559,7 @@ catch(e) {
 		httpmethod="GET" restpath="listAsync" {
 
 		setting requesttimeout="1000";
-		local.mr=new MavenRepo();
+		local.mr=new services.legacy.MavenRepo();
 		try {
 
 			var arr=mr.list(arguments.type,arguments.extended);
@@ -884,7 +583,7 @@ catch(e) {
 
 	remote function getDate(required string version restargsource="Path")
 		httpmethod="GET" restpath="getdate/{version}" {
-		var mr=new MavenRepo();
+		var mr=new services.legacy.MavenRepo();
 		try{
 			var info=mr.get(version,true);
 			if(!isNull(info.sources.pom.date))
@@ -906,7 +605,7 @@ catch(e) {
 		httpmethod="GET" restpath="get/{version}" {
 
 		setting requesttimeout="1000";
-		local.mr=new MavenRepo();
+		local.mr=new services.legacy.MavenRepo();
 		try {
 			return mr.get(arguments.version,arguments.extended);
 		}
@@ -930,7 +629,7 @@ catch(e) {
 	remote function listMissing(boolean inclFB=false restargsource="url")
 		httpmethod="GET" restpath="list-missing" {
 		setting requesttimeout="100";
-		var s3=new S3(variables.s3Root);
+		var s3=new services.legacy.S3(variables.s3Root);
 		var versions=s3.getVersions(true);
 
 		var rtn=structNew("linked");
@@ -959,7 +658,7 @@ catch(e) {
 		if(directoryExists(indexDir)) directoryDelete(indexDir, true);
 		
 		
-			var s3=new S3(variables.s3Root);
+			var s3=new services.legacy.S3(variables.s3Root);
 		s3.addMissing(true);
 		return "done";
 	}
@@ -1117,7 +816,7 @@ catch(e) {
 
 			}
 			//throw src&":"&res.statuscode&":"&len(res.filecontent);
-			if(isNull(res.statuscode) || res.statuscode!=200) 
+			if(isNull(res.statuscode) || res.statuscode!=200)
 				throw (src & ":" & res.statuscode);
 			if(len(res.filecontent)<1000) throw "file [#src#] is to small (#len(res.filecontent)#)";
 			fileWrite(trg,res.filecontent);
@@ -1134,7 +833,7 @@ catch(e) {
 	}
 
 	private function createArtifactIfNecessary(type,version) {
-		var s3=new S3(variables.s3Root);
+		var s3=new services.legacy.S3(variables.s3Root);
 		var versions=s3.getVersions();
 		var vs=toVersionSortable(version);
 		

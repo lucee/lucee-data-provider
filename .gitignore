@@ -24,3 +24,4 @@ update/WEB-INF
 /download/debug.cfm
 update/log-maven-download.log
 update/missing-bundles.txt
+/tests/artifacts
