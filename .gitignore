@@ -20,3 +20,7 @@ target/*
 update/cache/versions.json
 update/WEB-INF
 .env
+/root/debug.cfm
+/download/debug.cfm
+update/log-maven-download.log
+update/missing-bundles.txt

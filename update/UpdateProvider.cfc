@@ -4,6 +4,7 @@
 	request.s3Root="s3:///lucee-downloads/";
 	request.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
 
+	variables.providerLog = "update-provider";
 	variables.s3Root=request.s3Root;//"s3:///lucee-downloads/";
 	variables.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
 	variables.cdnURL="https://cdn.lucee.org/";
@@ -22,6 +23,11 @@
 	if (!directoryExists(variables.artDirectory))
 		directoryCreate(variables.artDirectory);
 	variables.extDirectory="/var/www/extension/extension/"; // TODO make more dynamic
+
+	private function logger( string text, string stack="", type="info" ){
+		var log = arguments.text & chr(13) & chr(10) & callstackGet('string') & chr(13) & chr(10) & arguments.stack;
+		WriteLog( text=log, type=arguments.type, log=variables.providerLog );
+	}
 
 		/**
 	* if there is a update the function is returning a struct like this:
@@ -128,7 +134,7 @@
 			}; // TODO get the right version for given version
 		}
 		catch(e){
-			log log="application" exception="#e#" type="error";
+			logger( text=e.message, stack=e.stacktrace, type="error" );
 			return {"type":"error","message":e.message,cfcatch:e};
 		}
 	}
@@ -288,7 +294,7 @@ try{
 			
 			FileAppend("log-maven-download-ok.log",arguments.bundleName&":"&bv&"
 ");
-			WriteLog(text="Maven matcher: " & arguments.bundleName&":"&arguments.bundleVersion&" "& match.url, type="info", log="application" );
+			logger(text="Maven matcher: " & arguments.bundleName & ":" & arguments.bundleVersion & " " & match.url, type="info");
 			//http url=match.url result="local.cfhttp";
 			//if(cfhttp.status_code!=200) throw match.url&" "&serialize(cfhttp);
 			if(!isNull(url.abc)) throw match.url;
@@ -303,7 +309,7 @@ try{
 				e.message&"
 ");			
 
-			WriteLog(text="Maven matcher missing bundle: " & arguments.bundleName&":"&arguments.bundleVersion&" "& e.stacktrace, type="error", log="application" );
+			logger(text="Maven matcher missing bundle: " & arguments.bundleName & ":" & arguments.bundleVersion, stack=e.stacktrace, type="error" );
 			
 		}
 		
@@ -460,8 +466,7 @@ try{
 					break;
 				}
 				systemOutput("", true);
-				systemOutput( tmp.status_code & " " &rep&uri, true);
-				// systemOutput(local.tmp, true);
+				systemOutput( tmp.status_code & " " & rep & uri, true);
 			}
 			
 			// ok an other last try, when "org.lucee" we know more about the pattern
@@ -513,7 +518,7 @@ try{
 			file action="append" addnewline="yes" file="#variables.current#missing-bundles.txt"
 				output="#arguments.bundleName#-#arguments.bundleVersion#->#path#" fixnewline="no";
 
-			WriteLog(text="No Jar available: #arguments.bundleName#-#arguments.bundleVersion#->#path#", type="error", log="application" );
+			logger(text="No Jar available: #arguments.bundleName#-#arguments.bundleVersion#->#path#", type="error");
 		}
 		else {
 			
@@ -522,8 +527,11 @@ try{
 	        content variable="#bin#" type="application/zip"; // in future version this should be handled with producer attribute
 		}
 }
-catch(e) { return e;}
-	}
+catch(e) { 
+	logger (text=e.message, stack=e.stacktrace, type="error");
+	return e;
+}
+		}
 
 	private function getLatestBundle(required string bundleName) {
 
@@ -577,9 +585,9 @@ catch(e) { return e;}
 			var text="no jar available for bundle "&arguments.bundleName;
 			header statuscode="404" statustext="#text#";
 			echo(text);
-			// TODO write to a log
+			logger (text=text, type="error");
 			file action="append" addnewline="yes" file="#variables.current#missing-bundles.txt"
-			output="#arguments.bundleName#-latest-version" fixnewline="no";
+				output="#arguments.bundleName#-latest-version" fixnewline="no";
 		}
 	}
 
@@ -791,6 +799,7 @@ catch(e) { return e;}
 		catch(e){
 			systemOutput( e, 1, 1 );
 			header statuscode="500";
+			logger (text=e.message, stack=e.stacktrace, type="error");
 			echo (e.message);
 		}
 	}
@@ -832,6 +841,7 @@ catch(e) { return e;}
 		}
 		catch(e){
 			systemOutput( e, 1, 1 );
+			logger ( error=e.message, stack=e.stacktrace, type="error" );
 			return {"type":"error","message":e.message};
 		}
 	}
@@ -876,7 +886,9 @@ catch(e) { return e;}
 			else if(!isNull(info.sources.jar.date))
 				return parseDateTime(info.sources.jar.date);
 		} catch(e) {
-			systemOutput("maven.getDate() threw " & cfcatch.message, true, true );
+			var mess=  "maven.getDate() threw " & cfcatch.message;
+			logger (text=mess, type="error");
+			systemOutput(mess, true, true );
 		}
 		
 		return "";

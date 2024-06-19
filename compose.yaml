@@ -30,6 +30,8 @@ services:
       - VIRTUAL_HOST=download.lucee.local
       - S3_DOWNLOAD_ACCESS_KEY_ID=${S3_DOWNLOAD_ACCESS_KEY_ID:-xxxxxx}
       - S3_DOWNLOAD_SECRET_KEY=${S3_DOWNLOAD_SECRET_KEY:-xxxxxx}
+      - SENTRY_ENV=${SENTRY_ENV:-xxxxxx}
+      - SENTRY_DSN=${SENTRY_DSN:-xxxxxx}
 
   update:
     build:
@@ -48,3 +50,5 @@ services:
       - S3_EXTENSION_ACCESS_KEY_ID=${S3_EXTENSION_ACCESS_KEY_ID:-xxxxxx}
       - S3_DOWNLOAD_SECRET_KEY=${S3_DOWNLOAD_SECRET_KEY:-xxxxxx}
       - S3_DOWNLOAD_ACCESS_KEY_ID=${S3_DOWNLOAD_ACCESS_KEY_ID:-xxxxxx}
+      - SENTRY_ENV=${SENTRY_ENV:-xxxxxx}
+      - SENTRY_DSN=${SENTRY_DSN:-xxxxxx}

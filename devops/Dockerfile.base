@@ -23,7 +23,6 @@ RUN mkdir -p /var/www && mkdir -p /var/www/logs \
 && ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/thread.log
 
 
-ENV LUCEE_ADMIN_ENABLED=false
 ENV LUCEE_SECURITY_LIMITEVALUATION=true
 COPY devops/conf/prometheus/config.yml /opt/lucee/conf/prometheus/config.yml
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 CMD [ "curl", "-f", "http://localhost:8888/update/healthcheck/index.cfm" ]
