@@ -157,12 +157,6 @@
             "appenderBundleVersion": "5.5.2.15",
             "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
             "layoutArguments": ""
-            /*
-            "appender": "resource",
-            "appenderArguments": "path:{lucee-config}/logs/application.log",
-            "level": "info",
-            "layout": "classic"
-            */
         },
         "scope": {
             "appender": "resource",
@@ -219,7 +213,8 @@
             "layout": "classic"
         }
     },
-    "mappings": { /*
+    "mappings": { 
+        /*
         "/lucee/": {
             "readonly": "yes",
             "physical": "{lucee-config}/context/",
@@ -247,7 +242,9 @@
             "inspectTemplate": "once",
             "topLevel": "true",
             "readOnly": "true"
-        } */},
+        } 
+        */
+    },
     "remoteClients": {
         "directory": "{lucee-config}remote-client/"
     },

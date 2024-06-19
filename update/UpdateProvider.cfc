@@ -26,7 +26,10 @@
 
 	private function logger( string text, any exception, type="info" ){
 		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
-		WriteLog( text=log, type=arguments.type, log=variables.providerLog, exception=arguments.exception );
+		if ( !isNull(arguments.exception ) )
+			WriteLog( text=log, type=arguments.type, log=variables.providerLog, exception=arguments.exception );
+		else
+			WriteLog( text=log, type=arguments.type, log=variables.providerLog );
 	}
 
 		/**
