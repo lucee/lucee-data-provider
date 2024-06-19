@@ -9,8 +9,8 @@ component {
 		_loadServices();
 	}
 
-	function onRequestStart() {
-		if ( this.allowReload && StructKeyExists( url, "fwreinit" ) ) {
+	function onRequestStart() output=true {
+		if ( StructKeyExists( url, "fwreinit" ) ) {
 			_loadServices();
 		}
 
@@ -20,15 +20,18 @@ component {
 	}
 
 	function _loadServices() {
-		var extS3Root = server.system.environment.S3_EXTENSIONS_ROOT    ?: "s3:///extension-downloads/";
-		var extCdnUrl = server.system.environment.S3_EXTENSIONS_CDN_URL ?: "https://ext.lucee.org/";
+		var extS3Root    = server.system.environment.S3_EXTENSIONS_ROOT    ?: "s3:///extension-downloads/";
+		var extCdnUrl    = server.system.environment.S3_EXTENSIONS_CDN_URL ?: "https://ext.lucee.org/";
+		var bundleS3Root = server.system.environment.S3_BUNDLES_ROOT       ?: "s3:///bundle-download/";
+		var bundleCdnUrl = server.system.environment.S3_BUNDLES_CDN_URL    ?: "https://bundle.lucee.org/";
 
 		var extMetaReader = new services.ExtensionMetadataReader(
 			s3root = extS3Root
 		);
 		var bundleDownloadService = new services.BundleDownloadService(
-			  extensionsS3root    = extS3Root
-			, extensionsCdnUrl    = extCdnUrl
+			  extensionsCdnUrl    = extCdnUrl
+			, bundleS3Root        = bundleS3Root
+			, bundleCdnUrl        = bundleCdnUrl
 			, extensionMetaReader = extMetaReader
 			, mavenMatcher        = new update.MavenMatcher()
 		);

@@ -4,8 +4,9 @@
  */
 component accessors=true {
 
-	property name="extensionsS3root"    type="string" default="";
 	property name="extensionsCdnUrl"    type="string" default="";
+	property name="bundleS3Root"        type="string" default="";
+	property name="bundleCdnUrl"        type="string" default="";
 	property name="extensionMetaReader" type="any";
 	property name="mavenMatcher"        type="any";
 
@@ -16,12 +17,14 @@ component accessors=true {
 	 * by looking up various locations
 	 */
 	public struct function findBundle( required string bundleName, required string bundleVersion ) {
+		// Get it from cache
 		var bundleInfo = _cacheLookup( argumentCollection=arguments );
 
 		if ( StructCount( bundleInfo ) ) {
 			return bundleInfo;
 		}
 
+		// Simple maven match
 		var bundleUrl = getMavenMatcher().findBundleUrl( argumentCollection=arguments );
 		if ( Len( Trim( bundleUrl ) ) ) {
 			var cacheExpiry = arguments.bundleVersion == "latest" ? DateAdd( 'h', 1, Now() ) : "never";
@@ -29,64 +32,50 @@ component accessors=true {
 			return _saveToCache( argumentCollection=arguments, bundleUrl=bundleUrl, cacheExpires=cacheExpiry );
 		}
 
-		if ( arguments.bundleVersion == "latest" ) {
-			arguments.bundleVersion = resolveLatestVersion( arguments.bundleName );
-			if ( !Len( arguments.bundleVersion ) ) {
-				return {};
-			}
-		}
-
-		var extensionLexFile = getExtensionMetaReader().getExtensionFileMatchingBundle( argumentCollection=arguments );
+		// Do we have a matching extension lex to download?
+		// Question here: should we also then be looking for a
+		// corresponding .jar? or do we actually download the lex
+		// (we SHOULD have already discovered the jar if there was one)?
+		var extensionLexFile = getExtensionMetaReader().getExtensionFileMatchingBundle(
+			  bundleName    = arguments.bundleName
+			, bundleVersion = arguments.bundleVersion
+		);
 		if ( Len( Trim( extensionLexFile ) ) ) {
 			bundleUrl = getExtensionsCdnUrl() & extensionLexFile;
 			return _saveToCache( argumentCollection=arguments, bundleUrl=bundleUrl, cacheExpires="never" );
 		}
 
+		// Fuller maven search
 		bundleUrl = getMavenMatcher().findBundleUrl( argumentCollection=arguments, rawSearch=true );
 		if ( Len( Trim( bundleUrl ) ) ) {
 			return _saveToCache( argumentCollection=arguments, bundleUrl=bundleUrl, cacheExpires="never" );
 		}
 
+		// Not found
 		return {};
-	}
-
-	public function resolveLatestVersion( required string bundleName ) {
-		var jsonCacheDir = _getS3CacheDir();
-
-		if ( DirectoryExists( jsonCacheDir ) ) {
-			var allVersions = DirectoryList( path=jsonCacheDir, listInfo="query", sort="namedesc", filter=function( path ) {
-				return ReFindNoCase( "\.json$", arguments.path ) && arguments.path.startsWith( jsonCacheDir() & "/#arguments.bundleName#." );
-			} );
-
-			if ( allVersions.recordCount ){
-				var jsonPath = allVersions.directory & "/" & allVersions.fileName;
-				try {
-					var meta = DeserializeJson( FileRead( jsonPath ) );
-
-					return meta.version ?: "";
-				} catch( any e ) {
-					return "";
-				}
-			}
-		}
-		return "";
 	}
 
 	public function registerBundleFromExtensionJar(
 		  required string directory
 		, required string filename
 	) {
-		var s3JarPath         = _getS3ExtensionJarFilePath( arguments.fileName );
-		var alreadyRegistered = FileExists( s3JarPath );
-		var bundleInfo        = alreadyRegistered ? {} : _getBundleNameAndVersionFromFileName( arguments.fileName );
-
+		var bundleInfo = _getBundleNameAndVersionFromFileName( arguments.fileName );
 		if ( StructIsEmpty( bundleInfo ) ) {
 			return;
 		}
 
-		FileCopy( arguments.directory & "/" & arguments.fileName, s3JarPath );
+		var s3JarPath  = _getS3ExtensionJarFilePath( arguments.fileName );
 
-		_saveToCache( argumentCollection=bundleInfo, bundleUrl=_getS3ExtensionJarUrl( arguments.fileName ), cacheExpires="never" );
+		if ( !FileExists( s3JarPath ) ) {
+			SystemOutput( "Registering bundle jar from extension lex file. Bundle: #arguments.fileName#", true );
+			var tmpFile = GetTempFile( GetTempDirectory(), "extensionjar" ) & ".jar";
+			FileCopy( arguments.directory & arguments.fileName, tmpFile );
+			FileCopy( tmpFile, s3JarPath );
+		}
+
+		if ( StructIsEmpty( _cacheLookup( argumentCollection=bundleInfo ) ) ) {
+			_saveToCache( argumentCollection=bundleInfo, bundleUrl=_getS3ExtensionJarUrl( arguments.fileName ), cacheExpires="never" );
+		}
 	}
 
 // PRIVATE HELPERS
@@ -148,7 +137,7 @@ component accessors=true {
 	}
 
 	private function _getS3CacheDir() {
-		return getExtensionsS3root() & "bundleInfoCache";;
+		return getBundleS3root() & ".meta-cache";
 	}
 
 	private function _getBundleNameAndVersionFromFileName( fileName ) {
@@ -181,12 +170,12 @@ component accessors=true {
 	}
 
 	private function _getS3ExtensionJarFilePath( fileName ) {
-		return _getS3ExtensionJarsDir() & "/#arguments.fileName#";
+		return _getS3ExtensionJarsDir() & "#arguments.fileName#";
 	}
 	private function _getS3ExtensionJarsDir() {
-		return getExtensionsS3root() & "extensionJars";
+		return getBundleS3root();
 	}
 	private function _getS3ExtensionJarUrl( fileName ) {
-		return getExtensionsCdnUrl() & "extensionJars/#arguments.fileName#";
+		return getBundleCdnUrl() & arguments.fileName;
 	}
 }

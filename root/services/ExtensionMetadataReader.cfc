@@ -92,15 +92,35 @@ component accessors=true {
 
 	public function getExtensionFileMatchingBundle( required string bundleName, required string bundleVersion ) {
 		var exts = _mapExtensionQueryByFilename( getExtensionMeta() );
+
+		if ( arguments.bundleVersion == "latest" ) {
+			var allMatches = [];
+			for ( var lexFile in exts ) {
+				if ( lexFile.startsWith( arguments.bundleName & "-" ) ) {
+					return lexFile;
+				}
+				if ( lexFile.startsWith( Replace( arguments.bundleName, '-', '.', 'all' ) & "-" ) ) {
+					return lexFile;
+				}
+				if ( lexFile.startsWith( Replace( arguments.bundleName, '.', '-', 'all' ) & "-" ) ) {
+					return lexFile;
+				}
+				if ( lexFile.startsWith( Replace( arguments.bundleName, '-', '.', 'all' ) & "." ) ) {
+					return lexFile;
+				}
+			}
+			return "";
+		}
+
 		var tries = [
-		      arguments.bundleName & "-" & arguments.bundleVersion & ".lex";
-			, Replace( arguments.bundleName,'.','-','all' ) & "-" & arguments.bundleVersion & ".lex";
-			, arguments.bundleName & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex";
-			, Replace( arguments.bundleName, '.', '-', 'all' ) & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex";
-			, Replace( arguments.bundleName, '.', '-', 'all' ) & "-" & Replace( arguments.bundleVersion,'-','.','all') & ".lex";
-			, Replace( arguments.bundleName, '-', '.', 'all' ) & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex";
-			, Replace( arguments.bundleName, '-', '.', 'all' ) & "-" & Replace( arguments.bundleVersion,'-','.','all') & ".lex";
-			, Replace( arguments.bundleName, '-', '.', 'all' ) & "." & Replace( arguments.bundleVersion,'-','.','all') & ".lex";
+		      arguments.bundleName & "-" & arguments.bundleVersion & ".lex"
+			, Replace( arguments.bundleName,'.','-','all' ) & "-" & arguments.bundleVersion & ".lex"
+			, arguments.bundleName & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex"
+			, Replace( arguments.bundleName, '.', '-', 'all' ) & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex"
+			, Replace( arguments.bundleName, '.', '-', 'all' ) & "-" & Replace( arguments.bundleVersion,'-','.','all') & ".lex"
+			, Replace( arguments.bundleName, '-', '.', 'all' ) & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex"
+			, Replace( arguments.bundleName, '-', '.', 'all' ) & "-" & Replace( arguments.bundleVersion,'-','.','all') & ".lex"
+			, Replace( arguments.bundleName, '-', '.', 'all' ) & "." & Replace( arguments.bundleVersion,'-','.','all') & ".lex"
 		];
 
 		for( var name in tries ) {
@@ -142,7 +162,7 @@ component accessors=true {
 	}
 
 	private function _mapExtensionQueryByFilename( extensionQuery ) {
-		var mapped = {};
+		var mapped = [:];
 
 		for( var e in arguments.extensionQuery ) {
 			mapped[ e.filename ] = e;
@@ -190,7 +210,7 @@ component accessors=true {
 
 	private function _copyRemoteFileToTmpFile( fileName ) {
 		var remoteFile = getS3Root() & "/" & arguments.fileName;
-		var tmpFile = GetTempDirectory() & "/" & arguments.fileName;
+		var tmpFile = GetTempFile( GetTempDirectory(), "lexfile" ) & Listlast( arguments.fileName, "." );
 
 		FileCopy( remoteFile, tmpFile );
 		return tmpFile;
@@ -259,7 +279,7 @@ component accessors=true {
 
 		if ( DirectoryExists( lexFileJarsDir )) {
 			for( var jar in DirectoryList( path=lexFileJarsDir, listInfo="query", filter="*.jar" ) ) {
-				getBundleDownloadService().registerBundleFromExtensionJar( jar.directory, jar.filename );
+				getBundleDownloadService().registerBundleFromExtensionJar( jar.directory, jar.name );
 			}
 		}
 	}

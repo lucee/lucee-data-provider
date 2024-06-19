@@ -280,8 +280,8 @@
 	}
 
 	/**
-	 * function to load 3 party Bundle file, for example "/antlr/2.7.6"
-	 * return the download as a binary (application/zip), if there is no download available, the functions throws a exception
+	 * function to load 3rd party Bundle file, for example "/antlr/2.7.6"
+	 * relocate to a download URL or directly serve the download as a binary (application/zip).
 	 *
 	 * @httpmethod GET
 	 * @restpath   download/{bundlename}/{bundleversion}
@@ -290,18 +290,19 @@
 		  required string  bundleName           restargsource="Path"
 		,          string  bundleVersion        restargsource="Path"
 		,          boolean allowRedirect = true restargsource="url"
-	) {
+	) output=true {
 		if ( arguments.bundleName == 'lucee.core' ) {
 			return downloadCore( arguments.bundleVersion );
 		}
 
 		var bundle = bundleDownloadService.findBundle( argumentCollection=arguments );
+
 		if ( StructCount( bundle ) ) {
 			if ( arguments.allowRedirect ){
 				return _relocateForDowload( bundle.url );
 			}
 
-			return _serveBundleUrlLocally( bundle.url, bundle.cache, bundle.cacheTimeout );
+			return _serveBundleUrlLocally( bundle.url, bundle.cache, bundle.cacheExpiry );
 		}
 		_doBundle404( argumentCollection=arguments );
 	}
