@@ -4,7 +4,7 @@ ENV JAVA_OPTS="-javaagent:/opt/lucee/bin/prometheus-java-agent.jar=9090:/opt/luc
 ENV LUCEE_ADMIN_ENABLED=false
 RUN  mkdir -p /opt/lucee/server/lucee-server/deploy && \
 mkdir -p /opt/lucee/server/lucee-server/context && \
-wget -nv https://ext.lucee.org/sentry-extension-5.5.2.12-BETA.lex -O /opt/lucee/server/lucee-server/deploy/sentry-extension.lex
+wget -nv https://ext.lucee.org/sentry-extension-5.5.2.15.lex -O /opt/lucee/server/lucee-server/deploy/sentry-extension.lex
 
 RUN mkdir -p /var/www && mkdir -p /var/www/logs \
 && ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/application.log \

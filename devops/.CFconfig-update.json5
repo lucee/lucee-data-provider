@@ -136,7 +136,7 @@
             "level": "error",
             "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
             "appenderBundleName": "sentry.extension",
-            "appenderBundleVersion": "5.5.2.12-BETA",
+            "appenderBundleVersion": "5.5.2.15",
             "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
             "layoutArguments": ""
         },
@@ -145,7 +145,7 @@
             "level": "error",
             "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
             "appenderBundleName": "sentry.extension",
-            "appenderBundleVersion": "5.5.2.12-BETA",
+            "appenderBundleVersion": "5.5.2.15",
             "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
             "layoutArguments": ""
         },
@@ -154,7 +154,7 @@
             "level": "info",
             "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
             "appenderBundleName": "sentry.extension",
-            "appenderBundleVersion": "5.5.2.12-BETA",
+            "appenderBundleVersion": "5.5.2.15",
             "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
             "layoutArguments": ""
             /*
@@ -211,7 +211,7 @@
             "level": "error",
             "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
             "appenderBundleName": "sentry.extension",
-            "appenderBundleVersion": "5.5.2.12-BETA",
+            "appenderBundleVersion": "5.5.2.15",
             "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
             "layoutArguments": ""
         },
