@@ -40,6 +40,7 @@ component {
 		extMetaReader.loadMeta();
 
 		application.extensionsCdnUrl      = extCdnUrl;
+		application.extensionsS3Root      = extS3Root;
 		application.extMetaReader         = extMetaReader;
 		application.bundleDownloadService = bundleDownloadService;
 	}

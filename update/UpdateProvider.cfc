@@ -1,28 +1,15 @@
 ﻿component restpath="/provider"  rest="true" {
 
-
-	request.s3Root="s3:///lucee-downloads/";
-	request.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
-
 	variables.bundleDownloadService = application.bundleDownloadService;
+	variables.s3Root=application.extensionsS3Root
 
 	variables.providerLog = "update-provider";
-	variables.s3Root=request.s3Root;//"s3:///lucee-downloads/";
-	variables.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
-
-	jiraDomain="luceeserver.atlassian.net";
 	
 	ALL_VERSION="0.0.0.0";
 	MIN_UPDATE_VERSION="5.0.0.254";
 	MIN_NEW_CHANGELOG_VERSION="5.3.0.0";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
  	
-	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
-	variables.artDirectory=variables.current&"artifacts/";
-	if (!directoryExists(variables.artDirectory))
-		directoryCreate(variables.artDirectory);
-	variables.extDirectory="/var/www/extension/extension/"; // TODO make more dynamic
-
 	private function logger( string text, any exception, type="info" ){
 		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
 		if ( !isNull(arguments.exception ) )
@@ -31,7 +18,7 @@
 			WriteLog( text=log, type=arguments.type, log=variables.providerLog );
 	}
 
-		/**
+	/**
 	* if there is a update the function is returning a struct like this:
 	* {"type":"info"
 	* ,"language":arguments.language
@@ -302,7 +289,7 @@
 				return _relocateForDowload( bundle.url );
 			}
 
-			return _serveBundleUrlLocally( bundle.url, bundle.cache, bundle.cacheExpiry );
+			return _serveBundleUrlLocally( bundle.url, bundle.cacheExpires );
 		}
 		_doBundle404( argumentCollection=arguments );
 	}
@@ -312,147 +299,31 @@
 		header name="Location" value=arguments.bundleUrl;
 	}
 
-	private function _serveBundleUrlLocally( bundleUrl ) {
-		// TODO
+	private function _serveBundleUrlLocally( bundleUrl, cacheExpires ) {
+		var expires = IsDate( arguments.cacheExpires ) ? arguments.cacheExpires : DateAdd( "d", 30, Now() );
+		var tmpFile = GetTempFile( GetTempDirectory(), "bundledownload" ) & "." & ListLast( bundleUrl, "." );
+		var fileName = ListLast( arguments.bundleUrl, "/" );
+
+		http url=arguments.bundleUrl file=tmpFile getasbinary=true;
+
+		header name="cache-control" value="public, max-age=#DateDiff( "s", Now(), expires )#";
+		header name="Content-Disposition" value="attachment; filename=""#fileName#""";
+		content
+			reset      = true
+			file       = tmpFile
+			type       = "application/x-zip-compressed"
+			deletefile = true;
 	}
 
 	private function _doBundle404( bundleName, bundleVersion ) {
 		var text = "No jar available for bundle " & arguments.bundleName & " in Version " & arguments.bundleVersion;
 
+		logger( text=text, type="warn" );
+
 		content reset=true;
 		header statuscode="404" statustext=text;
 		echo( text );
-
-		// TODO, log
 	}
-
-	private function _findBundleUrl( bundleName, bundleVersion ) {
-		// 1. Simple maven matcher approach
-		var mm        = new MavenMatcher();
-		var bundleUrl = mm.findBundleUrl( argumentCollection=arguments );
-
-		if ( Len( Trim( bundleUrl ) ) ) {
-			return bundleUrl;
-		}
-
-		// 2. All other approaches, require resolving latest version if set to "latest"
-		//    However, this may well be impossible if we don't know yet where the bundle *is*??
-		if ( arguments.bundleVersion == "latest" ) {
-			arguments.bundleVersion = getLatestBundle( arguments.bundleName ); // TODO, fix. This doesn't work and never can??
-		}
-
-		// 3. Find in our previously stored artifacts searches
-		bundleUrl = _findBundleUrlInStoredJsonArtifacts( argumentCollection=arguments );
-		if ( Len( Trim( bundleUrl ) ) ) {
-			return bundleUrl;
-		}
-
-		// 4. Do we have a matching extension with a lex file?
-		bundleUrl = extensionMetaReader.getExtensionFileMatchingBundle( argumentCollection=arguments );
-		if ( Len( Trim( bundleUrl ) ) ) {
-			return cdnURL & bundleUrl;
-		}
-
-
-		// 5. Desperation, try raw maven searching
-		bundleUrl = mm.findBundleUrl( argumentCollection=arguments, rawSearch=true );
-		if ( Len( Trim( bundleUrl ) ) ) {
-			return bundleUrl;
-		}
-
-		return "";
-	}
-
-	private function getLatestBundle(required string bundleName) {
-
-		// first we get all matching bundles
-		var file="";
-		//var str="";
-		local.dir=variables.artDirectory;
-		
-		directory action="list" name="local.children" directory=dir filter=function(path) {
-			var ext=listLast(arguments.path,'.');
-			return ext=='jar' || ext=='json';
-		};
-		var bn1=arguments.bundleName&"-";
-		var bn2=replace(arguments.bundleName,'-','.','all')&"-";
-		var bn3=replace(arguments.bundleName,'.','-','all')&"-";
-		var lbn=len(bn1);
-		loop query=children {
-			if(left(children.name,lbn)==bn1 || 
-				left(children.name,lbn)==bn2 || 
-				left(children.name,lbn)==bn3) {
-
-		
-				var v=mid(children.name,lbn+1);
-				v=left(v,len(v)- (right(v,4)==".jar"?4:5)); // remove .jar
-				//str&="-"&v&isVersion(v);
-				if(isVersion(v)) {
-
-					var vs=toVersion(v);
-					if(!isStruct(file) || isNewer(vs,file.version)) {
-						file={
-							dir:dir
-							,filename:children.name
-							,name:left(children.name,lbn)
-							,version:vs
-							,v:v
-						};
-					}
-				}
-			}
-		}
-		
-
-		if(isStruct(file)) {
-			return file.v;
-			//if(!isNull(url.test))throw ""&serialize(file);
-			//file action="readBinary" file="#file.dir#/#file.filename#" variable="local.bin";
-			//header name="Content-disposition" value="attachment;filename=#file.filename#";
-	        //content variable="#bin#" type="application/zip"; 
-		}
-		else {
-			var text="no jar available for bundle "&arguments.bundleName;
-			header statuscode="404" statustext="#text#";
-			echo(text);
-			logger (text=text, type="error");
-			file action="append" addnewline="yes" file="#variables.current#missing-bundles.txt"
-				output="#arguments.bundleName#-latest-version" fixnewline="no";
-		}
-	}
-
-	private function checkForJar(bundleName,bundleVersion, ext='jar') {
-		
-		var name=arguments.bundleName&"-"&arguments.bundleVersion&"."&ext;
-		if(isDefined("url.xc3"))throw name;
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-
-		// try different name patterns
-		name=replace(arguments.bundleName,'.','-','all')&"-"&arguments.bundleVersion&".jar";
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-		
-		name=arguments.bundleName&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-		
-
-		name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-		
-		name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".jar";
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-		
-		name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".jar";
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-		
-		name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".jar";
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-		
-		name=replace(arguments.bundleName,'-','.','all')&"."&replace(arguments.bundleVersion,'-','.','all')&".jar";
-		if(FileExists(variables.artDirectory&name)) return variables.artDirectory&name;
-		
-		return "";
-	}
-
 
 	/**
 	* if there is a update the function is returning a sting with the available version, if not a empty string is returned
