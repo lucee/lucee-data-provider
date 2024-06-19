@@ -1,0 +1,11 @@
+name: Deploy download.lucee.org
+on:
+  workflow_dispatch:
+jobs:
+  deploy:
+    name: Publish Snapshot to Forgebox
+    runs-on: ubuntu-latest
+    steps:
+       - name: Trigger deployments
+      run: |
+        curl -XPOST -u ${{ secrets.DEPLOY_API_TOKEN }}:${{ secrets.DEPLOY_API_TOKEN }} "${{ secrets.DEPLOY_API_ENDPOINT }}/update/"
