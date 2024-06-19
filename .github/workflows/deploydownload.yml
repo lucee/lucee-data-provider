@@ -1,9 +1,9 @@
 name: Deploy download.lucee.org
 on:
-  workflow_dispatch:
+  - workflow_dispatch
 jobs:
-  deploy:
-    name: Publish Snapshot to Forgebox
+  deploy-to-download:
+    name: Deploy
     runs-on: ubuntu-latest
     steps:
        - name: Trigger deployments
