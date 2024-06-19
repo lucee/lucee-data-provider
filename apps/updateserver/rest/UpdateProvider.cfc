@@ -552,36 +552,6 @@ component {
 		}
 	}
 
-	/*remote function readListAsync(
-		boolean force=false restargsource="url",
-		string type='all' restargsource="url",
-		boolean extended=false restargsource="url"
-		)
-		httpmethod="GET" restpath="listAsync" {
-
-		setting requesttimeout="1000";
-		local.mr=new services.legacy.MavenRepo();
-		try {
-
-			var arr=mr.list(arguments.type,arguments.extended);
-			if(arguments.extended) {
-				thread cfc=this arr=arr {
-					for(var i=arrayLen(arr);i>0;i--) {
-						arr[i].s3Express=cfc.s3Exists("lucee-express-#arr[i].version#.zip");
-						arr[i].s3Core=cfc.s3Exists("#arr[i].version#.lco");
-						arr[i].s3Light=cfc.s3Exists("lucee-light-#arr[i].version#.jar");
-						arr[i].s3War=cfc.s3Exists("lucee-#arr[i].version#.war");
-					}
-				}
-			}
-			return arr;
-		}
-		catch(e){
-			return {"type":"error","message":e.getMessage()};
-		}
-	}*/
-
-
 	remote function getDate(required string version restargsource="Path")
 		httpmethod="GET" restpath="getdate/{version}" {
 		var mr=new services.legacy.MavenRepo();
