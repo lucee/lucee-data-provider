@@ -16,7 +16,7 @@ component accessors=true {
 	 * Attempt to locate an osgi bundle file
 	 * by looking up various locations
 	 */
-	public struct function findBundle( required string bundleName, required string bundleVersion ) {
+	public struct function findBundle( required string bundleName, required string bundleVersion, string searchName=arguments.bundleName ) {
 		// Get it from cache (eventually everything will end up here)
 		var bundleInfo = _cacheLookup( argumentCollection=arguments );
 
@@ -25,14 +25,14 @@ component accessors=true {
 		}
 
 		// Get it from bundles s3 bucket directly
-		var bundleUrl = _searchBundleBucket( argumentCollection=arguments );
+		var bundleUrl = _searchBundleBucket( argumentCollection=arguments, bundleName=arguments.searchName );
 		if ( Len( Trim( bundleUrl ) ) ) {
 			return _saveToCache( argumentCollection=arguments, bundleUrl=bundleUrl, cacheExpires="never" );
 		}
 
 
 		// Simple maven match
-		bundleUrl = getMavenMatcher().findBundleUrl( argumentCollection=arguments );
+		bundleUrl = getMavenMatcher().findBundleUrl( argumentCollection=arguments, bundleName=arguments.searchName );
 		if ( Len( Trim( bundleUrl ) ) ) {
 			var cacheExpiry = arguments.bundleVersion == "latest" ? DateAdd( 'h', 1, Now() ) : "never";
 
@@ -44,7 +44,7 @@ component accessors=true {
 		// corresponding .jar? or do we actually download the lex
 		// (we SHOULD have already discovered the jar if there was one)?
 		var extensionLexFile = getExtensionMetaReader().getExtensionFileMatchingBundle(
-			  bundleName    = arguments.bundleName
+			  bundleName    = arguments.searchName
 			, bundleVersion = arguments.bundleVersion
 		);
 		if ( Len( Trim( extensionLexFile ) ) ) {
@@ -53,12 +53,28 @@ component accessors=true {
 		}
 
 		// Fuller maven search
-		bundleUrl = getMavenMatcher().findBundleUrl( argumentCollection=arguments, rawSearch=true );
+		bundleUrl = getMavenMatcher().findBundleUrl( argumentCollection=arguments, bundleName=arguments.searchName, rawSearch=true );
 		if ( Len( Trim( bundleUrl ) ) ) {
 			return _saveToCache( argumentCollection=arguments, bundleUrl=bundleUrl, cacheExpires="never" );
 		}
 
-		// Not found
+		// If we haven't already, try replacing - and .
+		// e.g. "org-my-package" > "org.my.package" and vice versa
+		if ( arguments.searchName == arguments.bundleName ) {
+			var newSearchName = "";
+
+			if ( arguments.bundleName contains "-" ) {
+				newSearchName = Replace( arguments.bundleName, "-", ".", "all" );
+			} else if ( arguments.bundleName contains "." ) {
+				newSearchName = Replace( arguments.bundleName, ".", "-", "all" );
+			}
+
+			if ( Len( newSearchName ) ) {
+				return findBundle( argumentCollection=arguments, searchName=newSearchName );
+			}
+		}
+
+		// Really not found
 		return {};
 	}
 

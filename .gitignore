@@ -1,4 +1,6 @@
 temp
+/apps/updateserver/services/legacy/meta/
+/apps/updateserver/services/legacy/cache/
 /update/artifacts/
 /update/index/
 /update/detail/
