@@ -289,7 +289,7 @@ component {
 
 		var bundle = bundleDownloadService.findBundle( argumentCollection=arguments );
 
-		if ( StructCount( bundle ) ) {
+		if ( StructCount( bundle ) && Len( bundle.url ) ) {
 			if ( arguments.allowRedirect ){
 				return _relocateForDowload( bundle.url );
 			}

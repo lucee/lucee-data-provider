@@ -74,8 +74,10 @@ component accessors=true {
 			}
 		}
 
-		// Really not found
-		return {};
+		// Really not found, cache this result for 10m to avoid
+		// repeated 404 lookups which have to go through all the hoops to get
+		// here
+		return _saveToCache( argumentCollection=arguments, bundleUrl="", cacheExpires=DateAdd( 'n', 10, Now() ) );
 	}
 
 	public function registerBundleFromExtensionJar(
