@@ -50,7 +50,19 @@ jobs:
         testLabels: data-provider
         testAdditional: ${{ github.workspace }}/tests
         testSevices: mysql
-
+    - name: Run Lucee Test Suite (testLabels="data-provider-integration")
+      uses: lucee/script-runner@main
+      continue-on-error: true
+      with:
+        webroot: ${{ github.workspace }}/lucee/test
+        execute: /bootstrap-tests.cfm
+        luceeVersion: ${{ env.luceeVersion }}
+        #luceeVersionQuery: ${{ env.luceeVersionQuery }}
+        extensionDir: ${{ github.workspace }}/
+      env:
+        testLabels: data-provider-integration
+        testAdditional: ${{ github.workspace }}/tests
+        testSevices: mysql
 
   build-and-push:
     name: Docker build, publish and deploy
