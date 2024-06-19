@@ -41,9 +41,10 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 				checkRequiredBundlesAreSupported( "5.0.1.85" );
 			});
 
-			it(title="4.5.5.017", body=function(){
-				checkRequiredBundlesAreSupported( "4.5.5.017" );
-			});
+			// pre osgi !!!!
+			//it(title="4.5.5.017", body=function(){
+			//	checkRequiredBundlesAreSupported( "4.5.5.017" );
+			//});
 		});
 	}
 
