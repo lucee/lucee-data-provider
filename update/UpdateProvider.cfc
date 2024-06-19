@@ -24,9 +24,9 @@
 		directoryCreate(variables.artDirectory);
 	variables.extDirectory="/var/www/extension/extension/"; // TODO make more dynamic
 
-	private function logger( string text, string stack="", type="info" ){
-		var log = arguments.text & chr(13) & chr(10) & callstackGet('string') & chr(13) & chr(10) & arguments.stack;
-		WriteLog( text=log, type=arguments.type, log=variables.providerLog );
+	private function logger( string text, any exception, type="info" ){
+		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
+		WriteLog( text=log, type=arguments.type, log=variables.providerLog, exception=arguments.exception );
 	}
 
 		/**
@@ -67,7 +67,8 @@
 			var versions=s3.getVersions();
 			var keys=structKeyArray(versions);
 			arraySort(keys,"textnocase");
-			var latest.version = versions[keys[arrayLen(keys)]].version;
+			var latest = {};
+			latest.version = versions[keys[arrayLen(keys)]].version;
 			var latestVersion=toVersion(latest.version);
 			
 			// others
@@ -78,10 +79,10 @@
 				for(var i=arrayLen(keys);i>=1;i--) {
 					var el=versions[keys[i]];
 					if(findNoCase("-SNAPSHOT",el.version)) {
-						if((--maxSnap)<=0) continue;
+						if ( ( --maxSnap )<=0 ) continue;
 					}
 					else {
-						if((--maxRel)<=0) continue;
+						if ( ( --maxRel )<=0 ) continue;
 					}
 					arrayPrepend(latest.otherVersions,el.version);
 				}
@@ -134,7 +135,7 @@
 			}; // TODO get the right version for given version
 		}
 		catch(e){
-			logger( text=e.message, stack=e.stacktrace, type="error" );
+			logger( text=e.message, exception=e, type="error" );
 			return {"type":"error","message":e.message,cfcatch:e};
 		}
 	}
@@ -309,7 +310,7 @@ try{
 				e.message&"
 ");			
 
-			logger(text="Maven matcher missing bundle: " & arguments.bundleName & ":" & arguments.bundleVersion, stack=e.stacktrace, type="error" );
+			logger(text="Maven matcher missing bundle: " & arguments.bundleName & ":" & arguments.bundleVersion, exception=e, type="error" );
 			
 		}
 		
@@ -404,7 +405,8 @@ try{
 						}
 						// TODO variables.extMappings is never defined!
 						if(!isnull(variables.extMappings) && structKeyExists(variables.extMappings,arguments.bundleName)) {
-							if(isDefined("url.xc10")) throw "we have a mapping "&serialize(variables.extMappings[arguments.bundleName]);
+							if(isDefined("url.xc10")) 
+								throw ()"we have a mapping "&serialize(variables.extMappings[arguments.bundleName]));
 							var map=variables.extMappings[arguments.bundleName];
 							var trgName=arguments.bundleName&"-"&arguments.bundleVersion&".jar";
 							fff&=jars.name&":"&(len(jars.name)>len(map.jar))&":"&left(jars.name,len(map.jar))&" :: "&jars.name&">"&map.jar&";";
@@ -489,7 +491,8 @@ try{
 
 				
 			if(!isNull(redirectURL)){
-				if(isDefined("url.xa1")) throw jsonPath&":"&redirectURL;
+				if(isDefined("url.xa1")) 
+					throw (jsonPath&":"&redirectURL);
 				filewrite(
 					jsonPath,
 					serialize({"jar":redirectURL,"local":path}));
@@ -528,7 +531,7 @@ try{
 		}
 }
 catch(e) { 
-	logger (text=e.message, stack=e.stacktrace, type="error");
+	logger(text=e.message, exception=e, type="error");
 	return e;
 }
 		}
@@ -799,7 +802,7 @@ catch(e) {
 		catch(e){
 			systemOutput( e, 1, 1 );
 			header statuscode="500";
-			logger (text=e.message, stack=e.stacktrace, type="error");
+			logger(text=e.message, exception=e, type="error");
 			echo (e.message);
 		}
 	}
@@ -841,7 +844,7 @@ catch(e) {
 		}
 		catch(e){
 			systemOutput( e, 1, 1 );
-			logger ( error=e.message, stack=e.stacktrace, type="error" );
+			logger( error=e.message, exception=e, type="error" );
 			return {"type":"error","message":e.message};
 		}
 	}
@@ -887,7 +890,7 @@ catch(e) {
 				return parseDateTime(info.sources.jar.date);
 		} catch(e) {
 			var mess=  "maven.getDate() threw " & cfcatch.message;
-			logger (text=mess, type="error");
+			logger(text=mess, exception=e, type="error");
 			systemOutput(mess, true, true );
 		}
 		
@@ -975,7 +978,7 @@ catch(e) {
 		}
 		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
 			if(ignoreInvalidVersion) return {};
-			throw "version number ["&arguments.version&"] is invalid";
+			throw ("version number ["&arguments.version&"] is invalid");
 		}
 		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
 
@@ -989,7 +992,7 @@ catch(e) {
 			else if(sct.qualifier_appendix=="BETA")sct.qualifier_appendix_nbr=50;
 			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
 		}
-		else throw "version number ["&arguments.version&"] is invalid";
+		else throw ("version number ["&arguments.version&"] is invalid");
 		sct.pure=
 					sct.major
 					&"."&sct.minor
@@ -1063,7 +1066,8 @@ catch(e) {
 	private function fromS3(path,name,async=true) {
 		
 		// if exist we redirect to it
-			if(!isNull(url.show)) throw (!isNull(application.exists[name]) && application.exists[name])&":"&fileExists(variables.s3Root&name)&"->"&(variables.s3Root&name);
+			if(!isNull(url.show))
+				throw ((!isNull(application.exists[name]) && application.exists[name])&":"&fileExists(variables.s3Root&name)&"->"&(variables.s3Root&name));
 
 			var hasDef=(!isNull(application.exists[name]) && application.exists[name]);
 			if(hasDef || fileExists(variables.s3Root&name)) {
@@ -1089,7 +1093,8 @@ catch(e) {
 					lock timeout=1000 name=src {
 						if(!fileExists(trg) && fileSize(src)>100000) {// we do this because it was created by a thread blocking this thread
 							_fileCopy(src,trg);
-							if(!isNull(url.show)) throw "fileExists: "&fileExists(src)&" + "&fileExists(trg);
+							if(!isNull(url.show))
+								throw ("fileExists: "&fileExists(src)&" + "&fileExists(trg));
 						}
 					}
 				}	
@@ -1109,7 +1114,8 @@ catch(e) {
 
 			}
 			//throw src&":"&res.statuscode&":"&len(res.filecontent);
-			if(isNull(res.statuscode) || res.statuscode!=200) throw src&":"&res.statuscode;
+			if(isNull(res.statuscode) || res.statuscode!=200) 
+				throw (src & ":" & res.statuscode);
 			if(len(res.filecontent)<1000) throw "file [#src#] is to small (#len(res.filecontent)#)";
 			fileWrite(trg,res.filecontent);
 		}
@@ -1152,7 +1158,7 @@ catch(e) {
 		local.arr=listToArray(arguments.version,'.');
 		
 		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
-			throw "version number ["&arguments.version&"] is invalid";
+			throw ("version number ["&arguments.version&"] is invalid");
 		}
 		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
 

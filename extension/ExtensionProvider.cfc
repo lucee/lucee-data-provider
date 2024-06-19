@@ -20,9 +20,9 @@
 	variables.cdnURL="https://ext.lucee.org/";
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	
-	private function logger( string text, string stack="", type="info" ){
-		var log = arguments.text & chr(13) & chr(10) & callStackGet('string') & chr(13) & chr(10) & arguments.stack;
-		WriteLog( text=log, type=arguments.type, log=variables.providerLog );
+	private function logger( string text, any exception, type="info" ){
+		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
+		WriteLog( text=log, type=arguments.type, log=variables.providerLog, exception=arguments.exception );
 	}
 
 	/**
