@@ -1,11 +1,6 @@
 # syntax = edrevo/dockerfile-plus
 INCLUDE+ ./devops/Dockerfile.base
-
-ARG SENTRY_ENV
-ARG SENTRY_DSN
-ENV SENTRY_ENV=${SENTRY_ENV}
-ENV SENTRY_DSN=${SENTRY_DSN}
 COPY ./root /var/www
 COPY ./update /var/www/update
 COPY ./extension /var/www/extension
-COPY ./devops/.CFconfig-update.json /opt/lucee/server/lucee-server/context/.CFConfig.json
+COPY ./devops/.CFconfig-update.json5 /opt/lucee/server/lucee-server/context/.CFConfig.json

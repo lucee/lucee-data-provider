@@ -7,6 +7,7 @@
 	variables.extensionMetaReader = application.extMetaReader;
 	variables.cdnURL              = application.cdnUrl;
 
+	variables.providerLog = "update-provider";
 	variables.s3Root=request.s3Root;//"s3:///lucee-downloads/";
 	variables.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
 
@@ -22,6 +23,14 @@
 	if (!directoryExists(variables.artDirectory))
 		directoryCreate(variables.artDirectory);
 	variables.extDirectory="/var/www/extension/extension/"; // TODO make more dynamic
+
+	private function logger( string text, any exception, type="info" ){
+		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
+		if ( !isNull(arguments.exception ) )
+			WriteLog( text=log, type=arguments.type, log=variables.providerLog, exception=arguments.exception );
+		else
+			WriteLog( text=log, type=arguments.type, log=variables.providerLog );
+	}
 
 		/**
 	* if there is a update the function is returning a struct like this:
@@ -61,7 +70,8 @@
 			var versions=s3.getVersions();
 			var keys=structKeyArray(versions);
 			arraySort(keys,"textnocase");
-			var latest.version = versions[keys[arrayLen(keys)]].version;
+			var latest = {};
+			latest.version = versions[keys[arrayLen(keys)]].version;
 			var latestVersion=toVersion(latest.version);
 			
 			// others
@@ -72,10 +82,10 @@
 				for(var i=arrayLen(keys);i>=1;i--) {
 					var el=versions[keys[i]];
 					if(findNoCase("-SNAPSHOT",el.version)) {
-						if((--maxSnap)<=0) continue;
+						if ( ( --maxSnap )<=0 ) continue;
 					}
 					else {
-						if((--maxRel)<=0) continue;
+						if ( ( --maxRel )<=0 ) continue;
 					}
 					arrayPrepend(latest.otherVersions,el.version);
 				}
@@ -128,7 +138,7 @@
 			}; // TODO get the right version for given version
 		}
 		catch(e){
-			log log="application" exception="#e#" type="error";
+			logger( text=e.message, exception=e, type="error" );
 			return {"type":"error","message":e.message,cfcatch:e};
 		}
 	}
@@ -293,7 +303,6 @@
 					return _relocateForDowload( bundle.url );
 				}
 
-				return _serveBundleUrlLocally( bundle.url, bundle.cache, bundle.cacheTimeout );
 			}
 			_doBundle404( argumentCollection=arguments );
 
@@ -435,9 +444,9 @@
 			var text="no jar available for bundle "&arguments.bundleName;
 			header statuscode="404" statustext="#text#";
 			echo(text);
-			// TODO write to a log
+			logger (text=text, type="error");
 			file action="append" addnewline="yes" file="#variables.current#missing-bundles.txt"
-			output="#arguments.bundleName#-latest-version" fixnewline="no";
+				output="#arguments.bundleName#-latest-version" fixnewline="no";
 		}
 	}
 
@@ -649,6 +658,7 @@
 		catch(e){
 			systemOutput( e, 1, 1 );
 			header statuscode="500";
+			logger(text=e.message, exception=e, type="error");
 			echo (e.message);
 		}
 	}
@@ -690,6 +700,7 @@
 		}
 		catch(e){
 			systemOutput( e, 1, 1 );
+			logger( error=e.message, exception=e, type="error" );
 			return {"type":"error","message":e.message};
 		}
 	}
@@ -734,7 +745,9 @@
 			else if(!isNull(info.sources.jar.date))
 				return parseDateTime(info.sources.jar.date);
 		} catch(e) {
-			systemOutput("maven.getDate() threw " & cfcatch.message, true, true );
+			var mess=  "maven.getDate() threw " & cfcatch.message;
+			logger(text=mess, exception=e, type="error");
+			systemOutput(mess, true, true );
 		}
 		
 		return "";
@@ -821,7 +834,7 @@
 		}
 		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
 			if(ignoreInvalidVersion) return {};
-			throw "version number ["&arguments.version&"] is invalid";
+			throw ("version number ["&arguments.version&"] is invalid");
 		}
 		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
 
@@ -835,7 +848,7 @@
 			else if(sct.qualifier_appendix=="BETA")sct.qualifier_appendix_nbr=50;
 			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
 		}
-		else throw "version number ["&arguments.version&"] is invalid";
+		else throw ("version number ["&arguments.version&"] is invalid");
 		sct.pure=
 					sct.major
 					&"."&sct.minor
@@ -909,7 +922,8 @@
 	private function fromS3(path,name,async=true) {
 		
 		// if exist we redirect to it
-			if(!isNull(url.show)) throw (!isNull(application.exists[name]) && application.exists[name])&":"&fileExists(variables.s3Root&name)&"->"&(variables.s3Root&name);
+			if(!isNull(url.show))
+				throw ((!isNull(application.exists[name]) && application.exists[name])&":"&fileExists(variables.s3Root&name)&"->"&(variables.s3Root&name));
 
 			var hasDef=(!isNull(application.exists[name]) && application.exists[name]);
 			if(hasDef || fileExists(variables.s3Root&name)) {
@@ -935,7 +949,8 @@
 					lock timeout=1000 name=src {
 						if(!fileExists(trg) && fileSize(src)>100000) {// we do this because it was created by a thread blocking this thread
 							_fileCopy(src,trg);
-							if(!isNull(url.show)) throw "fileExists: "&fileExists(src)&" + "&fileExists(trg);
+							if(!isNull(url.show))
+								throw ("fileExists: "&fileExists(src)&" + "&fileExists(trg));
 						}
 					}
 				}	
@@ -955,7 +970,8 @@
 
 			}
 			//throw src&":"&res.statuscode&":"&len(res.filecontent);
-			if(isNull(res.statuscode) || res.statuscode!=200) throw src&":"&res.statuscode;
+			if(isNull(res.statuscode) || res.statuscode!=200)
+				throw (src & ":" & res.statuscode);
 			if(len(res.filecontent)<1000) throw "file [#src#] is to small (#len(res.filecontent)#)";
 			fileWrite(trg,res.filecontent);
 		}
@@ -998,7 +1014,7 @@
 		local.arr=listToArray(arguments.version,'.');
 		
 		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
-			throw "version number ["&arguments.version&"] is invalid";
+			throw ("version number ["&arguments.version&"] is invalid");
 		}
 		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
 

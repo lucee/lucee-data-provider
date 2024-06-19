@@ -131,44 +131,33 @@
             "level": "error",
             "layout": "classic"
         },
-        "exception": {
-            "appenderArguments": {
-                "environment": "{env:SENTRY_ENV}",
-                "dsn": "{env:SENTRY_DSN}",
-                "debug": true
-            },
+        "update-provider": {
+            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
             "level": "error",
             "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
             "appenderBundleName": "sentry.extension",
-            "appenderBundleVersion": "5.5.2.12-BETA",
+            "appenderBundleVersion": "5.5.2.15",
+            "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
+            "layoutArguments": ""
+        },
+        "exception": {
+            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
+            "level": "error",
+            "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
+            "appenderBundleName": "sentry.extension",
+            "appenderBundleVersion": "5.5.2.15",
             "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
             "layoutArguments": ""
         },
         "application": {
-            "appenderArguments": {
-                "environment": "{env:SENTRY_ENV}",
-                "dsn": "{env:SENTRY_DSN}",
-                "debug": true
-            },
+            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
             "level": "info",
             "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
             "appenderBundleName": "sentry.extension",
-            "appenderBundleVersion": "5.5.2.12-BETA",
+            "appenderBundleVersion": "5.5.2.15",
             "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
             "layoutArguments": ""
         },
-        // "exception": {
-        //     "appender": "resource",
-        //     "appenderArguments": "path:{lucee-config}/logs/exception.log",
-        //     "level": "error",
-        //     "layout": "classic"
-        //   },
-        //   "application": {
-        //     "appender": "resource",
-        //     "appenderArguments": "path:{lucee-config}/logs/application.log",
-        //     "level": "info",
-        //     "layout": "classic"
-        //   },
         "scope": {
             "appender": "resource",
             "appenderArguments": "path:{lucee-config}/logs/scope.log",
@@ -212,10 +201,13 @@
             "layout": "classic"
         },
         "rest": {
-            "appender": "resource",
-            "appenderArguments": "path:{lucee-config}/logs/rest.log",
+            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
             "level": "error",
-            "layout": "classic"
+            "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
+            "appenderBundleName": "sentry.extension",
+            "appenderBundleVersion": "5.5.2.15",
+            "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
+            "layoutArguments": ""
         },
         "mapping": {
             "appender": "resource",
@@ -224,7 +216,8 @@
             "layout": "classic"
         }
     },
-    "mappings": {
+    "mappings": { 
+        /*
         "/lucee/": {
             "readonly": "yes",
             "physical": "{lucee-config}/context/",
@@ -252,30 +245,16 @@
             "inspectTemplate": "once",
             "topLevel": "true",
             "readOnly": "true"
-        }
+        } 
+        */
     },
     "remoteClients": {
         "directory": "{lucee-config}remote-client/"
     },
     "resourceProviders": [
         {
-            "scheme": "ftp",
-            "class": "lucee.commons.io.res.type.ftp.FTPResourceProvider",
-            "arguments": "lock-timeout:20000;socket-timeout:-1;client-timeout:60000"
-        },
-        {
             "scheme": "zip",
             "class": "lucee.commons.io.res.type.zip.ZipResourceProvider",
-            "arguments": "lock-timeout:1000;case-sensitive:true;"
-        },
-        {
-            "scheme": "tar",
-            "class": "lucee.commons.io.res.type.tar.TarResourceProvider",
-            "arguments": "lock-timeout:1000;case-sensitive:true;"
-        },
-        {
-            "scheme": "tgz",
-            "class": "lucee.commons.io.res.type.tgz.TGZResourceProvider",
             "arguments": "lock-timeout:1000;case-sensitive:true;"
         },
         {
@@ -322,17 +301,12 @@
             "id": "8D7FB0DF-08BB-1589-FE3975678F07DB17",
             "name": "Compress Tags",
             "version": "1.0.0.15"
-        },
-        {
-            "id": "83062C18-FA1F-4647-815BB663BCF98AC0",
-            "name": "Sentry",
-            "version": "5.5.2.12-BETA"
-        },
+        } /*
         {
             "id": "CED6227E-0F49-6367-A68D21AACA6B07E8",
-            "name": "Lucee Administrator",
-            "version": "1.0.0.5"
-        }
+            "version": "1.0.0.5",
+            "name": "Lucee Administrator"
+        } */
     ],
     "rest": {
         "mapping": [
