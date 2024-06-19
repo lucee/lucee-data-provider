@@ -17,15 +17,22 @@ component accessors=true {
 	 * by looking up various locations
 	 */
 	public struct function findBundle( required string bundleName, required string bundleVersion ) {
-		// Get it from cache
+		// Get it from cache (eventually everything will end up here)
 		var bundleInfo = _cacheLookup( argumentCollection=arguments );
 
 		if ( StructCount( bundleInfo ) ) {
 			return bundleInfo;
 		}
 
+		// Get it from bundles s3 bucket directly
+		var bundleUrl = _searchBundleBucket( argumentCollection=arguments );
+		if ( Len( Trim( bundleUrl ) ) ) {
+			return _saveToCache( argumentCollection=arguments, bundleUrl=bundleUrl, cacheExpires="never" );
+		}
+
+
 		// Simple maven match
-		var bundleUrl = getMavenMatcher().findBundleUrl( argumentCollection=arguments );
+		bundleUrl = getMavenMatcher().findBundleUrl( argumentCollection=arguments );
 		if ( Len( Trim( bundleUrl ) ) ) {
 			var cacheExpiry = arguments.bundleVersion == "latest" ? DateAdd( 'h', 1, Now() ) : "never";
 
@@ -64,17 +71,17 @@ component accessors=true {
 			return;
 		}
 
-		var s3JarPath  = _getS3ExtensionJarFilePath( arguments.fileName );
+		var s3BundlePath  = _getS3BundleFilePath( arguments.fileName );
 
-		if ( !FileExists( s3JarPath ) ) {
+		if ( !FileExists( s3BundlePath ) ) {
 			SystemOutput( "Registering bundle jar from extension lex file. Bundle: #arguments.fileName#", true );
 			var tmpFile = GetTempFile( GetTempDirectory(), "extensionjar" ) & ".jar";
 			FileCopy( arguments.directory & arguments.fileName, tmpFile );
-			FileCopy( tmpFile, s3JarPath );
+			FileCopy( tmpFile, s3BundlePath );
 		}
 
 		if ( StructIsEmpty( _cacheLookup( argumentCollection=bundleInfo ) ) ) {
-			_saveToCache( argumentCollection=bundleInfo, bundleUrl=_getS3ExtensionJarUrl( arguments.fileName ), cacheExpires="never" );
+			_saveToCache( argumentCollection=bundleInfo, bundleUrl=_getS3BundleUrl( arguments.fileName ), cacheExpires="never" );
 		}
 	}
 
@@ -160,6 +167,44 @@ component accessors=true {
 		return {};
 	}
 
+	private function _searchBundleBucket( bundleName, bundleVersion ) {
+		var matchedFiles  = [];
+		var matched       = false;
+		var latestOnly    = arguments.bundleVersion == "latest";
+		var possibleFiles = DirectoryList(
+			  path     = _getS3BundlesDir()
+			, filter   = "#ListFirst( arguments.bundleName, "-." )#*.jar"
+			, sort     = "name"
+			, listInfo = "query"
+		);
+		for( var f in possibleFiles ) {
+			var bundleinfo = _getBundleNameAndVersionFromFileName( f.name );
+			if ( StructCount( bundleInfo ) && bundleInfo.bundleName == bundleName ) {
+				if ( latestOnly ) {
+					matched = true;
+					ArrayAppend( matchedFiles, { name=f.name, version=VersionUtils::sortableVersionString( bundleInfo.bundleVersion ) } );
+				} else if ( arguments.bundleVersion == bundleInfo.bundleVersion ) {
+					return _getS3BundleUrl( f.name );
+				}
+
+			} else if ( matched ) {
+				break;
+			}
+		}
+
+		if ( ArrayLen( matchedFiles ) ) {
+			ArraySort( matchedFiles, function( a, b ){
+				if ( a.version == b.version ) return 0;
+				return a.version > b.version ? 1 : -1;
+			} );
+
+			return _getS3BundleUrl( matchedFiles[ 1 ].name );
+		}
+
+		return "";
+	}
+
+
 	private function _createBundleInfo( bundleName, bundleVersion, bundleUrl, cacheExpires="" ) {
 		return {
 			  name         = arguments.bundleName
@@ -169,13 +214,13 @@ component accessors=true {
 		};
 	}
 
-	private function _getS3ExtensionJarFilePath( fileName ) {
-		return _getS3ExtensionJarsDir() & "#arguments.fileName#";
+	private function _getS3BundleFilePath( fileName ) {
+		return _getS3BundlesDir() & "#arguments.fileName#";
 	}
-	private function _getS3ExtensionJarsDir() {
+	private function _getS3BundlesDir() {
 		return getBundleS3root();
 	}
-	private function _getS3ExtensionJarUrl( fileName ) {
+	private function _getS3BundleUrl( fileName ) {
 		return getBundleCdnUrl() & arguments.fileName;
 	}
 }
