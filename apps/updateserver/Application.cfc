@@ -26,6 +26,8 @@ component {
 	}
 
 	function _loadServices() {
+		setting requesttimeout=600;
+
 		var coreS3Root   = server.system.environment.S3_CORE_ROOT          ?: "s3:///lucee-downloads/";
 		var coreCdnUrl   = server.system.environment.S3_CORE_CDN_URL       ?: "https://cdn.lucee.org/";
 		var extS3Root    = server.system.environment.S3_EXTENSIONS_ROOT    ?: "s3:///extension-downloads/";

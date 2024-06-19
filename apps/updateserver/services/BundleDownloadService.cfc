@@ -167,10 +167,10 @@ component accessors=true {
 
 	private function _getBundleNameAndVersionFromFileName( fileName ) {
 		var nameSansExt       = ListDeleteAt( arguments.fileName, ListLen( arguments.fileName, "." ), "." );
-		var patternBase       = "([1-9]+[0-9]*~[1-9]+[0-9]*~[1-9]+[0-9]*~[^~]+)$"
+		var patternBase       = "([0-9]+~[0-9]+~[0-9]+.*)$"
 		var versionPatterns   = [
-			  "^(.*)\-#Replace( patternBase, "~","\.", "all" )#"
-			, "^(.*)\-#Replace( patternBase, "~","\-", "all" )#"
+			  "^(.*)-#Replace( patternBase, "~","\.", "all" )#"
+			, "^(.*)-#Replace( patternBase, "~","-", "all" )#"
 		];
 
 		for( var pattern in versionPatterns ) {
