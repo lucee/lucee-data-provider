@@ -277,7 +277,7 @@
 		  required string  bundleName           restargsource="Path"
 		,          string  bundleVersion        restargsource="Path"
 		,          boolean allowRedirect = true restargsource="url"
-	) output=true {
+	) {
 		if ( arguments.bundleName == 'lucee.core' ) {
 			return downloadCore( arguments.bundleVersion );
 		}

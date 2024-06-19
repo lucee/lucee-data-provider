@@ -57,6 +57,8 @@ component {
 
 		return ext;
 
+		// TODO + some logging + ensure 404 when not found (old logic below)
+
 		if ( StructCount( ext ) ) {
 			return ext;
 		}

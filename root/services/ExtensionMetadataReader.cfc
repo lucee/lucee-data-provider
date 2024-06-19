@@ -8,7 +8,7 @@ component accessors=true {
 	variables._simpleCache = {};
 
 	function loadMeta() {
-		lock type="exclusive" name="readExtMeta" timeout=30 {
+		lock type="exclusive" name="readExtMeta" timeout=0 {
 			var meta           = _readExistingMetaFileFromS3();
 			var existingByFile = _mapExtensionQueryByFilename( meta );
 			var lexFiles       = _listLexFilesFromBucket();
@@ -31,6 +31,8 @@ component accessors=true {
 
 			return meta;
 		}
+
+		variables.extensionMeta ?: _getEmptyExtensionsQuery();
 	}
 
 	public function list(
@@ -281,7 +283,9 @@ component accessors=true {
 
 		if ( DirectoryExists( lexFileJarsDir )) {
 			for( var jar in DirectoryList( path=lexFileJarsDir, listInfo="query", filter="*.jar" ) ) {
-				getBundleDownloadService().registerBundleFromExtensionJar( jar.directory, jar.name );
+				if ( jar.type == "file" && jar.size > 0 ) {
+					getBundleDownloadService().registerBundleFromExtensionJar( jar.directory, jar.name );
+				}
 			}
 		}
 	}
