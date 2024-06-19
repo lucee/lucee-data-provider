@@ -27,9 +27,6 @@ component accessors=true {
 		setExtensionMeta( meta );
 		_createExtensionAndVersionMap();
 
-		// todo, convert all this to individual extension structs + individual version structs ready to roll
-
-
 		return meta;
 	}
 
@@ -90,6 +87,28 @@ component accessors=true {
 		}
 
 		return {};
+	}
+
+	public function getExtensionFileMatchingBundle( required string bundleName, required string bundleVersion ) {
+		var exts = _mapExtensionQueryByFilename( getExtensionMeta() );
+		var tries = [
+		      arguments.bundleName & "-" & arguments.bundleVersion & ".lex";
+			, Replace( arguments.bundleName,'.','-','all' ) & "-" & arguments.bundleVersion & ".lex";
+			, arguments.bundleName & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex";
+			, Replace( arguments.bundleName, '.', '-', 'all' ) & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex";
+			, Replace( arguments.bundleName, '.', '-', 'all' ) & "-" & Replace( arguments.bundleVersion,'-','.','all') & ".lex";
+			, Replace( arguments.bundleName, '-', '.', 'all' ) & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex";
+			, Replace( arguments.bundleName, '-', '.', 'all' ) & "-" & Replace( arguments.bundleVersion,'-','.','all') & ".lex";
+			, Replace( arguments.bundleName, '-', '.', 'all' ) & "." & Replace( arguments.bundleVersion,'-','.','all') & ".lex";
+		];
+
+		for( var name in tries ) {
+			if ( StructKeyExists( exts, name ) ) {
+				return name;
+			}
+		}
+
+		return "";
 	}
 
 // PRIVATE HELPERS

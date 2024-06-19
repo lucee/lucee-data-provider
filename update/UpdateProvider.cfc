@@ -4,9 +4,11 @@
 	request.s3Root="s3:///lucee-downloads/";
 	request.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
 
+	variables.extensionMetaReader = application.extMetaReader;
+	variables.cdnURL              = application.cdnUrl;
+
 	variables.s3Root=request.s3Root;//"s3:///lucee-downloads/";
 	variables.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
-	variables.cdnURL="https://cdn.lucee.org/";
 
 	jiraDomain="luceeserver.atlassian.net";
 	
@@ -15,8 +17,6 @@
 	MIN_NEW_CHANGELOG_VERSION="5.3.0.0";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
  	
-	variables.mavenMappings= new MavenMatcher().getMavenMappings();
-
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.artDirectory=variables.current&"artifacts/";
 	if (!directoryExists(variables.artDirectory))
@@ -271,258 +271,116 @@
 	}
 
 	/**
-	* function to load 3 party Bundle file, for example "/antlr/2.7.6"
-	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
-	*/
-	remote function downloadBundle(required string bundleName restargsource="Path", 
-		string bundleVersion restargsource="Path",
-		string ioid="" restargsource="url",
-		boolean allowRedirect=true restargsource="url")
-		httpmethod="GET" restpath="download/{bundlename}/{bundleversion}" {
-try{
-
-		try {
-			var mm=new MavenMatcher();
-			var bv=isNull(arguments.bundleVersion)?"latest":arguments.bundleVersion;
-			var match=mm.getMatch(arguments.bundleName,bv);
-			
-			FileAppend("log-maven-download-ok.log",arguments.bundleName&":"&bv&"
-");
-			WriteLog(text="Maven matcher: " & arguments.bundleName&":"&arguments.bundleVersion&" "& match.url, type="info", log="application" );
-			//http url=match.url result="local.cfhttp";
-			//if(cfhttp.status_code!=200) throw match.url&" "&serialize(cfhttp);
-			if(!isNull(url.abc)) throw match.url;
-			header statuscode="302" statustext="Found";
-			header name="Location" value=match.url;
-			return;
-		}catch(e) {
-			if(!isNull(url.abc))
-				rethrow;
-			FileAppend("log-maven-download.log",
-				arguments.bundleName&":"&arguments.bundleVersion&" "&
-				e.message&"
-");			
-
-			WriteLog(text="Maven matcher missing bundle: " & arguments.bundleName&":"&arguments.bundleVersion&" "& e.stacktrace, type="error", log="application" );
-			
-		}
-		
-		if(arguments.bundleVersion=='latest') {
-			arguments.bundleVersion= getLatestBundle(arguments.bundleName);
-
+	 * function to load 3 party Bundle file, for example "/antlr/2.7.6"
+	 * return the download as a binary (application/zip), if there is no download available, the functions throws a exception
+	 *
+	 * @httpmethod GET
+	 * @restpath   download/{bundlename}/{bundleversion}
+	 */
+	remote function downloadBundle(
+		  required string  bundleName           restargsource="Path"
+		,          string  bundleVersion        restargsource="Path"
+		,          boolean allowRedirect = true restargsource="url"
+	) {
+		if ( arguments.bundleName == 'lucee.core' ) {
+			return downloadCore( arguments.bundleVersion );
 		}
 
-		// request for a core
-		if(arguments.bundleName=='lucee.core') {
-			return downloadCore(arguments.bundleVersion,arguments.ioid,arguments.allowRedirect);
-		}
-
-		// read json 
-		var name=arguments.bundleName&"-"&arguments.bundleVersion&".json";
-		var path=variables.artDirectory&name;
-		var jsonPath=path;
-		if(fileExists(path)) {
-			var data=deserializeJson(fileRead(path));
-		}
-
-		// redirect to maven repo
-		if(arguments.allowRedirect && !isNull(data.jar)) {
-			var jarPath=variables.artDirectory&arguments.bundleName&"-"&arguments.bundleVersion&".jar";
-			if(fileExists(jarPath)) {
-				fileDelete(jarPath);
-			}
-			header statuscode="302" statustext="Found";
-			header name="Location" value=data.jar;
-			return;
-		}
-
-		// first of all we look at the artifacts directory (lucee dependecies download automatically)
-		var orgName=arguments.bundleName&"-"&arguments.bundleVersion&".jar";
-		var orgPath=variables.artDirectory&orgName;
-		var path=checkForJar(arguments.bundleName,arguments.bundleVersion);
-
-		// download from Maven if we have a .json file
-		if(len(path)==0 && !isNull(data.jar)) {
-			_fileCopy(data.jar,orgPath);
-			path=orgPath;
-		}
-		systemOutput( "path:" & path, true);
-		systemOutput( "name:" & name, true);
-		systemOutput( arguments, true);
-		// extension jar?
-		if(len(path)==0) {
-			systemOutput(variables.extDirectory&name, true);
-			// get the extension
-			var name=arguments.bundleName&"-"&arguments.bundleVersion&".lex";
-			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
-				name=replace(arguments.bundleName,'.','-','all')&"-"&arguments.bundleVersion&".lex";
-			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
-				name=arguments.bundleName&"-"&replace(arguments.bundleVersion,'.','-','all')&".lex";
-			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
-				name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".lex";
-			if(!FileExists(variables.extDirectory&name)) // bundle-name-bundle.version
-				name=replace(arguments.bundleName,'.','-','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".lex";
-			if(!FileExists(variables.extDirectory&name)) // bundle.name-bundle-version
-				name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'.','-','all')&".lex";
-			if(!FileExists(variables.extDirectory&name)) // bundle.name-bundle.version
-				name=replace(arguments.bundleName,'-','.','all')&"-"&replace(arguments.bundleVersion,'-','.','all')&".lex";
-			if(!FileExists(variables.extDirectory&name)) // bundle.name.bundle.version
-				name=replace(arguments.bundleName,'-','.','all')&"."&replace(arguments.bundleVersion,'-','.','all')&".lex";
-
-			var useMapping=false;
-			if(!isnull(variables.extMappings) && structKeyExists(variables.extMappings,arguments.bundleName)) {
-				if(!FileExists(variables.extDirectory&name)) {
-					name=variables.extMappings[arguments.bundleName].lex&"-"&arguments.bundleVersion&".lex";
-					useMapping=true;
-				}	
-				if(!FileExists(variables.extDirectory&name)) {
-					name=variables.extMappings[arguments.bundleName].lex&"-"&replace(arguments.bundleVersion,'.','-','all')&".lex";
-					useMapping=true;
+		/*
+			var bundle = bundleDownloadService.findBundle( argumentCollection=arguments );
+			if ( !StructIsEmpty( bundle ) ) {
+				if ( arguments.allowRedirect ){
+					return _relocateForDowload( bundle.url );
 				}
-			}
-			systemOutput( "name 2:" & name, true);
 
-			var found=false;
-			if(FileExists(variables.extDirectory&name)) {
-
-				// extract jars
-				var dir="zip://"&variables.extDirectory&name&"!jars/";
-
-				if(directoryExists(dir)) {
-					directory filter="*.jar" name="local.jars" action="list" directory=dir;
-					local.fff="";
-					loop query=jars {
-						if(!FileExists(variables.artDirectory&jars.name)) {
-							_fileCopy(jars.directory&jars.name,variables.artDirectory&jars.name);
-							found=true;
-						}
-						// TODO variables.extMappings is never defined!
-						if(!isnull(variables.extMappings) && structKeyExists(variables.extMappings,arguments.bundleName)) {
-							if(isDefined("url.xc10")) throw "we have a mapping "&serialize(variables.extMappings[arguments.bundleName]);
-							var map=variables.extMappings[arguments.bundleName];
-							var trgName=arguments.bundleName&"-"&arguments.bundleVersion&".jar";
-							fff&=jars.name&":"&(len(jars.name)>len(map.jar))&":"&left(jars.name,len(map.jar))&" :: "&jars.name&">"&map.jar&";";
-							if(len(jars.name)>len(map.jar) && left(jars.name,len(map.jar))==map.jar && !FileExists(variables.artDirectory&trgName)) {
-								_fileCopy(jars.directory&jars.name,variables.artDirectory&trgName);
-								found=true;
-							}
-						}
-						// found is never used?
-					}
-				}
+				return _serveBundleUrlLocally( bundle.url, bundle.cache, bundle.cacheTimeout );
 			}
-			
-			if ( fileExists( variables.extDirectory & name ) ) {
-				path = variables.extDirectory & name;
-			} else {
-				path = checkForJar( arguments.bundleName, arguments.bundleVersion ); // eh, last arg defaults to .lex
-			}
-			
+			_doBundle404( argumentCollection=arguments );
+
+		*/
+
+		var bundleUrl = _findBundleUrl( argumentCollection=arguments );
+
+		if ( Len( bundleUrl ) ) {
+			return arguments.allowRedirect ? _relocateForDowload( bundleUrl ) : _serveBundleUrlLocally( bundleUrl );
 		}
-		systemOutput( "path 2:" & path, true);
-		if(len(path)==0 || !FileExists(path) || !isNull(url.ignoreLocal)) {
-			// last try, when the pattrn of the maven name matches the pattern of the osgi name we could be lucky
-			var mvnRep="https://repo1.maven.org/maven2";
-			var repositories=[
-				mvnRep,
-				"https://raw.githubusercontent.com/lucee/mvn/master/releases"
-				,"https://oss.sonatype.org/content/repositories/snapshots"
-				//,"https://repo1.maven.org/maven2"
-			];
-			
-			systemOutput(arguments, true);
-			if(structKeyExists(variables.mavenMappings,arguments.bundleName)) {
-				
-				var mvnId=variables.mavenMappings[arguments.bundleName];
-				systemOutput(mvnId, true);
-				var uri="/"&replace(mvnId.group,'.','/','all')&"/"&mvnId.artifact&
-						"/"&arguments.bundleVersion&
-						"/"&mvnId.artifact&"-"&arguments.bundleVersion&".jar";
-			}
-			else {
-				systemOutput("no maven mappings, sad face", true);
-				var uri="/"
-					&replace(arguments.bundleName,'.','/','all')&"/"
-					&arguments.bundleVersion&"/"
-					&listLast(arguments.bundleName,'.')&"-"
-					&arguments.bundleVersion&".jar";
-			}
 
-			systemOutput("---------------------------------------------", true);
-			systemOutput(uri, true);
-					
+		return _doBundle404( argumentCollection=arguments );
+	}
 
-			loop array=repositories item="local.rep" {
-				http url=rep&uri result="local.tmp";
-				if(isNull(tmp.status_code)) tmp.status_code=404;
-				if(tmp.status_code>=200 && tmp.status_code<300) {
-					local.redirectURL=rep&uri;
-					break;
-				}
-				systemOutput("", true);
-				systemOutput( tmp.status_code & " " &rep&uri, true);
-				// systemOutput(local.tmp, true);
-			}
-			
-			// ok an other last try, when "org.lucee" we know more about the pattern
-			if(isNull(redirectURL) && left(arguments.bundleName,10)=='org.lucee.'){
-				var art1=mid(arguments.bundleName,11);
-				var art2=replace(art1,'.','-','all');
-				
-				var urls=[
-					 mvnRep&"/org/lucee/"&art1&"/"&arguments.bundleVersion&"/"&art1&"-"&arguments.bundleVersion&".jar"
-					,mvnRep&"/org/lucee/"&art2&"/"&arguments.bundleVersion&"/"&art2&"-"&arguments.bundleVersion&".jar"
-				];
-				loop array=urls item="local._url" {
-					systemOutput(_url, true);
-					if(fileExists(_url)) {
-						local.redirectURL=_url;
-						break;
-					}
-				}
-			}
+	private function _relocateForDowload( bundleUrl ) {
+		header statuscode="302" statustext="Found";
+		header name="Location" value=arguments.bundleUrl;
+	}
 
-				
-			if(!isNull(redirectURL)){
-				if(isDefined("url.xa1")) throw jsonPath&":"&redirectURL;
-				filewrite(
-					jsonPath,
-					serialize({"jar":redirectURL,"local":path}));
+	private function _serveBundleUrlLocally( bundleUrl ) {
+		// TODO
+	}
 
-				if(arguments.allowRedirect) {
-					header statuscode="302" statustext="Found";
-					header name="Location" value=redirectURL;
-					return;
-				}
-				else {
-					_fileCopy(redirectURL,orgPath);
-					
-					file action="readBinary" file="#orgPath#" variable="local.bin";
-					header name="Content-disposition" value="attachment;filename=#orgName#";
-			        content variable="#bin#" type="application/zip";
+	private function _doBundle404( bundleName, bundleVersion ) {
+		var text = "No jar available for bundle " & arguments.bundleName & " in Version " & arguments.bundleVersion;
 
-			        return;
-				}
-			}
+		content reset=true;
+		header statuscode="404" statustext=text;
+		echo( text );
 
+		// TODO, log
+	}
 
-			var text=" no jar available for bundle "&arguments.bundleName&" in Version "&arguments.bundleVersion;
-			header statuscode="404" statustext="#text#";
-			echo(text);
-			// TODO write to a log
-			file action="append" addnewline="yes" file="#variables.current#missing-bundles.txt"
-				output="#arguments.bundleName#-#arguments.bundleVersion#->#path#" fixnewline="no";
+	private function _findBundleUrl( bundleName, bundleVersion ) {
+		// 1. Simple maven matcher approach
+		var mm        = new MavenMatcher();
+		var bundleUrl = mm.findBundleUrl( argumentCollection=arguments );
 
-			WriteLog(text="No Jar available: #arguments.bundleName#-#arguments.bundleVersion#->#path#", type="error", log="application" );
+		if ( Len( Trim( bundleUrl ) ) ) {
+			return bundleUrl;
 		}
-		else {
-			
-			file action="readBinary" file="#path#" variable="local.bin";
-			header name="Content-disposition" value="attachment;filename=#orgName#";
-	        content variable="#bin#" type="application/zip"; // in future version this should be handled with producer attribute
+
+		// 2. All other approaches, require resolving latest version if set to "latest"
+		//    However, this may well be impossible if we don't know yet where the bundle *is*??
+		if ( arguments.bundleVersion == "latest" ) {
+			arguments.bundleVersion = getLatestBundle( arguments.bundleName ); // TODO, fix. This doesn't work and never can??
 		}
-}
-catch(e) { return e;}
+
+		// 3. Find in our previously stored artifacts searches
+		bundleUrl = _findBundleUrlInStoredJsonArtifacts( argumentCollection=arguments );
+		if ( Len( Trim( bundleUrl ) ) ) {
+			return bundleUrl;
+		}
+
+		// 4. Do we have a matching extension with a lex file?
+		bundleUrl = extensionMetaReader.getExtensionFileMatchingBundle( argumentCollection=arguments );
+		if ( Len( Trim( bundleUrl ) ) ) {
+			return cdnURL & bundleUrl;
+		}
+
+
+		// 5. Desperation, try raw maven searching
+		bundleUrl = mm.findBundleUrl( argumentCollection=arguments, rawSearch=true );
+		if ( Len( Trim( bundleUrl ) ) ) {
+			return bundleUrl;
+		}
+
+		return "";
+	}
+
+	private function _findBundleUrlInStoredJsonArtifacts( bundleName, bundleVersion ) {
+		// TODO: convert this to S3 storage...
+
+		var name = arguments.bundleName & "-" & arguments.bundleVersion & ".json";
+		var path = variables.artDirectory & name;
+
+		if( FileExists( path )) {
+			try {
+				var data=DeserializeJson( FileRead( path ) );
+			} catch( any e ) {
+				return "";
+			}
+
+			return data.jar ?: "";
+		}
+
+		return "";
 	}
 
 	private function getLatestBundle(required string bundleName) {
