@@ -406,7 +406,7 @@ try{
 						// TODO variables.extMappings is never defined!
 						if(!isnull(variables.extMappings) && structKeyExists(variables.extMappings,arguments.bundleName)) {
 							if(isDefined("url.xc10")) 
-								throw ()"we have a mapping "&serialize(variables.extMappings[arguments.bundleName]));
+								throw ("we have a mapping "&serialize(variables.extMappings[arguments.bundleName]));
 							var map=variables.extMappings[arguments.bundleName];
 							var trgName=arguments.bundleName&"-"&arguments.bundleVersion&".jar";
 							fff&=jars.name&":"&(len(jars.name)>len(map.jar))&":"&left(jars.name,len(map.jar))&" :: "&jars.name&">"&map.jar&";";
