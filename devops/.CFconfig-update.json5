@@ -326,7 +326,7 @@
     // "errorGeneralTemplate": "/lucee/templates/error/error-public.cfm",
     // "errorMissingTemplate": "/lucee/templates/error/error-public.cfm",
     "errorStatusCode": "true",
-    "inspectTemplate": "once",
+    "inspectTemplate": "never",
     "typeChecking": "true",
     "cachedAfter": "0,0,0,0",
     "applicationPathTimeout": "0,0,0,20"
