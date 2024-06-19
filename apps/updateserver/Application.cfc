@@ -26,6 +26,8 @@ component {
 	}
 
 	function _loadServices() {
+		var coreS3Root   = server.system.environment.S3_CORE_ROOT          ?: "s3:///lucee-downloads/";
+		var coreCdnUrl   = server.system.environment.S3_CORE_CDN_URL       ?: "https://cdn.lucee.org/";
 		var extS3Root    = server.system.environment.S3_EXTENSIONS_ROOT    ?: "s3:///extension-downloads/";
 		var extCdnUrl    = server.system.environment.S3_EXTENSIONS_CDN_URL ?: "https://ext.lucee.org/";
 		var bundleS3Root = server.system.environment.S3_BUNDLES_ROOT       ?: "s3:///bundle-download/";
@@ -45,6 +47,8 @@ component {
 		extMetaReader.setBundleDownloadservice( bundleDownloadService );
 		extMetaReader.loadMeta();
 
+		application.coreS3Root            = coreS3Root;
+		application.coreCdnUrl            = coreCdnUrl;
 		application.extensionsCdnUrl      = extCdnUrl;
 		application.extensionsS3Root      = extS3Root;
 		application.extMetaReader         = extMetaReader;

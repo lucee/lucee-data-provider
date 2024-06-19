@@ -195,7 +195,7 @@ component accessors=true {
 		if ( ArrayLen( matchedFiles ) ) {
 			ArraySort( matchedFiles, function( a, b ){
 				if ( a.version == b.version ) return 0;
-				return a.version > b.version ? 1 : -1;
+				return a.version < b.version ? 1 : -1;
 			} );
 
 			return _getS3BundleUrl( matchedFiles[ 1 ].name );

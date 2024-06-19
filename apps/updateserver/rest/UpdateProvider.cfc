@@ -5,7 +5,8 @@
 component {
 
 	variables.bundleDownloadService = application.bundleDownloadService;
-	variables.s3Root=application.extensionsS3Root
+	variables.s3Root                = application.coreS3Root;
+	variables.cdnUrl                = application.coreCdnUrl;
 
 	variables.providerLog = "update-provider";
 	
