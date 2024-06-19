@@ -8,27 +8,29 @@ component accessors=true {
 	variables._simpleCache = {};
 
 	function loadMeta() {
-		var meta           = _readExistingMetaFileFromS3();
-		var existingByFile = _mapExtensionQueryByFilename( meta );
-		var lexFiles       = _listLexFilesFromBucket();
-		var metaChanged    = false;
+		lock type="exclusive" name="readExtMeta" timeout=30 {
+			var meta           = _readExistingMetaFileFromS3();
+			var existingByFile = _mapExtensionQueryByFilename( meta );
+			var lexFiles       = _listLexFilesFromBucket();
+			var metaChanged    = false;
 
-		for( var lexFile in lexFiles ) {
-			var isNewToUs = !StructKeyExists( existingByFile, lexFile.name )
-			if ( isNewToUs ) {
-				_addLexFile( lexFile.name, meta );
-				metaChanged = true;
+			for( var lexFile in lexFiles ) {
+				var isNewToUs = !StructKeyExists( existingByFile, lexFile.name )
+				if ( isNewToUs ) {
+					_addLexFile( lexFile.name, meta );
+					metaChanged = true;
+				}
 			}
-		}
-		if ( metaChanged ) {
-			QuerySort( meta, "name,id,versionSortable", "asc,asc,desc" );
-			_writeMetaFileToS3( meta );
-		}
+			if ( metaChanged ) {
+				QuerySort( meta, "name,id,versionSortable", "asc,asc,desc" );
+				_writeMetaFileToS3( meta );
+			}
 
-		setExtensionMeta( meta );
-		_createExtensionAndVersionMap();
+			setExtensionMeta( meta );
+			_createExtensionAndVersionMap();
 
-		return meta;
+			return meta;
+		}
 	}
 
 	public function list(
