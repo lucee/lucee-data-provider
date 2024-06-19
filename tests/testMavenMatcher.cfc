@@ -3,7 +3,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 	function beforeAll(){
 		variables.root = getDirectoryFromPath(getCurrentTemplatePath());  
 		variables.root = listDeleteAt(root,listLen(root,"/\"), "/\") & "/";  // getDirectoryFromPath 
-		variables.mavenMappingsFile = expandPath( "../update/mavenMappings.json" );
+		variables.mavenMappingsFile = expandPath( "../../update/mavenMappings.json" );
 		systemOutput("mavenMappingsFile: #mavenMappingsFile#", true);
 	};
 

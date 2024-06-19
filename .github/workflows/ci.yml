@@ -23,7 +23,7 @@ jobs:
     - name: Cache Lucee files
       uses: actions/cache@v4
       with:
-        path: ~/work/_actions/lucee/script-runner/main/lucee-download-cache
+        path: /home/runner/work/_actions/lucee/script-runner/main/lucee-download-cache
         key: lucee-downloads
     - name: Compile CFML
       uses: lucee/script-runner@main
