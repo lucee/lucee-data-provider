@@ -4,6 +4,7 @@
 	request.s3Root="s3:///lucee-downloads/";
 	request.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
 
+	variables.providerLog = "update-provider";
 	variables.s3Root=request.s3Root;//"s3:///lucee-downloads/";
 	variables.s3URL="https://s3-eu-west-1.amazonaws.com/lucee-downloads/";
 	variables.cdnURL="https://cdn.lucee.org/";
@@ -22,6 +23,14 @@
 	if (!directoryExists(variables.artDirectory))
 		directoryCreate(variables.artDirectory);
 	variables.extDirectory="/var/www/extension/extension/"; // TODO make more dynamic
+
+	private function logger( string text, any exception, type="info" ){
+		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
+		if ( !isNull(arguments.exception ) )
+			WriteLog( text=log, type=arguments.type, log=variables.providerLog, exception=arguments.exception );
+		else
+			WriteLog( text=log, type=arguments.type, log=variables.providerLog );
+	}
 
 		/**
 	* if there is a update the function is returning a struct like this:
@@ -61,7 +70,8 @@
 			var versions=s3.getVersions();
 			var keys=structKeyArray(versions);
 			arraySort(keys,"textnocase");
-			var latest.version = versions[keys[arrayLen(keys)]].version;
+			var latest = {};
+			latest.version = versions[keys[arrayLen(keys)]].version;
 			var latestVersion=toVersion(latest.version);
 			
 			// others
@@ -72,10 +82,10 @@
 				for(var i=arrayLen(keys);i>=1;i--) {
 					var el=versions[keys[i]];
 					if(findNoCase("-SNAPSHOT",el.version)) {
-						if((--maxSnap)<=0) continue;
+						if ( ( --maxSnap )<=0 ) continue;
 					}
 					else {
-						if((--maxRel)<=0) continue;
+						if ( ( --maxRel )<=0 ) continue;
 					}
 					arrayPrepend(latest.otherVersions,el.version);
 				}
@@ -128,7 +138,7 @@
 			}; // TODO get the right version for given version
 		}
 		catch(e){
-			log log="application" exception="#e#" type="error";
+			logger( text=e.message, exception=e, type="error" );
 			return {"type":"error","message":e.message,cfcatch:e};
 		}
 	}
@@ -288,7 +298,7 @@ try{
 			
 			FileAppend("log-maven-download-ok.log",arguments.bundleName&":"&bv&"
 ");
-			WriteLog(text="Maven matcher: " & arguments.bundleName&":"&arguments.bundleVersion&" "& match.url, type="info", log="application" );
+			logger(text="Maven matcher: " & arguments.bundleName & ":" & arguments.bundleVersion & " " & match.url, type="info");
 			//http url=match.url result="local.cfhttp";
 			//if(cfhttp.status_code!=200) throw match.url&" "&serialize(cfhttp);
 			if(!isNull(url.abc)) throw match.url;
@@ -303,7 +313,7 @@ try{
 				e.message&"
 ");			
 
-			WriteLog(text="Maven matcher missing bundle: " & arguments.bundleName&":"&arguments.bundleVersion&" "& e.stacktrace, type="error", log="application" );
+			logger(text="Maven matcher missing bundle: " & arguments.bundleName & ":" & arguments.bundleVersion, exception=e, type="error" );
 			
 		}
 		
@@ -398,7 +408,8 @@ try{
 						}
 						// TODO variables.extMappings is never defined!
 						if(!isnull(variables.extMappings) && structKeyExists(variables.extMappings,arguments.bundleName)) {
-							if(isDefined("url.xc10")) throw "we have a mapping "&serialize(variables.extMappings[arguments.bundleName]);
+							if(isDefined("url.xc10")) 
+								throw ("we have a mapping "&serialize(variables.extMappings[arguments.bundleName]));
 							var map=variables.extMappings[arguments.bundleName];
 							var trgName=arguments.bundleName&"-"&arguments.bundleVersion&".jar";
 							fff&=jars.name&":"&(len(jars.name)>len(map.jar))&":"&left(jars.name,len(map.jar))&" :: "&jars.name&">"&map.jar&";";
@@ -460,8 +471,7 @@ try{
 					break;
 				}
 				systemOutput("", true);
-				systemOutput( tmp.status_code & " " &rep&uri, true);
-				// systemOutput(local.tmp, true);
+				systemOutput( tmp.status_code & " " & rep & uri, true);
 			}
 			
 			// ok an other last try, when "org.lucee" we know more about the pattern
@@ -484,7 +494,8 @@ try{
 
 				
 			if(!isNull(redirectURL)){
-				if(isDefined("url.xa1")) throw jsonPath&":"&redirectURL;
+				if(isDefined("url.xa1")) 
+					throw (jsonPath&":"&redirectURL);
 				filewrite(
 					jsonPath,
 					serialize({"jar":redirectURL,"local":path}));
@@ -513,7 +524,7 @@ try{
 			file action="append" addnewline="yes" file="#variables.current#missing-bundles.txt"
 				output="#arguments.bundleName#-#arguments.bundleVersion#->#path#" fixnewline="no";
 
-			WriteLog(text="No Jar available: #arguments.bundleName#-#arguments.bundleVersion#->#path#", type="error", log="application" );
+			logger(text="No Jar available: #arguments.bundleName#-#arguments.bundleVersion#->#path#", type="error");
 		}
 		else {
 			
@@ -522,8 +533,11 @@ try{
 	        content variable="#bin#" type="application/zip"; // in future version this should be handled with producer attribute
 		}
 }
-catch(e) { return e;}
-	}
+catch(e) { 
+	logger(text=e.message, exception=e, type="error");
+	return e;
+}
+		}
 
 	private function getLatestBundle(required string bundleName) {
 
@@ -577,9 +591,9 @@ catch(e) { return e;}
 			var text="no jar available for bundle "&arguments.bundleName;
 			header statuscode="404" statustext="#text#";
 			echo(text);
-			// TODO write to a log
+			logger (text=text, type="error");
 			file action="append" addnewline="yes" file="#variables.current#missing-bundles.txt"
-			output="#arguments.bundleName#-latest-version" fixnewline="no";
+				output="#arguments.bundleName#-latest-version" fixnewline="no";
 		}
 	}
 
@@ -791,6 +805,7 @@ catch(e) { return e;}
 		catch(e){
 			systemOutput( e, 1, 1 );
 			header statuscode="500";
+			logger(text=e.message, exception=e, type="error");
 			echo (e.message);
 		}
 	}
@@ -832,6 +847,7 @@ catch(e) { return e;}
 		}
 		catch(e){
 			systemOutput( e, 1, 1 );
+			logger( error=e.message, exception=e, type="error" );
 			return {"type":"error","message":e.message};
 		}
 	}
@@ -876,7 +892,9 @@ catch(e) { return e;}
 			else if(!isNull(info.sources.jar.date))
 				return parseDateTime(info.sources.jar.date);
 		} catch(e) {
-			systemOutput("maven.getDate() threw " & cfcatch.message, true, true );
+			var mess=  "maven.getDate() threw " & cfcatch.message;
+			logger(text=mess, exception=e, type="error");
+			systemOutput(mess, true, true );
 		}
 		
 		return "";
@@ -963,7 +981,7 @@ catch(e) { return e;}
 		}
 		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
 			if(ignoreInvalidVersion) return {};
-			throw "version number ["&arguments.version&"] is invalid";
+			throw ("version number ["&arguments.version&"] is invalid");
 		}
 		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
 
@@ -977,7 +995,7 @@ catch(e) { return e;}
 			else if(sct.qualifier_appendix=="BETA")sct.qualifier_appendix_nbr=50;
 			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
 		}
-		else throw "version number ["&arguments.version&"] is invalid";
+		else throw ("version number ["&arguments.version&"] is invalid");
 		sct.pure=
 					sct.major
 					&"."&sct.minor
@@ -1051,7 +1069,8 @@ catch(e) { return e;}
 	private function fromS3(path,name,async=true) {
 		
 		// if exist we redirect to it
-			if(!isNull(url.show)) throw (!isNull(application.exists[name]) && application.exists[name])&":"&fileExists(variables.s3Root&name)&"->"&(variables.s3Root&name);
+			if(!isNull(url.show))
+				throw ((!isNull(application.exists[name]) && application.exists[name])&":"&fileExists(variables.s3Root&name)&"->"&(variables.s3Root&name));
 
 			var hasDef=(!isNull(application.exists[name]) && application.exists[name]);
 			if(hasDef || fileExists(variables.s3Root&name)) {
@@ -1077,7 +1096,8 @@ catch(e) { return e;}
 					lock timeout=1000 name=src {
 						if(!fileExists(trg) && fileSize(src)>100000) {// we do this because it was created by a thread blocking this thread
 							_fileCopy(src,trg);
-							if(!isNull(url.show)) throw "fileExists: "&fileExists(src)&" + "&fileExists(trg);
+							if(!isNull(url.show))
+								throw ("fileExists: "&fileExists(src)&" + "&fileExists(trg));
 						}
 					}
 				}	
@@ -1097,7 +1117,8 @@ catch(e) { return e;}
 
 			}
 			//throw src&":"&res.statuscode&":"&len(res.filecontent);
-			if(isNull(res.statuscode) || res.statuscode!=200) throw src&":"&res.statuscode;
+			if(isNull(res.statuscode) || res.statuscode!=200) 
+				throw (src & ":" & res.statuscode);
 			if(len(res.filecontent)<1000) throw "file [#src#] is to small (#len(res.filecontent)#)";
 			fileWrite(trg,res.filecontent);
 		}
@@ -1140,7 +1161,7 @@ catch(e) { return e;}
 		local.arr=listToArray(arguments.version,'.');
 		
 		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
-			throw "version number ["&arguments.version&"] is invalid";
+			throw ("version number ["&arguments.version&"] is invalid");
 		}
 		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
 

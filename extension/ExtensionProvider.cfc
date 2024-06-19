@@ -5,6 +5,7 @@
 
 	variables.EXPIRE=300*1000; // MS
 
+	variables.providerLog = "update-provider";
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	variables.extensionDir=variables.current&"extensions/";
 	variables.ext="lex";
@@ -19,6 +20,13 @@
 	variables.cdnURL="https://ext.lucee.org/";
 	variables.current=getDirectoryFromPath(getCurrentTemplatePath());
 	
+	private function logger( string text, any exception, type="info" ){
+		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
+		if ( !isNull(arguments.exception ) )
+			WriteLog( text=log, type=arguments.type, log=variables.providerLog, exception=arguments.exception );
+		else
+			WriteLog( text=log, type=arguments.type, log=variables.providerLog );
+	}
 
 	/**
 	* if there is a update the function is returning a struct like this:
@@ -534,6 +542,7 @@
 			var text="extension for id ["&arguments.id&"] "&(arguments.version.len()==0?"":("in version "&arguments.version))&" not found as "&type&" version";
 			
 			header statuscode="404" statustext="#text#";
+			logger (text, type="error");
 			echo(text);
 		}
 		
