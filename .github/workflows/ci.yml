@@ -20,6 +20,11 @@ jobs:
       with:
         path: ~/.m2
         key: lucee-script-runner-maven-cache
+    - name: Cache Test Artifacts
+      uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}/test/artifacts
+        key: test-artifacts
     - name: Cache Lucee files
       uses: actions/cache@v4
       with:
@@ -50,7 +55,19 @@ jobs:
         testLabels: data-provider
         testAdditional: ${{ github.workspace }}/tests
         testSevices: mysql
-
+    - name: Run Lucee Test Suite (testLabels="data-provider-integration")
+      uses: lucee/script-runner@main
+      continue-on-error: true
+      with:
+        webroot: ${{ github.workspace }}/lucee/test
+        execute: /bootstrap-tests.cfm
+        luceeVersion: ${{ env.luceeVersion }}
+        #luceeVersionQuery: ${{ env.luceeVersionQuery }}
+        extensionDir: ${{ github.workspace }}/
+      env:
+        testLabels: data-provider-integration
+        testAdditional: ${{ github.workspace }}/tests
+        testSevices: mysql
 
   build-and-push:
     name: Docker build, publish and deploy

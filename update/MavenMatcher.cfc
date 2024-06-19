@@ -133,11 +133,62 @@
 		var meta['versions'] = [];
 		meta['groupId'] = xml.XmlRoot.groupId.XmlText;
 		meta['artifactId'] = xml.XmlRoot.artifactId.XmlText;
-		meta['latest'] = xml.XmlRoot.versioning.latest.XmlText;
 		loop array=xml.XmlRoot.versioning.versions.XmlChildren item="local.node" {
-			arrayAppend( meta.versions,node.XmlText );
+			arrayAppend( meta.versions, node.XmlText );
 		}
+
+		try {
+			meta['latest'] = xml.XmlRoot.versioning.latest.XmlText;
+		} catch ( e ){ // some like apache oro don't have latest?
+			meta['latest'] = meta.versions[ len( meta.versions) ];
+		}
+
 		fileWrite( arguments.metaFile, serializeJson(meta) );
 		return meta;
+	}
+
+	public struct function findLuceeBundles( string artifact ) cachedWithin="request" {
+
+		systemOutput("searching for lucee bundles [#artifact#]", true);
+
+		http url="https://search.maven.org/solrsearch/select" result="local.res" {
+			httpparam type="url" name="q" value="q=a:#arguments.artifact#+AND+g:org.lucee";
+			httpparam type="url" name="rows" value="20";
+			httpparam type="url" name="wt" value="json";
+		};
+
+		var result = {
+			success: false,
+			statusCode = ( res.status_code ?: 0 ),
+			error: "",
+			mapping: {}
+		}
+
+		if ( res.status_code neq 200 || !isJson( res.filecontent )){
+			result.error = res.filecontent;
+			return result;
+		}
+
+		var json = deserializeJSON ( res.filecontent );
+
+		if ( isNull( json.response.numFound ) || json.response.numFound < 1  ){
+			result.error= "no candidate matches returned" ;
+			return result;
+		}
+
+		for ( var b in json.response.docs ){
+			if (b.artifact == arguments.artifact ){
+				result.success = true;
+				result.mapping = {
+					"group": b.g,
+					"artifact": b.a,
+					"latest": b.latestVersion
+				}
+				return result;
+			}
+		}
+
+		result.error= "no matches found within returned results" ;
+		return result;
 	}
 }
