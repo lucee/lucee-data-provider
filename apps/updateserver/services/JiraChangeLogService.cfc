@@ -1,11 +1,11 @@
 component accessors=true {
 
-	property name="s3root"                type="string" default="";
+	property name="s3root"                type="string"     default="";
 	property name="issues"                type="query";
-	property name="lastUpdated"           type="date"    default=now();
-	property name="refreshIntervalMins"   type="numeric" default=2;
-	property name="jiraServer"            type="string" default="luceeserver.atlassian.net";
-	
+	property name="lastUpdated"           type="date";
+	property name="refreshIntervalMins"   type="numeric"    default=2;
+	property name="jiraServer"            type="string"     default="luceeserver.atlassian.net";
+
 	variables._simpleCache = {};
 	variables.cacheFile = "/issues.json";
 
