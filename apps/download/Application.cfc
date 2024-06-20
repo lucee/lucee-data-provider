@@ -23,7 +23,7 @@ component {
     }
 
     function onRequest( string requestedPath ) output=true {
-    	if ( arguments.requestedPath == "/index.cfm" ) {
+    	if ( arguments.requestedPath == "/index.cfm" && structCount( url ) == 0) {
     		var tmpFile = getTempDirectory() & "/cachedhomepage.html";
 
     		if ( StructKeyExists( url, "reset" ) || !FileExists( tmpFile ) ) {
