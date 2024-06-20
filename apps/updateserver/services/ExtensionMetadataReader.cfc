@@ -22,7 +22,7 @@ component accessors=true {
 				}
 			}
 
-			if ( lexFiles.recordcount > 100 ) { // protext from disaster of accidentally not fetching the lex files
+			if ( QueryRecordCount( lexFiles ) > 100 ) { // protext from disaster of accidentally not fetching the lex files
 				metaChanged = _removeRedundantExtensions( meta, lexFiles ) || metaChanged;
 			}
 
@@ -55,14 +55,14 @@ component accessors=true {
 
 			var extensions = Duplicate( getExtensionMeta() );
 
+			if ( !arguments.all ) {
+				extensions = _stripAllButLatestVersions( extensions );
+			}
 			if ( arguments.type != "all" ) {
 				_filterExtensionTypes( extensions, arguments.type );
 			}
 			if ( !arguments.withLogo ) {
 				_stripExtensionLogos( extensions );
-			}
-			if ( !arguments.all ) {
-				extensions = _stripAllButLatestVersions( extensions );
 			}
 
 			variables._simpleCache[ cacheKey ] = extensions;
@@ -296,7 +296,7 @@ component accessors=true {
 	}
 
 	private function _filterExtensionTypes( extensions, type ) {
-		for( var i=arguments.extensions.recordcount; i>=1; i-- ) {
+		for( var i=QueryRecordCount( arguments.extensions ); i>=1; i-- ) {
 			switch( arguments.type ) {
 				case "snapshot":
 					if( !FindNoCase( '-SNAPSHOT', arguments.extensions.version[ i ] ) ) {
@@ -325,7 +325,7 @@ component accessors=true {
 	}
 
 	private function _stripExtensionLogos( extensions, type ) {
-		for ( var i=arguments.extensions.recordcount; i >= 1; i-- ) {
+		for ( var i=QueryRecordCount( arguments.extensions ); i >= 1; i-- ) {
 			arguments.extensions.image[ i ] = "";
 		}
 	}
@@ -374,7 +374,7 @@ component accessors=true {
 	private function _removeRedundantExtensions( cachedExts, lexFiles ) {
 		var changed = false;
 
-		for( var i=arguments.cachedExts.recordCount; i>0; i-- ){
+		for( var i=QueryRecordCount( arguments.cachedExts ); i>0; i-- ){
 			var found = false;
 			for( var f in lexFiles ) {
 				if ( f.name == arguments.cachedExts.filename[ i ] ) {
