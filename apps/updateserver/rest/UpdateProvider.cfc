@@ -7,6 +7,7 @@ component {
 	variables.bundleDownloadService = application.bundleDownloadService;
 	variables.s3Root                = application.coreS3Root;
 	variables.cdnUrl                = application.coreCdnUrl;
+	variables.jiraChangelogService  = application.jiraChangelogService;
 
 	variables.providerLog = "update-provider";
 	
@@ -351,31 +352,7 @@ component {
 		required string versionTo restargsource="Path")
 		httpmethod="GET" restpath="changelog/{versionFrom}/{versionTo}" {
 		
-		var from=toVersionSortable(versionFrom);
-		var to=toVersionSortable(versionTo);
-
-		var jira=new services.legacy.Jira("luceeserver.atlassian.net");
-		var issues=jira.listIssues(project:"LDEV",stati:["Deployed","Done","QA"]).issues;
-		var sct=structNew("linked");
-		var sorted = queryNew("ver,sort");
-
-		loop query=issues {
-			loop array=issues.fixVersions item="local.fv" {
-				try{var fvs=toVersionSortable(fv);}catch(e) {continue;}
-				if(fvs<from || fvs>to) continue;
-				if(!structKeyExists(sct,fv)) sct[fv]=structNew("linked");
-				sct[fv][issues.key]=issues.summary;
-				var row = queryAddRow(sorted);
-				querySetCell(sorted, "ver", fv, row);
-				querySetCell(sorted, "sort", fvs, row);
-			}
-		}
-		QuerySort(sorted, 'sort', 'desc');
-		var result = structNew("linked");
-		loop query=sorted {
-			result[sorted.ver] = sct[sorted.ver];
-		}
-		return result;
+		return jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo );
 	}
 
 
@@ -427,6 +404,7 @@ component {
 		httpmethod="GET" restpath="reset" {
 		new services.legacy.MavenRepo().reset();
 		new services.legacy.S3(variables.s3Root).reset();
+		jiraChangelogService.updateIssuesAsync(); // async
 	}
 
 	remote function getLatest(
@@ -806,7 +784,7 @@ component {
 	private function createArtifactIfNecessary(type,version) {
 		var s3=new services.legacy.S3(variables.s3Root);
 		var versions=s3.getVersions();
-		var vs=toVersionSortable(version);
+		var vs=services.VersionUtils::toVersionSortable(version);
 		
 		if(structKeyExists(versions,vs) && structKeyExists(versions[vs],type)) return;
 		thread s3=s3 name=createUUID() _type=type _version=version  {
@@ -825,36 +803,5 @@ component {
 		header statuscode="429" statustext="Still Building";
 		echo("artifact #encodeForHtml(type)# for version #encodeForHtml(version)# does not exist yet, but we triggered the build for it. Try again in a couple minutes.");
 		abort;
-	}
-
-	private function toVersionSortable(string version){
-		local.arr=listToArray(arguments.version,'.');
-		
-		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
-			throw ("version number ["&arguments.version&"] is invalid");
-		}
-		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
-
-		// qualifier has an appendix? (BETA,SNAPSHOT)
-		local.qArr=listToArray(arr[4],'-');
-		if(qArr.len()==1 && isNumeric(qArr[1])) local.sct.qualifier=qArr[1]+0;
-		else if(qArr.len()==2 && isNumeric(qArr[1])) {
-			sct.qualifier=qArr[1]+0;
-			sct.qualifier_appendix=qArr[2];
-			if(sct.qualifier_appendix=="SNAPSHOT")sct.qualifier_appendix_nbr=0;
-			else if(sct.qualifier_appendix=="BETA")sct.qualifier_appendix_nbr=50;
-			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
-		}
-		else {
-			sct.qualifier=qArr[1]+0;
-			sct.qualifier_appendix_nbr=75;
-		}
-
-
-		return 		repeatString("0",2-len(sct.major))&sct.major
-					&"."&repeatString("0",3-len(sct.minor))&sct.minor
-					&"."&repeatString("0",3-len(sct.micro))&sct.micro
-					&"."&repeatString("0",4-len(sct.qualifier))&sct.qualifier
-					&"."&repeatString("0",3-len(sct.qualifier_appendix_nbr))&sct.qualifier_appendix_nbr;
 	}
 }

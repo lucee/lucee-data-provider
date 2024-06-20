@@ -514,8 +514,8 @@ component {
 	private function _list(required string project, required numeric startAt, 
 		required numeric max, string fields, array stati=[] flush=false) {
 
-		var jql=isEmpty(arguments.project)?'':'project = '&arguments.project;
-		if(arrayLen(stati)) jql&=" AND status in ("&arrayToList(stati,", ")&")";
+		var jql=isEmpty(arguments.project) ? '' : ('project = ' & arguments.project );
+		if (arrayLen(stati)) jql&=" AND status in ("&arrayToList(stati,", ")&")";
 		var jql&=' ORDER BY key DESC';
 		var path= (variables.secure?"https":"http")
 			&"://"
@@ -527,7 +527,7 @@ component {
 			&"&fields="&arguments.fields
 			&"&jql="&jql
 		;
-		var result=_http(path);
+		var result=_http(path=path, desc="Loading issues from jira - #arguments.startAt#");
 		
 
 		if(result.status_code==200) {
@@ -763,13 +763,13 @@ component {
 		}
 	}
 
-	private function _http(required string path, required string method="get",struct body, boolean auth=true) {
+	private function _http(required string path, required string method="get",struct body, boolean auth=true, string desc) {
 		if(auth && !isNull(variables.lastAccess) && dateAdd("s", variables.maxInactiveInterval, variables.lastAccess)<=now()) {
 			authIfNecessary();
 		}
 
 		//systemOutput("http:"&path,1,1);
-		systemOutput("http:"&path,1,1);//&"<print-stack-trace>"
+		systemOutput( arguments.desc?: arguments.path,1,1);//&"<print-stack-trace>"
 
 		if(isNull(arguments.body) || structCount(arguments.body)==0) {
 			http 

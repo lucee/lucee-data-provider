@@ -38,6 +38,11 @@ component {
 		var extMetaReader = new services.ExtensionMetadataReader(
 			s3root = extS3Root
 		);
+
+		var jiraChangelogService = new services.JiraChangelogService(
+			s3root = coreS3Root
+		);
+
 		var bundleDownloadService = new services.BundleDownloadService(
 			  extensionsCdnUrl    = extCdnUrl
 			, bundleS3Root        = bundleS3Root
@@ -49,12 +54,16 @@ component {
 		extMetaReader.setBundleDownloadservice( bundleDownloadService );
 		extMetaReader.loadMeta();
 
+		jiraChangelogService.loadIssues();
+		jiraChangelogService.updateIssuesAsync();
+
 		application.coreS3Root            = coreS3Root;
 		application.coreCdnUrl            = coreCdnUrl;
 		application.extensionsCdnUrl      = extCdnUrl;
 		application.extensionsS3Root      = extS3Root;
 		application.extMetaReader         = extMetaReader;
 		application.bundleDownloadService = bundleDownloadService;
+		application.jiraChangelogService  = jiraChangelogService;
 	}
 
 }

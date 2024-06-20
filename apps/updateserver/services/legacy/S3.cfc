@@ -133,7 +133,7 @@ component {
 					arrPatch[2]!="RC" &&
 					arrPatch[2]!="ALPHA") continue;
 
-				var vs=toVersionSortable(version);
+				var vs=services.VersionUtils::toVersionSortable(version);
 				//if(isNull(data[version])) data[version]={};
 				data[vs]['version']=version;
 				data[vs][type]=name;
@@ -185,7 +185,7 @@ component {
 	public function add(required string type, required string version) {
 		setting requesttimeout="10000000";
 		var versions=getVersions(true);
-		var vs=toVersionSortable(version);
+		var vs=services.VersionUtils::toVersionSortable(version);
 		var mr=new MavenRepo();
 
 		// move the jar to maven if necessary
@@ -582,35 +582,6 @@ component {
 		return trg;
 	}
 
-	private function toVersionSortable(string version){
-		local.arr=listToArray(arguments.version,'.');
-
-		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
-			throw "version number ["&arguments.version&"] is invalid";
-		}
-		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
-
-		// qualifier has an appendix? (BETA,SNAPSHOT)
-		local.qArr=listToArray(arr[4],'-');
-		if (qArr.len()==1 && isNumeric(qArr[1])) local.sct.qualifier=qArr[1]+0;
-		else if(qArr.len()==2 && isNumeric(qArr[1])) {
-			sct.qualifier=qArr[1]+0;
-			sct.qualifier_appendix=qArr[2];
-			if (sct.qualifier_appendix=="SNAPSHOT") sct.qualifier_appendix_nbr=0;
-			else if (sct.qualifier_appendix=="BETA") sct.qualifier_appendix_nbr=50;
-			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
-		}
-		else {
-			sct.qualifier=qArr[1]+0;
-			sct.qualifier_appendix_nbr=75;
-		}
-
-		return	repeatString("0",2-len(sct.major))&sct.major
-			&"."&repeatString("0",3-len(sct.minor))&sct.minor
-			&"."&repeatString("0",3-len(sct.micro))&sct.micro
-			&"."&repeatString("0",4-len(sct.qualifier))&sct.qualifier
-			&"."&repeatString("0",3-len(sct.qualifier_appendix_nbr))&sct.qualifier_appendix_nbr;
-	}
 }
 
 
