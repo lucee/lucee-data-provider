@@ -116,7 +116,7 @@ component accessors=true {
 
 	private function _writeIssuesToS3( issues ) {
 		var issuesFile = getS3Root() & variables.cacheFile;
-		// FileWrite( issuesFile, SerializeJson( issues ) );
+		FileWrite( issuesFile, SerializeJson( issues ) );
 	}
 
 	private function _getEmptyIssuesQuery() {
