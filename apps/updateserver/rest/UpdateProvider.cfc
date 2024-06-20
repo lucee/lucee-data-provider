@@ -437,7 +437,7 @@ component {
 		httpmethod="GET" restpath="latest/{version}/{type}/{distribution}/{format}" {
 
 		try {
-			var s3 = new services.legacy.S3( request.s3Root );
+			var s3 = new services.legacy.S3( variables.s3Root );
 			var versions = s3.getVersions();
 			var arrVersions = structKeyArray( versions ).reverse();
 			var version = "";
@@ -523,7 +523,7 @@ component {
 
 		try {
 			
-			var s3=new services.legacy.S3(request.s3Root);
+			var s3=new services.legacy.S3(variables.s3Root);
 			var versions=s3.getVersions(flush);
 
 			if(!isNull(url.abc)){
