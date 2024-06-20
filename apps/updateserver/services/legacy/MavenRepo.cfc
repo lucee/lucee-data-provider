@@ -137,39 +137,6 @@ component {
 		return zip;
 	}
 
-	public function toVersionSortable(required string version){
-		local.arr=listToArray(arguments.version,'.');
-		
-		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
-			throw "version number ["&arguments.version&"] is invalid";
-		}
-		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
-
-		// qualifier has an appendix? (BETA,SNAPSHOT)
-		local.qArr=listToArray(arr[4],'-');
-		if(qArr.len()==1 && isNumeric(qArr[1])) local.sct.qualifier=qArr[1]+0;
-		else if(qArr.len()==2 && isNumeric(qArr[1])) {
-			sct.qualifier=qArr[1]+0;
-			sct.qualifier_appendix=qArr[2];
-			if(sct.qualifier_appendix=="SNAPSHOT")sct.qualifier_appendix_nbr=0;
-			else if(sct.qualifier_appendix=="BETA")sct.qualifier_appendix_nbr=50;
-			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
-		}
-		else {
-			sct.qualifier=qArr[1]+0;
-			sct.qualifier_appendix_nbr=75;
-		}
-
-
-		return 		repeatString("0",2-len(sct.major))&sct.major
-					&"."&repeatString("0",3-len(sct.minor))&sct.minor
-					&"."&repeatString("0",3-len(sct.micro))&sct.micro
-					&"."&repeatString("0",4-len(sct.qualifier))&sct.qualifier
-					&"."&repeatString("0",3-len(sct.qualifier_appendix_nbr))&sct.qualifier_appendix_nbr;
-	}
-
-
-
 	private function convertPattern(required string pattern,string group,string artifact, numeric from=1, numeric count=-1){
 		pattern=pattern&"?g="&group&"&a="&artifact;
 		if(from>0) pattern=pattern&"&from="&from;
@@ -806,7 +773,7 @@ component {
 			sct.groupId=entry.groupId;
 			sct.artifactId=entry.artifactId;
 			sct.version=entry.version;
-			sct.vs=toVersionSortable(entry.version);
+			sct.vs=services.VersionUtils::toVersionSortable(entry.version);
 			sct.repository=repos[ah.repositoryId];
 			if(extended) {
 				local.sources=getSources(sct.repository,sct.version);
