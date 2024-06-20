@@ -14,7 +14,7 @@ component {
 			_loadServices();
 		}
 
-		var allowedPaths = [ "rest", "healthcheck" ];
+		var allowedPaths = [ "rest", "healthcheck", "index.cfm" ];
 		var requestedPath = ListFirst( Trim( cgi.script_name ), "/" );
 
 		if ( !ArrayFindNoCase( allowedPaths, requestedPath ) ) {
