@@ -21,6 +21,11 @@ component accessors=true {
 					metaChanged = true;
 				}
 			}
+
+			if ( lexFiles.recordcount > 100 ) { // protext from disaster of accidentally not fetching the lex files
+				metaChanged = _removeRedundantExtensions( meta, lexFiles ) || metaChanged;
+			}
+
 			if ( metaChanged ) {
 				QuerySort( meta, "name,id,versionSortable", "asc,asc,desc" );
 				_writeMetaFileToS3( meta );
@@ -337,9 +342,9 @@ component accessors=true {
 			if ( last != ext.id ) {
 				var strippedCount = QueryRecordcount( stripped );
 				if( strippedCount > 0 ) {
-					QuerySetCell( stripped, "older"    , older    , strippedCount );
-					QuerySetCell( stripped, "olderName", olderName, strippedCount );
-					QuerySetCell( stripped, "olderDate", olderDate, strippedCount );
+					stripped.older    [ strippedCount ] = older;
+					stripped.olderName[ strippedCount ] = olderName;
+					stripped.olderDate[ strippedCount ] = olderDate;
 
 					older     = [];
 					olderName = [];
@@ -357,12 +362,33 @@ component accessors=true {
 		}
 
 		var strippedCount = QueryRecordcount( stripped );
-		if ( strippedCount && ArrayLen( older ) ) {
-			QuerySetCell( stripped, "older"    , older    , strippedCount );
-			QuerySetCell( stripped, "olderName", olderName, strippedCount );
-			QuerySetCell( stripped, "olderDate", olderDate, strippedCount );
+		if ( strippedCount ) {
+			stripped.older    [ strippedCount ] = older;
+			stripped.olderName[ strippedCount ] = olderName;
+			stripped.olderDate[ strippedCount ] = olderDate;
 		}
 
 		return stripped;
+	}
+
+	private function _removeRedundantExtensions( cachedExts, lexFiles ) {
+		var changed = false;
+
+		for( var i=arguments.cachedExts.recordCount; i>0; i-- ){
+			var found = false;
+			for( var f in lexFiles ) {
+				if ( f.name == arguments.cachedExts.filename[ i ] ) {
+					found = true;
+					break;
+				}
+			}
+			if ( !found ) {
+				changed = true;
+				SystemOutput( "Deleting [#arguments.cachedExts.filename[ i ]#] extension from cached query as it no longer exists in our lex file lookup.", true );
+				QueryDeleteRow( arguments.cachedExts, i );
+			}
+		}
+
+		return changed;
 	}
 }
