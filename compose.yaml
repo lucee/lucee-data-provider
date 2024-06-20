@@ -21,7 +21,7 @@ services:
       context: .
       dockerfile: devops/Dockerfile.download
     volumes:
-      - ./download:/var/www/
+      - ./apps/download:/var/www/
     expose:
       - 8888
     ports:
