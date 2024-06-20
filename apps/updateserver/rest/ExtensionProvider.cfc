@@ -47,17 +47,13 @@ component {
 		, required boolean withLogo = true  restargsource="url"
 		,          string  version  = ""    restargsource="url"
 		,          boolean flush    = false restargsource="url"
-	) {
+	){
 		var ext = metaReader.getExtensionDetail(
 			  id       = arguments.id
 			, withLogo = arguments.withLogo
 			, version  = arguments.version
 			, flush    = arguments.flush
 		);
-
-		return ext;
-
-		// TODO + some logging + ensure 404 when not found (old logic below)
 
 		if ( StructCount( ext ) ) {
 			return ext;
@@ -69,11 +65,10 @@ component {
 		} else {
 			msg &= ".";
 		}
-		SystemOutput( msg, true, true );
+
 		content type="text/plain";
-		header statuscode=404 statustext=msg;
-		echo(msg); // otherwise this creates a stack trace for forgebox stuff
-		abort;
+		header statuscode=404 statustext="msg";
+		echo( msg ); // otherwise this creates a stack trace for forgebox stuff
 	}
 
 
@@ -99,6 +94,7 @@ component {
 		if ( StructCount( ext ) ) {
 			header statuscode="302" statustext="Found";
 			header name="Location" value=variables.cdnURL & ext.filename;
+			return;
 		}
 
 		header statuscode="404" statustext="Not Found";
@@ -126,6 +122,7 @@ component {
 		if ( StructCount( ext ) ) {
 			header statuscode="302" statustext="Found";
 			header name="Location" value=variables.cdnURL & ext.filename;
+			return;
 		}
 
 		header statuscode="404" statustext="Not Found";
