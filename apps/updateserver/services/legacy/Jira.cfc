@@ -769,7 +769,7 @@ component {
 		}
 
 		//systemOutput("http:"&path,1,1);
-		systemOutput( arguments.desc?: arguments.desc,1,1);//&"<print-stack-trace>"
+		systemOutput( arguments.desc?: arguments.path,1,1);//&"<print-stack-trace>"
 
 		if(isNull(arguments.body) || structCount(arguments.body)==0) {
 			http 
