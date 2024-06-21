@@ -48,6 +48,7 @@
     "jffmpeg": { "artifact": "jffmpeg", "group": "jffmpeg" },
     "jfreechart": { "artifact": "jfreechart", "group": "jfreechart" },
     "jfreechart.patch": { "artifact": "patch", "group": "jfreechart" },
+    "jline": { "artifact": "jline", "group": "org.jline" },
     "jmimemagic": { "artifact": "jmimemagic", "group": "jmimemagic" },
     "joda-convert":{"group":"org.joda","artifact":"joda-convert"},
     "joda-time": { "artifact": "joda-time", "group": "joda-time" },
