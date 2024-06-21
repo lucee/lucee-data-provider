@@ -227,7 +227,7 @@
 		  tmp=structNew('linked');
 		  for(i=arrayLen(keys);i>0;i--) {
 			 k=keys[i];
-			 if(left(k,6)=="06.001" && right(k,4)==".000") continue; // .000=SNAPSHOT
+			 //if(left(k,6)=="06.001" && right(k,4)==".000") continue; // .000=SNAPSHOT
 			 tmp[k]=versions[k];
 		  }
 		  versions=tmp;
