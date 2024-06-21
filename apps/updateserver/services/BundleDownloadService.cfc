@@ -156,9 +156,7 @@ component accessors=true {
 	}
 
 	private function _getS3CacheFilePath( bundleName, bundleVersion ) {
-		var sortableVersion = VersionUtils::sortableVersionString( arguments.bundleVersion );
-
-		return _getS3CacheDir() & "/#arguments.bundleName#.#sortableVersion#.json";
+		return _getS3CacheDir() & "/#arguments.bundleName#.#arguments.bundleVersion#.json";
 	}
 
 	private function _getS3CacheDir() {
