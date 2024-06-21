@@ -3,7 +3,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 	function beforeAll (){
 		variables.dir = getDirectoryFromPath(getCurrentTemplatePath());
 		application action="update" mappings={
-			"/update" : expandPath( dir & "../update/" )
+			"/update" : expandPath( dir & "../apps/updateserver/" )
 		};
 		systemOutput( getApplicationSettings().mappings, true );
 		variables.artifacts = dir & "/artifacts";
@@ -54,13 +54,15 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		var requiredBundles = manifest.main[ "Require-Bundle" ];
 		var bundle = "";
 		var meta = {};
-		var mavenMatcher = new update.MavenMatcher();
+		var mavenMatcher = new update.services.legacy.MavenMatcher();
+		// var BundleDownloadService = new services.BundleDownloadService(); // needs creds
 		var missing  = [];
 			
 		loop list=requiredBundles item="bundle" {
 			// systemOutput( bundle, true );
 			try {
 				meta = mavenMatcher.getMatch( listFirst( bundle,";" ), listLast( listLast( bundle, ";" ), "=" ) );
+				//meta = bundleDownloadService.findBundle(  listFirst( bundle,";" ), listLast( listLast( bundle, ";" ), "=" ) );
 			} catch ( e ){
 				var st = new test._testRunner().trimJavaStackTrace( e.stacktrace );
 				systemOutput( st, true );
