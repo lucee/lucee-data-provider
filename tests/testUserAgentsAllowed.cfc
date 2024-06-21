@@ -39,7 +39,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 				for ( var UA in userAgents ){
 					http url="https://update.lucee.org/" userAgent=#UA# result="res";
 					if ( res.status_code ?: 0 neq 200 ){
-						arrayAppend( failed, "#userAgent# returned #res.status_code#" );
+						arrayAppend( failed, "cfhttp with [#UA#] returned #res.status_code#" );
 					}
 				}
 
