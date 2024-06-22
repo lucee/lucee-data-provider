@@ -57,6 +57,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		var mavenMatcher = new update.services.legacy.MavenMatcher();
 		// var BundleDownloadService = new services.BundleDownloadService(); // needs creds
 		var missing  = [];
+		var bundleSpec = "";
 			
 		loop list=requiredBundles item="bundle" {
 			// systemOutput( bundle, true );
@@ -64,9 +65,16 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 				meta = mavenMatcher.getMatch( listFirst( bundle,";" ), listLast( listLast( bundle, ";" ), "=" ) );
 				//meta = bundleDownloadService.findBundle(  listFirst( bundle,";" ), listLast( listLast( bundle, ";" ), "=" ) );
 			} catch ( e ){
-				var st = new test._testRunner().trimJavaStackTrace( e.stacktrace );
-				systemOutput( st, true );
-				arrayAppend( missing, bundle );
+				//var st = new test._testRunner().trimJavaStackTrace( e.stacktrace );
+				//systemOutput( st, true );
+				// see if the update provider can serve this bundle
+				try {
+					bundleSpec = listFirst( bundle,";" ) & "/" & listLast( listLast( bundle, ";" ), "=" );
+					http url="https://update.lucee.org/rest/update/provider/download/#bundleSpec#/" result="local.res" throwOnError=true;
+				} catch ( e ) {
+					systemOutput( "https://update.lucee.org/rest/update/provider/download/#bundleSpec#/ threw [" & e.message & "]", true );
+					arrayAppend( missing, bundle );
+				}
 			}
 		}
 		if ( len( missing ) ){

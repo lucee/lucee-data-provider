@@ -35,11 +35,15 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 
 				var failed = [];
 				var res = "";
+				var result = "";
 
 				for ( var UA in userAgents ){
 					http url="https://update.lucee.org/" userAgent=#UA# result="res";
-					if ( res.status_code ?: 0 neq 200 ){
-						arrayAppend( failed, "cfhttp with [#UA#] returned #res.status_code#" );
+					result = "cfhttp with [#UA#] returned #res.status_code#";
+					if ( res.status_code neq 200 ){
+						arrayAppend( failed, result );
+					} else {
+						systemOutput( result, true );
 					}
 				}
 
