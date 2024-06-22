@@ -21,9 +21,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 					// systemOutput( "checking #mapping.toJson()#", true );
 					try {
 						meta = mavenMatcher.getMatch( mapping, "latest" );
-						systemOutput( meta.toJson(), true );
+						systemOutput( mapping & ": " & meta.toJson(), true );
 					} catch( e ) {
-						arrayAppend(missing, " #mapping# threw #e.message#, mapping: #mappings[mapping].toJson()# ");
+						arrayAppend(missing, " #mapping# threw #e.message##chr(10)#, mapping: #mappings[mapping].toJson()# ");
 					}
 				}
 				if ( len( missing ) ){

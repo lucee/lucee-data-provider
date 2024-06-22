@@ -4,7 +4,6 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 		variables.root = getDirectoryFromPath(getCurrentTemplatePath());  
 		variables.root = listDeleteAt(root,listLen(root,"/\"), "/\") & "/";  // getDirectoryFromPath 
 		variables.mavenMappingsFile = expandPath( "../../apps/updateserver/services/legacy/mavenMappings.json" );
-		systemOutput("mavenMappingsFile: #mavenMappingsFile#", true);
 	};
 
 	function run( testResults , testBox ) {

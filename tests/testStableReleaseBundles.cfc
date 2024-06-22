@@ -5,14 +5,13 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		application action="update" mappings={
 			"/update" : expandPath( dir & "../apps/updateserver/" )
 		};
-		systemOutput( getApplicationSettings().mappings, true );
 		variables.artifacts = dir & "/artifacts";
 		if ( !DirectoryExists( variables.artifacts ))
 			directoryCreate( variables.artifacts );
 	}
 
 	function run( testResults , testBox ) {
-		describe( "check all bundles in manifest are supported", function() {
+		describe( "check all bundles in stable lucee release manifests are supported", function() {
 			it(title="6.0.3.1", body=function(){
 				checkRequiredBundlesAreSupported( "6.0.3.1" );
 			});
@@ -27,6 +26,26 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 
 			it(title="5.4.6.9", body=function(){
 				checkRequiredBundlesAreSupported( "5.4.6.9" );
+			});
+
+			it(title="5.4.5.23", body=function(){
+				checkRequiredBundlesAreSupported( "5.4.6.9" );
+			});
+
+			it(title="5.4.3.2", body=function(){
+				checkRequiredBundlesAreSupported( "5.4.6.9" );
+			});
+
+			it(title="5.3.12.1", body=function(){
+				checkRequiredBundlesAreSupported( "5.3.8.237" );
+			});
+
+			it(title="5.3.11.5", body=function(){
+				checkRequiredBundlesAreSupported( "5.3.8.237" );
+			});
+
+			it(title="5.3.9.173", body=function(){
+				checkRequiredBundlesAreSupported( "5.3.8.237" );
 			});
 
 			it(title="5.3.8.237", body=function(){
@@ -53,20 +72,14 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		var manifest = ManifestRead( core );
 		var requiredBundles = manifest.main[ "Require-Bundle" ];
 		var bundle = "";
-		var meta = {};
-		var mavenMatcher = new update.services.legacy.MavenMatcher();
 		// var BundleDownloadService = new services.BundleDownloadService(); // needs creds
 		var missing  = [];
 			
 		loop list=requiredBundles item="bundle" {
 			// systemOutput( bundle, true );
-			try {
-				meta = mavenMatcher.getMatch( listFirst( bundle,";" ), listLast( listLast( bundle, ";" ), "=" ) );
-				//meta = bundleDownloadService.findBundle(  listFirst( bundle,";" ), listLast( listLast( bundle, ";" ), "=" ) );
-			} catch ( e ){
-				var st = new test._testRunner().trimJavaStackTrace( e.stacktrace );
-				systemOutput( st, true );
-				arrayAppend( missing, bundle );
+			var result = fetchBundle( bundle );
+			if ( len ( result ) ){
+				arrayAppend( missing, result );
 			}
 		}
 		if ( len( missing ) ){
@@ -79,6 +92,29 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		expect ( len( missing ) ).toBe( 0, version );
 
 		fileDelete( core );
+	}
+
+	private function fetchBundle( string bundle ) cachedWithin="request" {
+		var meta = {};
+		var mavenMatcher = new update.services.legacy.MavenMatcher();
+		var bundleSpec = "";
+		
+		try {
+			meta = mavenMatcher.getMatch( listFirst( bundle,";" ), listLast( listLast( bundle, ";" ), "=" ) );
+			//meta = bundleDownloadService.findBundle(  listFirst( bundle,";" ), listLast( listLast( bundle, ";" ), "=" ) );
+		} catch ( e ){
+			//var st = new test._testRunner().trimJavaStackTrace( e.stacktrace );
+			//systemOutput( st, true );
+			// see if the update provider can serve this bundle
+			try {
+				bundleSpec = listFirst( bundle,";" ) & "/" & listLast( listLast( bundle, ";" ), "=" );
+				http url="https://update.lucee.org/rest/update/provider/download/#bundleSpec#/" result="local.res" throwOnError=true;
+			} catch ( e ) {
+				systemOutput( "https://update.lucee.org/rest/update/provider/download/#bundleSpec#/ threw [" & e.message & "]", true );
+				return missing;
+			}
+		}
+		return "";
 	}
 
 	private function fetchLuceeCore( string version ){
