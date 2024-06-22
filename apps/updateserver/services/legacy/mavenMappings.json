@@ -141,7 +141,7 @@
     "org.mongodb.driver-core": { "group": "org.mongodb", "artifact": "mongodb-driver-core" },
     "org.mongodb.mongo-java-driver": { "group": "org.mongodb", "artifact": "mongo-java-driver" },
     "org.objectweb.asm": { "artifact": "asm", "group": "org.ow2.asm" },
-    "org.objectweb.asm.all": { "artifact": "all", "group": "org.objectweb.asm" },
+    "org.objectweb.asm.all": { "artifact": "asm-all", "group": "org.ow2.asm" },
     "org.objectweb.asm.tree": { "artifact": "asm-tree", "group": "org.ow2.asm" },
     "org.objectweb.asm.util": { "artifact": "asm-util", "group": "org.ow2.asm" },
     "org.objectweb.asm.commons": { "artifact": "asm-commons", "group": "org.ow2.asm" },

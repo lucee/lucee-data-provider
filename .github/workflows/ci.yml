@@ -55,6 +55,7 @@ jobs:
         testLabels: data-provider
         testAdditional: ${{ github.workspace }}/tests
         testSevices: mysql
+        LUCEE_ADMIN_ENABLED: false
     - name: Run Lucee Test Suite (testLabels="data-provider-integration") (expected to fail)
       uses: lucee/script-runner@main
       continue-on-error: true
@@ -68,6 +69,7 @@ jobs:
         testLabels: data-provider-integration
         testAdditional: ${{ github.workspace }}/tests
         testSevices: mysql
+        LUCEE_ADMIN_ENABLED: false
 
   build:
     name: Docker build & publish
