@@ -1,15 +1,36 @@
 component {
 
-	this.name            = "lucee-provider";
-	this.s3.accessKeyId  = server.system.environment.S3_EXTENSION_ACCESS_KEY_ID;
-	this.s3.awsSecretKey = server.system.environment.S3_EXTENSION_SECRET_KEY;
-	this.allowReload     = IsBoolean( server.system.environment.ALLOW_RELOAD ?: "" ) && server.system.environment.ALLOW_RELOAD;
+	this.name                   = "lucee-provider";
+	this.clientManagement       = "no";
+	this.clientStorage          = "file";
+	this.scriptProtect          = "all";
+	this.sessionManagement      = "yes";
+	this.sessionStorage         = "memory";
+	this.sessionTimeout         = "#createTimeSpan(0,0,0,30)#";
+	this.sessionCookie.httpOnly = true; // prevent access to session cookies from javascript
+	this.sessionCookie.sameSite = "strict";
+	this.searchImplicitScopes   = false;
+	this.searchResults          = false;
+	this.scopeCascading         = 'strict';
+	this.s3.accessKeyId         = server.system.environment.S3_EXTENSION_ACCESS_KEY_ID;
+	this.s3.awsSecretKey        = server.system.environment.S3_EXTENSION_SECRET_KEY;
+	this.allowReload            = IsBoolean( server.system.environment.ALLOW_RELOAD ?: "" ) && server.system.environment.ALLOW_RELOAD;
 
 	function onApplicationStart() {
 		_loadServices();
 	}
 
 	function onRequestStart() output=true {
+		var sentry_dsn = "https://o1289959.ingest.us.sentry.io/api/4507452800040960/security/?sentry_key=9af63ea401ee6935d34159019b1ae765";
+		var csp = [
+			  "sandbox"
+			, "object-src 'none'"
+			, "script-src 'none'"
+			, "report-uri #sentry_dsn#"
+		];
+
+		header name="Content-Security-Policy" value=ArrayToList( csp, "; " );
+
 		if ( this.allowReload && StructKeyExists( url, "fwreinit" ) ) {
 			_loadServices();
 		}
