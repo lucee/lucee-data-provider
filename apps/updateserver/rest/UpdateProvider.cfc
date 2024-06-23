@@ -203,15 +203,20 @@ component {
 
 
 	private function _echo(statusCode="", mimeType="", charset="") {
+		var _cgi = {};
+		loop list="request_method,server_protocol,path_info,http_user_agent" item="local.c" {
+			_cgi[ local.c ] = cgi [ c ];
+		}
 		var sct={
 			'httpRequestData':getHTTPRequestData()
 			,'form':form
 			,'url':url
-			,'cgi':cgi
+			,'cgi': _cgi
 			,'session':session
 		};
-		if ( !isEmpty( arguments.statusCode ) )
+		if ( !isEmpty( arguments.statusCode ) ){
 			header statuscode=arguments.statusCode;
+		}
 		if ( !isEmpty( arguments.mimeType ) ){
 			if ( !isEmpty( arguments.charset ) ){
 				header name="Content-Type" value="#arguments.mimeType#;charset=#arguments.charset#";
