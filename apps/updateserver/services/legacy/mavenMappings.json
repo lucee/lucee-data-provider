@@ -34,6 +34,7 @@
     "javax.mail": { "artifact": "mail", "group": "javax.mail" },
     "javax.mail-api": { "artifact": "mail", "group": "javax.mail-api" },
     "javax.mail.activation": { "artifact": "activation", "group": "javax.mail" },
+    "javax.persistence.javax.persistence-api": { "artifact": "javax.persistence-api", "group": "javax.persistence" },
     "javax.websocket-api": { "artifact": "javax.websocket-api", "group": "javax.websocket" },
     "jaxb-api": { "artifact": "jaxb-api", "group": "javax.xml.bind"},
     "jcifs": { "artifact": "jcifs", "group": "jcifs" },
