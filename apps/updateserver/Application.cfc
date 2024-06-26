@@ -72,6 +72,8 @@ component {
 			, mavenMatcher        = new services.legacy.MavenMatcher()
 		);
 
+		var extensionCache = new services.ExtensionCache();
+
 		extMetaReader.setBundleDownloadservice( bundleDownloadService );
 		extMetaReader.loadMeta();
 
@@ -83,6 +85,7 @@ component {
 		application.extensionsCdnUrl      = extCdnUrl;
 		application.extensionsS3Root      = extS3Root;
 		application.extMetaReader         = extMetaReader;
+		application.extensionCache        = extensionCache;
 		application.bundleDownloadService = bundleDownloadService;
 		application.jiraChangelogService  = jiraChangelogService;
 	}

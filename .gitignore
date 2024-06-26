@@ -27,3 +27,4 @@ update/WEB-INF
 update/log-maven-download.log
 update/missing-bundles.txt
 /tests/artifacts
+/apps/updateserver/rest/cache

@@ -4,8 +4,9 @@
  */
 component {
 
-	variables.metaReader = application.extMetaReader;
-	variables.cdnURL     = application.extensionsCdnUrl;
+	variables.metaReader        = application.extMetaReader;
+	variables.cdnURL            = application.extensionsCdnUrl;
+	variables.extensionCache    = application.extensionCache
 
 	/**
 	 * @httpmethod GET
@@ -91,7 +92,25 @@ component {
 			, withLogo = false
 		);
 
+		param name="url.allowRedirect" default="";
+		if ( isEmpty( url.allowRedirect ) && left( cgi.request_url, 5 ) == "http:" ){
+			url.allowRedirect = false; // fall back to serving directly for older versions
+		} else {
+			url.allowRedirect = true;
+		}
+
 		if ( StructCount( ext ) ) {
+			if ( !url.allowRedirect ){
+				var path = extensionCache.getExtensionLex( variables.cdnURL & ext.filename );
+				var filename = listLast( path, "/" );
+				//header name="cache-control" value="public, max-age=#DateDiff( "s", Now(), expires )#";
+				header name="Content-Disposition" value="attachment; filename=""#fileName#""";
+				content
+					reset      = true
+					file       = path
+					type       = "application/x-zip-compressed"
+					deletefile = false;
+			}
 			header statuscode="302" statustext="Found";
 			header name="Location" value=variables.cdnURL & ext.filename;
 			return;
