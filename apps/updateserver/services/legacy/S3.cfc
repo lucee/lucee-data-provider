@@ -208,7 +208,7 @@ component {
 		}
 	}
 
-	public function addMissing(includingForgeBox=false) {
+	public function addMissing(includingForgeBox=false, skipMaven=false) {
 		setting requesttimeout="1000000";
 		systemOutput("start:"&now(),1,1);
 		var started = getTickCount();
@@ -217,20 +217,21 @@ component {
 		systemOutput("build: getting data from S3:"&now(),1,1);
 		local.mr=new MavenRepo();
 		var missing={};
-		systemOutput("build: getting data from Maven:"&now(),1,1);
-		var arr=mr.list('all',false);
+		if ( !arguments.skipMaven ){
+			systemOutput("build: getting data from Maven:"&now(),1,1);
+			var arr=mr.list('all',false);
 
-		systemOutput("build: downloading jars:"&now(),1,1);
-		var resetRequired = false;
-		// get the jar if missing
-		loop array=arr item="local.el" {
-			if (!isNull(s3List[el.vs].jar)) continue;
-			//maven2S3(mr,el.version,s3List);
-			resetRequired = true;
+			systemOutput("build: downloading jars:"&now(),1,1);
+			var resetRequired = false;
+			// get the jar if missing
+			loop array=arr item="local.el" {
+				if (!isNull(s3List[el.vs].jar)) continue;
+				//maven2S3(mr,el.version,s3List);
+				resetRequired = true;
+			}
+			if (resetRequired) 
+				s3List = getVersions(true); //force reset();
 		}
-		if (resetRequired) 
-			s3List = getVersions(true); //force reset();
-
 		// create the missing artifacts
 		loop struct=s3List index="local.vs" item="local.el" {
 			createArtifacts(mr,el,"",includingForgeBox);
@@ -373,22 +374,26 @@ component {
 	}
 
 	private function createWar(jar,version) {
-		local.temp=getTempDirectory();
+		var temp = getTemp( arguments.version );
 		local.war=variables.s3Root&"lucee-"&version&".war";
 		if ( fileExists( war ) ) {
 			systemOutput("--- " & war & " already built, skipping", true);
 		}
 		local.warTmp=temp&"lucee-"&version&"-temp-"&createUniqueId()&".war";
+		var curr=getDirectoryFromPath(getCurrenttemplatePath());
 
 		try {
 			// temp directory
 			// create paths and dir if necessary
 			local.build={};
 			loop list="extensions,common,website,war" item="local.name" {
-				local.tmp=expandPath("build/"&name&"/");
-				if ( !directoryExists( tmp ) ) directoryCreate( tmp, true );
-				build[name]=tmp;
+				local.tmp=curr & "build/"&name&"/";
+				if ( name == "extensions" && !directoryExists( tmp ) ) 
+					directoryCreate( tmp, true );
+				build[ name ]=tmp;
 			}
+			systemOutput( "---- createWar", true );
+			systemOutput( build, true );
 
 			// let's zip it
 			zip action="zip" file=warTmp overwrite=true {
@@ -408,7 +413,11 @@ component {
 
     private function createLight(jar, version, boolean toS3=true) {
         var sep=server.separator.file;
-        local.temp=getTempDirectory();
+        var temp = getTemp( arguments.version );
+		if ( directoryExists( temp ) )
+			directoryDelete( temp, true );
+		directoryCreate( temp );
+		
 		local.trg=variables.s3Root&"lucee-light-"&version&".jar";
 		if ( fileExists( trg ) ) {
 			// avoid double handling for forgebox light builds
@@ -467,7 +476,8 @@ component {
 
     private string function createExpress(required jar,required string version) {
 		var sep=server.separator.file;
-        var temp=getTempDirectory();
+        var temp = getTemp( arguments.version );
+		
 		var trg=variables.s3Root&"lucee-express-"&version&".zip";
 		if ( fileExists( trg ) ) {
 			systemOutput("--- " & trg & " already built, skipping", true);
@@ -487,11 +497,11 @@ component {
 
 			// common directory
 			local.commonDir=local.curr&("build/common/");
-			if (!directoryExists(commonDir)) directoryCreate(commonDir);
+			//if (!directoryExists(commonDir)) directoryCreate(commonDir);
 
 			// website directory
 			local.webDir=local.curr&("build/website/");
-			if (!directoryExists(webDir)) directoryCreate(webDir);
+			//if (!directoryExists(webDir)) directoryCreate(webDir);
 
 			// unpack the servers
 			zip action="unzip" file=#curr&("build/servers/tomcat.zip")# destination=tmpTom;
@@ -520,7 +530,8 @@ component {
 
 	private string function createForgeBox(required jar,required string version, boolean light=false) {
 		var sep=server.separator.file;
-		var temp=getTempDirectory();
+		var temp = getTemp( arguments.version );
+		var curr=getDirectoryFromPath(getCurrenttemplatePath());
 		var trg=variables.s3Root&"forgebox#( light ? '-light' : '' )#-"&version&".zip";
 		if ( fileExists( trg ) ) {
 			systemOutput("--- " & trg & " already built, skipping", true);
@@ -530,19 +541,19 @@ component {
 		var zipTmp=temp&"forgebox#( light ? '-light' : '' )#-"&version&"-temp-"&createUniqueId()&".zip";
 		try {
 			// extension directory
-			local.extDir=expandPath("build/extensions/");
+			local.extDir=curr & "/build/extensions/";
 			if(!directoryExists(extDir)) directoryCreate(extDir);
 
 			// common directory
-			local.commonDir=expandPath("build/common/");
-			if(!directoryExists(commonDir)) directoryCreate(commonDir);
+			local.commonDir=curr & "/build/common/";
+			//if(!directoryExists(commonDir)) directoryCreate(commonDir);
 
 			// war directory
-			local.warDir=expandPath("build/war/");
-			if(!directoryExists(warDir)) directoryCreate(warDir);
+			local.warDir=curr & "/build/war/";
+			//if(!directoryExists(warDir)) directoryCreate(warDir);
 
 			// create the war
-			local.war=temp&"engine.war";
+			local.war=temp & "/engine.war";
 			if ( light ) local.lightJar=createLight(jar, version, false);
 
 			zip action="zip" file=war overwrite=true {
@@ -555,7 +566,7 @@ component {
 			// create the json
 			// Turn 1.2.3.4 into 1.2.3+4 and 1.2.3.4-rc into 1.2.3-rc+4
 			var v=reReplace( arguments.version, '([0-9]*\.[0-9]*\.[0-9]*)(\.)([0-9]*)(-.*)?', '\1\4+\3' );
-			local.json=temp&"box.json";
+			local.json=temp&"/box.json";
 			fileWrite(json,
 '{
     "name":"Lucee #( light ? 'Light' : '' )# CF Engine",
@@ -580,6 +591,14 @@ component {
 			if(!isNull(tmpTom) && directoryExists(tmpTom)) directoryDelete(tmpTom,true);
 		}
 		return trg;
+	}
+
+	private function getTemp( string version ){
+		var temp = getTempDirectory() & createUniqueId() & "-#arguments.version#";
+		if ( directoryExists( temp ) )
+			directoryDelete( temp, true );
+		directoryCreate( temp );
+		return temp;
 	}
 
 }
