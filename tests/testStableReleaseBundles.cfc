@@ -37,15 +37,15 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 			});
 
 			it(title="5.3.12.1", body=function(){
-				checkRequiredBundlesAreSupported( "5.3.8.237" );
+				checkRequiredBundlesAreSupported( "5.3.12.1" );
 			});
 
 			it(title="5.3.11.5", body=function(){
-				checkRequiredBundlesAreSupported( "5.3.8.237" );
+				checkRequiredBundlesAreSupported( "5.3.11.5" );
 			});
 
 			it(title="5.3.9.173", body=function(){
-				checkRequiredBundlesAreSupported( "5.3.8.237" );
+				checkRequiredBundlesAreSupported( "5.3.9.173" );
 			});
 
 			it(title="5.3.8.237", body=function(){

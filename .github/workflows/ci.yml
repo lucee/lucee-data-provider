@@ -16,17 +16,20 @@ jobs:
         java-version: '11'
         distribution: 'adopt'
     - name: Cache Maven packages
+      if: always()
       uses: actions/cache@v4
       with:
         path: ~/.m2
         key: lucee-script-runner-maven-cache
     - name: Cache Test Artifacts
+      if: always()
       uses: actions/cache@v4
       with:
         path: ${{ github.workspace }}/tests/artifacts
         key: test-artifacts
     - name: Cache Lucee files
       uses: actions/cache@v4
+      if: always()
       with:
         path: /home/runner/work/_actions/lucee/script-runner/main/lucee-download-cache
         key: lucee-downloads
