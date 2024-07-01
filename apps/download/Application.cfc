@@ -15,32 +15,32 @@ component {
 
 	function onError(e){
  	   if (cgi.script_name contains "admin" or cgi.script_name contains "lucee"){
-            header statuscode="418" statustext="nice try, you're a teapot";
-            return;
-        }
-	    header statuscode="500" statustext="Server error";
-        echo("Sorry, Server error");
-    }
+			header statuscode="418" statustext="nice try, you're a teapot";
+			return;
+		}
+		header statuscode="500" statustext="Server error";
+		echo("Sorry, Server error");
+	}
 
-    function onRequest( string requestedPath ) output=true {
-    	if ( arguments.requestedPath == "/index.cfm"
+	function onRequest( string requestedPath ) output=true {
+		if ( arguments.requestedPath == "/index.cfm"
 				&& ( structCount( url ) == 0 || cgi.query_string == "type=snapshots&reset=force" ) ) {
-    		var tmpFile = getTempDirectory() & "/cachedhomepage.html";	
+			var tmpFile = getTempDirectory() & "/cachedhomepage.html";
 
-    		if ( StructKeyExists( url, "reset" ) || !FileExists( tmpFile ) ) {
-    			var pageContent = "";
-    			savecontent variable="pageContent" {
-    				include template=arguments.requestedPath;
-    			}
-    			FileWrite( tmpFile, Trim( pageContent ) );
-    			echo( Trim( pageContent ) );
-    			return;
-    		}
-    		echo( FileRead( tmpFile ) );
-    		return;
-    	}
+			if ( StructKeyExists( url, "reset" ) || !FileExists( tmpFile ) ) {
+				var pageContent = "";
+				savecontent variable="pageContent" {
+					include template=arguments.requestedPath;
+				}
+				FileWrite( tmpFile, Trim( pageContent ) );
+				echo( Trim( pageContent ) );
+				return;
+			}
+			echo( FileRead( tmpFile ) );
+			return;
+		}
 
-    	include template=arguments.requestedPath;
-    }
-		
+		include template=arguments.requestedPath;
+	}
+
 }
