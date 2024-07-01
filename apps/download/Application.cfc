@@ -23,8 +23,9 @@ component {
     }
 
     function onRequest( string requestedPath ) output=true {
-    	if ( arguments.requestedPath == "/index.cfm" && structCount( url ) == 0) {
-    		var tmpFile = getTempDirectory() & "/cachedhomepage.html";
+    	if ( arguments.requestedPath == "/index.cfm"
+				&& ( structCount( url ) == 0 || cgi.query_string == "type=snapshots&reset=force" ) ) {
+    		var tmpFile = getTempDirectory() & "/cachedhomepage.html";	
 
     		if ( StructKeyExists( url, "reset" ) || !FileExists( tmpFile ) ) {
     			var pageContent = "";
