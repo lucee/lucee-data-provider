@@ -382,15 +382,24 @@ component {
 		local.warTmp=temp&"lucee-"&version&"-temp-"&createUniqueId()&".war";
 		var curr=getDirectoryFromPath(getCurrenttemplatePath());
 
+		var noServlet = checkVersionGTE( arguments.version, 6, 2 );
+		systemOutput("War Version check, gte 6.2: #noServlet#", true );
+
+		var warFolder = noServlet ? "war-6.2" : "war";
+
 		try {
 			// temp directory
 			// create paths and dir if necessary
 			local.build={};
 			loop list="extensions,common,website,war" item="local.name" {
-				local.tmp=curr & "build/"&name&"/";
+				local.tmp=curr & "build/" & name & "/";
 				if ( name == "extensions" && !directoryExists( tmp ) ) 
 					directoryCreate( tmp, true );
-				build[ name ]=tmp;
+				if ( name == "war" ){
+					tmp = curr & "build/" & warFolder & "/";
+				}
+				build[ name ] = tmp;
+				
 			}
 			systemOutput( "---- createWar", true );
 			systemOutput( build, true );
@@ -599,6 +608,16 @@ component {
 			directoryDelete( temp, true );
 		directoryCreate( temp );
 		return temp;
+	}
+
+	private function checkVersionGTE( version, major, minor ){
+		var v = listToArray( arguments.version, "." );
+		if ( v[ 1 ] gt arguments.major ) {
+			return true;
+		} else if ( v[ 1 ] eq arguments.major && v[ 2 ] gte arguments.minor ) {
+			return true;
+		}
+		return false;
 	}
 
 }
