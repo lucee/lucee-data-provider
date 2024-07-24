@@ -34,10 +34,9 @@
       <description>Lucee Web Directory (for Website-specific configurations, settings, and libraries)</description>
     </init-param>
     !-->
-    <load-on-startup>2</load-on-startup>
+    <load-on-startup>1</load-on-startup>
 
     </servlet>
-
 
   <!-- ===================================================================== -->
   <!-- Lucee REST Servlet - handles Lucee's RESTful web services             -->
@@ -45,7 +44,7 @@
   <servlet>
     <servlet-name>RESTServlet</servlet-name>    
     <servlet-class>lucee.loader.servlet.RestServlet</servlet-class>
-    <load-on-startup>3</load-on-startup>
+    <load-on-startup>2</load-on-startup>
   </servlet> 
 
   <!-- ===================================================================== -->
@@ -73,36 +72,26 @@
     <load-on-startup>3</load-on-startup>
   </servlet> -->
 
-
-
-  <servlet-mapping>
-      <servlet-name>LuceeServlet</servlet-name>
-      <url-pattern>*.lucee</url-pattern>
-      <url-pattern>/index.lucee/*</url-pattern>
-  </servlet-mapping>
-
     <servlet-mapping>
       <servlet-name>CFMLServlet</servlet-name>
       <url-pattern>*.cfc</url-pattern>
       <url-pattern>*.cfm</url-pattern>
-      <url-pattern>*.cfml</url-pattern>   
+      <url-pattern>*.cfml</url-pattern>
+      <url-pattern>*.cfs</url-pattern>
       <url-pattern>/index.cfc/*</url-pattern>
       <url-pattern>/index.cfm/*</url-pattern>
       <url-pattern>/index.cfml/*</url-pattern>
+      <url-pattern>/index.cfs/*</url-pattern>
   </servlet-mapping>
-
-
 
   <servlet-mapping>
     <servlet-name>RESTServlet</servlet-name>
     <url-pattern>/rest/*</url-pattern>
   </servlet-mapping>
- 
 
 	<!-- default file to execute if directory is called with no file name, e.g. http://mysite.com/ !-->
 	<welcome-file-list>
 		<welcome-file>index.cfm</welcome-file>
-		<welcome-file>index.lucee</welcome-file>
 		<welcome-file>index.html</welcome-file>
 		<welcome-file>index.htm</welcome-file>
 	</welcome-file-list>
