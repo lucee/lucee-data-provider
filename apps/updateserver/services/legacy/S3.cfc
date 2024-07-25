@@ -382,10 +382,10 @@ component {
 		local.warTmp=temp&"lucee-"&version&"-temp-"&createUniqueId()&".war";
 		var curr=getDirectoryFromPath(getCurrenttemplatePath());
 
-		var noServlet = checkVersionGTE( arguments.version, 6, 2 );
-		systemOutput("War Version check, gte 6.2: #noServlet#", true );
+		var noLuceeServlet = checkVersionGTE( arguments.version, 6, 2 );
+		systemOutput("Has LuceeServlet Version check, gte 6.2: #noLuceeServlet#", true );
 
-		var warFolder = noServlet ? "war-6.2" : "war";
+		var warFolder = noLuceeServlet ? "war-6.2" : "war";
 
 		try {
 			// temp directory
@@ -558,8 +558,9 @@ component {
 			//if(!directoryExists(commonDir)) directoryCreate(commonDir);
 
 			// war directory
-			local.warDir=curr & "/build/war/";
-			//if(!directoryExists(warDir)) directoryCreate(warDir);
+			var noLuceeServlet = checkVersionGTE( arguments.version, 6, 2 );
+			systemOutput("Has LuceeServlet Version check, gte 6.2: #noLuceeServlet#", true );
+			local.warDir=curr & "/build/" & (noLuceeServlet ? "war-6.2" : "war") & "/";
 
 			// create the war
 			local.war=temp & "/engine.war";
