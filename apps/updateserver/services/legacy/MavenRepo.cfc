@@ -444,7 +444,8 @@ component {
 
 			// unpack the servers
 			if(!isNull(url.test)) throw temp;
-			zip action="unzip" file="#getDirectoryFromPath(getCurrenttemplatePath())&("build/servers/tomcat.zip")#" destination="#temp#tomcat";
+			local.minorVersion=mid(server.lucee.version,1,find(".",server.lucee.version,find(".",minorVersion)+1)-1);
+			zip action="unzip" file="#getDirectoryFromPath(getCurrenttemplatePath())&("build/servers/tomcat-"&(local.minorVersion >= '6.2'?'jakarta':'javax')&".zip")#" destination="#temp#tomcat";
 			
 			// let's zip it
 			zip action="zip" file=zipTmp overwrite=true {
