@@ -514,7 +514,9 @@ component {
 
 			// unpack the servers
 			local.minorVersion=mid(server.lucee.version,1,find(".",server.lucee.version,find(".",minorVersion)+1)-1);
-			zip action="unzip" file=#curr&("build/servers/tomcat-"&("build/servers/tomcat-"&(local.minorVersion >= '6.2'?'jakarta':'javax')&".zip")# destination=tmpTom;
+			local.srcTomcat = curr & "build/servers/tomcat-"
+				& (local.minorVersion >= '6.2' ? 'jakarta':'javax' ) & ".zip";
+			zip action="unzip" file=srcTomcat destination=tmpTom;
 
 			// let's zip it
 			zip action="zip" file=zipTmp overwrite=true {
