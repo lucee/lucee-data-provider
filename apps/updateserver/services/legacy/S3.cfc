@@ -513,9 +513,8 @@ component {
 			//if (!directoryExists(webDir)) directoryCreate(webDir);
 
 			// unpack the servers
-			local.minorVersion=mid(server.lucee.version,1,find(".",server.lucee.version,find(".",minorVersion)+1)-1);
-			local.srcTomcat = curr & "build/servers/tomcat-"
-				& (local.minorVersion >= '6.2' ? 'jakarta':'javax' ) & ".zip";
+			local.useJakarta=checkVersionGTE( arguments.version, '6.2' );
+			local.srcTomcat = curr & "build/servers/tomcat-" & ( useJakarta ? 'jakarta':'javax' ) & ".zip";
 			zip action="unzip" file=srcTomcat destination=tmpTom;
 
 			// let's zip it
