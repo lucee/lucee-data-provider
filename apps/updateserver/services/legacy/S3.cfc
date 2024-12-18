@@ -513,7 +513,9 @@ component {
 			//if (!directoryExists(webDir)) directoryCreate(webDir);
 
 			// unpack the servers
-			zip action="unzip" file=#curr&("build/servers/tomcat.zip")# destination=tmpTom;
+			local.useJakarta=checkVersionGTE( arguments.version, '6.2' );
+			local.srcTomcat = curr & "build/servers/tomcat-" & ( useJakarta ? 'jakarta':'javax' ) & ".zip";
+			zip action="unzip" file=srcTomcat destination=tmpTom;
 
 			// let's zip it
 			zip action="zip" file=zipTmp overwrite=true {
