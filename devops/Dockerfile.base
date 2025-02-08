@@ -1,4 +1,4 @@
-FROM lucee/lucee:6.1.2.25-SNAPSHOT-tomcat9.0-jdk11-temurin-jammy
+FROM lucee/lucee:6.1.2.26-SNAPSHOT-tomcat9.0-jdk11-temurin-jammy
 ADD https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.20.0/jmx_prometheus_javaagent-0.20.0.jar /opt/lucee/bin/prometheus-java-agent.jar
 ENV JAVA_OPTS="-javaagent:/opt/lucee/bin/prometheus-java-agent.jar=9090:/opt/lucee/conf/prometheus/config.yml"
 ENV LUCEE_ADMIN_ENABLED=false
