@@ -1,4 +1,4 @@
-name: Lucee data provider CI
+name: Lucee Data Provider CI
 
 on: [push, pull_request,workflow_dispatch]
 jobs:
