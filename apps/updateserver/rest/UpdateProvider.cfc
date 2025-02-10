@@ -4,6 +4,11 @@
  */
 component {
 
+	if (getApplicationSettings().name != "lucee-provider")
+		systemOutput("Update REST Provider has wrong Application Scope: [" 
+			& getApplicationSettings().name & "], should be [lucee-provider]", true);
+
+
 	variables.bundleDownloadService = application.bundleDownloadService;
 	variables.s3Root                = application.coreS3Root;
 	variables.cdnUrl                = application.coreCdnUrl;

@@ -111,7 +111,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 				http url="https://update.lucee.org/rest/update/provider/download/#bundleSpec#/" result="local.res" throwOnError=true;
 			} catch ( e ) {
 				systemOutput( "https://update.lucee.org/rest/update/provider/download/#bundleSpec#/ threw [" & e.message & "]", true );
-				return missing;
+				return bundle;
 			}
 		}
 		return "";

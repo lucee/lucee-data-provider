@@ -4,6 +4,10 @@
  */
 component {
 
+	if (getApplicationSettings().name != "lucee-provider")
+		systemOutput("Extension REST Provider has wrong Application Scope: [" 
+			& getApplicationSettings().name & "], should be [lucee-provider]", true);
+
 	variables.metaReader = application.extMetaReader;
 	variables.cdnURL     = application.extensionsCdnUrl;
 
