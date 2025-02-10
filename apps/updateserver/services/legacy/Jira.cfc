@@ -4,7 +4,7 @@
 component {
 	
 	variables.prefix="a2";
-	variables.maxInactiveInterval=getPageContext().getRequest().getSession(true).getMaxInactiveInterval();
+	variables.maxInactiveInterval=getPageContext().getRequest().getSession(true).getMaxInactiveInterval()?: 3600;
 	/*static {
 		static.prefix="a2";
 		static.maxInactiveInterval=getPageContext().getRequest().getSession(true).getMaxInactiveInterval();
