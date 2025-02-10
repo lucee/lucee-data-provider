@@ -1,7 +1,11 @@
+# FROM lucee/lucee:6.0.3.1-tomcat9.0-jdk11-temurin-jammy
+# FROM lucee/lucee:6.1.1.118-nginx-tomcat9.0-jdk11-temurin-jammy
 FROM lucee/lucee:6.2.0.317-SNAPSHOT-nginx-tomcat10.1-jre21-temurin-jammy
 ADD https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.20.0/jmx_prometheus_javaagent-0.20.0.jar /opt/lucee/bin/prometheus-java-agent.jar
 ENV JAVA_OPTS="-javaagent:/opt/lucee/bin/prometheus-java-agent.jar=9090:/opt/lucee/conf/prometheus/config.yml"
 ENV LUCEE_ADMIN_ENABLED=false
+ENV LUCEE_LOGGING_FORCE_LEVEL=info
+ENV LUCEE_LOGGING_FORCE_APPENDER=console
 RUN  mkdir -p /opt/lucee/server/lucee-server/deploy && \
 mkdir -p /opt/lucee/server/lucee-server/context && \
 wget -nv https://ext.lucee.org/sentry-extension-5.5.2.15.lex -O /opt/lucee/server/lucee-server/deploy/sentry-extension.lex
