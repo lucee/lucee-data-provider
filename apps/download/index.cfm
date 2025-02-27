@@ -158,20 +158,20 @@
 		  return application.mavenInfo[version]?:"";
 	   }
 	   
-	   function getChangelog(versionFrom,versionTo,flush=false) {
-		  var id=arguments.versionFrom&"-"&arguments.versionTo;
-		  if(arguments.flush || isNull(application.mavenChangeLog[id])) {
-			 local.res="";
-			 //try{
-				http url="https://release.lucee.org/rest/update/provider/changelog/"&arguments.versionFrom&"/"&arguments.versionTo result="local.res";
+	function getChangelog(versionFrom,versionTo,flush=false) {
+		var id=arguments.versionFrom&"-"&arguments.versionTo;
+		if(arguments.flush || isNull(application.jiraChangeLog[ id ])) {
+			var changeLogUrl = "https://release.lucee.org/rest/update/provider/changelog/"&arguments.versionFrom&"/"&arguments.versionTo;
+			local.res="";
+			//try{
+				http url="#changeLogUrl#" result="local.res";
 				var res= deserializeJson(res.fileContent);
-				application.mavenChangeLog[id]= res;
-			 //}catch(e) {}
-			 if(len(res)==0) return "";
-			 
-		  }
-		  return application.mavenChangeLog[id]?:"";
-	   }
+				application.jiraChangeLog[ id ]= res;
+			//}catch(e) {}
+			if(len(res)==0) return "";
+		}
+		return application.jiraChangeLog[ id ]?:"";
+	}
 	   
 	   
 	   baseURL="https://release.lucee.org/rest/update/provider/";
@@ -221,16 +221,22 @@
 			 rc:'Release Candidates'
 		  };
 	   
-		  noVersion="There are currently no downloads available in this category.";
-		  versions=getVersions(structKeyExists(url,"reset"));
-		  keys=structKeyArray(versions);
-		  tmp=structNew('linked');
-		  for(i=arrayLen(keys);i>0;i--) {
-			 k=keys[i];
-			 //if(left(k,6)=="06.001" && right(k,4)==".000") continue; // .000=SNAPSHOT
-			 tmp[k]=versions[k];
-		  }
-		  versions=tmp;
+			noVersion="There are currently no downloads available in this category.";
+			versions = getVersions( structKeyExists( url, "reset" ) );
+			if ( structKeyExists( url, "reset" ) ){
+				systemOutput("url.reset=true clearing caches", true);
+				application.jiraChangeLog = {};
+				application.mavenInfo = {};
+				//application.mavenDates = {};
+			}
+			keys=structKeyArray(versions);
+			tmp=structNew('linked');
+			for(i=arrayLen(keys);i>0;i--) {
+				k=keys[i];
+				//if(left(k,6)=="06.001" && right(k,4)==".000") continue; // .000=SNAPSHOT
+				tmp[k]=versions[k];
+			}
+			versions=tmp;
 		  
 		  // add types
 		  //releases,snapshots,rc,beta
