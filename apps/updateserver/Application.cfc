@@ -2,9 +2,9 @@ component {
 
 	this.name                   = "lucee-provider";
 	this.clientManagement       = "no";
-	//this.clientStorage          = "file";
+	this.clientStorage          = "file";
 	this.scriptProtect          = "all";
-	this.sessionManagement      = "no";
+	this.sessionManagement      = "yes";
 	this.sessionStorage         = "memory";
 	this.sessionTimeout         = "#createTimeSpan(0,0,0,30)#";
 	this.sessionCookie.httpOnly = true; // prevent access to session cookies from javascript
