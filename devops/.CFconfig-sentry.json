@@ -1,0 +1,40 @@
+{
+    "loggers": {
+        "update-provider": {
+            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
+            "level": "error",
+            "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
+            "appenderBundleName": "sentry.extension",
+            "appenderBundleVersion": "5.5.2.15",
+            "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
+            "layoutArguments": ""
+        },
+        "exception": {
+            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
+            "level": "error",
+            "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
+            "appenderBundleName": "sentry.extension",
+            "appenderBundleVersion": "5.5.2.15",
+            "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
+            "layoutArguments": ""
+        },
+        "application": {
+            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
+            "level": "info",
+            "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
+            "appenderBundleName": "sentry.extension",
+            "appenderBundleVersion": "5.5.2.15",
+            "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
+            "layoutArguments": ""
+        }
+        "rest": {
+            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
+            "level": "error",
+            "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
+            "appenderBundleName": "sentry.extension",
+            "appenderBundleVersion": "5.5.2.15",
+            "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
+            "layoutArguments": ""
+        }
+    }
+}

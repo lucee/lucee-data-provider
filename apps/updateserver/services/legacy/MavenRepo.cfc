@@ -17,9 +17,111 @@ component {
 		,"5.3.1.103","5.3.7.44","6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT","6.0.1.82"];
 	variables.majorBeta="5.3";
 
-	public function readDependenciesFromPOM(string pom, boolean extended=false,string specifivDep=""){
-		
+	public function reset(){
+		application.mavenRepoMatch={};
+		application._OSGiDependencies={};
 
+		application.mavenRepos={};
+		application.mavenInfo={};
+		structDelete(application, "cacheMavenList");
+	}
+
+	public array function list(string type='all', boolean extended=false) localmode=true {
+		var mavenList = [];
+		if ( !structKeyExists( application, "cacheMavenList" ) ){
+			lock name="fetch-MavenList" timeout=10 type="exclusive" throwOnTimeout=true{
+				var t= getTickcount();
+				mavenList = _list(argumentCollection=arguments);
+				systemOutput("maven.list() took: " & getTickCount()-t & "ms", true);
+				application.cacheMavenList = mavenList;
+				application.cacheMavenListUpdated = now();
+				return application.cacheMavenList;
+			}
+		}
+		return application.cacheMavenList;
+	}
+
+	private array function _list(string type='all', boolean extended=false) localmode=true {
+		if (type!='all' && type!='snapshots' && type!='releases' && type!='abc')
+			throw "provided type [#type#] is invalid, valid types are [all,snapshots,releases,abc]";
+
+		curr = getDirectoryFromPath(getCurrentTemplatePath());
+		dir= curr & "cache/mavenIndex/";
+		if (!directoryExists(dir)) directoryCreate(dir);
+
+		// collect the size of the index=
+		infoURL = convertPattern( variables.listPattern, variables.group, variables.artifact,1,1);
+		var update=false;
+		if( !structKeyExists(application,"mavenInfo") || !structKeyExists(application.mavenInfo,infoURL)) {
+			inc();
+			http url=infoURL result="local.res" {
+				httpparam type="header" name="accept" value="application/json";
+			}
+			info=deserializeJSON(res.fileContent);
+			info.url=infoURL;
+			var fi=dir&"info.json";
+			if(!fileExists(fi) || fileRead(fi)!=info.totalCount) {
+				systemOutput( "Maven.list: update required!", true);
+				update=true;
+			}
+			
+			//directoryDelete(dir,true);
+			//directoryCreate(dir);
+			fileWrite(fi,info.totalCount);
+			application.mavenInfo[infoURL]=info;
+		}
+		else info=application.mavenInfo[infoURL];
+
+		from=1;
+		max=200;
+		count=0;
+		last=false;
+		
+		// files
+		var files=[];
+		var cnt=0
+		while(true) {
+			if(cnt++>100) break;
+			to=from+max;
+			if(to>=info.totalCount) {
+				to=info.totalCount;
+				last=true;
+			}
+			file=dir&group&"-"&artifact&"-"&from&"-"&to&".json";
+			arrayPrepend(files,{file:file,from:from,max:max});
+			if(last) break;
+			from=to;
+			if(count++>1000) throw "something went wrong!";
+		}
+		data=[];
+		
+		repos=structNew("linked");
+		loop array=files item="local.file" {
+			// do we have locally?
+			if (!update && fileExists(file.file)) {
+				raw = deserializeJson(fileRead(file.file));
+			} else {
+				listURL=convertPattern(listPattern,group,artifact,file.from,max);
+				inc();
+				http url=listURL result="local.res" {
+					httpparam type="header" name="accept" value="application/json";
+				}
+				raw=deserializeJSON(res.fileContent);
+				var existing="";
+				if(fileExists(file.file) && fileRead(file.file)==res.fileContent) {
+					update=false;
+				}
+				else fileWrite(file.file,res.fileContent);
+			}
+			extractData(repos,data,raw,dir,type,extended);
+		}
+		arraySort(data,function(l,r) {
+			return compare(l.vs,r.vs);
+		});
+		return data;
+	}
+
+	public function readDependenciesFromPOM(string pom, boolean extended=false,string specifivDep=""){
 		local.content=fileRead(pom);
 		local.xml=xmlParse(content);
 
@@ -32,7 +134,7 @@ component {
 		// dependencies
 		local.dependencies=xml.xmlRoot.dependencies.xmlChildren;
 		local.arr=[];
-		if(isNull(application.repoMatch))application.repoMatch={};
+		if(isNull(application.mavenRepoMatch))application.mavenRepoMatch={};
 		loop array=dependencies item="local.dependency" {
 			local.g=dependency.groupId.xmlText;
 			local.a=dependency.artifactId.xmlText;
@@ -47,14 +149,11 @@ component {
 				"org.apache.ant"==g)) continue;
 
 			if(len(specifivDep) && specifivDep!=g) continue;
-
-
-			
 			
 			// find the right repo
 			// TODO store physically
-			if(!isNull(application.repoMatch[id&":"&extended])) {
-				local.detail=application.repoMatch[id&":"&extended];
+			if(!isNull(application.mavenRepoMatch[id&":"&extended])) {
+				local.detail=application.mavenRepoMatch[id&":"&extended];
 			}
 			else {
 				local.start=getTickCount();
@@ -65,7 +164,7 @@ component {
 						detail.jar=tmp.jar.src;
 						if(!isNull(tmp.pom.src))detail.pom=tmp.pom.src;
 
-						application.repoMatch[id&":"&extended]=detail;
+						application.mavenRepoMatch[id&":"&extended]=detail;
 						break;
 					}
 				}
@@ -153,32 +252,18 @@ component {
 				mid(str,11,2),
 				mid(str,13,2),0,timezone
 		);
-
 	}
 
 	private function getArtifactDirectory(){
-		local.dir=getDirectoryFromPath(getCurrenttemplatePath())&"artifacts/";
-		if(!directoryExists(dir))directoryCreate(dir);
+		local.dir=getDirectoryFromPath(getCurrentTemplatePath())&"artifacts/";
+		if(!directoryExists(dir)) directoryCreate(dir);
 		return dir
 	}
 
 	private function getTempDir(){
-		local.dir=getDirectoryFromPath(getCurrenttemplatePath())&"temp#getTickCount()#/";
-		if(!directoryExists(dir))directoryCreate(dir);
+		local.dir=getDirectoryFromPath(getCurrentTemplatePath())&"temp#getTickCount()#/";
+		if(!directoryExists(dir)) directoryCreate(dir);
 		return dir
-	}
-
-
-
-
-
-	public function reset(){
-		application.repoMatch={};
-		application._OSGiDependencies={};
-
-		application.repos={};
-		application.detail={};
-		application.info={};
 	}
 	
 	/**
@@ -247,8 +332,6 @@ component {
 		}
 		return jar;
 	}
-
-
 
 	/**
 	* returns local location for the loader (lucee.jar) of a specific version (get downloaded if necessary)
@@ -371,7 +454,7 @@ component {
 				}
 			}
 			catch(e) {
-				if(fileExists(jar))fileDelete(jar);
+				if(fileExists(jar)) fileDelete(jar);
 				rethrow;
 			}
 		}
@@ -422,7 +505,7 @@ component {
 			// temp directory
 			local.temp = getTempDir();
 
-			local.curr = getDirectoryFromPath(getCurrenttemplatePath());
+			local.curr = getDirectoryFromPath(getCurrentTemplatePath());
 
 			// extension directory
 			local.extDir = local.curr & ("build/extensions/");
@@ -444,7 +527,7 @@ component {
 
 			// unpack the servers
 			if(!isNull(url.test)) throw temp;
-			zip action="unzip" file="#getDirectoryFromPath(getCurrenttemplatePath())&("build/servers/tomcat.zip")#" destination="#temp#tomcat";
+			zip action="unzip" file="#getDirectoryFromPath(getCurrentTemplatePath())&("build/servers/tomcat.zip")#" destination="#temp#tomcat/";
 			
 			// let's zip it
 			zip action="zip" file=zipTmp overwrite=true {
@@ -631,106 +714,25 @@ component {
 	}
 
 	public function get(required string version, boolean extended=false) localmode=true {
+		var s = getTickCount();
 		arr=list();
 		var checks=[];
 		loop array=arr item="sct" {
 			arrayAppend(checks, sct.version);
 			if(sct.version==arguments.version) {
 				if(extended) sct.sources=getSources(sct.repository,sct.version);
+				// systemOutput("maven.get() took " & numberFormat(getTickCount()-s) & "ms", true);
 				return sct;
 			}
 		}
-		throw "version [#arguments.version#] is not available [#arrayToList(checks)#]";
+		throw "Maven.get() version [#arguments.version#] is not available";// [#arrayToList(checks)#]";
 	}
-
-	public function list(string type='all', boolean extended=false) localmode=true {
-		if(type!='all' && type!='snapshots' && type!='releases' && type!='abc')
-			throw "provided type [#type#] is invalid, valid types are [all,snapshots,releases,abc]";
-
-
-		curr=getDirectoryFromPath(getCurrenttemplatePath());
-		dir=curr&"index/";
-		if(!directoryExists(dir)) directoryCreate(dir);
-
-
-		// collect the size of the index=
-		infoURL=convertPattern(listPattern,group,artifact,1,1);
-		var update=false;
-		if(!structKeyExists(application,"info") || !structKeyExists(application.info,infoURL)) {
-			inc();
-			http url=infoURL result="local.res" {
-				httpparam type="header" name="accept" value="application/json";
-			}
-			info=deserializeJSON(res.fileContent);
-			info.url=infoURL;
-			var fi=dir&"info.json";
-			if(!fileExists(fi) || fileRead(fi)!=info.totalCount) update=true;
-			
-			//directoryDelete(dir,true);
-			//directoryCreate(dir);
-			fileWrite(fi,info.totalCount);
-			application.info[infoURL]=info;
-		}
-		else info=application.info[infoURL];
-		
-
-		from=1;
-		max=200;
-		count=0;
-		last=false;
-		
-		// files
-		var files=[];
-		var cnt=0
-		while(true) {
-			if(cnt++>100) break;
-			to=from+max;
-			if(to>=info.totalCount) {
-				to=info.totalCount;
-				last=true;
-			}
-			file=dir&group&"-"&artifact&"-"&from&"-"&to&".json";
-			arrayPrepend(files,{file:file,from:from,max:max});
-			if(last) break;
-			from=to;
-			if(count++>1000) throw "something went wrong!";
-		}
-		data=[];
-		
-		repos=structNew("linked");
-		loop array=files item="local.file" {
-
-			// do we have locally?
-			if(!update && fileExists(file.file)) {
-				raw=evaluate(fileRead(file.file));
-			}
-			else {
-				listURL=convertPattern(listPattern,group,artifact,file.from,max);
-				inc();
-				http url=listURL result="local.res" {
-					httpparam type="header" name="accept" value="application/json";
-				}
-				raw=deserializeJSON(res.fileContent);
-				var existing="";
-				if(fileExists(file.file) && fileRead(file.file)==res.fileContent) {
-					update=false;
-				}
-				else fileWrite(file.file,res.fileContent);
-			}
-			extractData(repos,data,raw,dir,type,extended);
-		}
-		arraySort(data,function(l,r) {
-			return compare(l.vs,r.vs);
-		});
-		return data;
-	}
-
 
 	private function extractRepos(repos,raw) {
 		loop array=raw.repoDetails item="local.entry" {
 			if(structKeyExists(repos,entry.repositoryId)) continue;
-			if(!isnull(application.repos[entry.repositoryId])) {
-				repos[entry.repositoryId]=application.repos[entry.repositoryId];
+			if(!isnull(application.mavenRepos[entry.repositoryId])) {
+				repos[entry.repositoryId]=application.mavenRepos[entry.repositoryId];
 				continue;
 			}
 
@@ -740,7 +742,7 @@ component {
 			}
 			local._raw=deSerializeJson(res.fileContent);
 			repos[entry.repositoryId]=_raw.data.contentResourceURI;
-			application.repos[entry.repositoryId]=_raw.data.contentResourceURI;
+			application.mavenRepos[entry.repositoryId]=_raw.data.contentResourceURI;
 		}
 	}
 
@@ -788,8 +790,8 @@ component {
 	}
 
 	public string function getDetailFile(version) {
-		curr=getDirectoryFromPath(getCurrenttemplatePath());
-		dir=curr&"detail/";
+		curr=getDirectoryFromPath(getCurrentTemplatePath());
+		dir=curr&"cache/mavenDetail/";
 		if(!directoryExists(dir)) directoryCreate(dir);
 
 		return dir&version&".json";

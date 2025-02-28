@@ -14,7 +14,7 @@ component {
 	request.s3URL="https://s3-eu-west-1.amazonaws.com/extension-downloads/";
 
 	function onError(e){
- 	   if (cgi.script_name contains "admin" or cgi.script_name contains "lucee"){
+ 		if (cgi.script_name contains "admin" or cgi.script_name contains "lucee"){
 			header statuscode="418" statustext="nice try, you're a teapot";
 			return;
 		}

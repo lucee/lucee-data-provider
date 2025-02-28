@@ -4,30 +4,12 @@
 component {
 	
 	variables.prefix="a2";
-	variables.maxInactiveInterval=getPageContext().getRequest().getSession(true).getMaxInactiveInterval() ?: 3600;
-	/*static {
-		static.prefix="a2";
-		static.maxInactiveInterval=getPageContext().getRequest().getSession(true).getMaxInactiveInterval();
-	}*/
-// STATIC
-
-	/* this function creates a singleton for the give set of arguments
+	variables.maxInactiveInterval=3600;
 	
-	public static function getInstance(required string domain, string basePath="/rest/", 
-		string username="", string password="", cachedWithin=0,  boolean secure=true) {
-		var id=static.prefix&hash(serialize(arguments),"quick");
-		
-		if(!isNull(static.instances[id])) {
-			return static.instances[id];
-		}
-		return static.instances[id]=new Jira(argumentcollection=arguments);
-	}*/
-
-
 // INSTANCE
 
 	variables.CACHE_KEY="sddddas22eedfecuezdgweu";
-	variables.MAX_RECORDS=300;// we use 100 because this is limkited that way by 'jira.search.views.default.max'.
+	variables.MAX_RECORDS=300;// we use 100 because this is limited that way by 'jira.search.views.default.max'.
 
 
 	variables.NL="
@@ -45,11 +27,13 @@ component {
 
 		// make sure we have the SSL certificate installed
 		//if(secure && SSLCertificateList(domain).recordcount==0);
+		/*
 		if(arguments.secure && isNull(variables["installSSL:"&domain])) {
 			SSLCertificateInstall(domain);
 			variables["installSSL:"&domain]=true;
 		}
 		variables["installSSL:"&domain]=nullValue();
+		*/
 
 		// store credentials
 		if(!isEmpty(arguments.username)) {
@@ -449,15 +433,14 @@ component {
 
 	public function listIssues(string project="", array fields=[], array stati=[]) {
 
-			
 		// if we have a cached we check when it has changed the last time;
 		var last=lastChanged(project);
+		//systemOutput("jira.listIssues: lastChanged " & last, true);
 
-		if(!isNull(application[CACHE_KEY]) && application[CACHE_KEY].lastChange==local.last)
+		if(!isNull(application[CACHE_KEY]) && application[CACHE_KEY].lastChange==local.last){
 			return application[CACHE_KEY];
-		
-
-
+		}
+		systemOutput("jira.listIssues: refreshing", true);
 
 		var count=0;
 		var startAt=0;
@@ -527,20 +510,14 @@ component {
 			&"&fields="&arguments.fields
 			&"&jql="&jql
 		;
+		//systemOutput(path, true);
 		var result=_http(path=path, desc="Loading issues from jira - #arguments.startAt#");
-		
-
-		if(result.status_code==200) {
+		if (result.status_code==200) {
 			var data=deserializeJson(result.fileContent);
 			return data;
 		}
-		else handleNon200(result,path);
+		handleNon200(result,path);
 	}
-
-
-
-
-
 
 ///////////////////////////////////////////////////////////////////////////
 //////////////////////////////// OTHERS ////////////////////////////////////

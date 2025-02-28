@@ -2,3 +2,5 @@
 INCLUDE+ ./devops/Dockerfile.base
 COPY ./apps/updateserver /var/www
 COPY ./devops/.CFconfig-update.json5 /opt/lucee/server/lucee-server/context/.CFConfig.json
+# post deploy configure sentry logs, once extension is installed
+COPY ./devops/.CFconfig-sentry.json /opt/lucee/server/lucee-server/deploy/.CFconfig-sentry.json
