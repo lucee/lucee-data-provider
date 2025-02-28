@@ -4,7 +4,7 @@ component {
 	variables.EXTENSION_DOWNLOAD="https://extension.lucee.org/rest/extension/provider/{type}/{id}";
 
 	variables.UPDATE_PROVIDER = "https://update.lucee.org/rest/update/provider";
-	variables.UPDATE_PROVIDER = "http://update:8888/rest/update/provider";
+	//variables.UPDATE_PROVIDER = "http://update:8888/rest/update/provider";
 	
 
 	function getExtensions(flush=false) localmode=true {
