@@ -6,7 +6,7 @@ jobs:
     name: Java build
     runs-on: ubuntu-latest
     env:
-      luceeVersion: 6.0.4.10
+      luceeVersion: 6.2.0.231
       #luceeVersionQuery: 6.0.3/all/jar
     steps:
     - uses: actions/checkout@v4
