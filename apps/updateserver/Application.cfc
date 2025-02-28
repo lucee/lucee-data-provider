@@ -5,12 +5,10 @@ component {
 	//this.clientStorage          = "file";
 	this.scriptProtect          = "all";
 	this.sessionManagement      = "no";
-	/*
 	this.sessionStorage         = "memory";
 	this.sessionTimeout         = "#createTimeSpan(0,0,0,30)#";
 	this.sessionCookie.httpOnly = true; // prevent access to session cookies from javascript
 	this.sessionCookie.sameSite = "strict";
-	*/
 	this.searchImplicitScopes   = false;
 	this.searchResults          = false;
 	this.scopeCascading         = 'strict';
