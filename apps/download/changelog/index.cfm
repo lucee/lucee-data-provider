@@ -68,6 +68,16 @@
 		arrVersions = structKeyArray(major).reverse().sort("text","desc");
 
 		arrChangeLogs = [];
+
+		function getBadgeForType( type ) {
+			switch(arguments.type){
+				case "bug":
+					return "danger";
+				case "enhancement":
+					return "success";
+			}
+			return "info";
+		}
 	</cfscript>
 
 	<cfsavecontent variable="changelog_report">
@@ -104,7 +114,7 @@
 						changelog = {};
 						versionReleaseDate = "";
 						if ( left( version, 3 ) eq url.version ){
-							changeLog = download.getChangelog( prevVersion, version );
+							changeLog = download.getChangelog( prevVersion, version, false, true );
 							versionReleaseDate = download.getReleaseDate(version);
 						}
 						if (!isStruct(changelog))
@@ -152,32 +162,47 @@
 						</h4>
 					</div>
 				</cfif>
-
-				<cfloop array="#arrChangeLogs#" item="lv">
-					<cfif structcount(lv.changelog) and left(lv.version,3) eq url.version>
-						<hr>
-						<#lv.header# class="modal-title" id="#lv.version#">
-							<b><a href="?version=#left(lv.version,3)####lv.version#">Lucee #lv.versionTitle#</a></b>
-							<small>
-								<span class="mr-2">#lv.versionReleaseDate#</span>
-								<a href="../?#lv.type#=#lv._version###core" title="Jump to Downloads"><span class="glyphicon glyphicon-download-alt"></span></a>
-							</small>
-						</#lv.header#>
-						<blockquote class="changelogs">
+				<table cellSpacing=0 border=0 cellPadding=2 width="100%" class="changelogs">
+					<cfloop array="#arrChangeLogs#" item="lv">
+						<cfif structcount(lv.changelog) and left(lv.version,3) eq url.version>
+							<tr>
+								<td colspan="4"><hr></td>
+							</tr>
+							<tr>
+								<td colspan="4">
+								<#lv.header# class="modal-title" id="#lv.version#">
+									<b><a href="?version=#left(lv.version,3)####lv.version#">Lucee #lv.versionTitle#</a></b>
+									<small>
+										<span class="mr-2">#lv.versionReleaseDate#</span>
+										<a href="../?#lv.type#=#lv._version###core" title="Jump to Downloads"><span class="glyphicon glyphicon-download-alt"></span></a>
+									</small>
+								</#lv.header#>
+								</td>
+							</tr>
 							<cfset changelogTicketList = {}>
 							<cfloop struct="#lv.changelog#" index="ver" item="tickets">
-								<cfloop struct="#tickets#" index="id" item="subject">
-									<cfif !StructKeyExists(changelogTicketList, id)>
-										<p title="#encodeforHTMlAttribute(ver)#">
-										<a href="https://bugs.lucee.org/browse/#id#" target="blank" class="ml-1">#id#</a> #encodeForHtml(subject)#
-										</p>
-										<cfset changelogTicketList[id] = true>
+								<cfloop struct="#tickets#" index="id" item="ticket">
+									<cfif !StructKeyExists(changelogTicketList, ticket.id)>
+										<tr valign="top">
+											<td><a href="https://bugs.lucee.org/browse/#id#" target="blank" class="ml-1">#id#</a></td>
+											<td><span class="label label-#getBadgeForType(ticket.type)#">#ticket.type#</span></td>
+											<td>#encodeForHtml(wrap(ticket.summary,70))#
+											<cfif len(ticket.labels)>
+												<br>
+												<cfloop array="#ticket.labels#" item="label">
+													<span class="label label-default">#encodeForHtml(label)#</span>
+												</cfloop>
+											</cfif>
+											</td>
+											<td>#encodeForHtml(arrayToList(ticket.fixVersions,", "))#</td>
+										</tr>
+										<cfset changelogTicketList[ticket.id] = true>
 									</cfif>
 								</cfloop>
 							</cfloop>
-						</blockquote>
-					</cfif>
-				</cfloop>
+						</cfif>
+					</cfloop>
+				</table>
 				<hr>
 				<p><em>Last Updated: #lsDateTimeFormat(now())#</em></p>
 			</body>

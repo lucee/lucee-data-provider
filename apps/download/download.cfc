@@ -145,13 +145,17 @@ component {
 		return application.mavenInfo[version]?:"";
 	}
 
-	function getChangelog(versionFrom,versionTo,flush=false) {
-		var id=arguments.versionFrom&"-"&arguments.versionTo;
+	function getChangelog(versionFrom,versionTo,flush=false,detailed=false) {
+		var id=arguments.versionFrom & "-" & arguments.versionTo & "-" & detailed;
 		if (arguments.flush || isNull(application.jiraChangeLog[ id ])) {
-			var changeLogUrl = "#UPDATE_PROVIDER#/changelog/"&arguments.versionFrom&"/"&arguments.versionTo;
+			var restMethod = "changelog";
+			if (arguments.detailed)
+				restMethod &= "Detailed";
+			var changeLogUrl = "#UPDATE_PROVIDER#/#restMethod#/"&arguments.versionFrom&"/"&arguments.versionTo;
 			var res="";
+			//systemOutput(changeLogUrl, true);
 			try{
-				http url="#changeLogUrl#" result="local.res";
+				http url="#changeLogUrl#" result="local.res" throwOnError="true";
 				var res= deserializeJson(res.fileContent);
 				application.jiraChangeLog[ id ]= res;
 			}catch(e) {}

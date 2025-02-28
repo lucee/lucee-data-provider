@@ -360,7 +360,6 @@ component {
 		return jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo );
 	}
 
-	/*
 	remote struct function getChangeLogExtended(
 		required string versionFrom restargsource="Path",
 		required string versionTo restargsource="Path")
@@ -368,8 +367,6 @@ component {
 		
 		return jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo, detailed=true );
 	}
-	*/
-
 	remote string function getChangeLogLastUpdated()
 		httpmethod="GET" restpath="changelogLastUpdated" {
 		// systemOutput("jiraChangelogService.getChangeLogUpdated():" & jiraChangelogService.getChangeLogUpdated(), true);

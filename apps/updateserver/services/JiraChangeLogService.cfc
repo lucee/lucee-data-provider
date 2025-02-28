@@ -89,7 +89,10 @@ component accessors=true {
 				if ( fvs < from || fvs > to ) continue;
 				if( !structKeyExists( sct, fv ) )
 					sct[ fv ] = structNew( "linked" );
-				sct[ fv ][ issues.key ]= issues.summary;
+				if (arguments.detailed)
+					sct[ fv ][ issues.key ] = queryRowData( issues, issues.currentRow );
+				else
+					sct[ fv ][ issues.key ]= issues.summary;
 				var row = queryAddRow( sorted );
 				querySetCell( sorted, "ver", fv, row );
 				querySetCell( sorted, "sort", fvs, row );

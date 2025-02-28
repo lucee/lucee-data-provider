@@ -445,9 +445,9 @@ component {
 		var count=0;
 		var startAt=0;
 		var strFields=arrayLen(fields)?","&arrayToList(fields):"";
-		var qry=queryNew("id,key,summary,self,type,created,updated,priority,status,fixVersions"&strFields);
+		var qry=queryNew("id,key,summary,self,type,created,updated,priority,status,fixVersions,labels"&strFields);
 		do {
-			var data=_list(project,startAt,variables.MAX_RECORDS,"issuetype,created,updated,priority,status,summary,fixVersions"&strFields,stati);
+			var data=_list(project,startAt,variables.MAX_RECORDS,"issuetype,created,updated,priority,status,summary,fixVersions,labels"&strFields,stati);
 			// first round
 			/*if(count==0 && !isNull(application[CACHE_KEY]) && application[CACHE_KEY].query.recordcount==data.total && application[CACHE_KEY].last==data.issues[1].id) {
 				// TODO check first and last
@@ -463,6 +463,7 @@ component {
 				querySetCell(qry,"priority",issue.fields.priority.name);
 				querySetCell(qry,"status",issue.fields.status.name);
 				querySetCell(qry,"summary",issue.fields.summary);
+				querySetCell(qry,"labels",issue.fields.labels);
 
 				fixVersions=[];
 				loop array=issue.fields.fixVersions item="local.fvData" {
