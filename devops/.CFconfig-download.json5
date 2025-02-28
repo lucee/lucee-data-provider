@@ -132,31 +132,22 @@
             "layout": "classic"
         },
         "update-provider": {
-            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
+            "appender": "resource",
+            "appenderArguments": "path:{lucee-config}/logs/update-provider.log",
             "level": "error",
-            "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
-            "appenderBundleName": "sentry.extension",
-            "appenderBundleVersion": "5.5.2.15",
-            "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
-            "layoutArguments": ""
+            "layout": "classic"
         },
         "exception": {
-            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
+            "appender": "resource",
+            "appenderArguments": "path:{lucee-config}/logs/exception.log",
             "level": "error",
-            "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
-            "appenderBundleName": "sentry.extension",
-            "appenderBundleVersion": "5.5.2.15",
-            "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
-            "layoutArguments": ""
+            "layout": "classic"
         },
         "application": {
-            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
-            "level": "info",
-            "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
-            "appenderBundleName": "sentry.extension",
-            "appenderBundleVersion": "5.5.2.15",
-            "layoutClass": "lucee.commons.io.log.log4j2.layout.ClassicLayout",
-            "layoutArguments": ""
+            "appender": "resource",
+            "appenderArguments": "path:{lucee-config}/logs/application.log",
+            "level": "error",
+            "layout": "classic"
         },
         "scope": {
             "appender": "resource",
@@ -268,43 +259,9 @@
             "scheme": "ram",
             "class": "lucee.commons.io.res.type.cache.CacheResourceProvider",
             "arguments": "case-sensitive:true;lock-timeout:1000;"
-        },
-        {
-            "bundleName": "s3.extension",
-            "arguments": "lock-timeout:10000",
-            "bundleVersion": "2.0.1.25",
-            "scheme": "s3",
-            "class": "org.lucee.extension.resource.s3.S3ResourceProvider"
         }
     ],
     "salt": "BC6F6636-DBE0-42CF-AFB9548BA094304C",
-    "extensions": [
-        {
-            "id": "17AB52DE-B300-A94B-E058BD978511E39E",
-            "name": "S3 Resource Extension",
-            "version": "2.0.1.25"
-        },
-        {
-            "id": "B737ABC4-D43F-4D91-8E8E973E37C40D1B",
-            "name": "Image extension",
-            "version": "2.0.0.26"
-        },
-        {
-            "id": "37C61C0A-5D7E-4256-8572639BE0CF5838",
-            "name": "ESAPI extension",
-            "version": "2.2.4.15"
-        },
-        {
-            "id": "8D7FB0DF-08BB-1589-FE3975678F07DB17",
-            "name": "Compress Tags",
-            "version": "1.0.0.15"
-        } /*
-        {
-            "id": "CED6227E-0F49-6367-A68D21AACA6B07E8",
-            "version": "1.0.0.5",
-            "name": "Lucee Administrator"
-        } */
-    ],
     "errorGeneralTemplate": "/lucee/templates/error/error-public.cfm",
     "errorMissingTemplate": "/lucee/templates/error/error-public.cfm",
     "errorStatusCode": "true",

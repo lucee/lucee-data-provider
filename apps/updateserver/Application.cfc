@@ -2,13 +2,15 @@ component {
 
 	this.name                   = "lucee-provider";
 	this.clientManagement       = "no";
-	this.clientStorage          = "file";
+	//this.clientStorage          = "file";
 	this.scriptProtect          = "all";
-	this.sessionManagement      = "yes";
+	this.sessionManagement      = "no";
+	/*
 	this.sessionStorage         = "memory";
 	this.sessionTimeout         = "#createTimeSpan(0,0,0,30)#";
 	this.sessionCookie.httpOnly = true; // prevent access to session cookies from javascript
 	this.sessionCookie.sameSite = "strict";
+	*/
 	this.searchImplicitScopes   = false;
 	this.searchResults          = false;
 	this.scopeCascading         = 'strict';
@@ -77,6 +79,7 @@ component {
 
 		jiraChangelogService.loadIssues();
 		jiraChangelogService.updateIssuesAsync();
+		new services.legacy.MavenRepo().list();
 
 		application.coreS3Root            = coreS3Root;
 		application.coreCdnUrl            = coreCdnUrl;

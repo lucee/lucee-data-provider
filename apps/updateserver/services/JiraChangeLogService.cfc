@@ -25,6 +25,7 @@ component accessors=true {
 	public function updateIssuesAsync() {
 		thread name="fetch-issues-#createUUID()#" {
 			lock type="exclusive" name="fetch-issues-async" timeout=0 {
+				systemOutput("updateIssuesAsync()", true );
 				var issues = _fetchIssues();
 				_writeIssuesToS3( issues );
 				setIssues( issues );
@@ -34,9 +35,13 @@ component accessors=true {
 		}
 	}
 
-	public function getChangelog( string versionFrom, string versionTo ) {
+	public function getChangeLogUpdated(){
+		return getLastUpdated();
+	}
+
+	public function getChangelog( string versionFrom, string versionTo, detailed=false ) {
 		_checkForUpdates(); // will update in the background if needed
-		var cacheKey = "#arguments.versionFrom#-#arguments.versionTo#";
+		var cacheKey = "#arguments.versionFrom#-#arguments.versionTo#-#arguments.detailed#";
 		if ( structKeyExists( variables._simpleCache, cacheKey ) ){
 			try {
 				return variables._simpleCache[ cacheKey ];
@@ -57,7 +62,7 @@ component accessors=true {
 	private function _checkForUpdates() {
 		var age = dateDiff( "n", getLastUpdated(), now() );
 
-		// systemOutput(" _checkForUpdates() cache is #age# mins old ", true );
+		//systemOutput("jira._checkForUpdates() cache is #age# mins old, max is #getRefreshIntervalMins()#", true );
 		if ( age < variables.getRefreshIntervalMins() ){
 			return;
 		}
@@ -67,10 +72,10 @@ component accessors=true {
 		}
 	}
 
-	private function _getChangelog( string versionFrom, string versionTo ){
+	private function _getChangelog( string versionFrom, string versionTo, detailed=false ){
 		var from	= VersionUtils::toVersionSortable( versionFrom );
 		var to      = VersionUtils::toVersionSortable( versionTo );
-		var issues  = duplicate( getIssues() );
+		var issues  = duplicate( getIssues( arguments.detailed ) );
 		var sct     = structNew( "linked" );
 		var sorted  = queryNew( "ver,sort" );
 
@@ -101,7 +106,7 @@ component accessors=true {
 	private function _fetchIssues() {
 		systemOutput("-- start fetching issues from jira --- ", true);
 		var jira = new services.legacy.Jira( getJiraServer() );
-		var issues = jira.listIssues( project:"LDEV", stati: [ "Deployed", "Done", "QA" ] ).issues;
+		var issues = jira.listIssues( project:"LDEV", stati: [ "Deployed", "Done", "QA", "Resolved" ] ).issues;
 		systemOutput("-- finished fetching issues from jira --- ", true);
 		return issues;
 	}
@@ -109,6 +114,7 @@ component accessors=true {
 	private function _readExistingIssuesFromS3() {
 		var issues = getS3Root() & variables.cacheFile;
 		if ( FileExists( issues ) ) {
+			systemOutput("jira._readExistingIssuesFromS3", true);
 			return DeserializeJson( FileRead( issues ), false );
 		}
 		return _getEmptyIssuesQuery();

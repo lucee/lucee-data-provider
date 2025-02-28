@@ -360,6 +360,21 @@ component {
 		return jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo );
 	}
 
+	/*
+	remote struct function getChangeLogExtended(
+		required string versionFrom restargsource="Path",
+		required string versionTo restargsource="Path")
+		httpmethod="GET" restpath="changelogDetailed/{versionFrom}/{versionTo}" {
+		
+		return jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo, detailed=true );
+	}
+	*/
+
+	remote string function getChangeLogLastUpdated()
+		httpmethod="GET" restpath="changelogLastUpdated" {
+		// systemOutput("jiraChangelogService.getChangeLogUpdated():" & jiraChangelogService.getChangeLogUpdated(), true);
+		return DateTimeFormat(jiraChangelogService.getChangeLogUpdated());
+	}
 
 	/**
 	* function to get all dependencies (bundles) for a specific version
@@ -545,8 +560,9 @@ component {
 			else if(!isNull(info.sources.jar.date))
 				return parseDateTime(info.sources.jar.date);
 		} catch(e) {
-			var mess=  "maven.getDate() threw " & cfcatch.message;
-			logger(text=mess, exception=e, type="error");
+			//systemOutput(e.stackTrace, true);
+			var mess=  "maven.getDate() threw " & left(cfcatch.message,100);
+			logger(text=mess, type="error");
 			systemOutput(mess, true, true );
 		}
 		
