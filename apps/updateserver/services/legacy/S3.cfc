@@ -3,10 +3,17 @@ component {
 ";
 	public function init(s3Root) {
 		variables.s3Root=arguments.s3Root;
+		if ( !structKeyExists( application, "expressTemplates" ) ) {
+			application.expressTemplates = new expressTemplates().getExpressTemplates( s3Root );
+		}
 	}
+
 	public void function reset() {
-		structDelete(application,"s3VersionData",false);
+		systemOutput( "s3.reset()", true );
+		structDelete( application, "s3VersionData", false );
+		structDelete( application, "expressTemplates", false );
 	}
+
 	public function getVersions(boolean flush=false) {
 		var rootDir = getDirectoryFromPath(getCurrentTemplatePath());
 		var cacheDir=rootDir & "cache/";
@@ -229,7 +236,7 @@ component {
 				//maven2S3(mr,el.version,s3List);
 				resetRequired = true;
 			}
-			if (resetRequired) 
+			if (resetRequired)
 				s3List = getVersions(true); //force reset();
 		}
 		// create the missing artifacts
@@ -288,7 +295,7 @@ component {
 					var list="lco,war,light,express";
 					if(includingForgeBox)list&=",fb,fbl";
 
-					systemOutput("Starting ( #s3.version# )",1,1);
+					systemOutput("createArtifacts() Starting ( #s3.version# )",1,1);
 					var c= 0;
 
 					loop list=list item="local.type" {
@@ -383,7 +390,7 @@ component {
 		var curr=getDirectoryFromPath(getCurrenttemplatePath());
 
 		var noLuceeServlet = checkVersionGTE( arguments.version, 6, 2 );
-		systemOutput("Has LuceeServlet Version check, gte 6.2: #noLuceeServlet#", true );
+		//systemOutput("Has LuceeServlet Version check, gte 6.2: #noLuceeServlet#", true );
 
 		var warFolder = noLuceeServlet ? "war-6.2" : "war";
 
@@ -393,13 +400,13 @@ component {
 			local.build={};
 			loop list="extensions,common,website,war" item="local.name" {
 				local.tmp=curr & "build/" & name & "/";
-				if ( name == "extensions" && !directoryExists( tmp ) ) 
+				if ( name == "extensions" && !directoryExists( tmp ) )
 					directoryCreate( tmp, true );
 				if ( name == "war" ){
 					tmp = curr & "build/" & warFolder & "/";
 				}
 				build[ name ] = tmp;
-				
+
 			}
 			systemOutput( "---- createWar", true );
 			systemOutput( build, true );
@@ -426,7 +433,7 @@ component {
 		if ( directoryExists( temp ) )
 			directoryDelete( temp, true );
 		directoryCreate( temp );
-		
+
 		local.trg=variables.s3Root&"lucee-light-"&version&".jar";
 		if ( fileExists( trg ) ) {
 			// avoid double handling for forgebox light builds
@@ -471,7 +478,7 @@ component {
             // zip loader
             local.tmpLoaderFile=temp&"lucee-loader-"&createUniqueId()&".jar";
             zip action="zip" source=tmpLoader file=tmpLoaderFile;
-			
+
 			//if(fileExists(light)) fileDelete(light);
             if (toS3) fileMove(tmpLoaderFile,trg);
         }
@@ -485,8 +492,8 @@ component {
 
     private string function createExpress(required jar,required string version) {
 		var sep=server.separator.file;
-        var temp = getTemp( arguments.version );
-		
+		var temp = getTemp( arguments.version );
+
 		var trg=variables.s3Root&"lucee-express-"&version&".zip";
 		if ( fileExists( trg ) ) {
 			systemOutput("--- " & trg & " already built, skipping", true);
@@ -512,8 +519,14 @@ component {
 			local.webDir=local.curr&("build/website/");
 			//if (!directoryExists(webDir)) directoryCreate(webDir);
 
+			var expressTemplates = application.expressTemplates;
 			// unpack the servers
-			zip action="unzip" file=#curr&("build/servers/tomcat.zip")# destination=tmpTom;
+			var local_tomcat_templates = curr & "build/servers"
+			if ( checkVersionGTE( arguments.version, 6, 2 ) ) {
+				zip action="unzip" file="#local_tomcat_templates#/#expressTemplates['tomcat-10']#" destination=tmpTom;
+			} else {
+				zip action="unzip" file="#local_tomcat_templates#/#expressTemplates['tomcat-9']#" destination=tmpTom;
+			}
 
 			// let's zip it
 			zip action="zip" file=zipTmp overwrite=true {
@@ -522,7 +535,7 @@ component {
 				// extensions to bundle
 				zipparam source=extDir filter="*.lex" prefix="lucee-server/context/deploy";
 				// jars
-				zipparam source=jar entrypath="lib/ext/lucee.jar";
+				zipparam source=jar entrypath="lib/ext/#listLast(jar, "/\")#";
 				// common files
 				zipparam source=commonDir;
 				// website files
@@ -622,6 +635,3 @@ component {
 	}
 
 }
-
-
-
