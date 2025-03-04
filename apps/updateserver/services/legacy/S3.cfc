@@ -572,7 +572,7 @@ component {
 
 			// war directory
 			var noLuceeServlet = checkVersionGTE( arguments.version, 6, 2 );
-			systemOutput("Has LuceeServlet Version check, gte 6.2: #noLuceeServlet#", true );
+			// systemOutput("Has LuceeServlet Version check, gte 6.2: #noLuceeServlet#", true );
 			local.warDir=curr & "/build/" & (noLuceeServlet ? "war-6.2" : "war") & "/";
 
 			// create the war

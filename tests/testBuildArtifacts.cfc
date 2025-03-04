@@ -22,34 +22,42 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		});
 	}
 
-	private function fetchLuceeJar( string version ){
-		if ( fileExists( variables.artifacts & "/#arguments.version#.jar" ))
-			return variables.artifacts & "/#arguments.version#.jar";
-		var artifact = "https://cdn.lucee.org/#arguments.version#.jar";
+	private function fetch( string filename, string extraDir="" ){
+		if ( fileExists( variables.artifacts & "/#arguments.filename#" ))
+			return variables.artifacts & "/#arguments.filename#";
+		var artifact = "https://cdn.lucee.org/#arguments.extraDir##arguments.filename#";
 
 		systemOutput( "Downloading #artifact# (cache miss)", true);
-		http url=artifact method="get" result="local.core" path=variables.artifacts throwonerror="true";
-		var file = directoryList(path=variables.artifacts, filter="#arguments.version#.jar");
+		http url=artifact method="get" result="local.core" file=arguments.filename path=variables.artifacts throwonerror="true";
+		var file = directoryList(path=variables.artifacts, filter="#arguments.filename#");
 		systemOutput(file, true);
 		return file[ 1 ];
 	}
 
 	private function buildArtifacts( version ){
 
+		systemOutput( "--- buildArtifacts [#arguments.version#] ", true);
+
 		var buildDir = getTempDirectory() & "/build-artifacts-#createUUID()#/";
 		if ( DirectoryExists( buildDir ) )
 			directoryDelete( buildDir, true );
 		directoryCreate( buildDir, true );
+		directoryCreate( buildDir & "express-templates", true );
 
-		systemOutput( "--- buildArtifacts [#arguments.version#] ", true);
-		var srcJar = fetchLuceeJar( arguments.version );
+		var srcJar = fetch( arguments.version  & ".jar" );
 		FileCopy( srcJar, buildDir & listLast( srcJar, "/\" ) );
 
-		var s3 = new services.legacy.S3();
-		s3.init( buildDir );
+		loop list="lucee-tomcat-9.0.100-template.zip,lucee-tomcat-10.1.36-template.zip" item="local.expressTemplate" {
+			if ( !fileExists( buildDir & "express-templates/" & expressTemplate ) ){
+				var template = fetch( expressTemplate, "express-templates/" );
+				FileCopy( template, buildDir & "express-templates/" & expressTemplate );
+			}
+		}
+
+		var s3 = new services.legacy.S3( buildDir );
 		s3.addMissing( includingForgeBox=true, skipMaven=true );
 
-		var produced = directoryList( path=buildDir, recurse=true, listinfo="query" );
+		var produced = directoryList( path=buildDir, recurse=false, listinfo="query", type="file" );
 		for (var f in produced ) {
 			systemOutput( "", true );
 			var fileCount = -1;
