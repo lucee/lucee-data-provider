@@ -219,8 +219,7 @@ component accessors=true {
 
 	private function _copyRemoteFileToTmpFile( fileName ) {
 		var remoteFile = getS3Root() & "/" & arguments.fileName;
-		var tmpFile = GetTempFile( GetTempDirectory(), "lexfile" ) & Listlast( arguments.fileName, "." );
-
+		var tmpFile = GetTempFile( GetTempDirectory(), "lexfile", Listlast( arguments.fileName, "." ) );
 		FileCopy( remoteFile, tmpFile );
 		return tmpFile;
 	}
@@ -255,11 +254,9 @@ component accessors=true {
 
 		if( FileExists( zippedPath ) ) {
 			// reduce colour depth to 8 bit by writing to gif
-			var tmpLogo     = ImageRead( zippedPath );
-			var tmpGifThumb = GetTempFile( GetTempDirectory(), "logo") & ".gif";
+			var tmpGifThumb = GetTempFile( GetTempDirectory(), "logo", ".gif" );
 
 			ImageWrite( ImageRead( zippedPath ), tmpGifThumb );
-
 			logoBase64 = ToBase64( FileReadBinary( tmpGifThumb ) );
 
 			try {
