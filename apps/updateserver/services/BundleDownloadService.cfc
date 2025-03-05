@@ -93,9 +93,10 @@ component accessors=true {
 
 		if ( !FileExists( s3BundlePath ) ) {
 			SystemOutput( "Registering bundle jar from extension lex file. Bundle: #arguments.fileName#", true );
-			var tmpFile = GetTempFile( GetTempDirectory(), "extensionjar" ) & ".jar";
+			var tmpFile = GetTempFile( GetTempDirectory(), "extensionJar", ".jar");
 			FileCopy( arguments.directory & arguments.fileName, tmpFile );
 			FileCopy( tmpFile, s3BundlePath );
+			FileDelete( tmpFile );
 		}
 
 		if ( StructIsEmpty( _cacheLookup( argumentCollection=bundleInfo ) ) ) {
@@ -145,6 +146,7 @@ component accessors=true {
 			FileWrite( _getS3CacheFilePath( argumentCollection=arguments ), SerializeJson( bundleInfo ) );
 		} catch( any e ) { /* just a cache, failing is fine */ }
 	}
+
 	private function _removeFromS3( bundleName, bundleVersion ) {
 		try {
 			FileDelete( _getS3CacheFilePath( argumentCollection=arguments ) );

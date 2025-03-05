@@ -257,13 +257,13 @@ component {
 	private function getArtifactDirectory(){
 		local.dir=getDirectoryFromPath(getCurrentTemplatePath())&"artifacts/";
 		if(!directoryExists(dir)) directoryCreate(dir);
-		return dir
+		return dir;
 	}
 
 	private function getTempDir(){
-		local.dir=getDirectoryFromPath(getCurrentTemplatePath())&"temp#getTickCount()#/";
+		local.dir=getDirectoryFromPath(getCurrentTemplatePath())&"temp#getUniqueId()#/";
 		if(!directoryExists(dir)) directoryCreate(dir);
-		return dir
+		return dir;
 	}
 	
 	/**

@@ -17,6 +17,17 @@ component {
 	this.allowReload            = IsBoolean( server.system.environment.ALLOW_RELOAD ?: "" ) && server.system.environment.ALLOW_RELOAD;
 
 	function onApplicationStart() {
+		lock name="configure-sentry" type="exclusive" timeout=5{
+			// workaround for LDEV-5371
+			// if LUCEE_LOGGING_FORCE_APPENDER=console is set, sentry is bypassed
+			var deploy = expandPath( '{lucee-server}/../deploy/' );
+			var sentry_json = deploy & "/.CFconfig-sentry.json"; 
+			if ( FileExists( sentry_json ) ){
+				configImport( sentry_json, "server", "admin" );
+				systemOutput("sentry.json loaded via configImport - LDEV-5371", true);
+				fileDelete( sentry_json );
+			}
+		}
 		_loadServices();
 	}
 
