@@ -1,7 +1,7 @@
 {
     "loggers": {
         "update-provider": {
-            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
+            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:false;tags",
             "level": "error",
             "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
             "appenderBundleName": "sentry.extension",
@@ -10,7 +10,7 @@
             "layoutArguments": ""
         },
         "exception": {
-            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
+            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:false;tags",
             "level": "error",
             "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
             "appenderBundleName": "sentry.extension",
@@ -19,7 +19,7 @@
             "layoutArguments": ""
         },
         "application": {
-            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
+            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:false;tags",
             "level": "info",
             "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
             "appenderBundleName": "sentry.extension",
@@ -28,7 +28,7 @@
             "layoutArguments": ""
         },
         "rest": {
-            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:true;tags",
+            "appenderArguments": "environment:%7Benv%2ESENTRY%5FENV%7D;dist:;extras:;dsn:%7Benv%2ESENTRY%5FDSN%7D;debug:false;tags",
             "level": "error",
             "appenderClass": "org.lucee.extension.sentry.log.log4j.SentryAppenderLog4j2",
             "appenderBundleName": "sentry.extension",
