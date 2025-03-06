@@ -317,32 +317,40 @@
 										<cfloop struct="#versions#" index="vs" item="data">
 											<cfif vs=="05.003.007.0044.100"><cfcontinue></cfif><cfif data.type==_type><option <cfif url[_type]==vs><cfset rows[_type]=vs> selected="selected"</cfif> value="#vs#"><cfset arrayAppend(_versions[_type],data.version)>#data.versionNoAppendix#</option></cfif>
 										</cfloop>
-									 </select>
-								  </div>
-								  <cfset dw=versions[rows[_type]]>
-								  <!--- desc --->
-								  <div class="desc descDiv row_even">
-									 <cfset res=download.getReleaseDate(dw.version)>
-									 <span style="font-weight:600">#dw.version#</span><cfif len(res)>
-
+									</select>
+								</div>
+								<cfscript>
+									if ( !structKeyExists( rows,_type ) ){ 
+										// requested version doesn't exist, fallback on latest
+										vs = download.getLatestVersionForType( versions, _type );
+										url[_type]=vs;
+										rows[_type]=vs;
+									}
+								</cfscript>
+								<cfset dw=versions[rows[_type]]>
+								<!--- desc --->
+								<div class="desc descDiv row_even">
+									<cfset res=download.getReleaseDate(dw.version)>
+									<span style="font-weight:600">#dw.version#</span><cfif len(res)>
 									<span style="font-size:12px">(#res#)</span></cfif><br><br>
+									#lang.desc[_type]#</div>
 
-									 #lang.desc[_type]#</div>
-
-								  <!--- Express --->
-								  <cfif structKeyExists(dw,"express")><div class="row_odd divHeight">
-									 <cfif doS3.express>
-										<cfset uri="#cdnURL##dw.express#">
-									 <cfelse>
-										<cfset uri="#baseURL#express/#dw.version#">
-									 </cfif>
-									 <div class="fontStyle">
-										<a href="#uri#">Express</a>
-										<span  class="triggerIcon pointer" style="color :##01798A" title="#lang.express#">
-										   <span class="glyphicon glyphicon-info-sign"></span>
-										</span>
-									 </div>
-								  </div></cfif>
+									<!--- Express --->
+								  	<cfif structKeyExists(dw,"express")>
+										<div class="row_odd divHeight">
+											<cfif doS3.express>
+												<cfset uri="#cdnURL##dw.express#">
+											<cfelse>
+												<cfset uri="#baseURL#express/#dw.version#">
+											</cfif>
+											<div class="fontStyle">
+												<a href="#uri#">Express</a>
+													<span  class="triggerIcon pointer" style="color :##01798A" title="#lang.express#">
+													<span class="glyphicon glyphicon-info-sign"></span>
+												</span>
+											</div>
+										</div>
+									</cfif>
 								  <!--- Installer --->
 								  <div class="row_even installerDiv">
 									 <cfif _type == "releases">
@@ -375,11 +383,11 @@
 								  </div>
 								  <!--- jar --->
 								  <div class="row_odd jarDiv">
-										<cfif structKeyExists(dw,"jar")>
+									<cfif structKeyExists(dw,"jar")>
 										<cfif doS3.jar>
-										   <cfset uri="#cdnURL##dw.jar#">
+											<cfset uri="#cdnURL##dw.jar#">
 										<cfelse>
-										   <cfset uri="#baseURL#loader/#dw.version#">
+											<cfset uri="#baseURL#loader/#dw.version#">
 										</cfif>
 
 										<div class="fontStyle"><a href="#(uri)#">lucee.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title="#lang.jar#">
@@ -407,8 +415,6 @@
 											  <span class="glyphicon glyphicon-info-sign"></span>
 										   </span></div>
 										</cfif>
-
-
 								  </div>
 								  <!--- core --->
 								  <cfif structKeyExists(dw,"lco")><div class="row_even divHeight">
