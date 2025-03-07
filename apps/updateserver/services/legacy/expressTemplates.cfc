@@ -19,10 +19,11 @@ component {
 		var local_templates = directoryList( path=expressLocal, listInfo="query" );
 		// figure out the latest templates for Tomcat 9 and 10
 		var express_templates = {};
+		var express_versions = "lucee-tomcat-9.0.,lucee-tomcat-10.1.,lucee-tomcat-11.0.";
 		var versions = [];
 		// https://cdn.lucee.org/express-templates/lucee-tomcat-9.0.100-template.zip
 		// https://cdn.lucee.org/express-templates/lucee-tomcat-10.1.36-template.zip
-		loop list="lucee-tomcat-9.0.,lucee-tomcat-10.1." item="local.tomcat_major" {
+		loop list="#express_versions#" item="local.tomcat_major" {
 			versions = [];
 			loop query="#s3_templates#" {
 				if ( s3_templates.name contains tomcat_major 
@@ -55,8 +56,8 @@ component {
 			}
 		}
 		
-		if ( structCount( express_templates ) neq 2 )
-			throw "Expected 2 express templates: [#express_templates.toJson()#]";
+		if ( structCount( express_templates ) neq listLen( express_versions ) )
+			throw "Expected #listLen(express_versions)# express templates: [#express_templates.toJson()#], i.e. [#express_versions#]";
 		return express_templates;
 	}
 
