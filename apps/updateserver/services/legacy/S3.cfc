@@ -523,9 +523,14 @@ component {
 			var expressTemplates = getExpressTemplates(); // at this point it should be already cached in the application scope
 			// unpack the lucee tomcat template
 			var local_tomcat_templates = curr & "build/servers"
-			if ( checkVersionGTE( arguments.version, 6, 2 ) ) {
+			if ( checkVersionGTE( arguments.version, 6, 2, 1 ) ) {
+				systemOutput("Using Tomcat 11", true);
+				zip action="unzip" file="#local_tomcat_templates#/#expressTemplates['tomcat-11']#" destination=tmpTom;
+			} else if ( checkVersionGTE( arguments.version, 6, 2 ) ) {
+				systemOutput("Using Tomcat 10", true);
 				zip action="unzip" file="#local_tomcat_templates#/#expressTemplates['tomcat-10']#" destination=tmpTom;
 			} else {
+				systemOutput("Using Tomcat 9", true);
 				zip action="unzip" file="#local_tomcat_templates#/#expressTemplates['tomcat-9']#" destination=tmpTom;
 			}
 
@@ -622,12 +627,15 @@ component {
 		return temp;
 	}
 
-	private function checkVersionGTE( version, major, minor ){
+	private function checkVersionGTE( version, major, minor, patch="" ){
 		var v = listToArray( arguments.version, "." );
 		if ( v[ 1 ] gt arguments.major ) {
 			return true;
 		} else if ( v[ 1 ] eq arguments.major && v[ 2 ] gte arguments.minor ) {
-			return true;
+			if ( len( arguments.patch ) )
+				return v[ 3 ] gte arguments.patch;
+			else
+				return true;
 		}
 		return false;
 	}
