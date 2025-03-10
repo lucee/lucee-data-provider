@@ -2,10 +2,11 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 
 	function beforeAll (){
 		variables.dir = getDirectoryFromPath(getCurrentTemplatePath());
+		var servicesDir = expandPath( dir & "../apps/updateserver/services" );
 		application action="update" mappings={
-			"/services" : expandPath( dir & "../apps/updateserver/services" )
+			"/services" : servicesDir
 		};
-		variables.artifacts = dir & "/artifacts";
+		variables.artifacts = servicesDir & "/legacy/build/servers/";
 		if ( !DirectoryExists( variables.artifacts ))
 			directoryCreate( variables.artifacts );
 	}
@@ -47,7 +48,10 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		var srcJar = fetch( arguments.version  & ".jar" );
 		FileCopy( srcJar, buildDir & listLast( srcJar, "/\" ) );
 
-		// using the cached versions from \apps\updateserver\services\legacy\build\servers
+		/* 
+		could use https://update.lucee.org/rest/update/provider/expressTemplates for now rely on these existing on s3
+		*/
+
 		loop list="lucee-tomcat-9.0.100-template.zip,lucee-tomcat-10.1.36-template.zip,lucee-tomcat-11.0.5-template.zip" item="local.expressTemplate" {
 			if ( !fileExists( buildDir & "express-templates/" & expressTemplate ) ){
 				var template = fetch( expressTemplate, "express-templates/" );
