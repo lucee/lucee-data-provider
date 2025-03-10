@@ -47,7 +47,8 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		var srcJar = fetch( arguments.version  & ".jar" );
 		FileCopy( srcJar, buildDir & listLast( srcJar, "/\" ) );
 
-		loop list="lucee-tomcat-9.0.100-template.zip,lucee-tomcat-10.1.36-template.zip" item="local.expressTemplate" {
+		// using the cached versions from \apps\updateserver\services\legacy\build\servers
+		loop list="lucee-tomcat-9.0.100-template.zip,lucee-tomcat-10.1.36-template.zip,lucee-tomcat-11.0.5-template.zip" item="local.expressTemplate" {
 			if ( !fileExists( buildDir & "express-templates/" & expressTemplate ) ){
 				var template = fetch( expressTemplate, "express-templates/" );
 				FileCopy( template, buildDir & "express-templates/" & expressTemplate );
