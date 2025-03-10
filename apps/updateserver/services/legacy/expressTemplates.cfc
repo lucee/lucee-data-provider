@@ -26,9 +26,9 @@ component {
 		loop list="#express_versions#" item="local.tomcat_major" {
 			versions = [];
 			loop query="#s3_templates#" {
-				if ( s3_templates.name contains tomcat_major 
+				if ( s3_templates.name contains tomcat_major
 						&& listLen( s3_templates.name, "-" ) eq 4
-						&& listLen( s3_templates.name, ".") eq 4 
+						&& listLen( s3_templates.name, ".") eq 4
 						&& listLast( s3_templates.name, "." ) eq "zip" ){
 					arrayAppend( versions, ListLast( ListGetAt( s3_templates.name, 3, "-" ), "." ) );
 				}
@@ -37,7 +37,7 @@ component {
 				throw "getExpressTemplates() No express templates found for: [#tomcat_major#]";
 			ArraySort( versions, "numeric", "desc" );
 			// tomcat-9 = lucee-tomcat-9.0.100-template.zip
-			express_templates[ ListFirst( listRest( tomcat_major, "-" ), "." ) ] 
+			express_templates[ ListFirst( listRest( tomcat_major, "-" ), "." ) ]
 				= "#tomcat_major##versions[ 1 ]#-template.zip" ;
 		}
 
@@ -55,7 +55,7 @@ component {
 				_fetchExpressTemplateFromS3( name, expressSrc, expressLocal );
 			}
 		}
-		
+
 		if ( structCount( express_templates ) neq listLen( express_versions ) )
 			throw "Expected #listLen(express_versions)# express templates: [#express_templates.toJson()#], i.e. [#express_versions#]";
 		return express_templates;
@@ -65,7 +65,8 @@ component {
 		if ( !directoryExists( dest ) )
 			directoryCreate( dest );
 		var _dest = getTempDirectory() & name;
-		fileCopy( src & name, getTempDirectory() & name );
+		var _src = src & name;
+		fileCopy( _src, _dest );
 		if ( isZipFile( _dest ) ){
 			fileCopy( _dest, dest & name);
 			fileDelete( _dest );
@@ -73,7 +74,7 @@ component {
 		} else {
 			fileDelete( _dest );
 		}
-		throw "getExpressTemplates() [#name#] isn't a valid zip file";
+		throw "getExpressTemplates() [#_dest#] isn't a valid zip file, src [#_src#], args [#arguments.toJson()#]";
 	}
 
 }
