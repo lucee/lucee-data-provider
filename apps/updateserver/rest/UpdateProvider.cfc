@@ -414,7 +414,15 @@ component {
 		catch(e){
 			return {"type":"error","message":"The version #version# is not available."};
 		}
- 
+	}
+
+	remote function getExpressTemplates() httpmethod="GET" restpath="expressTemplates" {
+		var s3 = new services.legacy.S3( variables.s3Root );
+		var expressTemplates = s3.getExpressTemplates();
+		loop collection=#expressTemplates# key="local.key" item="local.item"{
+			expressTemplates[ key ] = application.coreCdnUrl & "express-templates/" & item;
+		};
+		return expressTemplates;
 	}
 
 	remote function reset()

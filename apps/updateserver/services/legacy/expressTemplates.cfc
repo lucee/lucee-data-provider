@@ -44,7 +44,7 @@ component {
 		var st_s3 = QueryToStruct(s3_templates, "name" );
 		var st_local = QueryToStruct(local_templates, "name" );
 
-		systemOutput( express_templates, true );
+		//systemOutput( express_templates, true );
 
 		loop collection="#express_templates#" key="local.major" value="local.name"{
 			if ( !structKeyExists(st_local, name ) ){

@@ -1,4 +1,5 @@
 component {
+	variables.providerLog = "update-provider";
 	variables.NL="
 ";
 	public function init(s3Root) {
@@ -9,6 +10,14 @@ component {
 		systemOutput( "s3.reset()", true );
 		structDelete( application, "s3VersionData", false );
 		structDelete( application, "expressTemplates", false );
+	}
+
+	private function logger( string text, any exception, type="info" ){
+		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
+		if ( !isNull(arguments.exception ) )
+			WriteLog( text=log, type=arguments.type, log=variables.providerLog, exception=arguments.exception );
+		else
+			WriteLog( text=log, type=arguments.type, log=variables.providerLog );
 	}
 
 	public function getVersions(boolean flush=false) {
@@ -186,7 +195,7 @@ component {
 		return versions[keys[arrayLen(keys)]].version;
 	}
 
-	private function getExpressTemplates(){
+	public function getExpressTemplates(){
 		if ( !structKeyExists( application, "expressTemplates" ) ) {
 			application.expressTemplates = new expressTemplates().getExpressTemplates( s3Root );
 		}
@@ -382,6 +391,9 @@ component {
 			fileCopy( "zip://" & jar & "!core/core.lco", lco ); // now extract
 			fileMove( lco, trg );
 		}
+		catch( e ){
+			logger(text=e.message, type="error", exception=e);
+		}
 		finally {
 			if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
 		}
@@ -428,6 +440,9 @@ component {
 				zipparam source=build["war"];
 			}
 			fileMove (warTmp, war );
+		}
+		catch( e ){
+			logger(text=e.message, type="error", exception=e);
 		}
 		finally {
 			if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
@@ -486,6 +501,9 @@ component {
 			//if(fileExists(light)) fileDelete(light);
             if (toS3) fileMove(tmpLoaderFile,trg);
         }
+		catch( e ){
+			logger(text=e.message, type="error", exception=e);
+		}
         finally {
             if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
         }
@@ -548,6 +566,9 @@ component {
 				zipparam source=webDir prefix="webapps/ROOT";
 			}
 			fileMove( zipTmp , trg );
+		}
+		catch( e ){
+			logger(text=e.message, type="error", exception=e);
 		}
 		finally {
 			if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
@@ -612,6 +633,10 @@ component {
 				zipparam source=json;
 			}
 			fileMove( zipTmp, trg );
+			throw "I'm a test!";
+		}
+		catch( e ){
+			logger(text=e.message, type="error", exception=e);
 		}
 		finally {
 			if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
