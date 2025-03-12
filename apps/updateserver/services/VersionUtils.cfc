@@ -107,4 +107,55 @@ component {
 			type
 		};
 	}
+
+	public static function matchVersion( versions, type, version, distribution ){
+
+		var arrVersions = structKeyArray( arguments.versions ).reverse();
+
+		loop array="#arrVersions#" index="local.i" value="local.v" {
+			var _version = versions[ local.v ].version;
+			var _type = listToArray( _version, "-" ); // [ "6.2.0.317", "RC" ]
+			systemOutput({_version, _type}, true);
+			if ( arrayLen( _type ) eq 2 && arguments.type eq "stable" ){
+				// version has a suffix, i.e. 6.2.1.55-SNAPSHOT, stable versions have no suffix
+				continue;
+			} else if ( len( arguments.type ) gt 0 && arguments.type neq "stable" ){
+				if ( arrayLen( _type ) eq 1
+						|| ( _type[ 2 ] neq arguments.type) ){
+					// version type doesn't match requested type
+					continue;
+				}
+			}
+			
+			if ( len( arguments.version ) eq 0 
+					&& structKeyExists( versions[ local.v ], arguments.distribution ) ){
+				return v; // match for the first version for the requested distribution
+			}
+			var versionMatches = findNoCase( arguments.version, _version );
+			if ( versionMatches neq 1 ) {
+				// requested version prefix does not match this version
+				continue;
+			}
+			// at this point, the versions prefix match
+			if ( versionMatches eq 1 && len( _type[ 1 ] ) eq len( arguments.version ) ) {
+				if ( structKeyExists( versions[ local.v ], arguments.distribution ) ){
+					return v; // exact version match!
+				} else {
+					return ""; // exact version match but missing distribution
+				}
+			} else {
+				// avoid 6.2.1.55 matching 6.2.1.5
+				if ( ( len( arguments.version ) lt len( _type[ 1 ] )
+						&& mid( _type[ 1 ], len( arguments.version ) + 1, 1 ) neq "." )) {
+					continue;
+				}
+			}
+			if ( structKeyExists( versions[ local.v ], arguments.distribution ) ){
+				return v; // match on version and distribution
+			} else {
+				return ""; // match but missing distribution
+			}
+		}
+		return "";
+	}
 }
