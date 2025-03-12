@@ -43,7 +43,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		});
 	}
 
-	private testLatest(type, version, distribution ){
+	private function testLatest(type, version, distribution ){
 
 		var matchedVersion = services.VersionUtils::matchVersion( variables.testVersions, 
 			arguments.type, arguments.version, arguments.distribution );
