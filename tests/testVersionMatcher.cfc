@@ -17,10 +17,19 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 				expect( testLatest( "snapshot", "6.2.1.5", "jar" ) ).toBe( "6.2.1.5-SNAPSHOT" );
 				expect( testLatest( "snapshot", "6.2.1.55", "jar" ) ) .toBe( "6.2.1.55-SNAPSHOT" );
 				expect( testLatest( "snapshot", "6.2.0.32", "jar" ) ) .toBe( "6.2.0.32-SNAPSHOT" );
+
+
+				expect( testLatest( "stable", "5.3.1.1", "jar" ) ).toBe( "5.3.1.1" );
+				expect( testLatest( "stable", "5.3.1", "jar" ) ).toBe( "5.3.1.1" );
+				expect( testLatest( "stable", "5.3.10", "jar" ) ).toBe( "5.3.10.1" );
+				expect( testLatest( "stable", "5.3", "jar" ) ).toBe( "5.3.10.1" );
+
 				expect( testLatest( "all", "6.2.1.5", "linux-arm64" ) ) .toBe( "6.2.1.5-SNAPSHOT" );
+				expect( testLatest( "snapshot", "6.2.1.5", "jar" ) ).toBe( "6.2.1.5-SNAPSHOT" );
 			});
 
 			it(title="missing", body=function(){
+				expect( testLatest( "snapshot", "5.3.1.0", "jar" ) ).toBe( "" );
 				expect( testLatest( "stable", "6.2.0.32", "jar" ) ) .toBe( "" );
 				expect( testLatest( "snapshot", "6.2.0.321", "jar" ) ) .toBe( "" );
 				expect( testLatest( "any", "7", "jar" ) ) .toBe( "" );
@@ -69,7 +78,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 			arguments.version = "";
 
 
-		var matchedVersion = update.services.VersionUtils::matchVersion( duplicate(variables.testVersions), 
+		var matchedVersion = update.services.VersionUtils::matchVersion( duplicate(variables.testVersions),
 			arguments.type, arguments.version, arguments.distribution );
 		if ( len( matchedVersion ) eq 0 )
 			return "";
