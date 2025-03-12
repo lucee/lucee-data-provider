@@ -26,6 +26,7 @@
     },
     "06.002.001.0005.000": {
         "version": "6.2.1.5-SNAPSHOT",
+        "linux-arm64": "lucee-6.2.1.5-SNAPSHOT-linux-arm64-installer.run",
         "jar": "lucee-6.2.1.5-SNAPSHOT.jar"
     },
     "06.002.001.0048.000": {
@@ -38,7 +39,6 @@
     },
     "06.002.001.0058.000": {
         "version": "6.2.1.58-SNAPSHOT",
-        "linux-arm64": "lucee-6.2.1.58-SNAPSHOT-linux-arm64-installer.run",
         "linux-x64": "lucee-6.2.1.58-SNAPSHOT-linux-x64-installer.run",
         "jar": "lucee-6.2.1.58-SNAPSHOT.jar",
         "win64": "lucee-6.2.1.58-SNAPSHOT-windows-x64-installer.exe"

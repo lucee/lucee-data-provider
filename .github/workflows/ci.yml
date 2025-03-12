@@ -59,7 +59,7 @@ jobs:
         testAdditional: ${{ github.workspace }}/tests
         testSevices: mysql
         LUCEE_ADMIN_ENABLED: false
-    - name: Run Lucee Test Suite (testLabels="data-provider-integration") (expected to fail)
+    - name: Run Lucee Test Suite (testLabels="data-provider-integration")
       uses: lucee/script-runner@main
       #continue-on-error: true
       with:
