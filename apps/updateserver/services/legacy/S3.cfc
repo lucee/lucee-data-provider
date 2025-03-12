@@ -92,27 +92,19 @@ component {
 				var version="";
 				// core (.lco)
 				var name=qry.name;
-				if(ext=='lco') {
+				if (ext=='lco') {
 					var version=mid(qry.name,1,len(qry.name)-4);
 					var type="lco";
 				}
-				else if(ext=='exe') {
-					var version=mid(qry.name,7,len(qry.name)-10);
-					version=replace(version,'-windows-x64-installer','');
-					version=replace(version,'-windows-installer','');
-					version=replace(version,'-pl0','');
-					version=replace(version,'-pl1','');
-					version=replace(version,'-pl2','');
-					var type="win";
+				else if (ext=='exe') {
+					var _installer = services.VersionUtils::parseInstallerFilename( qry.name );
+					var version = _installer.version;
+					var type =  _installer.type;
 				}
-				else if(ext=='run') {
-					var version=mid(qry.name,7,len(qry.name)-10);
-					var type=findNoCase('-x64-',version)?'lin64':'lin32';
-					version=replace(version,'-linux-x64-installer','');
-					version=replace(version,'-linux-installer','');
-					version=replace(version,'-pl0','');
-					version=replace(version,'-pl1','');
-					version=replace(version,'-pl2','');
+				else if (ext=='run') {
+					var _installer = services.VersionUtils::parseInstallerFilename( qry.name );
+					var version = _installer.version;
+					var type =  _installer.type;
 				}
 				else if(ext=='war') {
 					var version=mid(qry.name,7,len(qry.name)-10);

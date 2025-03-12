@@ -4,6 +4,7 @@
 		["Developer Forum", "https://dev.lucee.org/"],
 		["Download", "/"],
 		["Changelogs", "/changelog"],
+		["Release Notes", "https://dev.lucee.org/c/news/release/8"],
 		["Docker", "https://hub.docker.com/r/lucee/lucee/"],
 		["Documentation", "https://docs.lucee.org/"],
 		["Github", "https://github.com/lucee"],
