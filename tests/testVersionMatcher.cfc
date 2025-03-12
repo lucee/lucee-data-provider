@@ -45,7 +45,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 
 	private function testLatest(type, version, distribution ){
 
-		var matchedVersion = services.VersionUtils::matchVersion( variables.testVersions, 
+		var matchedVersion = update.services.VersionUtils::matchVersion( variables.testVersions, 
 			arguments.type, arguments.version, arguments.distribution );
 		if ( len( matchedVersion ) eq 0 );
 			return "";
