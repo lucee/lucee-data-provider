@@ -12,7 +12,7 @@
 		,zero:true
 		,war:true
 	};
-	dockerURL="https://github.com/lucee/lucee-docs/blob/master/docs/recipes/docker.md";
+	dockerURL="https://docs.lucee.org/recipes/docker.html";
 	baseURL="https://release.lucee.org/rest/update/provider/";
 
 	jarInfo='(Java ARchive, read more about <a target="_blank" href="https://en.wikipedia.org/wiki/JAR_(file_format)">here</a>)';
@@ -37,9 +37,9 @@
 	lang.lib="The Lucee Jar file, you can simply copy to your existing installation to update to Lucee 5. This file comes in 2 favors, the ""lucee.jar"" that only contains Lucee itself and no dependecies (Lucee will download dependencies if necessary) or the lucee-all.jar with all dependencies Lucee needs bundled (not availble for versions before 5.0.0.112).";
 	lang.libNew="The Lucee Jar file, you can simply copy to your existing installation to update to Lucee 5. This file comes with all necessary dependencies Lucee needs build in, so no addional jars necessary. You can have this Jar in 2 flavors, a version containing all Core Extension (like Hibernate, Lucene or Axis) and a version with no Extension bundled.";
 
-	lang.installer.win="Windows";
-	lang.installer.lin64="Linux (64b)";
-	lang.installer.lin32="Linux (32b)";
+	lang.installer.win64="Windows";
+	lang.installer['linux-x64']="Linux (x64)";
+	lang.installer['linux-arm64']="Linux (arm64)";
 
 	cdnURL="https://cdn.lucee.org/";
 	cdnURLExt="https://ext.lucee.org/";
@@ -135,65 +135,63 @@
 							<cfset lists={edge:"releases,rc,beta,snapshots",lts:"releases,rc,snapshots"}>
 							<cfloop list="edge,lts" item="mainType">
 							<td valign="top"><div class="panel-body">
-							   <div class="bg-primary BoxWidth text-white"><h2>#mainsubjects[mainType]#</h2></div>
-							   <div class="desc descDiv row_even">
+								<div class="bg-primary BoxWidth text-white"><h2>#mainsubjects[mainType]#</h2></div>
+								<div class="desc descDiv row_even">
 
-							   <cfloop list="#lists[mainType]#" item="type">
+								<cfloop list="#lists[mainType]#" item="type">
+									<cfif len( latest[maintype][type] ?: {} ) eq 0>
+										<cfcontinue>
+									</cfif>
 									<div class="panel-body">
 									<cfset dw=latest[maintype][type]>
 									<cfset dateFormatted=download.getReleaseDate(dw.version)>
 									<h2>#subjects[type]# #dw.version#<cfif len(dateFormatted)> (#dateFormatted#)</cfif></h2>
 									<p>#lang.desc[type]#</p>
 								<ul>
-								  <!--- Express --->
-								  <div class="fontStyle">
-								  <cfif structKeyExists(dw,"express")>
-									 <cfif doS3.express>
-										<cfset uri="#cdnURL##dw.express#">
-									 <cfelse>
-										<cfset uri="#baseURL#express/#dw.version#">
-									 </cfif>
-										<li><a href="#uri#">Express</a>
-										<span  class="triggerIcon pointer" style="color :##01798A" title="#lang.express#">
-										   <span class="glyphicon glyphicon-info-sign"></span>
-										</span>
-									 </li>
-								  </cfif>
-
-								  <!--- Installer --->
-								  <cfif type EQ "releases" or type EQ "lts">
-									 <cfif !structKeyExists(dw,"win") and !structKeyExists(dw,"lin32") and !structKeyExists(dw,"lin64")>
-
-									 <cfelse>
-										<cfset str="">
-										<cfloop list="win,lin64,lin32" item="kk">
-										   <cfif !structKeyExists(dw,kk)><cfcontinue></cfif>
-										   <cfset uri="#cdnURL##dw[kk]#">
-										   <cfset str&='<li><a href="#uri#">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
-										   <span class="glyphicon glyphicon-info-sign"></span>
-										</span></li>'>
-										</cfloop>
-										#str#
-									 </cfif>
-								  </cfif>
-
-								  <!--- jar --->
-									 <cfif structKeyExists(dw,"jar")>
-										<cfif doS3.jar>
-										   <cfset uri="#cdnURL##dw.jar#">
+									<!--- Express --->
+									<div class="fontStyle">
+									<cfif structKeyExists(dw,"express")>
+										<cfif doS3.express>
+											<cfset uri="#cdnURL##dw.express#">
 										<cfelse>
-										   <cfset uri="#baseURL#loader/#dw.version#">
+											<cfset uri="#baseURL#express/#dw.version#">
+										</cfif>
+										<li><a href="#uri#">Express</a>
+											<span  class="triggerIcon pointer" style="color :##01798A" title="#lang.express#">
+												<span class="glyphicon glyphicon-info-sign"></span>
+											</span>
+										</li>
+									</cfif>
+
+									<!--- Installer --->
+									<cfset str="">
+									<cfloop list="win64,linux-x64,linux-arm64" item="kk">
+										<cfif !structKeyExists(dw,kk)><cfcontinue></cfif>
+										<cfset uri="#cdnURL##dw[kk]#">
+										<cfset str&='<li><a href="#uri#">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
+										<span class="glyphicon glyphicon-info-sign"></span>
+									</span></li>'>
+									</cfloop>
+									#str#
+
+									<!--- jar --->
+									<cfif structKeyExists(dw,"jar")>
+										<cfif doS3.jar>
+											<cfset uri="#cdnURL##dw.jar#">
+										<cfelse>
+											<cfset uri="#baseURL#loader/#dw.version#">
 										</cfif>
 
-										<li><a href="#(uri)#">lucee.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title="#lang.jar#">
-										   <span class="glyphicon glyphicon-info-sign"></span></li>
-									 </span>
-									 </cfif>
-									 <cfif structKeyExists(dw,"light")>
+										<li><a href="#(uri)#">lucee.jar</a>
+											<span  class="triggerIcon pointer" style="color :##01798A" title="#lang.jar#">
+												<span class="glyphicon glyphicon-info-sign"></span></li>
+											</span>
+									</cfif>
+									<cfif structKeyExists(dw,"light")>
 										<cfif doS3.light>
-										   <cfset uri="#cdnURL##dw.light#">
+											<cfset uri="#cdnURL##dw.light#">
 										<cfelse>
-										   <cfset uri="#baseURL#light/#dw.version#">
+											<cfset uri="#baseURL#light/#dw.version#">
 										</cfif>
 
 										<li><a href="#(uri)#">lucee-light.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled, "Lucee light"'>
@@ -215,32 +213,38 @@
 									 <!--- core --->
 									 <cfif structKeyExists(dw,"lco")>
 										<cfif doS3.lco>
-										   <cfset uri="#cdnURL##dw.lco#">
+											<cfset uri="#cdnURL##dw.lco#">
 										<cfelse>
-										   <cfset uri="#baseURL#core/#dw.version#">
+											<cfset uri="#baseURL#core/#dw.version#">
 										</cfif>
 
-										<li><a href="#(uri)#" >Core</a><span class="triggerIcon pointer" style="color :##01798A" title='#lang.core#'>
-											  <span class="glyphicon glyphicon-info-sign"></span>
-										   </span></li>
+										<li><a href="#(uri)#" >Core</a>
+											<span class="triggerIcon pointer" style="color :##01798A" title='#lang.core#'>
+												<span class="glyphicon glyphicon-info-sign"></span>
+											</span></li>
 									 </cfif>
 									 <!--- WAR --->
 									 <cfif structKeyExists(dw,"war")>
 										<cfif doS3.war>
-										   <cfset uri="#cdnURL##dw.war#">
+											<cfset uri="#cdnURL##dw.war#">
 										<cfelse>
-										   <cfset uri="#baseURL#war/#dw.version#">
+											<cfset uri="#baseURL#war/#dw.version#">
 										</cfif>
 
-										<li><a href="#(uri)#" title="#lang.war#">WAR</a><span class="triggerIcon pointer" style="color :##01798A" title="#lang.war#">
-											  <span class="glyphicon glyphicon-info-sign"></span>
-										   </span></li>
+										<li>
+											<a href="#(uri)#" title="#lang.war#">WAR</a>
+											<span class="triggerIcon pointer" style="color :##01798A" title="#lang.war#">
+												<span class="glyphicon glyphicon-info-sign"></span>
+											</span>
+										</li>
 									 </cfif>
 									 <!--- Docker --->
 									 <li>
-										<div id="dockerCommand" class="code-block">docker pull lucee/lucee:#dw.version#</div>
-										<button class="buttonx" onclick="copyToClipboard('dockerCommand', this)">copy</button>
-										<button class="buttonx" onclick="window.location.href='#dockerURL#'">Info</button>
+										<!--- Docker --->
+										<a href="https://hub.docker.com/r/lucee/lucee/tags?name=#dw.version#">Docker Images</a>
+										<span class="triggerIcon pointer" style="color :##01798A" title="#lang.docker#">
+											<a href="#dockerURL#"><span class="glyphicon glyphicon-info-sign"></span></a>
+										</span>
 									</li>
 								  </ul></div>
 							   </cfloop>
@@ -301,34 +305,38 @@
 						 <div class="panel-body">
 							<cfset _versions={}>
 							<cfloop list="releases,snapshots,rc,beta" item="_type">
-							   <cfset _versions[_type]=[]>
-							   <div class="col-md-3 col-sm-3 col-xs-3">
-								  <!--- dropDown --->
-								  <div class="bg-primary BoxWidth text-white">
+								<cfset _versions[_type]=[]>
+								<div class="col-md-3 col-sm-3 col-xs-3">
+									<!--- dropDown --->
+									<div class="bg-primary BoxWidth text-white">
+										<cfscript>
+											if (!structKeyExists(url,_type) || !structKeyExists(versions, url[_type])){ // handle beta=true, ignore
+												vs = download.getLatestVersionForType( versions, _type );
+												url[_type]=vs;
+												rows[_type]=vs;
+											}
+										</cfscript>
+										<b><h2>#singular[_type]#</h2> <!--- #ldownloads[type].versionNoAppendix#</b> (#lsDateFormat(ldownloads[type].jarDate)#) --->
+										<select onchange="change('#_type#',this, 'core')" style="color:7f8c8d;font-style:normal;" id="lCore" class="form-control" <!--- class="custom-select" --->>
+											<cfloop struct="#versions#" index="vs" item="data">
+												<cfif vs=="05.003.007.0044.100"><cfcontinue></cfif><cfif data.type==_type><option <cfif url[_type]==vs><cfset rows[_type]=vs> selected="selected"</cfif> value="#vs#"><cfset arrayAppend(_versions[_type],data.version)>#data.versionNoAppendix#</option></cfif>
+											</cfloop>
+										</select>
+									</div>
 									<cfscript>
-										if (!structKeyExists(url,_type) || !structKeyExists(versions, url[_type])){ // handle beta=true, ignore
+										if ( !structKeyExists( rows,_type ) ){ 
+											// requested version doesn't exist, fallback on latest
 											vs = download.getLatestVersionForType( versions, _type );
 											url[_type]=vs;
 											rows[_type]=vs;
 										}
 									</cfscript>
-									 <b><h2>#singular[_type]#</h2> <!--- #ldownloads[type].versionNoAppendix#</b> (#lsDateFormat(ldownloads[type].jarDate)#) --->
-									 <select onchange="change('#_type#',this, 'core')" style="color:7f8c8d;font-style:normal;" id="lCore" class="form-control" <!--- class="custom-select" --->>
-										<cfloop struct="#versions#" index="vs" item="data">
-											<cfif vs=="05.003.007.0044.100"><cfcontinue></cfif><cfif data.type==_type><option <cfif url[_type]==vs><cfset rows[_type]=vs> selected="selected"</cfif> value="#vs#"><cfset arrayAppend(_versions[_type],data.version)>#data.versionNoAppendix#</option></cfif>
-										</cfloop>
-									</select>
-								</div>
-								<cfscript>
-									if ( !structKeyExists( rows,_type ) ){ 
-										// requested version doesn't exist, fallback on latest
-										vs = download.getLatestVersionForType( versions, _type );
-										url[_type]=vs;
-										rows[_type]=vs;
-									}
-								</cfscript>
-								<cfset dw=versions[rows[_type]]>
+								<cfset dw=versions[rows[_type]] ?: {}>
 								<!--- desc --->
+								<cfif len(dw) eq 0>
+									</div>
+									<cfcontinue>
+								</cfif>
 								<div class="desc descDiv row_even">
 									<cfset res=download.getReleaseDate(dw.version)>
 									<span style="font-weight:600">#dw.version#</span><cfif len(res)>
@@ -336,7 +344,7 @@
 									#lang.desc[_type]#</div>
 
 									<!--- Express --->
-								  	<cfif structKeyExists(dw,"express")>
+									<cfif structKeyExists(dw,"express")>
 										<div class="row_odd divHeight">
 											<cfif doS3.express>
 												<cfset uri="#cdnURL##dw.express#">
@@ -351,112 +359,123 @@
 											</div>
 										</div>
 									</cfif>
-								  <!--- Installer --->
-								  <div class="row_even installerDiv">
-									 <cfif _type == "releases">
-
-										<cfif !structKeyExists(dw,"win") and !structKeyExists(dw,"lin32") and !structKeyExists(dw,"lin64")>
-										   <cfif left(dw.version,1) GT 4>
-											  <div class="fontStyle">
-											  <span class="text-primary">Coming Soon!</span>
-											  <span  class="triggerIcon pointer" style="color :##01798A" title="Installers will available on soon">
-												 <span class="glyphicon glyphicon-info-sign"></span>
-											  </span>
-										   </div></cfif>
-										<cfelse>
-										   <cfset count=1>
-										   <cfset str="">
-										   <cfloop list="win,lin64,lin32" item="kk">
-											  <cfif !structKeyExists(dw,kk)><cfcontinue></cfif>
-											  <cfset uri="#cdnURL##dw[kk]#">
-											  <cfif count GT 1>
-												 <cfset str&='<br>'>
-											  </cfif>
-											  <cfset str&='<a href="#uri#">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
-											  <span class="glyphicon glyphicon-info-sign"></span>
-										   </span>'>
-											  <cfset count++>
-										   </cfloop>
-										   <div class="fontStyle">#str#</div>
+									<!--- Installer --->
+									<div class="row_even installerDiv">
+										<cfset count=0>
+										<cfset str="">
+										<cfloop list="win64,linux-x64,linux-arm64" item="kk">
+											<cfif !structKeyExists(dw,kk)><cfcontinue></cfif>
+												<cfset count++>
+												<cfset uri="#cdnURL##dw[kk]#">
+												<cfif count GT 2>
+													<cfset str&='<br>'>
+												</cfif>
+												<cfset str&='<a href="#uri#">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
+											<span class="glyphicon glyphicon-info-sign"></span>
+										</span>'>
+										</cfloop>
+										<cfif _type == "releases" && count eq 0>
+											<div class="fontStyle">
+												<span class="text-primary">Coming Soon!</span>
+													<span  class="triggerIcon pointer" style="color :##01798A" title="Installers will available on soon">
+														<span class="glyphicon glyphicon-info-sign"></span>
+													</span>
+											</div>
+										<cfelseif count gt 0>
+											<div class="fontStyle">#str#</div>
 										</cfif>
-									 </cfif>
-								  </div>
-								  <!--- jar --->
-								  <div class="row_odd jarDiv">
-									<cfif structKeyExists(dw,"jar")>
-										<cfif doS3.jar>
-											<cfset uri="#cdnURL##dw.jar#">
-										<cfelse>
-											<cfset uri="#baseURL#loader/#dw.version#">
-										</cfif>
+									</div>
+									<!--- jar --->
+									<div class="row_odd jarDiv">
+										<cfif structKeyExists(dw,"jar")>
+											<cfif doS3.jar>
+												<cfset uri="#cdnURL##dw.jar#">
+											<cfelse>
+												<cfset uri="#baseURL#loader/#dw.version#">
+											</cfif>
 
-										<div class="fontStyle"><a href="#(uri)#">lucee.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title="#lang.jar#">
-										   <span class="glyphicon glyphicon-info-sign"></span>
-										</span></div></cfif>
+											<div class="fontStyle"><a href="#(uri)#">lucee.jar</a>
+												<span  class="triggerIcon pointer" style="color :##01798A" title="#lang.jar#">
+													<span class="glyphicon glyphicon-info-sign"></span>
+												</span>
+											</div>
+										</cfif>
 										<cfif structKeyExists(dw,"light")>
-										   <cfif doS3.light>
-											  <cfset uri="#cdnURL##dw.light#">
-										   <cfelse>
-											  <cfset uri="#baseURL#light/#dw.version#">
-										   </cfif>
+											<cfif doS3.light>
+												<cfset uri="#cdnURL##dw.light#">
+											<cfelse>
+												<cfset uri="#baseURL#light/#dw.version#">
+											</cfif>
 
-										   <div class="fontStyle"><a href="#(uri)#">lucee-light.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled, "Lucee light"'>
-											  <span class="glyphicon glyphicon-info-sign"></span>
-										   </span></div>
+											<div class="fontStyle"><a href="#(uri)#">lucee-light.jar</a>
+												<span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled, "Lucee light"'>
+													<span class="glyphicon glyphicon-info-sign"></span>
+												</span>
+											</div>
 										</cfif>
 										<cfif structKeyExists(dw,"zero")>
-										   <cfif doS3.zero>
-											  <cfset uri="#cdnURL##dw.zero#">
-										   <cfelse>
-											  <cfset uri="#baseURL#zero/#dw.version#">
-										   </cfif>
+											<cfif doS3.zero>
+												<cfset uri="#cdnURL##dw.zero#">
+											<cfelse>
+												<cfset uri="#baseURL#zero/#dw.version#">
+											</cfif>
 
-										   <div class="fontStyle"><a href="#(uri)#">lucee-zero.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled or doc and admin bundles, "Lucee zero"'>
-											  <span class="glyphicon glyphicon-info-sign"></span>
-										   </span></div>
+											<div class="fontStyle"><a href="#(uri)#">lucee-zero.jar</a>
+												<span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled or doc and admin bundles, "Lucee zero"'>
+													<span class="glyphicon glyphicon-info-sign"></span>
+												</span>
+											</div>
 										</cfif>
-								  </div>
-								  <!--- core --->
-								  <cfif structKeyExists(dw,"lco")><div class="row_even divHeight">
-									 <cfif doS3.lco>
-										<cfset uri="#cdnURL##dw.lco#">
-									 <cfelse>
-										<cfset uri="#baseURL#core/#dw.version#">
-									 </cfif>
-
-									 <div class="fontStyle"><a href="#(uri)#" >Core</a><span class="triggerIcon pointer" style="color :##01798A" title='#lang.core#'>
-										   <span class="glyphicon glyphicon-info-sign"></span>
-										</span></div>
-								  </div></cfif>
-								  <!--- WAR --->
-								  <cfif structKeyExists(dw,"war")><div class="row_odd divHeight">
-									 <cfif doS3.war>
-										<cfset uri="#cdnURL##dw.war#">
-									 <cfelse>
-										<cfset uri="#baseURL#war/#dw.version#">
-									 </cfif>
-
-									 <div class="fontStyle"><a href="#(uri)#" title="#lang.war#">WAR</a><span class="triggerIcon pointer" style="color :##01798A" title="#lang.war#">
-										   <span class="glyphicon glyphicon-info-sign"></span>
-										</span></div>
-								  </div></cfif>
-
-								  <!--- Docker --->
-								 <div class="fontStyle">
-									<div id="dockerCommand#hash(dw.version)#" class="code-block" style="font-size: 10px;width:100%">docker pull lucee/lucee:#dw.version#</div>
-									<div class="button-container">
-										<button class="buttony" onclick="copyToClipboard('dockerCommand#hash(dw.version)#', this)">Copy</button>
-										<button class="buttony" onclick="window.location.href='#dockerURL#'">Info</button>
 									</div>
-								</div>
+									<!--- core --->
+									<cfif structKeyExists(dw,"lco")>
+										<div class="row_even divHeight">
+											<cfif doS3.lco>
+												<cfset uri="#cdnURL##dw.lco#">
+											<cfelse>
+												<cfset uri="#baseURL#core/#dw.version#">
+											</cfif>
+											<div class="fontStyle"><a href="#(uri)#" >Core</a>
+												<span class="triggerIcon pointer" style="color :##01798A" title='#lang.core#'>
+													<span class="glyphicon glyphicon-info-sign"></span>
+												</span>
+											</div>
+										</div>
+									</cfif>
+									<!--- WAR --->
+									<cfif structKeyExists(dw,"war")>
+										<div class="row_odd divHeight">
+											<cfif doS3.war>
+												<cfset uri="#cdnURL##dw.war#">
+											<cfelse>
+												<cfset uri="#baseURL#war/#dw.version#">
+											</cfif>
 
-								  <!--- logs --->
-								  <div class="row_odd divHeight">
-										<cfscript>
+											<div class="fontStyle"><a href="#(uri)#" title="#lang.war#">WAR</a>
+												<span class="triggerIcon pointer" style="color :##01798A" title="#lang.war#">
+													<span class="glyphicon glyphicon-info-sign"></span>
+												</span>
+											</div>
+										</div>
+									</cfif>
+
+									<!--- Docker --->
+									<div class="row_even divHeight">
+										<div class="fontStyle">
+											<a href="https://hub.docker.com/r/lucee/lucee/tags?name=#dw.version#">Docker Images</a>
+											<span class="triggerIcon pointer" style="color :##01798A" title="#lang.docker#">
+												<a href="#dockerURL#"><span class="glyphicon glyphicon-info-sign"></span></a>
+											</span>
+										</div>
+									</div>
+
+								<!--- logs --->
+								<div class="row_odd divHeight">
+									<cfscript>
 										loop array=_versions[_type] item="vv" index="i"{
-										   if(vv==dw.version ) {
-											  prevVersion=arrayIndexExists(_versions[_type],i+1)?_versions[_type][i+1]:"0.0.0.0";
-										   }
+											if(vv==dw.version ) {
+												prevVersion=arrayIndexExists(_versions[_type],i+1)?_versions[_type][i+1]:"0.0.0.0";
+											}
 										}
 										changelog=download.getChangelog(prevVersion,dw.version);
 										if(isStruct(changelog))structDelete(changelog,prevVersion);
@@ -471,38 +490,39 @@
 										   <p class="collapsed mb-0" data-toggle="modal" data-target="##myModal#_type#">Changelog<small class="align-middle h6 mb-0 ml-1"><i class="icon icon-collapse collapsed"></i></small></p>
 										</div>
 										<div class="modal fade" id="myModal#_type#" role="dialog">
-										   <div class="modal-dialog modal-lg">
-											  <div class="modal-content">
-												 <div class="modal-header">
-													<button type="button" class="close" data-dismiss="modal">&times;</button>
-													<h4 class="modal-title"><b>Version-#dw.version# Changelogs</b></h4>
-												 </div>
-												 <div class="modal-body desc">
-													<cfset changelogTicketList = "">
-													<cfloop struct="#changelog#" index="ver" item="tickets">
-													   <cfloop struct="#tickets#" index="id" item="subject">
-														  <cfif !listFindNoCase(changelogTicketList, id)>
-															 <a href="https://bugs.lucee.org/browse/#id#" target="blank">#id#</a>- #subject#
-															 <br>
-															 <cfset changelogTicketList = listAppend(changelogTicketList, id)>
-														  </cfif>
-													</cfloop></cfloop>
-												 </div>
-												 <div class="modal-footer">
-													<button type="button" class="btn btn-default btn-lg" data-dismiss="modal">Close</button>
-												 </div>
+											<div class="modal-dialog modal-lg">
+												<div class="modal-content">
+													<div class="modal-header">
+														<button type="button" class="close" data-dismiss="modal">&times;</button>
+														<h4 class="modal-title"><b>Version-#dw.version# Changelogs</b></h4>
+													</div>
+													<div class="modal-body desc">
+														<cfset changelogTicketList = "">
+														<cfloop struct="#changelog#" index="ver" item="tickets">
+															<cfloop struct="#tickets#" index="id" item="subject">
+																<cfif !listFindNoCase(changelogTicketList, id)>
+																	<a href="https://bugs.lucee.org/browse/#id#" target="blank">#id#</a>- #subject#
+																	<br>
+																	<cfset changelogTicketList = listAppend(changelogTicketList, id)>
+																</cfif>
+															</cfloop>
+														</cfloop>
+													</div>
+													<div class="modal-footer">
+														<button type="button" class="btn btn-default btn-lg" data-dismiss="modal">Close</button>
+												 	</div>
 												</div>
-										   </div>
+											</div>
 										</div>
-									 <cfelse>
+									<cfelse>
 										<div class="fontStyle"></div>
-									 </cfif>
-								  </div>
-								  <div><hr></div><!--- --->
-							   </div>
-							</cfloop>
-						 </div>
-					  </div>
+									</cfif>
+								</div>
+								<div><hr></div><!--- --->
+							</div>
+						</cfloop>
+						</div>
+					</div>
 
 	<cfscript>
 		extQry=download.getExtensions(structKeyExists(url,"reset"));

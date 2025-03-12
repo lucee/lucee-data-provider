@@ -72,4 +72,39 @@ component {
 			&"."&repeatString("0",4-len(sct.qualifier))&sct.qualifier
 			&"."&repeatString("0",3-len(sct.qualifier_appendix_nbr))&sct.qualifier_appendix_nbr;
 	}
+
+	/*
+	lucee-6.2.1.58-SNAPSHOT-linux-arm64-installer.run
+	lucee-6.2.1.58-SNAPSHOT-linux-x64-installer.run
+	lucee-6.2.1.58-SNAPSHOT-windows-x64-installer.exe
+	*/
+
+	public static function parseInstallerFilename( filename ){
+		var ext = listLast( arguments.filename, '.' );
+		var _version = listToArray( arguments.filename, "-" );
+		var type = "";
+		var version = "";
+		switch ( ext ){
+			case "run":
+				type = findNoCase('-x64-', arguments.filename ) ? 'linux-x64' : 'linux-arm64';
+				var pos = ArrayFind( _version, 'linux' );
+				version = _version[ 2 ];
+				if (pos == 4)
+					 version &= "-" & _version[ 3 ]; // i.e. snapshot
+				break;
+			case "exe":
+				type="win64";
+				var pos = ArrayFind( _version, 'windows' );
+				version = _version[ 2 ];
+				if (pos == 4)
+					 version &= "-" & _version[ 3 ]; // i.e. snapshot
+				break;
+			default:
+				break;
+		}
+		return {
+			version,
+			type
+		};
+	}
 }
