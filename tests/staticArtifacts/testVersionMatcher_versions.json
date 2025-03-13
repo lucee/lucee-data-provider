@@ -1,0 +1,54 @@
+{
+    "05.003.001.0001.100": {
+        "version": "5.3.1.1",
+        "jar": "lucee-5.3.10.1.jar"
+    },
+    "05.003.003.0010.100": {
+        "version": "5.3.10.1",
+        "jar": "lucee-5.3.10.1.jar"
+    },
+    "05.004.006.0009.100": {
+        "version": "5.4.6.9",
+        "jar": "lucee-5.4.6.9.jar"
+    },
+    "06.000.004.0010.100": {
+        "version": "6.0.4.10",
+        "jar": "lucee-6.0.4.10.jar"
+    },
+    "06.001.000.0243.100": {
+        "version": "6.1.0.243",
+        "jar": "lucee-6.1.0.243.jar"
+    },
+    "06.002.000.0032.000": {
+        "version": "6.2.0.32-SNAPSHOT",
+        "jar": "lucee-6.2.0.32-SNAPSHOT.jar"
+    },
+    "06.002.000.0321.100": {
+        "version": "6.2.0.321",
+        "jar": "lucee-6.2.0.321.jar",
+        "win64": "lucee-6.2.0.321-windows-x64-installer.exe"
+    },
+    "06.002.001.0004.000": {
+        "version": "6.2.1.4-SNAPSHOT",
+        "jar": "lucee-6.2.1.4-SNAPSHOT.jar"
+    },
+    "06.002.001.0005.000": {
+        "version": "6.2.1.5-SNAPSHOT",
+        "linux-arm64": "lucee-6.2.1.5-SNAPSHOT-linux-arm64-installer.run",
+        "jar": "lucee-6.2.1.5-SNAPSHOT.jar"
+    },
+    "06.002.001.0048.000": {
+        "version": "6.2.1.48-SNAPSHOT",
+        "jar": "lucee-6.2.1.48-SNAPSHOT.jar"
+    },
+    "06.002.001.0055.000": {
+        "version": "6.2.1.55-SNAPSHOT",
+        "jar": "lucee-6.2.1.55-SNAPSHOT.jar"
+    },
+    "06.002.001.0058.000": {
+        "version": "6.2.1.58-SNAPSHOT",
+        "linux-x64": "lucee-6.2.1.58-SNAPSHOT-linux-x64-installer.run",
+        "jar": "lucee-6.2.1.58-SNAPSHOT.jar",
+        "win64": "lucee-6.2.1.58-SNAPSHOT-windows-x64-installer.exe"
+    }
+}

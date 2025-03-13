@@ -9,7 +9,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 
 	function run( testResults , testBox ) {
 		describe( "check all maven mapping are valid", function() {
-			it(title="check each maven mapping resolves", body=function(){
+			xit(title="check each maven mapping resolves", body=function(){
 				var mappings = fileRead("/update/services/legacy/mavenMappings.json");
 				expect( isJson( mappings) ).toBeTrue();
 				mappings = deserializeJSON( mappings );

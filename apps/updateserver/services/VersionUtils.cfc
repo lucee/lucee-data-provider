@@ -107,4 +107,64 @@ component {
 			type
 		};
 	}
+
+	public static function matchVersion( versions, type, version, distribution ){
+		//systemOutput(versions.toJson(), true);
+		//systemOutput("", true);
+		//systemOutput("-------[#type#][#version#][#distribution#]------------", true);
+		var arrVersions = structKeyArray( arguments.versions ).reverse();
+
+		loop array="#arrVersions#" index="local.i" value="local.v" {
+			var _version = versions[ local.v ].version;
+			var _type = listToArray( _version, "-" ); // [ "6.2.0.317", "RC" ]
+			//systemOutput({_version, _type}, true);
+			if ( arrayLen( _type ) eq 2 && arguments.type eq "stable" ){
+				// version has a suffix, i.e. 6.2.1.55-SNAPSHOT, stable versions have no suffix
+				//systemOutput("version has a suffix, not stable", true);
+				continue;
+			} else if ( len( arguments.type ) gt 0 && arguments.type neq "stable" ){
+				if ( arrayLen( _type ) eq 1
+						|| ( _type[ 2 ] neq arguments.type) ){
+					//systemOutput("wrong type", true);
+					continue;
+				}
+			}
+
+			if ( len( arguments.version ) eq 0
+					&& structKeyExists( versions[ local.v ], arguments.distribution ) ){
+				//systemOutput("match for the first version for the requested distribution", true);
+				return v;
+			}
+			var versionMatches = findNoCase( arguments.version, _version );
+			if ( versionMatches neq 1 ) {
+				//systemOutput("requested version prefix does not match this version", true);
+				continue;
+			}
+			// at this point, the versions prefix match
+			if ( versionMatches eq 1 && len( _type[ 1 ] ) eq len( arguments.version ) ) {
+				//systemOutput("exact version match", true);
+				if ( structKeyExists( versions[ local.v ], arguments.distribution ) ){
+					//systemOutput("exact version match", true);
+					return v;
+				} else {
+					//systemOutput("exact version match, no distribution", true);
+					return "";
+				}
+			} else {
+				// avoid 6.2.1.55 matching 6.2.1.5
+				if ( ( len( arguments.version ) lt len( _type[ 1 ] )
+						&& mid( _type[ 1 ], len( arguments.version ) + 1, 1 ) neq "." )) {
+					//systemOutput("avoid partial match", true);
+					continue;
+				}
+			}
+			if ( structKeyExists( versions[ local.v ], arguments.distribution ) ){
+				return v; // match on version and distribution
+			} else {
+				//systemOutput("match but missing distribution", true);
+				continue; //
+			}
+		}
+		return "";
+	}
 }

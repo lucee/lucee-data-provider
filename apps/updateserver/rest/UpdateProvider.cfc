@@ -10,12 +10,12 @@ component {
 	variables.jiraChangelogService  = application.jiraChangelogService;
 
 	variables.providerLog = "update-provider";
-	
+
 	ALL_VERSION="0.0.0.0";
 	MIN_UPDATE_VERSION="5.0.0.254";
 	MIN_NEW_CHANGELOG_VERSION="5.3.0.0";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
- 	
+
 	private function logger( string text, any exception, type="info" ){
 		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
 		if ( !isNull(arguments.exception ) )
@@ -35,7 +35,7 @@ component {
 	* }
 	* if there is no update, you get a struct like this:
 	* {"type":"warning","message":"There is no update available for this version"}
-	* 
+	*
 	* @version current version installed
 	* @ioid ioid of the requesting user
 	* @langauage language f the requesting user
@@ -45,17 +45,17 @@ component {
 		string ioid="" restargsource="url",
 		string language="en" restargsource="url")
 		httpmethod="GET" restpath="info/{version}" {
-		
+
 
 		try{
 			local.version=toVersion(arguments.version);
 
 			// no updates for versions smaller than ...
-			if(ALL_VERSION!=version.display && !isNewer(version,toVersion(MIN_UPDATE_VERSION))) 
+			if(ALL_VERSION!=version.display && !isNewer(version,toVersion(MIN_UPDATE_VERSION)))
 				return {
 					"type":"warning",
 					"message":"Version ["&version.display&"] can not be updated from within the Lucee Administrator.  Please update Lucee by replacing the lucee.jar, which can be downloaded from [http://download.lucee.org]"};
-			
+
 
 
 			local.s3=new services.legacy.S3(variables.s3Root);
@@ -65,10 +65,10 @@ component {
 			var latest = {};
 			latest.version = versions[keys[arrayLen(keys)]].version;
 			var latestVersion=toVersion(latest.version);
-			
+
 			// others
 			latest.otherVersions=[];
-			var maxSnap=400; 
+			var maxSnap=400;
 			var maxRel=100;
 			if(ALL_VERSION!=version.display) {
 				for(var i=arrayLen(keys);i>=1;i--) {
@@ -96,28 +96,28 @@ component {
 				local.notes=(ALL_VERSION==version.display)?
 					"":getChangeLog(version.display,latestVersion.display);
 
-				// do we need old layout of changelog?	
+				// do we need old layout of changelog?
 				if(!isNewer(version,toVersion(MIN_NEW_CHANGELOG_VERSION))) {
 					var nn=structNew("linked");
 					loop struct=notes index="local.ver" item="local.dat" {
 					    loop struct=dat index="local.k" item="local.v"{
 					        nn[k]=v;
 					    }
-					} 
+					}
 					notes=nn;
 				}
 			}
 			catch(local.ee){
 				local.notes="";
 			}
-			
+
 			var msgAppendix="";
-			if(ALL_VERSION!=version.display && !isNewer(version,toVersion(MIN_WIN_UPDATE_VERSION))) 
+			if(ALL_VERSION!=version.display && !isNewer(version,toVersion(MIN_WIN_UPDATE_VERSION)))
 				msgAppendix="
 				<div class=""error"">Warning! <br/>
 				If this Lucee install is on a Windows based computer/server, please do not use the updater for this version due to a bug.  Instead download the latest lucee.jar from <a href=""http://stable.lucee.org/download/?type=snapshots"">here</a> and replace your existing lucee.jar with it.  This is a one-time workaround.";
-			
-			
+
+
 
 			return {
 				"type":"info"
@@ -147,7 +147,7 @@ component {
 		httpmethod="GET" restpath="loader/{version}" {
 
 		createArtifactIfNecessary("jar",version);
-			
+
 		header statuscode="302" statustext="Found";
 		header name="Location" value=variables.cdnURL&"lucee-"&arguments.version&".jar";
 		return;
@@ -163,7 +163,7 @@ component {
 		httpmethod="GET" restpath="light/{version}" {
 
 		createArtifactIfNecessary("light",version);
-	
+
 		header statuscode="302" statustext="Found";
 		header name="Location" value=variables.cdnURL&"lucee-light-"&arguments.version&".jar";
 		return;
@@ -192,7 +192,7 @@ component {
 	remote function echoGET(
 				string statusCode="" restargsource="url",
 				string mimeType="" restargsource="url",
-				string charset="" restargsource="url") 
+				string charset="" restargsource="url")
 			httpmethod="GET"
 			restpath="echoGet" {
 		return _echo(arguments.statusCode, arguments.mimeType, arguments.charset);
@@ -232,9 +232,9 @@ component {
 		required string version restargsource="Path",
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="download/{version}" {
-		
+
 		createArtifactIfNecessary("lco",version);
-		
+
 		header statuscode="302" statustext="Found";
 		header name="Location" value=variables.cdnURL&arguments.version&".lco";
 		return;
@@ -257,7 +257,7 @@ component {
 		httpmethod="GET" restpath="war/{version}" {
 
 		createArtifactIfNecessary("war",version);
-		
+
 		header statuscode="302" statustext="Found";
 		header name="Location" value=variables.cdnURL&"lucee-"&arguments.version&".war";
 		return;
@@ -266,12 +266,12 @@ component {
 
 	remote function downloadForgebox(
 		required string version restargsource="Path",
-		string ioid="" restargsource="url", 
+		string ioid="" restargsource="url",
 		boolean light=false restargsource="url")
 		httpmethod="GET" restpath="forgebox/{version}" {
 
 		createArtifactIfNecessary(light?"fbl":"fb",version);
-		
+
 		header statuscode="302" statustext="Found";
 		header name="Location" value=variables.cdnURL&"forgebox-"&(light?"light-":"")&arguments.version&".zip";
 		return;
@@ -343,10 +343,10 @@ component {
 	*/
 	remote string function getInfoSimple(required string version restargsource="Path",string ioid="" restargsource="url")
 		httpmethod="GET" restpath="update-for/{version}" produces="application/lazy" {
-		
+
 		local.info=getInfo(version,ioid,"en");
 		systemOutput(version&"->	"&structkeyExists(info,"available"),true,true);
-		
+
 
 		if(structkeyExists(info,"available")) return info.available;
 		return "";
@@ -356,7 +356,7 @@ component {
 		required string versionFrom restargsource="Path",
 		required string versionTo restargsource="Path")
 		httpmethod="GET" restpath="changelog/{versionFrom}/{versionTo}" {
-		
+
 		return jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo );
 	}
 
@@ -364,7 +364,7 @@ component {
 		required string versionFrom restargsource="Path",
 		required string versionTo restargsource="Path")
 		httpmethod="GET" restpath="changelogDetailed/{versionFrom}/{versionTo}" {
-		
+
 		return jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo, detailed=true );
 	}
 	remote string function getChangeLogLastUpdated()
@@ -394,7 +394,7 @@ component {
 
 		file action="readBinary" file="#path#" variable="local.bin";
 			header name="Content-disposition" value="attachment;filename=lucee-dependencies-#version#.zip";
-	        content variable="#bin#" type="application/zip"; 
+	        content variable="#bin#" type="application/zip";
 	}
 
 	/**
@@ -433,55 +433,36 @@ component {
 	}
 
 	remote function getLatest(
-		string version restargsource="path",
-		string type restargsource="path",
-		string distribution restargsource="path",
-		string format restargsource="path" ) 
-		httpmethod="GET" restpath="latest/{version}/{type}/{distribution}/{format}" {
+			string version restargsource="path",
+			string type restargsource="path", // stable rc beta snapshot all
+			string distribution restargsource="path", // jar. light, zero
+			string format restargsource="path" // redirect, string, url, info, filename
+		) httpmethod="GET" restpath="latest/{version}/{type}/{distribution}/{format}" {
 
 		try {
 			var s3 = new services.legacy.S3( variables.s3Root );
 			var versions = s3.getVersions();
-			var arrVersions = structKeyArray( versions ).reverse();
-			var version = "";
 
 			if ( arguments.type eq "all" )
 				arguments.type ="";
 			if ( arguments.version eq 0 )
 				arguments.version = "";
 
-			loop array=arrVersions index="local.i" value="local.v" {
-				local.version = versions[local.v].version;
-				local.type = listToArray(version, "-" );
-				if ( arrayLen( type ) eq 2 && arguments.type eq "stable" ){
-					version = "";
-					continue;
-				} else if ( len( arguments.type ) gt 0 && arguments.type neq "stable"){
-					if ( arrayLen( type ) eq 1
-						|| (type[ 2 ] neq arguments.type) ){
-						version = "";
-						continue;
-					}
-				}
-				if ( len( arguments.version ) eq 0 ) {
-					if ( structKeyExists( versions[local.v], arguments.distribution ) )
-						break;
-				} else if ( findNoCase(arguments.version, version ) neq 1) {
-					version="";
-					continue;
-				} else {
-					if ( structKeyExists( versions[ local.v ], arguments.distribution ) )
-						break;
-				}
-			}
-			if ( len( version ) eq 0 ){
+			
+			var matchedVersion = services.VersionUtils::matchVersion( versions, arguments.type, 
+				arguments.version, arguments.distribution );  // i.e. 06.002.001.0048.000
+
+			if ( len( matchedVersion ) eq 0 ){
 				header statuscode="404";
 				return "Requested version not found";
 			}
 			if ( len( arguments.format ) eq 0)
 				arguments.format = "redirect";
 			
-			var versionUrl = "https://cdn.lucee.org/#versions[local.v][arguments.distribution]#";
+
+			var _version = versions[ matchedVersion ].version; // i.e 6.2.1.48-SNAPSHOT
+
+			var versionUrl = "https://cdn.lucee.org/#versions[ matchedVersion ][ arguments.distribution ]#";
 
 			switch (arguments.format){
 				case "redirect":
@@ -489,21 +470,21 @@ component {
 					header name="Location" value=versionUrl;
 					return;
 				case "string":
-					return version;
+					return _version;
 				case "filename":
-					return versions[local.v][arguments.distribution];
+					return versions[ matchedVersion ][ arguments.distribution ];
 				case "url":
 					return versionUrl;
 				case "info":
 					return {
 						"url": versionUrl,
-						"version": version,
-						"filename": versions[local.v][arguments.distribution]
+						"version": _version,
+						"filename": versions[ matchedVersion ][ arguments.distribution ]
 					};
 				default:
 					header statuscode="500";
-					return "error: supported formats are [ redirect, string, url, info ]";
-			}	
+					return "error: supported formats are [ redirect, string, url, info, filename ]";
+			}
 		}
 		catch(e){
 			systemOutput( e, 1, 1 );
@@ -521,11 +502,11 @@ component {
 		boolean flush=false restargsource="url"
 		)
 		httpmethod="GET" restpath="list" {
-		
+
 		setting requesttimeout="1000";
 
 		try {
-			
+
 			var s3=new services.legacy.S3(variables.s3Root);
 			var versions=s3.getVersions(flush);
 
@@ -535,12 +516,12 @@ component {
 
 			var ignores=["6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT","6.0.1.82"];
 			loop array=structKeyArray( versions ) item="local.k" {
-				if ( !structKeyExists( versions[ k ], "version" ) 
+				if ( !structKeyExists( versions[ k ], "version" )
 						|| arrayFind( ignores, versions[k].version ) ){
 					structDelete( versions, k );
 				}
 			}
-			
+
 			if ( extended ) return versions;
 			var arr=[];
 			loop struct=versions index="local.vs" item="local.data" {
@@ -570,7 +551,7 @@ component {
 			logger(text=mess, type="error");
 			systemOutput(mess, true, true );
 		}
-		
+
 		return "";
 	}
 
@@ -593,9 +574,9 @@ component {
 		required string version restargsource="Path",
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="express/{version}" {
-		
+
 		createArtifactIfNecessary("express",version);
-		
+
 		header statuscode="302" statustext="Found";
 		header name="Location" value=variables.cdnURL&"lucee-express-"&arguments.version&".zip";
 		return;
@@ -611,7 +592,7 @@ component {
 		var list="jar,lco,war,light,express";
 		if(inclFB)list&=",fb,fbl";
 		loop list=list item="type" {
-			
+
 			loop struct=versions index="vs" item="data" {
 				if(!structKeyExists(data,type) && left(data.version,1)>4) {
 					if(isNull(rtn[type]))rtn[type]=[];
@@ -628,17 +609,17 @@ component {
 	*/
 	remote function buildLatest()
 		httpmethod="GET" restpath="buildLatest" {
-		
+
 		var indexDir=getDirectoryFromPath(getCurrentTemplatePath())&"index/";
 		if(directoryExists(indexDir)) directoryDelete(indexDir, true);
-		
-		
+
+
 			var s3=new services.legacy.S3(variables.s3Root);
 		s3.addMissing(true);
 		return "done";
 	}
 
-	private boolean function isVersion(required string version) { 
+	private boolean function isVersion(required string version) {
 		try{
 			toVersion(version);
 			return true;
@@ -647,7 +628,7 @@ component {
 			return false;
 		}
 	}
-	
+
 	private struct function toVersion(required string version, boolean ignoreInvalidVersion=false){
 		local.arr=listToArray(arguments.version,'.');
 		if(arr.len()==3) {
@@ -678,7 +659,7 @@ component {
 		sct.display=
 					sct.pure
 					&(sct.qualifier_appendix==""?"":"-"&sct.qualifier_appendix);
-		
+
 		sct.sortable=repeatString("0",2-len(sct.major))&sct.major
 					&"."&repeatString("0",3-len(sct.minor))&sct.minor
 					&"."&repeatString("0",3-len(sct.micro))&sct.micro
@@ -691,11 +672,11 @@ component {
 		// major
 		if(left.major>right.major) return true;
 		if(left.major<right.major) return false;
-		
+
 		// minor
 		if(left.minor>right.minor) return true;
 		if(left.minor<right.minor) return false;
-		
+
 		// micro
 		if(left.micro>right.micro) return true;
 		if(left.micro<right.micro) return false;
@@ -703,10 +684,10 @@ component {
 		// qualifier
 		if(left.qualifier>right.qualifier) return true;
 		if(left.qualifier<right.qualifier) return false;
-		
+
 		if(left.qualifier_appendix_nbr>right.qualifier_appendix_nbr) return true;
 		if(left.qualifier_appendix_nbr<right.qualifier_appendix_nbr) return false;
-		
+
 		if(left.qualifier_appendix_nbr==75 && right.qualifier_appendix_nbr==75) {
 			if(left.qualifier_appendix>right.qualifier_appendix) return true;
 			if(left.qualifier_appendix<right.qualifier_appendix) return false; // not really necessary
@@ -741,7 +722,7 @@ component {
 	* So nobody has to wait that it is copied over
 	*/
 	private function fromS3(path,name,async=true) {
-		
+
 		// if exist we redirect to it
 			if(!isNull(url.show))
 				throw ((!isNull(application.exists[name]) && application.exists[name])&":"&fileExists(variables.s3Root&name)&"->"&(variables.s3Root&name));
@@ -774,7 +755,7 @@ component {
 								throw ("fileExists: "&fileExists(src)&" + "&fileExists(trg));
 						}
 					}
-				}	
+				}
 			}
 			return false;
 	}
@@ -811,7 +792,7 @@ component {
 		var s3=new services.legacy.S3(variables.s3Root);
 		var versions=s3.getVersions();
 		var vs=services.VersionUtils::toVersionSortable(version);
-		
+
 		if(structKeyExists(versions,vs) && structKeyExists(versions[vs],type)) return;
 		thread s3=s3 name=createUUID() _type=type _version=version  {
 			try{
