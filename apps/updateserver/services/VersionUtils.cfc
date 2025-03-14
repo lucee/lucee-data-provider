@@ -74,7 +74,7 @@ component {
 	}
 
 	/*
-	lucee-6.2.1.58-SNAPSHOT-linux-arm64-installer.run
+	lucee-6.2.1.58-SNAPSHOT-linux-aarch64-installer.run
 	lucee-6.2.1.58-SNAPSHOT-linux-x64-installer.run
 	lucee-6.2.1.58-SNAPSHOT-windows-x64-installer.exe
 	*/
@@ -86,7 +86,7 @@ component {
 		var version = "";
 		switch ( ext ){
 			case "run":
-				type = findNoCase('-x64-', arguments.filename ) ? 'linux-x64' : 'linux-arm64';
+				type = findNoCase('-x64-', arguments.filename ) ? 'linux-x64' : 'linux-aarch64';
 				var pos = ArrayFind( _version, 'linux' );
 				version = _version[ 2 ];
 				if (pos == 4)

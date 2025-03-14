@@ -39,7 +39,7 @@
 
 	lang.installer.win64="Windows";
 	lang.installer['linux-x64']="Linux (x64)";
-	lang.installer['linux-arm64']="Linux (arm64)";
+	lang.installer['linux-aarch64']="Linux (aarch64)";
 
 	cdnURL="https://cdn.lucee.org/";
 	cdnURLExt="https://ext.lucee.org/";
@@ -165,7 +165,7 @@
 
 									<!--- Installer --->
 									<cfset str="">
-									<cfloop list="win64,linux-x64,linux-arm64" item="kk">
+									<cfloop list="win64,linux-x64,linux-aarch64" item="kk">
 										<cfif !structKeyExists(dw,kk)><cfcontinue></cfif>
 										<cfset uri="#cdnURL##dw[kk]#">
 										<cfset str&='<li><a href="#uri#">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
@@ -293,6 +293,7 @@
 						 function hideToggle (a) {
         					$(`.${a}`).toggleClass('collapse');
 							$('##'+a).hide();
+							$('.'+a).removeClass('show');
 						 }
 						 function change(type,field,id) {
 							window.location="?"+type+"="+field.value+"##"+id;
@@ -364,7 +365,7 @@
 									<div class="row_even installerDiv">
 										<cfset count=0>
 										<cfset str="">
-										<cfloop list="win64,linux-x64,linux-arm64" item="kk">
+										<cfloop list="win64,linux-x64,linux-aarch64" item="kk">
 											<cfif !structKeyExists(dw,kk)><cfcontinue></cfif>
 												<cfset count++>
 												<cfset uri="#cdnURL##dw[kk]#">
@@ -570,57 +571,51 @@
 				<!--- call extractVersions function once per extension rather than three times --->
 				<cfset exts=download.extractVersions(extQry)>
 				<cfloop list="release,abc,snapshot" item="type">
-				   <cfif structCount(exts[type])>
-				   <div class="mb-0 mt-1 col-xs-4 col-md-4 borderInfo">
-					  <div class="bg-primary jumbotron text-white jumboStyle">
-						 <span class="btn-primary">
-							<h2 class="fontSize">#multi[type]#</h2>
-						 </span>
-					  </div>
-					  <cfset ind=0>
-					  <cfset uid="">
-					  <cfset cnt=structCount(exts[type])>
-					  <cfloop struct="#exts[type]#" index="ver" item="el">
-					  <cfset ind++>
-
-					  <!--- show more --->
-					  <cfif ind EQ 5 and cnt GT 6>
-						 <cfset uid=createUniqueId()>
-						 <div style="text-align:center;background-color:##BCBCBC;color:2C3A47;" id="#uid#_release" class="collapse-toggle collapsed textStyle" onclick="return hideToggle('#uid#_release');" data-toggle="collapse">
-						 <b><i>Show more..</i></b>
-						 <small class="align-middle h6 mb-0">
-							<i class="icon icon-open"></i>
-						 </small>
-						 </div>
-						 <div  class="clog-detail collapse #uid#_release row_alter" style="text-align:center;">
-					  </cfif>
-
-
-					  <div <cfif ind MOD 2 eq 0>class="row_alterEven textStyle textWrap"<cfelse>class="row_alterOdd textStyle textWrap"</cfif>>
-
-						 <a href="#cdnURLExt##el.filename#">#ver# (#lsDateFormat(el.date)#)</a>
-						 <!--- <span  class="triggerIcon pointer"
-						 style="color :##01798A" title="">
-						 <span class="glyphicon glyphicon-info-sign"></span>
-						 </span>--->
-
-					  </div>
-
-					  <!--- show less --->
-					  <cfif cnt EQ ind and len(uid)>
-						 <div class="showLess pointer textStyle"
-						 style="text-align:center;background-color:##BCBCBC;" onclick="return hideData('#uid#_release');">
-							<b><i>Show less</i></b>
-							<small class="align-middle h6 mb-0  hideClick">
-							   <i class="icon icon-collapse"></i>
-							</small>
-						 </div>
-					  </div>
-					  </cfif>
-					  </cfloop>
-
-				   </div>
-				   </cfif>
+					<cfif structCount(exts[type])>
+						<div class="mb-0 mt-1 col-xs-4 col-md-4 borderInfo">
+							<div class="bg-primary jumbotron text-white jumboStyle">
+								<span class="btn-primary">
+									<h2 class="fontSize">#multi[type]#</h2>
+								</span>
+							</div>
+							<cfset ind=0>
+							<cfset uid="">
+							<cfset cnt=structCount(exts[type])>
+							<cfloop struct="#exts[type]#" index="ver" item="el">
+								<cfset ind++>
+								<!--- show more --->
+								<cfif ind EQ 5 and cnt GT 6>
+									<cfset uid=createUniqueId()>
+									<div style="text-align:center;background-color:##BCBCBC;color:2C3A47;" id="#uid#_release_id" class="collapse-toggle collapsed textStyle" onclick="return hideToggle('#uid#_release_id');"  data-toggle="toggle">
+										<b><i>Show more..</i></b>
+										<small class="align-middle h6 mb-0">
+											<i class="icon icon-open"></i>
+										</small>
+										</div>
+										<div  class="clog-detail collapse #uid#_release row_alter" style="text-align:center;">
+								</cfif>
+								<div <cfif ind MOD 2 eq 0>class="row_alterEven textStyle textWrap"<cfelse>class="row_alterOdd textStyle textWrap"</cfif>>
+									<a href="#cdnURLExt##el.filename#">#ver# (#lsDateFormat(el.date)#)</a>
+									<!--- <span  class="triggerIcon pointer"
+									style="color :##01798A" title="">
+									<span class="glyphicon glyphicon-info-sign"></span>
+									</span>--->
+								</div>
+								<!--- show less --->
+								<cfif cnt EQ ind and len(uid)>
+									<div class="showLess pointer textStyle"
+											style="text-align:center;background-color:##BCBCBC;" 
+											onclick="return hideData('#uid#_release');">
+										<b><i>Show less</i></b>
+										<small class="align-middle h6 mb-0  hideClick">
+											<i class="icon icon-collapse"></i>
+										</small>
+									</div>
+								</div>
+							</cfif>
+						</cfloop>
+						</div>
+					</cfif>
 				</cfloop>
 				</div>
 			 </div>
