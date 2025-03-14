@@ -287,10 +287,11 @@
 							});
 						 });
 						 function hideData (a) {
-							$('.'+a).removeClass('show');
-							$('##'+a+'_id').show();
+							$(`.${a}`).toggleClass('collapse');
+							$('##'+a).show();
 						 }
 						 function hideToggle (a) {
+        					$(`.${a}`).toggleClass('collapse');
 							$('##'+a).hide();
 						 }
 						 function change(type,field,id) {
@@ -585,7 +586,7 @@
 					  <!--- show more --->
 					  <cfif ind EQ 5 and cnt GT 6>
 						 <cfset uid=createUniqueId()>
-						 <div style="text-align:center;background-color:##BCBCBC;color:2C3A47;" id="#uid#_release_id" class="collapse-toggle collapsed textStyle" onclick="return hideToggle('#uid#_release_id');"  data-toggle="collapse">
+						 <div style="text-align:center;background-color:##BCBCBC;color:2C3A47;" id="#uid#_release" class="collapse-toggle collapsed textStyle" onclick="return hideToggle('#uid#_release');" data-toggle="collapse">
 						 <b><i>Show more..</i></b>
 						 <small class="align-middle h6 mb-0">
 							<i class="icon icon-open"></i>
