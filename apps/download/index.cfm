@@ -369,7 +369,7 @@
 											<cfif !structKeyExists(dw,kk)><cfcontinue></cfif>
 												<cfset count++>
 												<cfset uri="#cdnURL##dw[kk]#">
-												<cfif count GT 2>
+												<cfif count GT 1>
 													<cfset str&='<br>'>
 												</cfif>
 												<cfset str&='<a href="#uri#">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
