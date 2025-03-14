@@ -24,7 +24,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 				expect( testLatest( "stable", "5.3.10", "jar" ) ).toBe( "5.3.10.1" );
 				expect( testLatest( "stable", "5.3", "jar" ) ).toBe( "5.3.10.1" );
 
-				expect( testLatest( "all", "6.2.1.5", "linux-arm64" ) ).toBe( "6.2.1.5-SNAPSHOT" );
+				expect( testLatest( "all", "6.2.1.5", "linux-aarch64" ) ).toBe( "6.2.1.5-SNAPSHOT" );
 				expect( testLatest( "snapshot", "6.2.1.5", "jar" ) ).toBe( "6.2.1.5-SNAPSHOT" );
 			});
 
@@ -56,19 +56,19 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 			});
 
 			it(title="installer", body=function(){
-				expect( testLatest( "all", "0", "linux-arm64" ) ).toBe( "6.2.1.5-SNAPSHOT" );
+				expect( testLatest( "all", "0", "linux-aarch64" ) ).toBe( "6.2.1.5-SNAPSHOT" );
 				expect( testLatest( "all", "0", "linux-x64" ) ).toBe( "6.2.1.58-SNAPSHOT" );
 
-				expect( testLatest( "stable", "0", "linux-arm64" ) ).toBe( "" );
+				expect( testLatest( "stable", "0", "linux-aarch64" ) ).toBe( "" );
 				expect( testLatest( "stable", "0", "linux-x64" ) ).toBe( "" );
 
-				expect( testLatest( "all", "6", "linux-arm64" ) ).toBe( "6.2.1.5-SNAPSHOT" );
+				expect( testLatest( "all", "6", "linux-aarch64" ) ).toBe( "6.2.1.5-SNAPSHOT" );
 				expect( testLatest( "all", "6", "linux-x64" ) ).toBe( "6.2.1.58-SNAPSHOT" );
 
-				expect( testLatest( "all", "5", "linux-arm64" ) ).toBe( "" );
+				expect( testLatest( "all", "5", "linux-aarch64" ) ).toBe( "" );
 				expect( testLatest( "all", "5", "linux-x64" ) ).toBe( "" );
 
-				expect( testLatest( "all", "7", "linux-arm64" ) ).toBe( "" );
+				expect( testLatest( "all", "7", "linux-aarch64" ) ).toBe( "" );
 				expect( testLatest( "all", "7", "linux-x64" ) ).toBe( "" );
 			});
 
