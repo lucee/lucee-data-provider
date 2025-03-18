@@ -592,7 +592,7 @@
 											<i class="icon icon-open"></i>
 										</small>
 										</div>
-										<div  class="clog-detail collapse #uid#_release row_alter" style="text-align:center;">
+										<div  class="clog-detail collapse #uid#_release_id row_alter" style="text-align:center;">
 								</cfif>
 								<div <cfif ind MOD 2 eq 0>class="row_alterEven textStyle textWrap"<cfelse>class="row_alterOdd textStyle textWrap"</cfif>>
 									<a href="#cdnURLExt##el.filename#">#ver# (#lsDateFormat(el.date)#)</a>
@@ -605,7 +605,7 @@
 								<cfif cnt EQ ind and len(uid)>
 									<div class="showLess pointer textStyle"
 											style="text-align:center;background-color:##BCBCBC;" 
-											onclick="return hideData('#uid#_release');">
+											onclick="return hideData('#uid#_release_id');">
 										<b><i>Show less</i></b>
 										<small class="align-middle h6 mb-0  hideClick">
 											<i class="icon icon-collapse"></i>
