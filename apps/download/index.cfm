@@ -83,11 +83,13 @@
 	}
 
 	// latest
-	edgeMajor="6";
+	edgeMajor="7";
+	stableMajor="6"
 	ltsMajor="5";
 	latest={"edge":{},"lts":{}};
 	alias[ltsMajor]="lts";
 	alias[edgeMajor]="edge";
+	alias[stableMajor]="edge";
 	loop struct=variables.VERSIONS index="key" item="val" {
 		l=int(listFirst(key,'.'));
 		if (!structKeyExists(alias, l)) continue;
