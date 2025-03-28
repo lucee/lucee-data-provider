@@ -611,16 +611,21 @@ component {
 			// Turn 1.2.3.4 into 1.2.3+4 and 1.2.3.4-rc into 1.2.3-rc+4
 			var v=reReplace( arguments.version, '([0-9]*\.[0-9]*\.[0-9]*)(\.)([0-9]*)(-.*)?', '\1\4+\3' );
 			var json = temp & "/box.json";
-			fileWrite( json,
-'{
-    "name":"Lucee #( light ? 'Light' : '' )# CF Engine",
-    "version":"#v#",
-    "createPackageDirectory":false,
-    "location":"https://cdn.lucee.org/rest/update/provider/forgebox/#arguments.version##( light ? '?light=true' : '' )#",
-    "slug":"lucee#( light ? '-light' : '' )#",
-    "shortDescription":"Lucee #( light ? 'Light' : '' )# WAR engine for CommandBox servers.",
-    "type":"cf-engines"
-}');
+			var boxJson = [
+				"name":"Lucee #( light ? 'Light' : '' )# CF Engine",
+				"version":"#v#",
+				"createPackageDirectory":false,
+				//"location":"https://cdn.lucee.org/rest/update/provider/forgebox/#arguments.version##( light ? '?light=true' : '' )#",
+				"slug":"lucee#( light ? '-light' : '' )#",
+				"shortDescription":"Lucee #( light ? 'Light' : '' )# WAR engine for CommandBox servers.",
+				"type":"cf-engines"
+			];
+			if ( checkVersionGTE( arguments.version, 7 ) ){
+				systemOutput( "Using JakartaEE", true );
+				boxJson[ "JakartaEE" ] = true;
+			}
+			fileWrite( json, boxJson.toJson() );
+			//systemOutput( boxJson.toJson(), true );
 
 			// create the war
 			zip action="zip" file=zipTmp overwrite=true {
@@ -628,7 +633,6 @@ component {
 				zipparam source=json;
 			}
 			fileMove( zipTmp, trg );
-			throw "I'm a test!";
 		}
 		catch( e ){
 			logger(text=e.message, type="error", exception=e);
