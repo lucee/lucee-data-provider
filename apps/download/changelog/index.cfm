@@ -135,16 +135,15 @@
 				<cfset lastMajor = "">
 				<div class="versionList">
 					<cfloop array="#arrChangeLogs#" item="luceeVersion">
-						<cfif luceeVersion.type eq "releases">
-							<cfif lastMajor neq left(luceeVersion.version, 3)>
-								<cfif len(lastMajor) eq 0>
-									Lucee Releases:
-								</cfif>
-								<b><a href="?version=#left(luceeVersion.version,3)#">#left(LuceeVersion.version, 3)#</a>&nbsp;</b>&nbsp;
-								<a href="?version=#left(luceeVersion.version,3)####luceeVersion.version#">#luceeVersion.version#</a>&nbsp;
+						<cfif lastMajor neq left(luceeVersion.version, 3)>
+							<cfif len(lastMajor) eq 0>
+								Lucee Releases:
 							</cfif>
 							<cfset lastMajor = left(LuceeVersion.version, 3)>
+							<b><a href="?version=#left(luceeVersion.version,3)#">#left(LuceeVersion.version, 3)#</a>&nbsp;</b>&nbsp;
+							<a href="?version=#left(luceeVersion.version,3)####luceeVersion.version#">#luceeVersion.version#</a>&nbsp;
 						</cfif>
+						
 					</cfloop>
 				</div>
 				<cfif stMajorVersion[ url.version ] eq "false">
