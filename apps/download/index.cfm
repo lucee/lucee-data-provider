@@ -86,10 +86,10 @@
 	edgeMajor="7";
 	stableMajor="6"
 	ltsMajor="5";
-	latest={"edge":{},"lts":{}};
+	latest={"edge":{},"lts":{},stable:{}};
 	alias[ltsMajor]="lts";
 	alias[edgeMajor]="edge";
-	alias[stableMajor]="edge";
+	alias[stableMajor]="stable";
 	loop struct=variables.VERSIONS index="key" item="val" {
 		l=int(listFirst(key,'.'));
 		if (!structKeyExists(alias, l)) continue;
@@ -128,18 +128,19 @@
 						 snapshots:"Snapshot"
 					  }>
 					  <cfset mainsubjects={
-						 edge:"Latest/Current",
+						 edge:"Bleeding Edge",
+						 stable: "Stable",
 						 lts:"LTS (Long Term Support)"
 					  }>
 
 					  <table  border=0 cellpadding="25" cellspacing="5" width="100%">
 						 <tr>
-							<cfset lists={edge:"releases,rc,beta,snapshots",lts:"releases,rc,snapshots"}>
-							<cfloop list="edge,lts" item="mainType">
+							<cfset lists={stable="releases,rc,beta,snapshots",edge:"rc,beta,snapshots",lts:"releases,rc,snapshots"}>
+							<cfloop list="stable,edge,lts" item="mainType">
 							<td valign="top"><div class="panel-body">
 								<div class="bg-primary BoxWidth text-white"><h2>#mainsubjects[mainType]#</h2></div>
 								<div class="desc descDiv row_even">
-
+								<cfset count_shown=0>
 								<cfloop list="#lists[mainType]#" item="type">
 									<cfif len( latest[maintype][type] ?: {} ) eq 0>
 										<cfcontinue>
@@ -248,7 +249,12 @@
 											<a href="#dockerURL#"><span class="glyphicon glyphicon-info-sign"></span></a>
 										</span>
 									</li>
-								  </ul></div>
+									</ul>
+									<cfif count_shown eq 0>
+										<a href="/changelog/?version=#left(dw.version,3)#">Version Changelogs</a>
+									</cfif>
+									<cfset count_shown++>
+								</div>
 							   </cfloop>
 							</div></div></td>
 							</cfloop>
