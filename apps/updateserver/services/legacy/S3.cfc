@@ -596,6 +596,9 @@ component {
 			// systemOutput("Has LuceeServlet Version check, gte 6.2: #noLuceeServlet#", true );
 			var warDir=curr & "/build/" & (noLuceeServlet ? "war-6.2" : "war") & "/";
 
+			if ( checkVersionGTE( arguments.version, 7 ) )
+				warDir=curr & "/build/war-7.0/";
+
 			// create the war
 			var war=temp & "/engine.war";
 			if ( light ) local.lightJar=createLight(jar, version, false, temp);
