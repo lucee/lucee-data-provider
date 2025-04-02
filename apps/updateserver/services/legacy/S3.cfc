@@ -23,6 +23,10 @@ component {
 		}
 	}
 
+	/*
+		MARK: Get Versions
+	*/
+
 	public function getVersions(boolean flush=false) {
 		var rootDir = getDirectoryFromPath(getCurrentTemplatePath());
 		var cacheDir=rootDir & "cache/";
@@ -223,6 +227,9 @@ component {
 		}
 	}
 
+	/*
+		MARK: Add Missing
+	*/
 	public function addMissing(includingForgeBox=false, skipMaven=false) {
 		setting requesttimeout="1000000";
 		systemOutput("start:"&now(),1,1);
@@ -292,6 +299,9 @@ component {
 		}
 	}
 
+	/*
+		MARK: Create Artifacts
+	*/
 	private function createArtifacts(mr,s3,specType="",includingForgeBox=true) {
 		if(left(s3.version,1)<5) return;
 
@@ -374,6 +384,9 @@ component {
 		}
 	}
 
+	/*
+		MARK: Create LCO
+	*/	
 	private function createLCO( jar, version ) {
 		var trg=variables.s3Root & version & ".lco";
 		if ( fileExists( trg ) ) {
@@ -395,6 +408,9 @@ component {
 		return trg;
 	}
 
+	/*
+		MARK: Create WAR
+	*/
 	private function createWar( jar, version ) {		
 		var war=variables.s3Root & "lucee-" & version & ".war";
 		if ( fileExists( war ) ) {
@@ -441,6 +457,10 @@ component {
 		return war;
 	}
 
+	/*
+		MARK: Create LIGHT
+	*/
+	
     private function createLight(jar, version, boolean toS3=true, tempDir) {
         var sep=server.separator.file;
         var trg=variables.s3Root & "lucee-light-" & version & ".jar";
@@ -501,6 +521,9 @@ component {
         return toS3?trg:tmpLoaderFile;
     }
 
+	/*
+		MARK: Create EXPRESS
+	*/
     private string function createExpress(required jar,required string version) {
 		var sep=server.separator.file;
 		var trg = variables.s3Root & "lucee-express-" & version & ".zip";
@@ -567,6 +590,9 @@ component {
 		return trg;
 	}
 
+	/*
+		MARK: Create FORGEBOX
+	*/
 	private string function createForgeBox(required jar,required string version, boolean light=false) {
 		var trg=variables.s3Root & "forgebox#( light ? '-light' : '' )#-" &version & ".zip";
 		if ( fileExists( trg ) ) {
