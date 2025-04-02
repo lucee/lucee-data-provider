@@ -234,13 +234,19 @@
 						<cfset delim="">
 					</cfloop>
 				</div>
+
 				--->
-				<table cellSpacing=0 border=0 cellPadding=2 width="100%" class="changelogs">
+				<cfset row=0>
+				<hr>
+				<table cellSpacing=0 border=0 cellPadding=2 width="100%" class="changelogs table-striped">
 					<cfloop array="#arrChangeLogs#" item="lv">
 						<cfif structcount(lv.changelog) and left(lv.version,3) eq url.version>
-							<tr>
-								<td colspan="4"><hr></td>
-							</tr>
+							<cfif row neq 0>
+								<tr>
+									<td colspan="4"><hr></td>
+								</tr>
+							</cfif>
+							<cfset row=1>
 							<tr>
 								<td colspan="4">
 								<#lv.header# class="modal-title" id="#lv.version#">
@@ -267,7 +273,7 @@
 												</cfloop>
 											</cfif>
 											</td>
-											<td>#encodeForHtml(arrayToList(ticket.fixVersions,", "))#</td>
+											<td style="max-width:250px;">#encodeForHtml(wrap(arrayToList(ticket.fixVersions,", "),15))#</td>
 										</tr>
 										<cfset changelogTicketList[ticket.id] = true>
 									</cfif>

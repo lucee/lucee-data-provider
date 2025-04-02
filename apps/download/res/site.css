@@ -30,7 +30,7 @@
 .jumbotron { padding-top: 1rem; }
 .py-3 .jumbotron { padding-left: 20px; }
 .changelogs { font-size: 1.25rem; margin-top: 1.5rem; padding-top: 0; padding-bottom: 0; padding-left: 5px; padding-right: 5px; }
-.changelogs TD { padding-top: 5px; }
+.changelogs TD { padding-top: 5px; padding-bottom: 3px; }
 .link-bar a span.support-lucee { color: red; }
 
 /*.TextStyle{ padding: 1%; font-family: "Segoe UI"; font-size: 1.25rem; font-weight: 600;}*/
