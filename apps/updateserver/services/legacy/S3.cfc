@@ -386,7 +386,7 @@ component {
 
 	/*
 		MARK: Create LCO
-	*/	
+	*/
 	private function createLCO( jar, version ) {
 		var trg=variables.s3Root & version & ".lco";
 		if ( fileExists( trg ) ) {
@@ -395,7 +395,7 @@ component {
 		try {
 			var temp = getTemp( arguments.version );
 			var lco= temp & "lucee-" & version & ".lco";
-		
+
 			fileCopy( "zip://" & jar & "!core/core.lco", lco ); // now extract
 			fileMove( lco, trg );
 		}
@@ -411,7 +411,7 @@ component {
 	/*
 		MARK: Create WAR
 	*/
-	private function createWar( jar, version ) {		
+	private function createWar( jar, version ) {
 		var war=variables.s3Root & "lucee-" & version & ".war";
 		if ( fileExists( war ) ) {
 			systemOutput("--- " & war & " already built, skipping", true);
@@ -460,10 +460,10 @@ component {
 	/*
 		MARK: Create LIGHT
 	*/
-	
-    private function createLight(jar, version, boolean toS3=true, tempDir) {
-        var sep=server.separator.file;
-        var trg=variables.s3Root & "lucee-light-" & version & ".jar";
+
+	private function createLight(jar, version, boolean toS3=true, tempDir) {
+		var sep=server.separator.file;
+		var trg=variables.s3Root & "lucee-light-" & version & ".jar";
 		if ( fileExists( trg ) ) {
 			// avoid double handling for forgebox light builds
 			systemOutput("--- " & trg & " already built, skipping", true);
@@ -473,58 +473,58 @@ component {
 		}
 		var temp = getTemp( arguments.version );
 		var s = getTickCount();
-        try {
-            var tmpLoader=temp & "lucee-loader-" & createUniqueId(); // the jar
-            directoryCreate( tmpLoader );
+		try {
+			var tmpLoader=temp & "lucee-loader-" & createUniqueId(); // the jar
+			directoryCreate( tmpLoader );
 
-            // unzip
-            try{
+			// unzip
+			try{
 				zip action="unzip" file=jar destination=tmpLoader;
-            }
-            catch(e) {
-            	fileDelete(jar);
-            	return "";
-            }
-            // rewrite trg
-            var extDir=tmpLoader & sep & "extensions";
-            if ( directoryExists( extDir ) ) directoryDelete(extDir,true); // deletes directory with all files inside
-            directoryCreate( extDir ); // create empty dir again (maybe Lucee expect this directory to exist)
+			}
+			catch(e) {
+				fileDelete(jar);
+				return "";
+			}
+			// rewrite trg
+			var extDir=tmpLoader & sep & "extensions";
+			if ( directoryExists( extDir ) ) directoryDelete(extDir,true); // deletes directory with all files inside
+			directoryCreate( extDir ); // create empty dir again (maybe Lucee expect this directory to exist)
 
 			// unzip core
-            var lcoFile=tmpLoader & sep & "core" & sep & "core.lco";
-            local.tmpCore=temp & "lucee-core-" & createUniqueId(); // the jar
-            directoryCreate(tmpCore);
-            zip action="unzip" file=lcoFile destination=tmpCore;
+			var lcoFile=tmpLoader & sep & "core" & sep & "core.lco";
+			local.tmpCore=temp & "lucee-core-" & createUniqueId(); // the jar
+			directoryCreate(tmpCore);
+			zip action="unzip" file=lcoFile destination=tmpCore;
 			// rewrite manifest
-            var manifest=tmpCore & sep & "META-INF" & sep&"MANIFEST.MF";
-            var content=fileRead(manifest);
-            var index=find('Require-Extension',content);
-            if(index>0) content=mid(content,1,index-1)&variables.NL;
-            fileWrite(manifest,content);
+			var manifest=tmpCore & sep & "META-INF" & sep&"MANIFEST.MF";
+			var content=fileRead(manifest);
+			var index=find('Require-Extension',content);
+			if(index>0) content=mid(content,1,index-1)&variables.NL;
+			fileWrite(manifest,content);
 
-            // zip core
-            if ( fileExists( lcoFile ) ) fileDelete( lcoFile );
-            zip action="zip" source=tmpCore file=lcoFile;
-            // zip loader
-            local.tmpLoaderFile=temp&"lucee-loader-"&createUniqueId()&".jar";
-            zip action="zip" source=tmpLoader file=tmpLoaderFile;
+			// zip core
+			if ( fileExists( lcoFile ) ) fileDelete( lcoFile );
+			zip action="zip" source=tmpCore file=lcoFile;
+			// zip loader
+			local.tmpLoaderFile=temp&"lucee-loader-"&createUniqueId()&".jar";
+			zip action="zip" source=tmpLoader file=tmpLoaderFile;
 
 			//if(fileExists(light)) fileDelete(light);
-            if (toS3) fileMove(tmpLoaderFile,trg);
-        }
+			if (toS3) fileMove(tmpLoaderFile,trg);
+		}
 		catch( e ){
 			logger(text=e.message, type="error", exception=e);
 		}
-        finally {
-            if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
-        }
-        return toS3?trg:tmpLoaderFile;
-    }
+		finally {
+			if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
+		}
+		return toS3?trg:tmpLoaderFile;
+	}
 
 	/*
 		MARK: Create EXPRESS
 	*/
-    private string function createExpress(required jar,required string version) {
+	private string function createExpress(required jar,required string version) {
 		var sep=server.separator.file;
 		var trg = variables.s3Root & "lucee-express-" & version & ".zip";
 		if ( fileExists( trg ) ) {
