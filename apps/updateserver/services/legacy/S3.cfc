@@ -687,7 +687,7 @@ component {
 	private function getWarTemplate( version ){
 		if ( checkVersionGTE( arguments.version, 7 ) )
 			return "war-7.0";  // jakarta, no lucee servlet
-		else if checkVersionGTE( arguments.version, 6, 2 )
+		else if ( checkVersionGTE( arguments.version, 6, 2 ) )
 			return "war-6.2"; // javax & jakarta, no lucee servlet
 		else
 			return "war"; // javax
