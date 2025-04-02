@@ -403,11 +403,7 @@ component {
 		var temp = getTemp( arguments.version );
 		var warTmp=temp & "lucee-" & version & "-temp-" & createUniqueId() & ".war";
 		var curr=getDirectoryFromPath( getCurrentTemplatePath() );
-
-		var noLuceeServlet = checkVersionGTE( arguments.version, 6, 2 );
-		//systemOutput("Has LuceeServlet Version check, gte 6.2: #noLuceeServlet#", true );
-
-		var warFolder = noLuceeServlet ? "war-6.2" : "war";
+		var warTemplateFolder = getWarTemplate( arguments.version );
 
 		try {
 			// temp directory
@@ -418,7 +414,7 @@ component {
 				if ( name == "extensions" && !directoryExists( tmp ) )
 					directoryCreate( tmp, true );
 				if ( name == "war" ){
-					tmp = curr & "build/" & warFolder & "/";
+					tmp = curr & "build/" & warTemplateFolder & "/";
 				}
 				build[ name ] = tmp;
 
@@ -592,12 +588,7 @@ component {
 			//if(!directoryExists(commonDir)) directoryCreate(commonDir);
 
 			// war directory
-			var noLuceeServlet = checkVersionGTE( arguments.version, 6, 2 );
-			// systemOutput("Has LuceeServlet Version check, gte 6.2: #noLuceeServlet#", true );
-			var warDir=curr & "/build/" & (noLuceeServlet ? "war-6.2" : "war") & "/";
-
-			if ( checkVersionGTE( arguments.version, 7 ) )
-				warDir=curr & "/build/war-7.0/";
+			var warDir = curr & "/build/" & getWarTemplate( arguments.version ) & "/";
 
 			// create the war
 			var war=temp & "/engine.war";
@@ -665,6 +656,15 @@ component {
 				return true;
 		}
 		return false;
+	}
+
+	private function getWarTemplate( version ){
+		if ( checkVersionGTE( arguments.version, 7 ) )
+			return "war-7.0";  // jakarta, no lucee servlet
+		else if checkVersionGTE( arguments.version, 6, 2 )
+			return "war-6.2"; // javax & jakarta, no lucee servlet
+		else
+			return "war"; // javax
 	}
 
 }
