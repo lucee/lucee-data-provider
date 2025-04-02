@@ -23,6 +23,10 @@ component {
 		}
 	}
 
+	/*
+		MARK: Get Versions
+	*/
+
 	public function getVersions(boolean flush=false) {
 		var rootDir = getDirectoryFromPath(getCurrentTemplatePath());
 		var cacheDir=rootDir & "cache/";
@@ -223,6 +227,9 @@ component {
 		}
 	}
 
+	/*
+		MARK: Add Missing
+	*/
 	public function addMissing(includingForgeBox=false, skipMaven=false) {
 		setting requesttimeout="1000000";
 		systemOutput("start:"&now(),1,1);
@@ -292,6 +299,9 @@ component {
 		}
 	}
 
+	/*
+		MARK: Create Artifacts
+	*/
 	private function createArtifacts(mr,s3,specType="",includingForgeBox=true) {
 		if(left(s3.version,1)<5) return;
 
@@ -374,6 +384,9 @@ component {
 		}
 	}
 
+	/*
+		MARK: Create LCO
+	*/
 	private function createLCO( jar, version ) {
 		var trg=variables.s3Root & version & ".lco";
 		if ( fileExists( trg ) ) {
@@ -382,7 +395,7 @@ component {
 		try {
 			var temp = getTemp( arguments.version );
 			var lco= temp & "lucee-" & version & ".lco";
-		
+
 			fileCopy( "zip://" & jar & "!core/core.lco", lco ); // now extract
 			fileMove( lco, trg );
 		}
@@ -395,7 +408,10 @@ component {
 		return trg;
 	}
 
-	private function createWar( jar, version ) {		
+	/*
+		MARK: Create WAR
+	*/
+	private function createWar( jar, version ) {
 		var war=variables.s3Root & "lucee-" & version & ".war";
 		if ( fileExists( war ) ) {
 			systemOutput("--- " & war & " already built, skipping", true);
@@ -403,11 +419,7 @@ component {
 		var temp = getTemp( arguments.version );
 		var warTmp=temp & "lucee-" & version & "-temp-" & createUniqueId() & ".war";
 		var curr=getDirectoryFromPath( getCurrentTemplatePath() );
-
-		var noLuceeServlet = checkVersionGTE( arguments.version, 6, 2 );
-		//systemOutput("Has LuceeServlet Version check, gte 6.2: #noLuceeServlet#", true );
-
-		var warFolder = noLuceeServlet ? "war-6.2" : "war";
+		var warTemplateFolder = getWarTemplate( arguments.version );
 
 		try {
 			// temp directory
@@ -418,7 +430,7 @@ component {
 				if ( name == "extensions" && !directoryExists( tmp ) )
 					directoryCreate( tmp, true );
 				if ( name == "war" ){
-					tmp = curr & "build/" & warFolder & "/";
+					tmp = curr & "build/" & warTemplateFolder & "/";
 				}
 				build[ name ] = tmp;
 
@@ -445,9 +457,13 @@ component {
 		return war;
 	}
 
-    private function createLight(jar, version, boolean toS3=true, tempDir) {
-        var sep=server.separator.file;
-        var trg=variables.s3Root & "lucee-light-" & version & ".jar";
+	/*
+		MARK: Create LIGHT
+	*/
+
+	private function createLight(jar, version, boolean toS3=true, tempDir) {
+		var sep=server.separator.file;
+		var trg=variables.s3Root & "lucee-light-" & version & ".jar";
 		if ( fileExists( trg ) ) {
 			// avoid double handling for forgebox light builds
 			systemOutput("--- " & trg & " already built, skipping", true);
@@ -457,55 +473,58 @@ component {
 		}
 		var temp = getTemp( arguments.version );
 		var s = getTickCount();
-        try {
-            var tmpLoader=temp & "lucee-loader-" & createUniqueId(); // the jar
-            directoryCreate( tmpLoader );
+		try {
+			var tmpLoader=temp & "lucee-loader-" & createUniqueId(); // the jar
+			directoryCreate( tmpLoader );
 
-            // unzip
-            try{
+			// unzip
+			try{
 				zip action="unzip" file=jar destination=tmpLoader;
-            }
-            catch(e) {
-            	fileDelete(jar);
-            	return "";
-            }
-            // rewrite trg
-            var extDir=tmpLoader & sep & "extensions";
-            if ( directoryExists( extDir ) ) directoryDelete(extDir,true); // deletes directory with all files inside
-            directoryCreate( extDir ); // create empty dir again (maybe Lucee expect this directory to exist)
+			}
+			catch(e) {
+				fileDelete(jar);
+				return "";
+			}
+			// rewrite trg
+			var extDir=tmpLoader & sep & "extensions";
+			if ( directoryExists( extDir ) ) directoryDelete(extDir,true); // deletes directory with all files inside
+			directoryCreate( extDir ); // create empty dir again (maybe Lucee expect this directory to exist)
 
 			// unzip core
-            var lcoFile=tmpLoader & sep & "core" & sep & "core.lco";
-            local.tmpCore=temp & "lucee-core-" & createUniqueId(); // the jar
-            directoryCreate(tmpCore);
-            zip action="unzip" file=lcoFile destination=tmpCore;
+			var lcoFile=tmpLoader & sep & "core" & sep & "core.lco";
+			local.tmpCore=temp & "lucee-core-" & createUniqueId(); // the jar
+			directoryCreate(tmpCore);
+			zip action="unzip" file=lcoFile destination=tmpCore;
 			// rewrite manifest
-            var manifest=tmpCore & sep & "META-INF" & sep&"MANIFEST.MF";
-            var content=fileRead(manifest);
-            var index=find('Require-Extension',content);
-            if(index>0) content=mid(content,1,index-1)&variables.NL;
-            fileWrite(manifest,content);
+			var manifest=tmpCore & sep & "META-INF" & sep&"MANIFEST.MF";
+			var content=fileRead(manifest);
+			var index=find('Require-Extension',content);
+			if(index>0) content=mid(content,1,index-1)&variables.NL;
+			fileWrite(manifest,content);
 
-            // zip core
-            if ( fileExists( lcoFile ) ) fileDelete( lcoFile );
-            zip action="zip" source=tmpCore file=lcoFile;
-            // zip loader
-            local.tmpLoaderFile=temp&"lucee-loader-"&createUniqueId()&".jar";
-            zip action="zip" source=tmpLoader file=tmpLoaderFile;
+			// zip core
+			if ( fileExists( lcoFile ) ) fileDelete( lcoFile );
+			zip action="zip" source=tmpCore file=lcoFile;
+			// zip loader
+			local.tmpLoaderFile=temp&"lucee-loader-"&createUniqueId()&".jar";
+			zip action="zip" source=tmpLoader file=tmpLoaderFile;
 
 			//if(fileExists(light)) fileDelete(light);
-            if (toS3) fileMove(tmpLoaderFile,trg);
-        }
+			if (toS3) fileMove(tmpLoaderFile,trg);
+		}
 		catch( e ){
 			logger(text=e.message, type="error", exception=e);
 		}
-        finally {
-            if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
-        }
-        return toS3?trg:tmpLoaderFile;
-    }
+		finally {
+			if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
+		}
+		return toS3?trg:tmpLoaderFile;
+	}
 
-    private string function createExpress(required jar,required string version) {
+	/*
+		MARK: Create EXPRESS
+	*/
+	private string function createExpress(required jar,required string version) {
 		var sep=server.separator.file;
 		var trg = variables.s3Root & "lucee-express-" & version & ".zip";
 		if ( fileExists( trg ) ) {
@@ -571,6 +590,9 @@ component {
 		return trg;
 	}
 
+	/*
+		MARK: Create FORGEBOX
+	*/
 	private string function createForgeBox(required jar,required string version, boolean light=false) {
 		var trg=variables.s3Root & "forgebox#( light ? '-light' : '' )#-" &version & ".zip";
 		if ( fileExists( trg ) ) {
@@ -592,12 +614,7 @@ component {
 			//if(!directoryExists(commonDir)) directoryCreate(commonDir);
 
 			// war directory
-			var noLuceeServlet = checkVersionGTE( arguments.version, 6, 2 );
-			// systemOutput("Has LuceeServlet Version check, gte 6.2: #noLuceeServlet#", true );
-			var warDir=curr & "/build/" & (noLuceeServlet ? "war-6.2" : "war") & "/";
-
-			if ( checkVersionGTE( arguments.version, 7 ) )
-				warDir=curr & "/build/war-7.0/";
+			var warDir = curr & "/build/" & getWarTemplate( arguments.version ) & "/";
 
 			// create the war
 			var war=temp & "/engine.war";
@@ -665,6 +682,15 @@ component {
 				return true;
 		}
 		return false;
+	}
+
+	private function getWarTemplate( version ){
+		if ( checkVersionGTE( arguments.version, 7 ) )
+			return "war-7.0";  // jakarta, no lucee servlet
+		else if ( checkVersionGTE( arguments.version, 6, 2 ) )
+			return "war-6.2"; // javax & jakarta, no lucee servlet
+		else
+			return "war"; // javax
 	}
 
 }
