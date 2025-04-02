@@ -257,8 +257,8 @@
 								<cfloop struct="#tickets#" index="id" item="ticket">
 									<cfif !StructKeyExists(changelogTicketList, ticket.id)>
 										<tr valign="top">
-											<td nowrap><a href="https://bugs.lucee.org/browse/#id#" target="blank" class="ml-1">#id#</a></td>
-											<td><span class="label label-#getBadgeForType(ticket.type)#" data-ticket-type="#ticket.type#">#ticket.type#</span></td>
+											<td nowrap><a href="https://bugs.lucee.org/browse/#id#" target="blank" class="mr-1">#id#</a></td>
+											<td><span class="label label-#getBadgeForType(ticket.type)# mr-1" data-ticket-type="#ticket.type#">#ticket.type#</span></td>
 											<td>#encodeForHtml(wrap(ticket.summary,70))#
 											<cfif len(ticket.labels)>
 												<br>
