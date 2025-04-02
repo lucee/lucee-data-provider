@@ -20,17 +20,26 @@
 			location url="?version=#defaultMajorVersion#" addtoken=false;
 	}
 
-	if ( structKeyExists(application, "changeLogReport")
-			&& structKeyExists(application.changelogReport, url.version )){
+	if ( structKeyExists( application, "changeLogReport" )
+			&& structKeyExists( application.changelogReport, url.version )){
 		echo( application.changelogReport[ url.version ] );
 		abort;
-	} else if (structKeyExists(application, "changeLogReportOld")
-			&& structKeyExists(application.changelogReportOld, url.version )){
+	} else if (structKeyExists( application, "changeLogReportOld")
+			&& structKeyExists( application.changelogReportOld, url.version )){
 		// changelog is being updated!
 		echo( application.changelogReportOld[ url.version ] );
 		abort;
 	}
 </cfscript>
+<!---
+<script>
+	$( document ).ready(function() {
+		$(".issue-type").onClick(function(el){
+			console.log(el);
+		});
+	});
+</script>
+--->
 <cflock type="exclusive" name="changelogReport-#url.version#" timeout=1 throwontimeout="false">
 	<cfscript>
 		buildStarted = getTickCount();
@@ -53,6 +62,7 @@
 		versions=tmp;
 
 		major = {};
+		preRelease = {};
 		// add types
 		//releases,snapshots,rc,beta
 		loop struct=versions index="vs" item="data" {
@@ -62,11 +72,36 @@
 			else if(findNoCase("-alpha",data.version)) data['type']="alpha";
 			else data['type']="releases";
 			data['versionNoAppendix']=data.version;
-			if (data.type != "snapshots")
-				major[vs]=data;
+			if ( data.type != "snapshots" ) {
+				major[ vs ] = data;
+			} else {
+				// need to find latest pre release builds
+				if ( structKeyExists( data, "versionSorted" ) ){
+					v = ArrayToList( ArraySlice( listToArray( data.versionSorted,"." ), 1 , 2 ), "." );
+					preRelease[ v ] = {
+						versionSorted: data.versionSorted,
+						versionNoAppendix: data.versionNoAppendix
+					};
+				}
+			}
 		}
-		arrVersions = structKeyArray(major).reverse().sort("text","desc");
+		// avoid showingh a snapshot for a release etc
+		structEach( preRelease, function( k, v ) {
+			var releaseVersionSorted = left( v.versionSorted, len( v.versionSorted ) -4 );
+			// check for RC / BETA / SNAPSHOT with the same version
+			arrayEach( [ ".050",".100",".075" ], function( i ){
+				if ( structKeyExists( major, releaseVersionSorted & arguments.i ) )
+					structDelete( preRelease, k );
+			});
+		});
+		structEach( preRelease, function( k, v ) {
+			major[ v.versionSorted ] = {
+				version: v.versionNoAppendix,
+				type: "snapshot"
+			};
+		});
 
+		arrVersions = structKeyArray(major).reverse().sort("text","desc");
 		arrChangeLogs = [];
 
 		function getBadgeForType( type ) {
@@ -78,6 +113,9 @@
 			}
 			return "info";
 		}
+
+		//ticketTypes={};
+		//ticketLabels={};
 	</cfscript>
 
 	<cfsavecontent variable="changelog_report">
@@ -130,12 +168,30 @@
 							header: header,
 							versionTitle: versionTitle
 						});
+						/*
+						structEach(changeLog, function(cl){
+							structEach(changeLog[cl], function( ticket ){
+								var _type= changeLog[ cl ][ ticket ].type;
+								if ( !structKeyExists( ticketTypes, _type ) )
+									ticketTypes[ _type ]=0;
+								ticketTypes[ _type ]++;
+
+								var _labels = changeLog [cl ][ ticket ].labels;
+								arrayEach(_labels, function(_label) {
+									if (!structKeyExists( ticketLabels, _label ) )
+										ticketLabels[_label]=0;
+									ticketLabels[_label]++;
+								});
+							});
+						});
+						*/
+						
 					</cfscript>
 				</cfloop>
 				<cfset lastMajor = "">
 				<div class="versionList">
 					<cfloop array="#arrChangeLogs#" item="luceeVersion">
-						<cfif lastMajor neq left(luceeVersion.version, 3)>
+						<cfif lastMajor neq left(luceeVersion.version, 3) and luceeVersion.type neq "snapshots">
 							<cfif len(lastMajor) eq 0>
 								Lucee Releases:
 							</cfif>
@@ -161,6 +217,24 @@
 						</h4>
 					</div>
 				</cfif>
+				<!---
+				<cfset delim="">
+				<div class="versionList issue-types">
+					Issue Types:
+					<cfloop collection=#ticketTypes# item="type">
+						#delim# <span class="issue-label" data-type="#encodeForHtmlAttribute(type)#"> #type# (#ticketTypes[type]#)</span>
+						<cfset delim=",">
+					</cfloop>
+				</div>
+				<cfset delim="">
+				<div class="versionList">
+					Issue Labels:
+					<cfloop collection=#ticketLabels# item="label">
+						#delim# <span class="issue-label" data-label="#encodeForHtmlAttribute(label)#">#encodeForHtml(label)# (#ticketLabels[label]#)</span>
+						<cfset delim="">
+					</cfloop>
+				</div>
+				--->
 				<table cellSpacing=0 border=0 cellPadding=2 width="100%" class="changelogs">
 					<cfloop array="#arrChangeLogs#" item="lv">
 						<cfif structcount(lv.changelog) and left(lv.version,3) eq url.version>
@@ -183,8 +257,8 @@
 								<cfloop struct="#tickets#" index="id" item="ticket">
 									<cfif !StructKeyExists(changelogTicketList, ticket.id)>
 										<tr valign="top">
-											<td><a href="https://bugs.lucee.org/browse/#id#" target="blank" class="ml-1">#id#</a></td>
-											<td><span class="label label-#getBadgeForType(ticket.type)#">#ticket.type#</span></td>
+											<td nowrap><a href="https://bugs.lucee.org/browse/#id#" target="blank" class="ml-1">#id#</a></td>
+											<td><span class="label label-#getBadgeForType(ticket.type)#" data-ticket-type="#ticket.type#">#ticket.type#</span></td>
 											<td>#encodeForHtml(wrap(ticket.summary,70))#
 											<cfif len(ticket.labels)>
 												<br>
