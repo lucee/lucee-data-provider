@@ -4,6 +4,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		describe( "validate extension info json", function() {
 
 			it(title="latest", body=function(){
+				var dir = getDirectoryFromPath(getCurrentTemplatePath());
 				var extInfoPath = expandPath( dir & "../apps/download/extensionMeta.json" );
 				expect( fileExists( extInfoPath ) ).toBeTrue();
 				expect( isJson( fileRead( extInfoPath ) ) ).toBeTrue();
