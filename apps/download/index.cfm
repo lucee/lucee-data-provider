@@ -573,7 +573,24 @@
 						 ID: #extQry.id#
 						 <p class="fontStyle ml-2">#extQry.description#</p>
 					  </div>
-
+					  
+					  <cfif structKeyExists(application.extensionMeta, extQry.id)>
+						<div class="head1 textStyle" style="font-size:1.5rem;">
+							<cfset extMeta = application.extensionMeta[extQry.id]>
+							<cfif structKeyExists(extMeta, "docs")>
+								<span class="glyphicon glyphicon-info-sign"></span>
+								<a href="#extMeta.docs#">Documentation</a>&nbsp;
+							</cfif>
+							<cfif structKeyExists(extMeta, "src")>
+								<span class="glyphicon glyphicon-info-sign"></span>
+								<a href="#extMeta.src#">Source</a>&nbsp;
+							</cfif>
+							<cfif structKeyExists(extMeta, "labels")>
+								<span class="glyphicon glyphicon-info-sign"></span>
+								<a href="https://luceeserver.atlassian.net/issues/?jql=labels%20%3D%20%22#extMeta.labels#%22">Issues</a>
+							</cfif>
+						 </div>
+					  </cfif>
 				<!--- downloads --->
 				<div class="row">
 				<!--- call extractVersions function once per extension rather than three times --->

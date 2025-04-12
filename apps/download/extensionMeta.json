@@ -1,0 +1,121 @@
+{
+	"DF28D0A4-6748-44B9-A2FDC12E4E2E4D38": {
+		"docs": "https://docs.lucee.org/categories/webservice.html",
+		"src": "https://github.com/lucee/extension-axis",
+		"labels": "webservice"
+	},
+	"D46B46A9-A0E3-44E1-D972A04AC3A8DC10":{
+		"docs": "https://docs.lucee.org/reference/tags/chart.html",
+		"src": "https://github.com/lucee/extension-chart",
+		"labels": "charts"
+	},
+	"7891D723-8F78-45F5-B7E333A22F8467CA":{
+		"docs": "https://docs.lucee.org/categories/crypto.html",
+		"src": "https://github.com/lucee/extension-argon2",
+		"labels": "argon2"
+	},
+	"6E2CB28F-98FB-4B51-B6BE6C64ADF35473":{
+		"docs": "https://docs.lucee.org/categories/ajax.html",
+		"src": "https://github.com/lucee/extension-ajax",
+		"labels": "ajax"
+	},
+	"8D7FB0DF-08BB-1589-FE3975678F07DB17": {
+		"docs": "https://docs.lucee.org/categories/zip.html",
+		"src": "https://github.com/lucee/extension-compress",
+		"labels": "cfzip"
+	},
+	"87FE44E5-179C-43A3-A87B3D38BEF4652E": {
+		"docs": "https://docs.lucee.org/categories/cache.html",
+		"src": "https://github.com/lucee/extension-ehcache",
+		"labels": "ehcache"
+	},
+	"37C61C0A-5D7E-4256-8572639BE0CF5838": {
+		"docs": "https://docs.lucee.org/categories/encode.html",
+		"src": "https://github.com/lucee/extension-esapi",
+		"labels": "esapi"
+	},
+	"FAD67145-E3AE-30F8-1C11A6CCF544F0B7": {
+		"docs": "https://docs.lucee.org/categories/ajax.html",
+		"src": "https://github.com/lucee/extension-esapi",
+		"labels": "cfform"
+	},
+	"FAD1E8CB-4F45-4184-86359145767C29DE": {
+		"docs": "https://docs.lucee.org/categories/orm.html",
+		"src": "https://github.com/lucee/extension-hibernate",
+		"labels": "orm"
+	},
+	"B737ABC4-D43F-4D91-8E8E973E37C40D1B": {
+		"docs": "https://docs.lucee.org/categories/image.html",
+		"src": "https://github.com/lucee/extension-image",
+		"labels": "image"
+	},
+	"A03F4335-BDEF-44DE-946FB16C47802F96": {
+		"docs": "https://docs.lucee.org/categories/json.html",
+		"src": "https://github.com/lucee/extension-json",
+		"labels": "json"
+	},
+	"60772C12-F179-D555-8E2CD2B4F7428718": {
+		"docs": "https://docs.lucee.org/categories/redis.html",
+		"src": "https://github.com/lucee/extension-redis",
+		"labels": "redis"
+	},
+	"3F9DFF32-B555-449D-B0EB5DB723044045": {
+		"docs": "https://docs.lucee.org/recipes/websocket-extension.html",
+		"src": "https://github.com/lucee/extension-websocket",
+		"labels": "websockets"
+	},
+	"EFDEB172-F52E-4D84-9CD1A1F561B3DFC8": {
+		"docs": "https://docs.lucee.org/recipes/websocket-extension.html",
+		"src": "https://github.com/lucee/extension-lucene",
+		"labels": "cfsearch"
+	},	
+	"16FF9B13-C595-4FA7-B87DED467B7E61A0": {
+		"docs": "https://docs.lucee.org/guides/extensions/extension-membase.html",
+		"src": "https://github.com/lucee/extension-memcached",
+		"labels": "memcached"
+	},
+	"99A4EF8D-F2FD-40C8-8FB8C2E67A4EEEB6": {
+		"src": "https://github.com/lucee/extension-jdbc-mssql",
+		"labels": "mssql"
+	},
+	"E6634E1A-4CC5-4839-A83C67549ECA8D5B":{
+		"docs": "https://docs.lucee.org/guides/extensions/extension-mongoDB.html",
+		"src": "https://github.com/lucee/extension-mongodb",
+		"labels": "mongodb"
+	},
+	"7E673D15-D87C-41A6-8B5F1956528C605F": {
+		"src": "https://github.com/lucee/extension-jdbc-mysql",
+		"labels": "mysql"
+	},
+	"D4EDFDBD-A9A3-E9AF-597322D767E0C949": {
+		"src": "https://github.com/lucee/extension-jdbc-oracle",
+		"labels": "oracle"
+	},
+	"66E312DD-D083-27C0-64189D16753FD6F0":{
+		"docs": "https://docs.lucee.org/categories/pdf.html",
+		"src": "https://github.com/lucee/extension-pdf",
+		"labels": "pdf"
+	},
+	"671B01B8-B3B3-42B9-AC055A356BED5281": {
+		"src": "https://github.com/lucee/extension-jdbc-postgres",
+		"labels": "postgres"
+	},
+	"17AB52DE-B300-A94B-E058BD978511E39E": {
+		"docs": "https://docs.lucee.org/categories/s3.html",
+		"src": "https://github.com/lucee/extension-s3",
+		"labels": "s3"
+	},
+	"83062C18-FA1F-4647-815BB663BCF98AC0": {
+		"docs": "https://docs.lucee.org/categories/s3.html",
+		"src": "https://github.com/lucee/extension-sentry",
+		"labels": "sentry"
+	},
+	"947C02B0-7AE4-4054-938A8E059DD7625A": {
+		"docs": "https://docs.lucee.org/categories/event-gateways.html",
+		"src": "https://github.com/lucee/task-event-gateway",
+		"labels": "event-gateways"
+	},
+	"2BCD080F-4E1E-48F5-BEFE794232A21AF6" : {
+		"src": "https://github.com/lucee/extension-jdbc-jtds"
+	}
+}

@@ -25,6 +25,7 @@ component {
 				fileDelete( sentry_json );
 			}
 		}
+		application.extensionMeta = deserializeJson(fileRead("extensionMeta.json"));
 	}
 
 	function onError(e){
