@@ -134,6 +134,12 @@ component {
 					!isNumeric(arrVersion[2]) ||
 					!isNumeric(arrVersion[3])) continue;
 
+				// hide 7.0.0.202 stable
+				if (arrVersion[1] == 7
+					&& arrVersion[2] == 0
+					&& arrVersion[3] == 0
+					&& arrVersion[4] == 202) continue;
+
 				var arrPatch=listToArray(arrVersion[4],'-');
 				if( arrayLen(arrPatch)>2 ||
 					arrayLen(arrPatch)==0 ||
