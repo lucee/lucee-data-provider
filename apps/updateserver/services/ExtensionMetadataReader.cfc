@@ -5,7 +5,7 @@ component accessors=true {
 	property name="extensionVersions"     type="struct";
 	property name="bundleDownloadService" type="any";
 
-	variables._simpleCache = {};
+	variables._simpleCache = StructNew( "max:500" );
 
 	function loadMeta() {
 		lock type="exclusive" name="readExtMeta" timeout=0 {
@@ -22,7 +22,7 @@ component accessors=true {
 				}
 			}
 
-			if ( QueryRecordCount( lexFiles ) > 100 ) { // protext from disaster of accidentally not fetching the lex files
+			if ( QueryRecordCount( lexFiles ) > 100 ) { // protect from disaster of accidentally not fetching the lex files
 				metaChanged = _removeRedundantExtensions( meta, lexFiles ) || metaChanged;
 			}
 
@@ -32,7 +32,7 @@ component accessors=true {
 			}
 
 			setExtensionMeta( meta );
-			_createExtensionAndVersionMap();
+			setExtensionVersions( _createExtensionAndVersionMap() );
 
 			return meta;
 		}
@@ -41,12 +41,17 @@ component accessors=true {
 	}
 
 	public function list(
-		  required string  type     = "all"
-		,          boolean flush    = false
-		,          boolean withLogo = false
-		,          boolean all      = false
+		  required string  type         = "all"
+		,          boolean flush        = false
+		,          boolean withLogo     = false
+		,          boolean all          = false
+		,          string  coreVersion  = ""
 	) {
-		var cacheKey = "list-" & ( arguments.withLogo ? "wl" : "nl" ) & "_" & arguments.type & ( arguments.all ? "_all" : "" );
+		var cacheKey = "list-"
+			& ( arguments.withLogo ? "wl" : "nl" )
+			& "_" & arguments.type
+			& ( arguments.all ? "_all" : "" )
+			& "_" & arguments.coreVersion;
 
 		if ( arguments.flush || !StructKeyExists( variables._simpleCache, cacheKey ) ) {
 			if ( !IsQuery( variables.extensionMeta ?: "" ) || arguments.flush ) {
@@ -55,37 +60,42 @@ component accessors=true {
 
 			var extensions = Duplicate( getExtensionMeta() );
 
+			if ( len( arguments.coreVersion ) ) {
+				extensions = _filterByCoreVersion( extensions, arguments.coreVersion );
+			}
+
 			if ( !arguments.all ) {
 				extensions = _stripAllButLatestVersions( extensions );
 			}
+
 			if ( arguments.type != "all" ) {
-				_filterExtensionTypes( extensions, arguments.type );
+				_filterByReleaseType( extensions, arguments.type );
 			}
+
 			if ( !arguments.withLogo ) {
 				_stripExtensionLogos( extensions );
 			}
 
 			variables._simpleCache[ cacheKey ] = extensions;
 		}
-
 		return variables._simpleCache[ cacheKey ];
 	}
 
 	public function getExtensionDetail(
 		  required string  id
-		,          string  version  = "latest"
-		,          boolean flush    = false
-		,          boolean withLogo = false
+		,          string  version      = "latest"
+		,          boolean flush        = false
+		,          boolean withLogo     = false
+		,          string  coreVersion  = coreVersion
 	) {
 		if ( !IsQuery( variables.extensionMeta ?: "" ) || arguments.flush ) {
 			loadMeta();
 		}
-
 		var mapped = getExtensionVersions();
 
 		if ( StructKeyExists( mapped, arguments.id ) ) {
 			if ( arguments.version == "latest" || isEmpty( arguments.version ) ) {
-				arguments.version = mapped[ arguments.id ]._latest;
+				arguments.version = _getLatestversion( mapped[ arguments.id ], arguments.coreVersion );
 			}
 			if ( StructKeyExists( mapped[ arguments.id ], arguments.version ) ) {
 				var ext = StructCopy( mapped[ arguments.id ][ arguments.version ] );
@@ -167,7 +177,9 @@ component accessors=true {
 	}
 
 	private function _getEmptyExtensionsQuery() {
-		return QueryNew( "id,version,versionSortable,name,description,filename,image,category,author,created,releaseType,minLoaderVersion,minCoreVersion,price,currency,disableFull,trial,older,olderName,olderDate,promotionLevel,promotionText,projectUrl,sourceUrl,documentionUrl" );
+		return QueryNew( "id,version,versionSortable,name,description,filename,image,category,author,created,releaseType,"
+			& "minLoaderVersion,minCoreVersion,price,currency,disableFull,trial,older,olderName,"
+			& "olderDate,promotionLevel,promotionText,projectUrl,sourceUrl,documentionUrl" );
 	}
 
 	private function _mapExtensionQueryByFilename( extensionQuery ) {
@@ -245,7 +257,6 @@ component accessors=true {
 		}
 
 		return meta;
-
 	}
 
 	private function _getLogoThumbnail( lexFile ){
@@ -277,7 +288,7 @@ component accessors=true {
 			mapped[ extAndVersion.id ][ extAndVersion.version ] = extAndVersion;
 		}
 
-		setExtensionVersions( mapped );
+		return mapped;
 	}
 
 	private function _processExtensionJars( lexFile ){
@@ -292,8 +303,8 @@ component accessors=true {
 		}
 	}
 
-	private function _filterExtensionTypes( extensions, type ) {
-		for( var i=QueryRecordCount( arguments.extensions ); i>=1; i-- ) {
+	private function _filterByReleaseType( extensions, type ) {
+		for( var i=arguments.extensions.recordcount; i>=1; i-- ) {
 			switch( arguments.type ) {
 				case "snapshot":
 					if( !FindNoCase( '-SNAPSHOT', arguments.extensions.version[ i ] ) ) {
@@ -329,8 +340,8 @@ component accessors=true {
 
 	private function _stripAllButLatestVersions( extensions ) {
 		var last      = "";
-		var collist   = QueryColumnList( arguments.extensions );
-		var stripped  = QueryNew( collist );
+		var colList   = QueryColumnList( arguments.extensions );
+		var stripped  = QueryNew( colList );
 		var older     = [];
 		var olderName = [];
 		var olderDate = [];
@@ -388,4 +399,25 @@ component accessors=true {
 
 		return changed;
 	}
+
+	private function _filterByCoreVersion( required query extensions, required string coreVersion ) {
+		var v = listToArray( arguments.coreVersion, "." );
+		var filtered = queryFilter( arguments.extensions, function( row ){
+			if ( len( row.minCoreVersion ) == 0 ) return true;
+			var _v = v; // avoids scope cascading 4x
+			return valid =services.versionUtils::checkVersionGTE( row.minCoreVersion, _v[ 1 ], _v[ 2 ], _v[ 3 ], _v[ 4 ] );
+		});
+		return filtered;
+	}
+
+	private function _getLatestVersion( extVersions, coreVersion ) {
+		if ( len( arguments.coreVersion ) == 0 ) return arguments.extVersions._latest;
+		var cv = listToArray( arguments.coreVersion, "." );
+		loop collection="#arguments.extVersions#" key="local.k" value="local.v" {
+			if (k == "_latest") continue;
+			if ( services.versionUtils::checkVersionGTE( v.minCoreVersion, cv[ 1 ], cv[ 2 ], cv[ 3 ], cv[ 4 ] ) )
+				return k;
+		}
+		throw "No extension version available for [#arguments.coreVersion#]";
+	};
 }
