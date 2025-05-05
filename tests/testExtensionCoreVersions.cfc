@@ -2,7 +2,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 
 	function beforeAll(){
 		variables.dir = getDirectoryFromPath(getCurrentTemplatePath());
-		variables.testVersions = deserializeJson(FileRead("staticArtifacts/testExtensionCoreVersions.json"));
+		variables.testVersions = deserializeJson(FileRead("staticArtifacts/testExtensionCoreVersions.json"), false);
 
 		application action="update" mappings={
 			"/services" : expandPath( dir & "../apps/updateserver/services" )
