@@ -1,19 +1,17 @@
 component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-integration" {
 
 	function beforeAll(){
-		function beforeAll (){
-			variables.dir = getDirectoryFromPath(getCurrentTemplatePath());
-			variables.testVersions = deserializeJson(FileRead("staticArtifacts/testExtensionCoreVersions.json"));
+		variables.dir = getDirectoryFromPath(getCurrentTemplatePath());
+		variables.testVersions = deserializeJson(FileRead("staticArtifacts/testExtensionCoreVersions.json"));
 
-			application action="update" mappings={
-				"/update" : expandPath( dir & "../apps/updateserver/" )
-			};
-			variables.extMetaReader = new services.ExtensionMetadataReader();
-			variables.extMetaReader.loadMeta( variables.testVersions );
+		application action="update" mappings={
+			"/update" : expandPath( dir & "../apps/updateserver/" )
+		};
+		variables.extMetaReader = new services.ExtensionMetadataReader();
+		variables.extMetaReader.loadMeta( variables.testVersions );
 
-			variables.compressExt = "8D7FB0DF-08BB-1589-FE3975678F07DB17";
-			variables.imageExt   = "B737ABC4-D43F-4D91-8E8E973E37C40D1B";
-		}
+		variables.compressExt = "8D7FB0DF-08BB-1589-FE3975678F07DB17";
+		variables.imageExt   = "B737ABC4-D43F-4D91-8E8E973E37C40D1B";
 	}
 
 	function run( testResults , testBox ) {
