@@ -7,9 +7,9 @@ component accessors=true {
 
 	variables._simpleCache = StructNew( "max:500" );
 
-	function loadMeta() {
+	function loadMeta( srcMeta="" ) {
 		lock type="exclusive" name="readExtMeta" timeout=0 {
-			var meta           = _readExistingMetaFileFromS3();
+			var meta           = len( arguments.srcMeta ) ? arguments.srcMeta : _readExistingMetaFileFromS3();
 			var existingByFile = _mapExtensionQueryByFilename( meta );
 			var lexFiles       = _listLexFilesFromBucket();
 			var metaChanged    = false;
