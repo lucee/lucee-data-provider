@@ -5,7 +5,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		variables.testVersions = deserializeJson(FileRead("staticArtifacts/testExtensionCoreVersions.json"));
 
 		application action="update" mappings={
-			"/update" : expandPath( dir & "../apps/updateserver/" )
+			"/services" : expandPath( dir & "../apps/updateserver/services" )
 		};
 		variables.extMetaReader = new services.ExtensionMetadataReader();
 		variables.extMetaReader.loadMeta( variables.testVersions );
