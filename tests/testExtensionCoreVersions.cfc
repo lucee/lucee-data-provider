@@ -19,42 +19,42 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 
 			it (title="test no coreVersion", body=function(){
 				var ext = testExtList( coreVersion="" );
-				expect ( ext.recordcount ).toHaveLength( 2 );
+				expect ( ext ).toHaveLength( 2 );
 				expect ( ext[ variables.compressExt ].version ).toBe ( "2.0.0.1-SNAPSHOT" );
 				expect ( ext[ imageExt ].version ).toBe ( "3.0.0.0-SNAPSHOT" );
 			});
 
 			it (title="test coreVersion 5.4.6.9", body=function(){
 				var ext = testExtList( coreVersion="5.4.6.9" );
-				expect ( ext.recordcount ).toHaveLength( 2 );
+				expect ( ext ).toHaveLength( 2 );
 				expect ( ext[ variables.compressExt ].version ).toBe ( "1.0.0.15" );
 				expect ( ext[ imageExt ].version ).toBe ( "2.0.0.29" );
 			});
 
 			it (title="test coreVersion 6.2.1.5", body=function(){
 				var ext = testExtList( coreVersion="6.2.1.5" );
-				expect ( ext.recordcount ).toHaveLength( 2 );
+				expect ( ext ).toHaveLength( 2 );
 				expect ( ext[ variables.compressExt ].version ).toBe ( "1.0.0.15" );
 				expect ( ext[ variables.imageExt ].version ).toBe ( "2.0.0.29" );
 			});
 
 			it (title="test coreVersion 7.0.0.109", body=function(){
 				var ext = testExtList( coreVersion="7.0.0.109" );
-				expect ( ext.recordcount ).toHaveLength( 2 );
+				expect ( ext ).toHaveLength( 2 );
 				expect ( ext[ variables.compressExt ].version ).toBe ( "1.0.0.15" );
 				expect ( ext[ variables.imageExt ].version ).toBe ( "2.0.0.29" );
 			});
 
 			it (title="test coreVersion 7.0.0.219", body=function(){
 				var ext = testExtList( coreVersion="8.0.0.0");
-				expect ( ext.recordcount ).toHaveLength( 2 );
+				expect ( ext ).toHaveLength( 2 );
 				expect ( ext[ variables.compressExt ].version ).toBe ( "2.0.0.1-SNAPSHOT" );
 				expect ( ext[ variables.imageExt ].version ).toBe ( "3.0.0.0-SNAPSHOT" );
 			});
 
 			it (title="test coreVersion 8.0.0.0", body=function(){
 				var ext = testExtList( coreVersion="8.0.0.0");
-				expect ( ext.recordcount ).toHaveLength( 2 );
+				expect ( ext ).toHaveLength( 2 );
 				expect ( ext[ variables.compressExt ].version ).toBe ( "2.0.0.1-SNAPSHOT" );
 				expect ( ext[ variables.imageExt ].version ).toBe ( "3.0.0.0-SNAPSHOT" );
 			});
