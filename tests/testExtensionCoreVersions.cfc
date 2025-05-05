@@ -20,7 +20,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		describe( "test extension listing by core version", function() {
 
 			it (title="test no coreVersion", body=function(){
-				var ext = testExtList( coreVersion="");
+				var ext = testExtList( coreVersion="" );
 				expect ( ext.recordcount ).toHaveLength( 2 );
 				expect ( ext[ compressExt ].version ).toBe ( "2.0.0.1-SNAPSHOT" );
 				expect ( ext[ imageExt ].version ).toBe ( "3.0.0.0-SNAPSHOT" );
@@ -126,7 +126,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 	}
 
 	private function testExtFull( id, version="", coreVersion="" ){
-		var ext = metaReader.getExtensionDetail(
+		var ext = extMetaReader.getExtensionDetail(
 			  id            = arguments.id
 			, version       = arguments.version
 			, coreVersion   = arguments.coreVersion
@@ -137,8 +137,8 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 	}
 
 	private function testExtList( type="all", version="", coreVersion="" ){
-		var ext = metaReader.list(
-			, type     	    = arguments.type
+		var ext = extMetaReader.list(
+			  type          = arguments.type
 			, coreVersion   = arguments.coreVersion
 			, withLogo      = false
 		);
