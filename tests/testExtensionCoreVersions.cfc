@@ -126,7 +126,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 	}
 
 	private function testExtFull( id, version="", coreVersion="" ){
-		var ext = extMetaReader.getExtensionDetail(
+		var ext = variables.extMetaReader.getExtensionDetail(
 			  id            = arguments.id
 			, version       = arguments.version
 			, coreVersion   = arguments.coreVersion
@@ -137,7 +137,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 	}
 
 	private function testExtList( type="all", version="", coreVersion="" ){
-		var ext = extMetaReader.list(
+		var ext = variables.extMetaReader.list(
 			  type          = arguments.type
 			, coreVersion   = arguments.coreVersion
 			, withLogo      = false
