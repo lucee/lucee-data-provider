@@ -12,9 +12,10 @@ component {
 	 * @restPath   info
 	 */
 	remote struct function getInfo(
-		  required boolean withLogo = true      restargsource="url"
-		, required string  type     = 'release' restargsource="url"
-		, required boolean flush    = false     restargsource="url"
+		  required boolean withLogo     = true      restargsource="url"
+		, required string  type         = 'release' restargsource="url"
+		, required boolean flush        = false     restargsource="url"
+		, required string  coreVersion  = ''        restargsource="url"
 	) {
 		var hostName = cgi.HTTP_HOST;
 		var retVal   = { meta={
@@ -27,9 +28,10 @@ component {
 
 		try {
 			retVal.extensions = metaReader.list(
-				  type     = ReFindNoCase( "^beta\.", hostName ) ? "abc" : arguments.type
-				, flush    = arguments.flush
-				, withLogo = arguments.withLogo
+				  type          = ReFindNoCase( "^beta\.", hostName ) ? "abc" : arguments.type
+				, flush         = arguments.flush
+				, withLogo      = arguments.withLogo
+				, coreVersion   = coreVersion
 			);
 		} catch( e ) {
 			return e;
@@ -43,16 +45,18 @@ component {
 	 * @restPath   info/{id}
 	 */
 	remote  function getInfoDetail(
-		  required string  id               restargsource="Path"
-		, required boolean withLogo = true  restargsource="url"
-		,          string  version  = ""    restargsource="url"
-		,          boolean flush    = false restargsource="url"
+		  required string  id                  restargsource="Path"
+		, required boolean withLogo = true     restargsource="url"
+		,          string  version  = ""       restargsource="url"
+		,          string  coreVersion = ""    restargsource="url"
+		,          boolean flush    = false    restargsource="url"
 	){
 		var ext = metaReader.getExtensionDetail(
-			  id       = arguments.id
-			, withLogo = arguments.withLogo
-			, version  = arguments.version
-			, flush    = arguments.flush
+			  id       	    = arguments.id
+			, withLogo      = arguments.withLogo
+			, version       = arguments.version
+			, coreVersion   = arguments.coreVersion
+			, flush         = arguments.flush
 		);
 
 		if ( StructCount( ext ) ) {
@@ -79,14 +83,16 @@ component {
 	 * @restPath   full/{id}
 	 */
 	remote function getFull(
-		  required string  id              restargsource="Path"
-		,          string  version = ""    restargsource="url"
-		,          boolean flush   = false restargsource="url"
+		  required string  id               restargsource="Path"
+		,          string  version = ""     restargsource="url"
+		,          string  coreVersion = "" restargsource="url"
+		,          boolean flush   = false  restargsource="url"
 	) {
 
 		var ext = metaReader.getExtensionDetail(
 			  id       = arguments.id
 			, version  = arguments.version
+			, coreVersion   = arguments.coreVersion
 			, flush    = arguments.flush
 			, withLogo = false
 		);
@@ -107,14 +113,16 @@ component {
 	 * @restPath   trial/{id}
 	 */
 	remote function getTrial(
-		  required string  id              restargsource="Path"
-		,          string  version = ""    restargsource="url"
-		,          boolean flush   = false restargsource="url"
+		  required string  id              	restargsource="Path"
+		,          string  version = ""     restargsource="url"
+		,          string  coreVersion = "" restargsource="url"
+		,          boolean flush   = false  restargsource="url"
 	) {
 
 		var ext = metaReader.getExtensionDetail(
 			  id       = arguments.id
 			, version  = arguments.version
+			, coreVersion   = arguments.coreVersion
 			, flush    = arguments.flush
 			, withLogo = false
 		);

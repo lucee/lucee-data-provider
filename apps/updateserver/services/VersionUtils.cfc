@@ -167,4 +167,23 @@ component {
 		}
 		return "";
 	}
+
+	// more basic version used in s3.cfc, this is used for extension version matching against min core version
+	public boolean static function checkVersionGTE(version, major, minor="", patch="", build="") {
+		var v = listToArray(arguments.version, ".");
+		while (v.len() < 4) v.append(0); // Normalize to 4 components
+
+		if ( v[ 1 ] > arguments.major ) return false;
+		if  (v[ 1 ] < arguments.major ) return true;
+
+		// same major, check deeper
+		if  (v[ 2 ] > arguments.minor ) return false;
+		if  (v[ 2 ] < arguments.minor ) return true;
+
+		// same minor, check deeper
+		if ( v[ 3 ] > arguments.patch ) return false;
+		if ( v[ 3 ] < arguments.patch ) return true;
+
+		return (v[4] <= arguments.build);
+	}
 }
