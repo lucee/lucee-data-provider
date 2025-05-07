@@ -270,7 +270,7 @@
 	"extensions": [
 		{
 			"name": "Lucene",
-			"path": "/opt/lucee/extensions/lucene-search-extension-3.0.0.147-ALPHA.lex"
+			"path": "https://ext.lucee.org/lucene-search-extension-3.0.0.147-ALPHA.lex"
 		}
 	]
 }
