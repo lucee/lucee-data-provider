@@ -3,6 +3,8 @@ services:
     image: lucee-ai:latest
     environment:
       LUCEE_ADMIN_PASSWORD: "sfjsaiofdsnadlfsa23"
+      AI_SECRET_KEY: "sdcsafsdfjsdlkfasndflasjfasldkfasc"
+      ALLOWED_MINUTE_CONSUMPTION: "50000"
       AI_ENDPOINT: '{"class": "lucee.runtime.ai.anthropic.ClaudeEngine","custom": {"model": "claude-3-7-sonnet-20250219","temperature": "0.1","apiKey": "","connectTimeout": "10000","socketTimeout": "20000","conversationSizeLimit": "10"}}'
     volumes:
       - "./www:/var/www"

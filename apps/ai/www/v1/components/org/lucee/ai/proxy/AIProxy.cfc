@@ -58,7 +58,6 @@
 	}
 
 	public function init() {
-		systemOutput("AIProxy.init",1,1);
 		variables.rag=new RAG([
 			new RecipeIndexData()
 			,new TagIndexData()
@@ -71,15 +70,16 @@
 	 * chat completitions endpoint
 	 */
 	public function chatCompletions() {
-		var data=readInput("POST");
-		var forwardData=createSessionData(data);
+		var input=readInput("POST",true);
+		validate(input);
+		var forwardData=createSessionData(input.data);
 		var inquiry=forwardData.inquiry;
 		structDelete(forwardData,"inquiry",false);
 		var inquiry=variables.rag.augment(inquiry);
 		var ai=LoadAISession("finalDestination", forwardData);
 		
 		// stream
-		if(data.stream?:false) {
+		if(input.data.stream?:false) {
 			var choices={
 				"choices":[
 					{

@@ -1,8 +1,7 @@
 ﻿component {
 	NL="
 ";
-systemOutput("------- body.initttt -----------",1,1);
-
+	variables.totalConsumption={};
 	/**
 	 * general invoke method called for all requests
 	 * @endpoint 
@@ -25,7 +24,6 @@ systemOutput("------- body.initttt -----------",1,1);
 			}
 		}
 		catch(ex) {
-
 			systemOutput(ex,1,1);
 			handleException(ex);
 			return;
@@ -64,8 +62,6 @@ systemOutput("------- body.initttt -----------",1,1);
 		if(!structKeyExists(sct,"systemMessage") || isEmpty(sct.systemMessage)) {
 			sct["systemMessage"]=static.systemMessage;
 		}
-		systemOutput(sct,1,1);
-
 		// TODO check for existence and handle if not
 		sct["inquiry"]=entry.question;
 		return sct;
@@ -76,7 +72,7 @@ systemOutput("------- body.initttt -----------",1,1);
 	 * read input send by data
 	 * @method allowed method to write from
 	 */
-	private static function readInput(method) {
+	package static function readInput(method, boolean validate=false) {
 		var data=getHTTPRequestData();
 		if(method!=data.method) {
 			cfthrow(
@@ -85,18 +81,49 @@ systemOutput("------- body.initttt -----------",1,1);
 				type:"invalid_request_error"
 			);
 		}
-		if(structKeyExists(data,"content") && !isEmpty(data.content)) {
-			return deserializeJSON(data.content);
+		var auth=trim(data.headers.authorization?:"");
+		if(left(auth,7)=="Bearer ") {
+			auth=trim(mid(auth,8));
 		}
-		
-		
+
+		var rtn={"auth":auth};
+		if(structKeyExists(data,"content") && !isEmpty(data.content)) {
+			rtn["raw"]=trim(data.content);
+			rtn["data"]=deserializeJSON(data.content);
+		}
+		else {
+			validate=false;
+		}
+		return rtn;
+	}
+
+	package function validate(input) {
+		// full access with no limitation 
+		if(input.auth==application.fullAccessSecretKey) {
+			return;
+		}
+		var minuteKey=FormatBaseN(int(getTickCount("s")/60),36);
+		if(structKeyExists(application,"lastMinuteKey") && (application.lastMinuteKey?:minuteKey)!=minuteKey) {
+			structDelete(variables.totalConsumption,application.lastMinuteKey?:"undefined",false);
+		}
+		application.lastMinuteKey=minuteKey;
+		var consumption=variables.totalConsumption[minuteKey]?:0;
+		var upcomingConsumption=len(input.raw);
+		if(application.allowedMinuteConsumption<(consumption+upcomingConsumption)) {
+			cfthrow(
+				message: "Rate limit exceeded. Maximum request size per minute reached. Please try again after one minute.",
+				errorcode: "rate_limit_exceeded",
+				type: "request_limit_error"
+			);
+		}
+		variables.totalConsumption[minuteKey]=consumption+upcomingConsumption;
 	}
 
 	/**
 	 * writes out data to response stream
 	 * @data  data to write out
 	 */
-	private static function writeOut(data) {
+	package static function writeOut(data) {
 		setting show=false;
 		content type="application/json;charset=UTF-8";
 		
@@ -107,7 +134,7 @@ systemOutput("------- body.initttt -----------",1,1);
 	 * writes an exception to the response stream in the proper format
 	 * @ex exception to write  
 	 */
-	private static function handleException(ex) {
+	package static function handleException(ex) {
 		if(structKeyExists(ex,"errorcode")) local.code=ex.errorcode;
 		else if(structKeyExists(ex,"code")) local.code=ex.code;
 		

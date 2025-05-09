@@ -15,27 +15,21 @@ component {
     }
   ];
 
+    application.fullAccessSecretKey=server.system.environment.AI_SECRET_KEY?:"sdcsafsdfjsdlkfasndflasjfasldkfasc";
+    application.allowedMinuteConsumption=server.system.environment.ALLOWED_MINUTE_CONSUMPTION?:50000;
+    this.debug=false;
 
 
 
   public function onRequest(template) {
-    systemOutput("---- before ------",1,1);
-    systemOutput((this.ai),1,1);
-    //if(!structKeyExists(application, "ai")) {
-		  application.aiproxy=new org.lucee.ai.proxy.AIProxy();
-    //}
+    if(!structKeyExists(application, "aiproxy") || this.debug) {
+      application.aiproxy=new org.lucee.ai.proxy.AIProxy();
+    }
     
     var endpoint=listCompact(replace(arguments.template,"/index.cfm",""),"/");
     var version=listFirst(endpoint,"/");
     var endpoint=listCompact(replace(endpoint,version,""),"/");
     
     application.aiproxy.invoke(endpoint,version);
-    systemOutput("---- after.invoke ------",1,1);
   }
-
-
-
-	systemOutput(cgi.request_url?:"",1,1);
-
-
 }
