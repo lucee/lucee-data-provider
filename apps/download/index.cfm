@@ -620,7 +620,11 @@
 										<div  class="clog-detail collapse #uid#_release_id row_alter" style="text-align:center;">
 								</cfif>
 								<div <cfif ind MOD 2 eq 0>class="row_alterEven textStyle textWrap"<cfelse>class="row_alterOdd textStyle textWrap"</cfif>>
-									<a href="#cdnURLExt##el.filename#">#ver# (#lsDateFormat(el.date)#)</a>
+									<a href="#cdnURLExt##el.filename#"
+										<cfif !isEmpty(el.meta.mincoreversion)>
+											title="Requires Lucee #encodeForHTMLAttribute(el.meta.mincoreversion)#" 
+										</cfif>
+										>#ver# (#lsDateFormat(el.date)#)</a>
 									<!--- <span  class="triggerIcon pointer"
 									style="color :##01798A" title="">
 									<span class="glyphicon glyphicon-info-sign"></span>

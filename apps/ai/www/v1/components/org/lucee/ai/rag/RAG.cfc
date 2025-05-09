@@ -121,6 +121,8 @@ Documentation Context: #serializeJSON(searchResultsAsArray)#";
 				var collDirectory=expandPath("{temp-directory}");
 			}
 			// create collection TF-IDF word2vec
+			/* 
+			TODO  disabled due to CI running with 6.2 not 7
 			cfcollection(
 				action= "Create" 
 				collection=collectionName 
@@ -128,7 +130,7 @@ Documentation Context: #serializeJSON(searchResultsAsArray)#";
 				mode="hybrid"
 				embedding="TF-IDF"
 				ratio="0.5");
-			
+			*/
 		}	
 	}
 
