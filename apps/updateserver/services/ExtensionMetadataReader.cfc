@@ -341,10 +341,11 @@ component accessors=true {
 	private function _stripAllButLatestVersions( extensions ) {
 		var last      = "";
 		var colList   = QueryColumnList( arguments.extensions );
-		var stripped  = QueryNew( colList );
+		var stripped  = QueryNew( colList & ",coreVersion" ); // add extra column for backwards compat
 		var older     = [];
 		var olderName = [];
 		var olderDate = [];
+		var coreVersion = [];
 
 		for( var ext in arguments.extensions ) {
 			if ( last != ext.id ) {
@@ -353,17 +354,20 @@ component accessors=true {
 					stripped.older    [ strippedCount ] = older;
 					stripped.olderName[ strippedCount ] = olderName;
 					stripped.olderDate[ strippedCount ] = olderDate;
+					stripped.coreVersion[ strippedCount ] = coreVersion;
 
 					older     = [];
 					olderName = [];
 					olderDate = [];
+					coreVersion = [];
 				}
 
 				QueryAddrow( stripped, ext );
 			} else if ( Len( ext.version ) ) {
-				ArrayAppend( older    , ext.version  );
-				ArrayAppend( olderName, ext.filename );
-				ArrayAppend( olderDate, ext.created  );
+				ArrayAppend( older    ,     ext.version  );
+				ArrayAppend( olderName,     ext.filename );
+				ArrayAppend( olderDate,     ext.created  );
+				ArrayAppend( coreVersion,   ext.minCoreVersion  );
 			}
 
 			last=ext.id;
@@ -374,6 +378,7 @@ component accessors=true {
 			stripped.older    [ strippedCount ] = older;
 			stripped.olderName[ strippedCount ] = olderName;
 			stripped.olderDate[ strippedCount ] = olderDate;
+			stripped.coreVersion[ strippedCount ] = coreVersion;
 		}
 
 		return stripped;

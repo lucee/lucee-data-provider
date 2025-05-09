@@ -1,31 +1,40 @@
 component {
 
 	variables.EXTENSION_PROVIDER="https://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=all";
+	//variables.EXTENSION_PROVIDER="http://127.0.0.1:8889/rest/extension/provider/info?withLogo=true&type=all";
+
 	variables.EXTENSION_DOWNLOAD="https://extension.lucee.org/rest/extension/provider/{type}/{id}";
 
 	variables.UPDATE_PROVIDER = "https://update.lucee.org/rest/update/provider";
-	//variables.UPDATE_PROVIDER = "http://update:8888/rest/update/provider";
-	
+
+	//variables.UPDATE_PROVIDER = "http://127.0.0.1:8889/rest/update/provider";
+
 
 	function getExtensions(flush=false) localmode=true {
-		if (arguments.flush || isNull(application.extInfo)) {
+		if ( arguments.flush || isNull( application.extInfo ) ) {
 			http url=EXTENSION_PROVIDER&"&flush="&arguments.flush result="http";
-			if(isNull(http.status_code) || http.status_code!=200) throw "could not connect to extension provider (#ep#)";
-			var data=deSerializeJson(http.fileContent,false);
+
+			if ( isNull( http.status_code ) || http.status_code != 200 )
+				throw "could not connect to extension provider (#EXTENSION_PROVIDER#)";
+
+			var data = deSerializeJson( http.fileContent, false );
 			if (!structKeyExists( data, "meta" ) ) {
-			systemOutput("error fetching extensions, falling back on cache", true);
-			http url=EXTENSION_PROVIDER result="http";
-			if(isNull(http.status_code) || http.status_code!=200) throw "could not connect to extension provider (#ep#)";
-			data=deSerializeJson(http.fileContent,false);
-			application.extInfo = data.extensions;
+				systemOutput( "error fetching extensions, falling back on cache", true);
+				http url=EXTENSION_PROVIDER result="http";
+
+				if ( isNull( http.status_code ) || http.status_code != 200 )
+					throw "could not connect to extension provider (#EXTENSION_PROVIDER#)";
+
+				data = deSerializeJson( http.fileContent, false );
+				application.extInfo = data.extensions;
 			} else {
-			application.extInfo = data.extensions;
+				application.extInfo = data.extensions;
 			}
 		}
 		return application.extInfo;
 	}
 
-	function extractVersions(qry) localmode=true {
+	function extractVersions( qry ) localmode=true {
 		// To make a call this function once per extension rather than three times
 		var data = {};
 		data["release"]=structNew("linked");
@@ -40,14 +49,24 @@ component {
 		var _other = arguments.qry.older;
 		var _otherName = arguments.qry.olderName;
 		var _otherDate = arguments.qry.olderDate;
+		var _coreVersion = arguments.qry.coreVersion;
 
 		var arrExt = [];
 		loop array=_other index="local.i" item="local.version" {
-			arrExt[i] = {'version':version,'filename':_otherName[i],'date':_otherDate[i]}
+			arrExt[i] = {
+				'version':version,
+				'filename':_otherName[i],
+				'date':_otherDate[i],
+				'minCoreVersion': _coreVersion[i]
+			};
 		}
-
 		// appends current into other because some current version is not newer.
-		arrayAppend(arrExt, {'version':arguments.qry.version,'filename':arguments.qry.fileName,'date':arguments.qry.created});
+		arrayAppend(arrExt, {
+			'version':arguments.qry.version,
+			'filename':arguments.qry.fileName,
+			'date':arguments.qry.created,
+			'minCoreVersion': arguments.qry.minCoreVersion
+		});
 
 		// sorts by version
 		arraySort(arrExt, function(e1, e2){
@@ -55,9 +74,13 @@ component {
 		});
 
 		loop array=arrExt index="i" item="local.ext" {
-			if (variables.is("release",ext.version)) data["release"][ext.version]={'filename':ext.filename,'date':ext.date};
-			else if (variables.is("abc",ext.version)) data["abc"][ext.version]={'filename':ext.filename,'date':ext.date};
-			else if (variables.is("snapshot",ext.version)) data["snapshot"][ext.version]={'filename':ext.filename,'date':ext.date};
+			if (variables.is("release",ext.version)) {
+				data["release"][ext.version]={'filename':ext.filename,'date':ext.date, meta: ext};
+			} else if (variables.is("abc",ext.version)) {
+				data["abc"][ext.version]={'filename':ext.filename,'date':ext.date, meta: ext};
+			} else if (variables.is("snapshot",ext.version)) {
+				data["snapshot"][ext.version]={'filename':ext.filename,'date':ext.date, meta: ext};
+			}
 		}
 		return data;
 	}
@@ -65,16 +88,16 @@ component {
 	function toSort( required String version) localmode=true {
 		var listLength = listLen(arguments.version, "-");
 		var arr = [];
-		if (listLength == 3) 
+		if (listLength == 3)
 			arr = listToArray(listDeleteAt(arguments.version, listLength, "-"), ".,-"); // ESAPI extension has 5 parameters
-		else 
+		else
 			arr  = listToArray(listFirst(arguments.version, "-"), ".");
 
 		var rtn="";
 		loop array=arr index="local.i" item="local.v" {
-			if ( len( v ) < 5 ) 
+			if ( len( v ) < 5 )
 				rtn &= "." & repeatString( "0", 5-len( v ) ) & v;
-			else 
+			else
 				rtn &= "." & v;
 		}
 		return rtn;
@@ -124,7 +147,7 @@ component {
 				application.mavenDates[version]= lsDateFormat(parseDateTime(res));
 			}
 			catch(e) {
-				application.mavenDates[version]=""; 
+				application.mavenDates[version]="";
 			}
 		}
 		return application.mavenDates[arguments.version]?:"";
@@ -185,7 +208,7 @@ component {
 			systemOutput("url.reset=true clearing caches", true);
 
 			var lastUpdated = changelogLastUpdated();
-			if ( !structKeyExists(application, "changelogLastUpdated" ) 
+			if ( !structKeyExists(application, "changelogLastUpdated" )
 					|| application[ "changelogLastUpdated" ] != lastUpdated ){
 				application.jiraChangeLog = {};
 				if ( structKeyExists( application, "changeLogReport" ) ){
