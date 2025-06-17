@@ -1,6 +1,6 @@
 # Lucee "Data provider"
 
-This repo contains the application code for:
+This repo contains the application code for the following services:
 
 * https://download.lucee.org
 * https://update.lucee.org
