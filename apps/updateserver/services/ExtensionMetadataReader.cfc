@@ -5,7 +5,11 @@ component accessors=true {
 	property name="extensionVersions"     type="struct";
 	property name="bundleDownloadService" type="any";
 
-	variables._simpleCache = StructNew( "max:500" );
+	reset();
+
+	function reset() {
+		variables._simpleCache = StructNew( "max:500" );
+	}
 
 	function loadMeta( srcMeta="" ) {
 		lock type="exclusive" name="readExtMeta" timeout=0 {
@@ -33,7 +37,7 @@ component accessors=true {
 
 			setExtensionMeta( meta );
 			setExtensionVersions( _createExtensionAndVersionMap() );
-
+			reset();
 			return meta;
 		}
 
