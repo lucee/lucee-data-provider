@@ -8,7 +8,7 @@ component accessors=true {
 	reset();
 
 	function reset() {
-		variables._simpleCache = StructNew( "max:500" );
+		variables._simpleCache = StructNew( "max:100" );
 	}
 
 	function loadMeta( srcMeta="" ) {
