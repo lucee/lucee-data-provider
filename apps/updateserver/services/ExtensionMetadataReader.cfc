@@ -288,7 +288,7 @@ component accessors=true {
 		var raw = getExtensionMeta();
 		var mapped = {};
 		for( var extAndVersion in raw ) {
-			mapped[ extAndVersion.id ] = mapped[ extAndVersion.id ] ?: { _latest=extAndVersion.version };
+			mapped[ extAndVersion.id ] = mapped[ extAndVersion.id ] ?: [ _latest=extAndVersion.version ];
 			mapped[ extAndVersion.id ][ extAndVersion.version ] = extAndVersion;
 		}
 
