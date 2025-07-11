@@ -16,6 +16,7 @@
 	baseURL="https://release.lucee.org/rest/update/provider/";
 
 	jarInfo='(Java ARchive, read more about <a target="_blank" href="https://en.wikipedia.org/wiki/JAR_(file_format)">here</a>)';
+	lang = {};
 	lang.desc={
 		abc:"Beta versions and Release Candidates offer a glimpse into upcoming releases but are not designed for production environments."
 		,beta:"Beta versions preview upcoming releases but are not suitable for production environments."
@@ -87,6 +88,7 @@
 	stableMajor="6"
 	ltsMajor="5";
 	latest={"edge":{},"lts":{},stable:{}};
+	alias = {};
 	alias[ltsMajor]="lts";
 	alias[edgeMajor]="edge";
 	alias[stableMajor]="stable";
