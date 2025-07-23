@@ -59,6 +59,7 @@
     "org.apache.commons.commons-collections4": { "artifact": "commons-collections4", "group": "org.apache.commons" },
     "org.apache.commons.commons-compress": { "artifact": "commons-compress", "group": "org.apache.commons" },
     "org.apache.commons.commons-fileupload": { "artifact": "commons-fileupload", "group": "commons-fileupload" },
+    "org.apache.commons.commons-fileupload2": { "artifact": "commons-fileupload2", "group": "org.apache.commons" },
     "org.apache.commons.commons-io": { "artifact": "commons-io", "group": "commons-io" },
     "org.apache.commons.commons-lang": { "artifact": "commons-lang", "group": "commons-lang" },
     "org.apache.commons.commons-net": { "artifact": "commons-net", "group": "commons-net" },
