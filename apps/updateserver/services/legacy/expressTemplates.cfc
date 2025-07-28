@@ -33,8 +33,10 @@ component {
 					arrayAppend( versions, ListLast( ListGetAt( s3_templates.name, 3, "-" ), "." ) );
 				}
 			}
-			if ( arrayLen( versions ) eq 0 )
+			if ( arrayLen( versions ) eq 0 ){
+				systemOutput("express templates dir was empty? [#expressSrc#]", true);
 				throw "getExpressTemplates() No express templates found for: [#tomcat_major#]";
+			}
 			ArraySort( versions, "numeric", "desc" );
 			// tomcat-9 = lucee-tomcat-9.0.100-template.zip
 			express_templates[ ListFirst( listRest( tomcat_major, "-" ), "." ) ]
@@ -64,7 +66,7 @@ component {
 	private function _fetchExpressTemplateFromS3( name, src, dest ){
 		if ( !directoryExists( dest ) )
 			directoryCreate( dest );
-		var _dest = getTempDirectory() & name;
+		var _dest = getTempDirectory( true ) & name;
 		var _src = src & name;
 		fileCopy( _src, _dest );
 		if ( isZipFile( _dest ) ){

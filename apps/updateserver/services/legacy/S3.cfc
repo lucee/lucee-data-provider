@@ -1,30 +1,31 @@
 component {
+	static {
+		static.DEBUG = (server.system.environment.DEBUG ?: false);
+	}
+
 	variables.providerLog = "update-provider";
 	variables.NL="
 ";
 	public function init(s3Root) {
 		variables.s3Root=arguments.s3Root;
-	}
-
-	public void function reset() {
-		systemOutput( "s3.reset()", true );
-		structDelete( application, "s3VersionData", false );
-		structDelete( application, "expressTemplates", false );
-	}
-
-	private function logger( string text, any exception, type="info" ){
-		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
-		if ( !isNull(arguments.exception ) ){
-			WriteLog( text=arguments.text, type=arguments.type, log=variables.providerLog, exception=arguments.exception );
-			systemOutput( arguments.exception, true, true );
-		} else {
-			WriteLog( text=arguments.text, type=arguments.type, log=variables.providerLog );
-			systemOutput( arguments.text, true, true );
+		if ( !structKeyExists( application, "s3VersionDetail" )) {
+			application.s3VersionDetail = {};
+		}
+		if ( !structKeyExists( application, "s3Versions" )) {
+			application.s3Versions = {};
 		}
 	}
 
+	public void function reset() {
+		logger( "s3.reset()");
+		structDelete( application, "s3Versions", false );
+		structDelete( application, "s3VersionDetail", false );
+		structDelete( application, "expressTemplates", false );
+		getVersions(flush=true);
+	}
+
 	/*
-		MARK: Get Versions
+		MARK: GetVersions
 	*/
 
 	public function getVersions(boolean flush=false) {
@@ -35,169 +36,94 @@ component {
 		lock name="check-version-cache" timeout="2" throwOnTimeout="false" {
 			if (!directoryExists(cacheDir))
 				directoryCreate(cacheDir);
-			if ( isNull(application.s3VersionData) && fileExists( cacheDir & cacheFile ) ){
-				systemOutput("s3List.versions load from cache", true);
-				application.s3VersionData =
-				sortVersions(deserializeJSON( fileRead(cacheDir & cacheFile), false ));
+			if ( isNull(application.s3Versions) && fileExists( cacheDir & cacheFile ) ){
+				systemOutput("s3List.versions load from cache");
+				application.s3Versions = deserializeJSON( fileRead(cacheDir & cacheFile), false );
 			}
 		}
 
-		if(!flush && !isNull(application.s3VersionData))
-			return application.s3VersionData;
+		if ( !flush && !isEmpty(application.s3Versions) )
+			return application.s3Versions;
 
 		lock name="read-version-metadata" timeout="2" throwOnTimeout="false" {
 			setting requesttimeout="1000";
 
 			var runid = createUniqueID();
 			var start = getTickCount();
-
-			systemOutput("s3Versions.list [#runId#] START #numberFormat(getTickCount()-start)#ms",1,1);
-
-			// systemOutput(variables.s3Root,1,1);
 			try {
-				var qry=directoryList(path:variables.s3Root,listInfo:"query",filter:function (path){
-					var ext=listLast(path,'.');
-					var name=listLast(path,'\/');
-
-					if(ext=='lco') return true;
-					if(ext=='war' && left(name,6)=='lucee-') return true;
-					if(ext=='exe' && left(name,6)=='lucee-') return true; // lucee-4.5.3.020-pl0-windows-installer.exe
-					if(ext=='run' && left(name,6)=='lucee-') return true; // lucee-4.5.3.020-pl0-windows-installer.exe
-					if(ext=='jar' && left(name,6)=='lucee-') return true;
-					if(ext=='zip' && (left(name,6)=='lucee-' || left(name,9)=='forgebox-')) return true;
-					/*
-					if(ext=='jar' && left(name,6)=='lucee-' || left(name,12)!='lucee-light-') {
-						return true;
-					}*/
-					return false;
-				});
-			} catch (e){
-				systemOutput("error directory listing versions on s3", true);
-				systemOutput(e, true);
-				if(isNull(application.s3VersionData))
-					return application.s3VersionData;
-				throw "cannot read versions from s3 directory";
-			}
-			systemOutput("s3Versions.list [#runId#] FETCHED #numberFormat(getTickCount()-start)#ms, #qry.recordcount# files on s3 found",1,1);
-			//dump(qry);
-			var data=structNew("linked");
-			// first we get all
-			var patterns=structNew('linked');
-			patterns['express']='lucee-express-';
-			patterns['light']='lucee-light-';
-			patterns['zero']='lucee-zero-';
-			patterns['fbl']='forgebox-light-';
-			patterns['fb']='forgebox-';
-			patterns['jars']='lucee-jars-';
-			patterns['jar']='lucee-';
-
-			loop query=qry {
-				var ext=listLast(qry.name,'.');
-				var version="";
-				// core (.lco)
-				var name=qry.name;
-				if (ext=='lco') {
-					var version=mid(qry.name,1,len(qry.name)-4);
-					var type="lco";
-				}
-				else if (ext=='exe') {
-					var _installer = services.VersionUtils::parseInstallerFilename( qry.name );
-					var version = _installer.version;
-					var type =  _installer.type;
-				}
-				else if (ext=='run') {
-					var _installer = services.VersionUtils::parseInstallerFilename( qry.name );
-					var version = _installer.version;
-					var type =  _installer.type;
-				}
-				else if(ext=='war') {
-					var version=mid(qry.name,7,len(qry.name)-10);
-					var type="war";
-				}
-				// all others
-				else {
-					loop struct=patterns index="local.t" item="local.prefix" {
-						var l=len(prefix);
-						if(left(qry.name,l)==prefix) {
-							var version=mid(qry.name,l+1,len(qry.name)-4-l);
-							var type=t;
-							if(type=="jars") type="jar";
-							break;
+				systemOutput("s3Versions.list [#runId#] START #numberFormat(getTickCount()-start)#ms",1,1);
+				var data = getLuceeVersionsListS3();
+				if ( len( data ) gt 0 ){ // only cache good data
+					fileWrite( cacheDir & cacheFile, serializeJSON( data, false) );
+					if ( serializeJson( application.s3Versions ) neq SerializeJson( data ) ){
+						// only ping on change
+						application.s3Versions = data;
+						if ( structKeyExists( application, "downloadsUrl" ) ){
+							var downloadRefeshUrl = "#application.downloadsUrl#?type=snapshots&reset=force";
+							logger("Versions updated, pinging [#downloadRefeshUrl#]");
+							try {
+								cfhttp( url=downloadRefeshUrl );
+							} catch (e){
+								logger(message="error returned updating download server [#downloadRefeshUrl#]", exception=e, type="error");
+							}
+						} else {
+							logger("Versions updated, not pinging due to missing application.downloadsUrl");
 						}
 					}
 				}
-
-				// check version
-				var arrVersion=listToArray(version,'.');
-				if( arrayLen(arrVersion)!=4 ||
-					!isNumeric(arrVersion[1]) ||
-					!isNumeric(arrVersion[2]) ||
-					!isNumeric(arrVersion[3])) continue;
-
-				// hide 7.0.0.202 stable
-				if (arrVersion[1] == 7
-					&& arrVersion[2] == 0
-					&& arrVersion[3] == 0
-					&& arrVersion[4] == 202) continue;
-
-				var arrPatch=listToArray(arrVersion[4],'-');
-				if( arrayLen(arrPatch)>2 ||
-					arrayLen(arrPatch)==0 ||
-					!isNumeric(arrPatch[1])) continue;
-
-				if(arrayLen(arrPatch)==2 &&
-					arrPatch[2]!="SNAPSHOT" &&
-					arrPatch[2]!="BETA" &&
-					arrPatch[2]!="RC" &&
-					arrPatch[2]!="ALPHA") continue;
-
-				var vs=services.VersionUtils::toVersionSortable(version);
-				//if(isNull(data[version])) data[version]={};
-				data[vs]['version']=version;
-				data[vs][type]=name;
-				//data[version]['date-'&type]=qry.dateLastModified;
-				//data[version]['size-'&type]=qry.size;
+				application.s3Versions = data;
+			} catch (e){
+				systemOutput( "error directory listing versions on s3", true );
+				throw( message="cannot read versions from s3 directory", cause=e );
 			}
-			systemOutput("s3Versions.list [#runId#] SORT #numberFormat(getTickCount()-start)#ms, #len(data)# versions found ",1,1);
-			// sort
-			var _data = sortVersions(data);
-			if ( len(_data) gt 0 ) // only cache good data
-				fileWrite(cacheDir & cacheFile, serializeJSON(_data, false) );
-			systemOutput("s3Versions.list [#runId#] END #numberFormat(getTickCount()-start)#ms, #len(_data)# versions found",1,1);
-
-			if ( structCount(_data) eq 0 && !isNull(application.s3VersionData) )
-				return application.s3VersionData; // emergency hotfix
-			return application.s3VersionData=_data;
+			systemOutput("s3Versions.list [#runId#] FETCHED #numberFormat(getTickCount()-start)#ms, #len(data)# files on s3 found",1,1);
 		}
-		if ( !structKeyExists( application, "s3VersionData" ) ){
+		if ( !structKeyExists( application, "s3Versions" ) ){
 			// lock timed out, still use cache if found
 			if ( fileExists( cacheDir & cacheFile ) ){
 				systemOutput("s3List.versions load from cache (after lock)", true);
-				var _data = deserializeJSON( fileRead(cacheDir & cacheFile), false );
-				application.s3VersionData = sortVersions(_data);
+				var data = deserializeJSON( fileRead(cacheDir & cacheFile), false );
+				application.s3Versions = data;
 			} else {
 				throw "lock timeout readVersions() no cached found";
 			}
 		}
-		return application.s3VersionData;
+		return application.s3Versions;
 	}
 
-	private function sortVersions(data){
-		var keys=structKeyArray(data);
-		arraySort(keys,"textnocase");
-		var _data=structNew("linked");
-		loop array=keys item="local.k" {
-			if ( structKeyExists( data[ k ], "version" ) && !isEmpty( data[k][ 'version' ] ) )
-				_data[k] = data[k];
+	// this simply gets one version from the versions list
+	public function getLuceeVersionsDetail( version ) {
+		if ( !structKeyExists( application, "s3VersionDetail" ) ) {
+			application[ "s3VersionDetail" ] = {};
+		} else if ( structKeyExists( application.s3VersionDetail, version ) ) {
+			return application.s3VersionDetail[ version ];
 		}
-		return _data;
-	}
 
-	public function getLatestVersion(boolean flush=false) {
-		var versions=getVersions(flush);
-		var keys=structKeyArray(versions);
-		arraySort(keys,"textnocase");
-		return versions[keys[arrayLen(keys)]].version;
+		var versionInfo = {};
+		if ( left( s3Root, 3 ) == "s3:" ) {
+			versionInfo = luceeVersionsDetailS3( arguments.version );
+		} else {
+			versionInfo = getLocalVersionsDetail( arguments.version ); // this is still faster, as it's reading from the local cache
+		}
+		return application.s3VersionDetail[ version ] = versionInfo;
+	}
+	
+	// fallback handling for local testing with Lucee jar files in the root directory
+	public function getJarPath( version ){
+		var jarPath = variables.s3Root & "/org/lucee/lucee/#arguments.version#/lucee-#arguments.version#.jar";
+		if ( left( s3Root, 3) == "s3:") {
+			return jarPath;
+		}
+		if (!fileExists(jarPath)){
+			var dir = getDirectoryFromPath(jarPath);
+			if (!directoryExists(dir))
+				directoryCreate(dir);
+			var tmpJar = getLocalVersionsDetail(version).jar;
+			logger ("local_S3: copying jar [#tmpJar#] to [#jarPath#]");
+			fileCopy( tmpJar, jarPath );
+			reset();
+		}
+		return jarPath;
 	}
 
 	public function getExpressTemplates(){
@@ -207,29 +133,33 @@ component {
 		return application.expressTemplates;
 	}
 
+	/*
+		MARK: Add
+	*/
 	public function add(required string type, required string version) {
-		setting requesttimeout="10000000";
-		var versions=getVersions(true);
-		var vs=services.VersionUtils::toVersionSortable(version);
+		setting requesttimeout="1000";
+
+		logger("-------- add:#type# --------");
+		var data = getLuceeVersionsDetail(version);
+		//logger(data);
 		var mr=new MavenRepo();
 
-		// move the jar to maven if necessary
-		if(!structKeyExists(versions,vs) || !structKeyExists(versions[vs],'jar')) {
-			maven2S3(mr,version,versions);
-			SystemOutput("add: downloaded jar from maven:"&now(),1,1);
-			versions = getVersions(true);
+		// move the jar from maven if necessary
+		if (isNull(data.jar)) {
+			maven2S3(mr,version);
+			logger("add: downloaded jar from maven:"&now());
 		}
+		//var vs=services.VersionUtils::toVersionSortable(version);
 		// create the artifact
 
 		try {
-			if( type != "jar" ){
-				SystemOutput("add: createArtifacts (#type#):"&now(),1,1);
-				createArtifacts(mr,versions[vs],type,true);
-				versions = getVersions(true);
-				SystemOutput("add: after creating artifact (#type#):"&now(),1,1);
+			if ( type != "jar" ){
+				logger("add: createArtifacts (#type#):"&now());
+				new ArtifactBuilder(s3Root).createArtifacts(mr,version,type,true);
+				logger("add: artifact created (#type#):"&now());
 			}
 		} catch(e){
-			SystemOutput(e.stacktrace,1,1);
+			logger(exception=e, text="add: error creating artifacts for version #version# type #type#", type="error");
 		}
 	}
 
@@ -237,7 +167,7 @@ component {
 		MARK: Add Missing
 	*/
 	public function addMissing(includingForgeBox=false, skipMaven=false) {
-		setting requesttimeout="1000000";
+		setting requesttimeout="1000";
 		systemOutput("start:"&now(),1,1);
 		var started = getTickCount();
 
@@ -262,441 +192,195 @@ component {
 		}
 		getExpressTemplates();
 		// create the missing artifacts
-		loop struct=s3List index="local.vs" item="local.el" {
-			createArtifacts(mr,el,"",includingForgeBox);
+		var builder = new ArtifactBuilder(s3Root);
+		loop array=s3List item="local.el" {
+			builder.createArtifacts(mr,el.version,"",includingForgeBox);
 		}
 		systemOutput("build complete, all artifacts created in #numberFormat(getTickCount()-started)#,s",1,1);
 		getVersions(true); //force reset();
 	}
 
-	private function maven2S3(mr,version,all) {
+	public function buildLatest(includingForgeBox=false) {
+		var list=getLuceeVersionsListS3( flush=true );
+		var latest=list[len(list)].version;
+		logger("buildLatest: " & latest);
+		var mr=new MavenRepo();
+		new ArtifactBuilder(s3Root).createArtifacts(mr,latest,"",includingForgeBox);
+	}
+
+	/*
+		MARK: Helpers
+	*/
+
+	private function logger( string text, any exception, type="info", boolean forceSentry=false ){
+		//var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
+		if ( !isNull(arguments.exception ) ){
+
+			if (static.DEBUG) {
+				if (len(arguments.text)) systemOutput( arguments.text, true, true );
+				systemOutput( arguments.exception, true, true );
+			} else {
+				writeLog( text=arguments.text, type=arguments.type, log="exception", exception=arguments.exception );
+				// Send errors and warnings to Sentry (case insensitive check)
+				var normalizedType = lCase( arguments.type );
+				if ( normalizedType == "error" || normalizedType == "warning" || normalizedType == "warn" ) {
+					try {
+						var sentryExtra = {};
+						// Include custom text as context if provided
+						if ( len( arguments.text ) ) {
+							sentryExtra[ "logText" ] = arguments.text;
+						}
+						application.sentryLogger.logException(
+							exception = arguments.exception,
+							level = arguments.type,
+							extra = sentryExtra
+						);
+					} catch ( any e ) {
+						// Don't let Sentry failures break anything
+					}
+				}
+			}
+		} else {
+			if (static.DEBUG) {
+				systemOutput( arguments.text, true, true );
+			} else {
+				writeLog( text=arguments.text, type=arguments.type, log="application" );
+				// Send to Sentry if forceSentry is true
+				if ( arguments.forceSentry ) {
+					try {
+						application.sentryLogger.logMessage( message=arguments.text, level=arguments.type );
+					} catch ( any e ) {
+						// Don't let Sentry failures break anything
+					}
+				}
+			}
+		}
+	}
+	
+
+	private function maven2S3(mr,version) {
 		if(left(version,1)<5) return;
-		// ignore this versions
-		if(listFind("5.0.0.20-SNAPSHOT,5.0.0.255-SNAPSHOT,5.0.0.256-SNAPSHOT,5.0.0.258-SNAPSHOT,5.0.0.259-SNAPSHOT",version)) {
-			structDelete(all,version,false);
+		// ignore these versions
+		if(listFind("5.0.0.20-SNAPSHOT,5.0.0.255-SNAPSHOT,5.0.0.256-SNAPSHOT,5.0.0.258-SNAPSHOT,5.0.0.259-SNAPSHOT,7.0.0.202",version)) {
+			logger( "maven2S3 skipping bad version: #version#" );
 			return;
 		}
 
-		var trg=variables.s3Root&"lucee-"&version&".jar";
-
+		var trg = variables.s3Root & "/org/lucee/lucee/#version#/lucee-#version#.jar";
 		lock name="download from maven-#version#" timeout="1" {
-			systemOutput("downloading from maven-#version#",1,1);
+			logger( "downloading from maven-#version#" );
 			// add the jar
 			var info=mr.get(version, true);
 			if(isNull(info.sources.jar.src)) {
-				systemOutput("404:"&version,1,1);
-				structDelete(all,version,false);
+				logger("404:"&version);
 				return;
 			}
 			var src=info.sources.jar.src;
 			var date=parseDateTime(info.sources.jar.date);
 
 			if (!fileExists(src)) {
-				structDelete(all,version,false);
-				systemOutput("404:"&src,1,1);
+				logger("404:"&src);
 				return;
 			}
 			// copy jar from maven to S3
-			fileCopy(src,trg);
+			var dir = getDirectoryFromPath(trg);
+			if (!directoryExists(dir))
+				directoryCreate(dir);
+			if (!fileExists(trg))
+				fileCopy(src,trg);
 
-			systemOutput("200:"&trg,1,1);
-			all[version]['jar']=true;
-			all[version]['date-jar']=date;
+			logger("200:"&trg);
 		}
 	}
 
-	/*
-		MARK: Create Artifacts
+	/**
+	* checks if file exists on S3 and if so redirect to it, if not it copies it to S3 and the next one will have it there.
+	* So nobody has to wait that it is copied over
 	*/
-	private function createArtifacts(mr,s3,specType="",includingForgeBox=true) {
-		if(left(s3.version,1)<5) return;
+	private function fromS3(path,name,async=true) {
+		// if exist we redirect to it
+		if(!isNull(url.show))
+			throw ((!isNull(application.exists[name]) && application.exists[name])&":"&fileExists(variables.s3Root&name)&"->"&(variables.s3Root&name));
 
-		var jarRem=variables.s3Root&"lucee-"&s3.version&".jar";
-
-		try {
-			lock name="build-lucee-artifacts-#s3.version#" timeout="1" {
-				try {
-					// check and if necessary create other artifacts
-					var list="lco,war,light,express";
-					if(includingForgeBox)list&=",fb,fbl";
-
-					systemOutput("createArtifacts() Starting ( #s3.version# )",1,1);
-					var c= 0;
-
-					loop list=list item="local.type" {
-						if ( len( specType ) && specType!=type ) continue;
-						if ( structKeyExists( s3, type ) ) continue;
-						c++;
-						var s = getTickCount();
-						// first we need a local copy of the jar
-						var lcl=getTempDirectory() & "/lucee-"&s3.version&".jar";
-						try{
-							if(!fileExists(lcl)) fileCopy(jarRem,lcl);
-						}
-						catch(e) {
-							systemOutput(e,1,1);
-							continue;
-						}
-						// extract lco and copy to S3
-						if(type=="lco") {
-							var result=createLCO(lcl,s3.version);
-							systemOutput("lco: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
-						}
-						else if(type=="fb") {
-							var result=createForgeBox(lcl,s3.version,false);
-							systemOutput("forgebox: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
-							//abort;
-						}
-						else if(type=="fbl") {
-							var result=createForgeBox(lcl,s3.version,true);
-							systemOutput("forgebox-light: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
-						}
-						// create war and copy to S3
-						else if(type=="war") {
-							lock name="build-lucee-war" timeout="10" {
-								var result=createWar(lcl,s3.version);
-							}
-							systemOutput("war: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
-						}
-						// create war and copy to S3
-						else if(type=="light") {
-							var result=createLight(lcl,s3.version);
-							systemOutput("light: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
-						}
-						else if(type=="express") {
-							lock name="build-lucee-express" timeout="10" {
-								var result=createExpress(lcl,s3.version);
-							}
-							systemOutput("express: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
-						}
-						else {
-							systemOutput("unsupported: " & type &":"&s3.version,1,1);
-							c--;
-						}
-					}
-					systemOutput( "--- " & s3.version & " done #c# artifacts built",1,1);
-				}
-				catch (e){
-					systemOutput("----------------------------------------------",1,1);
-					systemOutput(cfcatch.stacktrace,1,1);
-					writeLog( text=e.message, exception=e, type="error" );
-				}
-				finally {
-					if(!isNull(lcl) && fileExists(lcl)) fileDelete(lcl);
-				}
-			}
-		} catch(e) {
-			systemOutput( "--- " & s3.version & " already building, skipping, #e.message#",1,1);
-		}
-	}
-
-	/*
-		MARK: Create LCO
-	*/
-	private function createLCO( jar, version ) {
-		var trg=variables.s3Root & version & ".lco";
-		if ( fileExists( trg ) ) {
-			systemOutput("--- " & trg & " already built, skipping", true);
-		}
-		try {
-			var temp = getTemp( arguments.version );
-			var lco= temp & "lucee-" & version & ".lco";
-
-			fileCopy( "zip://" & jar & "!core/core.lco", lco ); // now extract
-			fileMove( lco, trg );
-		}
-		catch( e ){
-			logger(text=e.message, type="error", exception=e);
-		}
-		finally {
-			if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
-		}
-		return trg;
-	}
-
-	/*
-		MARK: Create WAR
-	*/
-	private function createWar( jar, version ) {
-		var war=variables.s3Root & "lucee-" & version & ".war";
-		if ( fileExists( war ) ) {
-			systemOutput("--- " & war & " already built, skipping", true);
-		}
-		var temp = getTemp( arguments.version );
-		var warTmp=temp & "lucee-" & version & "-temp-" & createUniqueId() & ".war";
-		var curr=getDirectoryFromPath( getCurrentTemplatePath() );
-		var warTemplateFolder = getWarTemplate( arguments.version );
-
-		try {
-			// temp directory
-			// create paths and dir if necessary
-			var build={};
-			loop list="extensions,common,website,war" item="local.name" {
-				var tmp=curr & "build/" & name & "/";
-				if ( name == "extensions" && !directoryExists( tmp ) )
-					directoryCreate( tmp, true );
-				if ( name == "war" ){
-					tmp = curr & "build/" & warTemplateFolder & "/";
-				}
-				build[ name ] = tmp;
-
-			}
-			//systemOutput( "---- createWar", true );
-			//systemOutput( build, true );
-
-			// let's zip it
-			zip action="zip" file=warTmp overwrite=true {
-				zipparam source=build["extensions"] filter="*.lex" prefix="WEB-INF/lucee-server/context/deploy";
-				zipparam source=jar entrypath="WEB-INF/lib/lucee.jar";
-				zipparam source=build["common"];
-				zipparam source=build["website"];
-				zipparam source=build["war"];
-			}
-			fileMove (warTmp, war );
-		}
-		catch( e ){
-			logger(text=e.message, type="error", exception=e);
-		}
-		finally {
-			if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
-		}
-		return war;
-	}
-
-	/*
-		MARK: Create LIGHT
-	*/
-
-	private function createLight(jar, version, boolean toS3=true, tempDir) {
-		var sep=server.separator.file;
-		var trg=variables.s3Root & "lucee-light-" & version & ".jar";
-		if ( fileExists( trg ) ) {
-			// avoid double handling for forgebox light builds
-			systemOutput("--- " & trg & " already built, skipping", true);
-			var tempLight = getTempFile( arguments.tempDir, "lucee-light-" & version, "jar");
-			fileCopy( trg, tempLight); // create a local temp file from s3
-			return tempLight;
-		}
-		var temp = getTemp( arguments.version );
-		var s = getTickCount();
-		try {
-			var tmpLoader=temp & "lucee-loader-" & createUniqueId(); // the jar
-			directoryCreate( tmpLoader );
-
-			// unzip
-			try{
-				zip action="unzip" file=jar destination=tmpLoader;
-			}
-			catch(e) {
-				fileDelete(jar);
-				return "";
-			}
-			// rewrite trg
-			var extDir=tmpLoader & sep & "extensions";
-			if ( directoryExists( extDir ) ) directoryDelete(extDir,true); // deletes directory with all files inside
-			directoryCreate( extDir ); // create empty dir again (maybe Lucee expect this directory to exist)
-
-			// unzip core
-			var lcoFile=tmpLoader & sep & "core" & sep & "core.lco";
-			local.tmpCore=temp & "lucee-core-" & createUniqueId(); // the jar
-			directoryCreate(tmpCore);
-			zip action="unzip" file=lcoFile destination=tmpCore;
-			// rewrite manifest
-			var manifest=tmpCore & sep & "META-INF" & sep&"MANIFEST.MF";
-			var content=fileRead(manifest);
-			var index=find('Require-Extension',content);
-			if(index>0) content=mid(content,1,index-1)&variables.NL;
-			fileWrite(manifest,content);
-
-			// zip core
-			if ( fileExists( lcoFile ) ) fileDelete( lcoFile );
-			zip action="zip" source=tmpCore file=lcoFile;
-			// zip loader
-			local.tmpLoaderFile=temp&"lucee-loader-"&createUniqueId()&".jar";
-			zip action="zip" source=tmpLoader file=tmpLoaderFile;
-
-			//if(fileExists(light)) fileDelete(light);
-			if (toS3) fileMove(tmpLoaderFile,trg);
-		}
-		catch( e ){
-			logger(text=e.message, type="error", exception=e);
-		}
-		finally {
-			if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
-		}
-		return toS3?trg:tmpLoaderFile;
-	}
-
-	/*
-		MARK: Create EXPRESS
-	*/
-	private string function createExpress(required jar,required string version) {
-		var sep=server.separator.file;
-		var trg = variables.s3Root & "lucee-express-" & version & ".zip";
-		if ( fileExists( trg ) ) {
-			systemOutput("--- " & trg & " already built, skipping", true);
-			return trg;
-		}
-		var temp = getTemp( arguments.version );
-		//todo this can overlapp?
-		var curr=getDirectoryFromPath(getCurrentTemplatePath());
-
-		// website trg
-		var zipTmp=temp & "lucee-express-" & version & "-temp-" &createUniqueId() & ".zip";
-		var tmpTom="#temp#tomcat";
-		// Create the express zip
-		try {
-			// extension directory
-			var extDir = curr & ("build/extensions/");
-			if (!directoryExists(extDir)) directoryCreate(extDir);
-
-			// common directory
-			var commonDir = curr & ("build/common/");
-			//if (!directoryExists(commonDir)) directoryCreate(commonDir);
-
-			// website directory
-			var webDir = curr & ("build/website/");
-			//if (!directoryExists(webDir)) directoryCreate(webDir);
-
-			var expressTemplates = getExpressTemplates(); // at this point it should be already cached in the application scope
-			// unpack the lucee tomcat template
-			var local_tomcat_templates = curr & "build/servers"
-			if ( checkVersionGTE( arguments.version, 6, 2, 1 ) ) {
-				systemOutput("Using Tomcat 11", true);
-				zip action="unzip" file="#local_tomcat_templates#/#expressTemplates['tomcat-11']#" destination=tmpTom;
-			} else if ( checkVersionGTE( arguments.version, 6, 2 ) ) {
-				systemOutput("Using Tomcat 10", true);
-				zip action="unzip" file="#local_tomcat_templates#/#expressTemplates['tomcat-10']#" destination=tmpTom;
-			} else {
-				systemOutput("Using Tomcat 9", true);
-				zip action="unzip" file="#local_tomcat_templates#/#expressTemplates['tomcat-9']#" destination=tmpTom;
-			}
-
-			// let's zip it
-			zip action="zip" file=zipTmp overwrite=true {
-				// tomcat server
-				zipparam source=temp&"tomcat";
-				// extensions to bundle
-				zipparam source=extDir filter="*.lex" prefix="lucee-server/context/deploy";
-				// jars
-				zipparam source=jar entrypath="lib/ext/#listLast(jar, "/\")#";
-				// common files
-				zipparam source=commonDir;
-				// website files
-				zipparam source=webDir prefix="webapps/ROOT";
-			}
-			fileMove( zipTmp , trg );
-		}
-		catch( e ){
-			logger(text=e.message, type="error", exception=e);
-		}
-		finally {
-			if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
-		}
-		return trg;
-	}
-
-	/*
-		MARK: Create FORGEBOX
-	*/
-	private string function createForgeBox(required jar,required string version, boolean light=false) {
-		var trg=variables.s3Root & "forgebox#( light ? '-light' : '' )#-" &version & ".zip";
-		if ( fileExists( trg ) ) {
-			systemOutput("--- " & trg & " already built, skipping", true);
-			return trg;
-		}
-		var sep = server.separator.file;
-		var temp = getTemp( arguments.version );
-		var curr = getDirectoryFromPath(getCurrentTemplatePath());
-
-		var zipTmp=temp & "forgebox#( light ? '-light' : '' )#-" & version & "-temp-" & createUniqueId() & ".zip";
-		try {
-			// extension directory
-			var extDir=curr & "/build/extensions/";
-			if(!directoryExists(extDir)) directoryCreate(extDir);
-
-			// common directory
-			var commonDir=curr & "/build/common/";
-			//if(!directoryExists(commonDir)) directoryCreate(commonDir);
-
-			// war directory
-			var warDir = curr & "/build/" & getWarTemplate( arguments.version ) & "/";
-
-			// create the war
-			var war=temp & "/engine.war";
-			if ( light ) local.lightJar=createLight(jar, version, false, temp);
-
-			zip action="zip" file=war overwrite=true {
-				zipparam source=extDir filter="*.lex" prefix="WEB-INF/lucee-server/context/deploy";
-				zipparam source=( light ? lightJar: jar) entrypath="WEB-INF/lib/lucee#( light ? '-light' : '' )#.jar";
-				zipparam source=commonDir;
-				zipparam source=warDir;
-			}
-
-			// create the json
-			// Turn 1.2.3.4 into 1.2.3+4 and 1.2.3.4-rc into 1.2.3-rc+4
-			var v=reReplace( arguments.version, '([0-9]*\.[0-9]*\.[0-9]*)(\.)([0-9]*)(-.*)?', '\1\4+\3' );
-			var json = temp & "/box.json";
-			var boxJson = [
-				"name":"Lucee #( light ? 'Light' : '' )# CF Engine",
-				"version":"#v#",
-				"createPackageDirectory":false,
-				//"location":"https://cdn.lucee.org/rest/update/provider/forgebox/#arguments.version##( light ? '?light=true' : '' )#",
-				"slug":"lucee#( light ? '-light' : '' )#",
-				"shortDescription":"Lucee #( light ? 'Light' : '' )# WAR engine for CommandBox servers.",
-				"type":"cf-engines"
-			];
-			if ( checkVersionGTE( arguments.version, 7 ) ){
-				systemOutput( "Using JakartaEE", true );
-				boxJson[ "JakartaEE" ] = true;
-			}
-			fileWrite( json, boxJson.toJson() );
-			//systemOutput( boxJson.toJson(), true );
-
-			// create the war
-			zip action="zip" file=zipTmp overwrite=true {
-				zipparam source=war;
-				zipparam source=json;
-			}
-			fileMove( zipTmp, trg );
-		}
-		catch( e ){
-			logger(text=e.message, type="error", exception=e);
-		}
-		finally {
-			if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
-		}
-		return trg;
-	}
-
-	private function getTemp( string version ){
-		var temp = getTempDirectory() & "#arguments.version#-" & createUniqueId() & "/";
-		if ( directoryExists( temp ) )
-			directoryDelete( temp, true );
-		directoryCreate( temp );
-		return temp;
-	}
-
-	private function checkVersionGTE( version, major, minor, patch="" ){
-		var v = listToArray( arguments.version, "." );
-		if ( v[ 1 ] gt arguments.major ) {
+		var hasDef=(!isNull(application.exists[name]) && application.exists[name]);
+		if(hasDef || fileExists(variables.s3Root&name)) {
+			application.exists[name]=true;
+			header statuscode="302" statustext="Found";
+			header name="Location" value=variables.cdnURL&name;
 			return true;
-		} else if ( v[ 1 ] eq arguments.major && v[ 2 ] gte arguments.minor ) {
-			if ( len( arguments.patch ) )
-				return v[ 3 ] gte arguments.patch;
-			else
-				return true;
+		}
+		// if not exist we make ready for the next
+		else {
+
+			if(async && isNull(url.show)) {
+				thread src=path trg=variables.s3Root&name {
+					lock timeout=1000 name=src {
+						if(!fileExists(trg) && fileSize(src)>100000) // we do this because it was created by a thread blocking this thread
+							_fileCopy(src,trg);
+					}
+				}
+			}
+			else {
+				var src=path;
+				var trg=variables.s3Root&name;
+				lock timeout=1000 name=src {
+					if(!fileExists(trg) && fileSize(src)>100000) {// we do this because it was created by a thread blocking this thread
+						_fileCopy(src,trg);
+						if(!isNull(url.show))
+							throw ("fileExists: "&fileExists(src)&" + "&fileExists(trg));
+					}
+				}
+			}
 		}
 		return false;
 	}
 
-	private function getWarTemplate( version ){
-		if ( checkVersionGTE( arguments.version, 7 ) )
-			return "war-7.0";  // jakarta, no lucee servlet
-		else if ( checkVersionGTE( arguments.version, 6, 2 ) )
-			return "war-6.2"; // javax & jakarta, no lucee servlet
-		else
-			return "war"; // javax
+	// wrappers to allow using a local dir for testing without s3 access
+	private function getLuceeVersionsListS3() {
+		// TODO this currently is cached internally by lucee MAX_AGE = 10000ms
+		if ( left( s3Root, 3) == "s3:") {
+			return luceeVersionsListS3();
+		}
+		return getLocalVersionsList();
 	}
+
+	// used for testing, uses a local directory instead of s3
+	private function getLocalVersionsList(){
+		var versions = new S3local().listVersions(s3root);
+		// systemOutput(serializeJson(var=versions, compact=false), true);
+		return versions;
+	}
+
+	private function getLocalVersionsDetail( version ){
+		var versions = getVersions();
+		var _version = arguments.version;
+		var detail = arrayFilter(versions, function(item){
+			return item.version	== _version;
+		});
+		//systemOutput(serializeJson(var=detail, compact=false), true);
+		if ( arrayLen(detail) eq 0 )
+			throw "Version [#arguments.version#] not found";
+		return detail[1];
+	}
+
+	/* not used
+	private function sortVersions(data){
+		var keys=structKeyArray(data);
+		arraySort(keys,"textnocase");
+		var _data=structNew("linked");
+		loop array=keys item="local.k" {
+			if ( structKeyExists( data[ k ], "version" ) && !isEmpty( data[k][ 'version' ] ) )
+				_data[k] = data[k];
+		}
+		return _data;
+	}
+
+	public function getLatestVersion(boolean flush=false) {
+		var versions=getVersions(flush); // missing?
+		var keys=structKeyArray(versions);
+		arraySort(keys,"textnocase");
+		return versions[keys[arrayLen(keys)]].version;
+	}
+	*/
 
 }
