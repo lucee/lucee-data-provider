@@ -1,4 +1,8 @@
 component {
+
+	static {
+		static.DEBUG = (server.system.environment.DEBUG ?: false);
+	}
 	variables.listPattern=	"https://oss.sonatype.org/service/local/lucene/search";
 	//defaultRepo="https://oss.sonatype.org/content/repositories/releases";
 	variables.defaultRepo="https://repo1.maven.org/maven2";
@@ -32,7 +36,7 @@ component {
 			lock name="fetch-MavenList" timeout=10 type="exclusive" throwOnTimeout=true{
 				var t= getTickcount();
 				mavenList = _list(argumentCollection=arguments);
-				systemOutput("maven.list() took: " & getTickCount()-t & "ms", true);
+				if(static.DEBUG) systemOutput("maven.list() took: " & getTickCount()-t & "ms", true);
 				application.cacheMavenList = mavenList;
 				application.cacheMavenListUpdated = now();
 				return application.cacheMavenList;
@@ -61,7 +65,7 @@ component {
 			info.url=infoURL;
 			var fi=dir&"info.json";
 			if(!fileExists(fi) || fileRead(fi)!=info.totalCount) {
-				systemOutput( "Maven.list: update required!", true);
+				if(static.DEBUG) systemOutput( "Maven.list: update required!", true);
 				update=true;
 			}
 			
@@ -171,7 +175,7 @@ component {
 				local.detail.groupId=g;
 				local.detail.artifactId=a;
 				local.detail.version=v;
-				systemOutput(id&":"&(getTickCount()-start),true,true);
+				if(static.DEBUG) systemOutput(id&":"&(getTickCount()-start),true,true);
 				
 			}
 			arrayAppend(arr,detail);
@@ -341,7 +345,7 @@ component {
 		local.jar=getArtifactDirectory()&"lucee-light-"&version&".jar"; // the jar
 		if(!structKeyExists(url,"makefresh") && fileExists(jar)) return jar;
 		
-		setting requesttimeout="10000";
+		setting requesttimeout="1000";
 		var loader=getLoader(version);
 		//try{
 			createLight(loader,jar);
@@ -698,7 +702,7 @@ component {
 					boxJson[ "JakartaEE" ] = true;
 				}
 				fileWrite( json, boxJson.toJson() );
-				//systemOutput( boxJson.toJson(), true );
+				//if(static.DEBUG) systemOutput( boxJson.toJson(), true );
 
 				// create the war
 				zip action="zip" file=zipTmp overwrite=true {
@@ -724,7 +728,7 @@ component {
 			arrayAppend(checks, sct.version);
 			if(sct.version==arguments.version) {
 				if(extended) sct.sources=getSources(sct.repository,sct.version);
-				// systemOutput("maven.get() took " & numberFormat(getTickCount()-s) & "ms", true);
+				// if(static.DEBUG) systemOutput("maven.get() took " & numberFormat(getTickCount()-s) & "ms", true);
 				return sct;
 			}
 		}
