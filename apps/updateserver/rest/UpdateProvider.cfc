@@ -43,91 +43,41 @@ component {
 	remote struct function getInfo(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url",
-		string language="en" restargsource="url")
+		string language="en" restargsource="url",
+		string extended=true restargsource="url")
 		httpmethod="GET" restpath="info/{version}" {
 
 
-		try{
-			local.version=toVersion(arguments.version);
-
-			// no updates for versions smaller than ...
-			if(ALL_VERSION!=version.display && !isNewer(version,toVersion(MIN_UPDATE_VERSION)))
-				return {
-					"type":"warning",
-					"message":"Version ["&version.display&"] can not be updated from within the Lucee Administrator.  Please update Lucee by replacing the lucee.jar, which can be downloaded from [http://download.lucee.org]"};
-
-
-
-			local.s3=new services.legacy.S3(variables.s3Root);
-			var versions=s3.getVersions();
-			var keys=structKeyArray(versions);
-			arraySort(keys,"textnocase");
-			var latest = {};
-			latest.version = versions[keys[arrayLen(keys)]].version;
-			var latestVersion=toVersion(latest.version);
-
-			// others
-			latest.otherVersions=[];
-			var maxSnap=400;
-			var maxRel=100;
-			if(ALL_VERSION!=version.display) {
-				for(var i=arrayLen(keys);i>=1;i--) {
-					var el=versions[keys[i]];
-					if(findNoCase("-SNAPSHOT",el.version)) {
-						if ( ( --maxSnap )<=0 ) continue;
-					}
-					else {
-						if ( ( --maxRel )<=0 ) continue;
-					}
-					arrayPrepend(latest.otherVersions,el.version);
-				}
-			}
-
-			// no update
-			if(ALL_VERSION!=version.display && !isNewer(latestVersion,version))
-				return {
-					"type":"info",
-					"message":"There is no update available for your version (#version.display#). Latest version is [#latestVersion.display#].",
-					"otherVersions":latest.otherVersions?:[]
-				};
-
-			try {
-				var newChangeLog=isNewer(version,toVersion(MIN_NEW_CHANGELOG_VERSION));
-				local.notes=(ALL_VERSION==version.display)?
-					"":getChangeLog(version.display,latestVersion.display);
-
-				// do we need old layout of changelog?
-				if(!isNewer(version,toVersion(MIN_NEW_CHANGELOG_VERSION))) {
-					var nn=structNew("linked");
-					loop struct=notes index="local.ver" item="local.dat" {
-					    loop struct=dat index="local.k" item="local.v"{
-					        nn[k]=v;
-					    }
-					}
-					notes=nn;
-				}
-			}
-			catch(local.ee){
-				local.notes="";
-			}
-
-			var msgAppendix="";
-			if(ALL_VERSION!=version.display && !isNewer(version,toVersion(MIN_WIN_UPDATE_VERSION)))
-				msgAppendix="
-				<div class=""error"">Warning! <br/>
-				If this Lucee install is on a Windows based computer/server, please do not use the updater for this version due to a bug.  Instead download the latest lucee.jar from <a href=""http://stable.lucee.org/download/?type=snapshots"">here</a> and replace your existing lucee.jar with it.  This is a one-time workaround.";
-
-
-
-			return {
+		try {
+			var version=toVersion(arguments.version);
+			var list=luceeVersionsList();
+			var data=LuceeVersionsDetail(version.display);
+			var index=arrayFindNoCase(list,version.display);
+			var latest= list[len(list)];
+			var len=arrayLen(list);
+			arrayDeleteAt(list,index);
+			var rtn= {
 				"type":"info"
 				,"language":arguments.language
 				,"current":version.display
-				,"available":latestVersion.display
-				,"otherVersions":latest.otherVersions?:[]
-				,"message":"A patch (#latestVersion.display#) is available for your current version (#version.display#)."&msgAppendix
-				,"changelog":isSimpleValue(notes)?{}:notes/*readChangeLog(newest.log)*/
-			}; // TODO get the right version for given version
+				,"latest":latest
+				,"sources":data
+				//,"changelog":isSimpleValue(notes)?{}:notes/*readChangeLog(newest.log)*/
+			}; 
+
+			if(arguments.extended) {
+				rtn["otherVersions"]=list;
+			}
+			// we have an update?
+			if(len>index) {
+				rtn["available"]=latest;
+				rtn["message"]="A patch (#latest#) is available for your current version (#version.display#).";
+				rtn["changelog"]=getChangeLogs(version,toVersion(latest));
+			}
+			else {
+				rtn["message"]="There is no update available for your version (#version.display#). Latest version is [#latest#]."
+			}
+			return rtn;
 		}
 		catch(e){
 			logger( text=e.message, exception=e, type="error" );
@@ -135,6 +85,29 @@ component {
 		}
 	}
 
+
+	private function getChangeLogs(struct version, struct latestVersion) {
+		try {
+			var newChangeLog=isNewer(version,toVersion(MIN_NEW_CHANGELOG_VERSION));
+			local.notes=(ALL_VERSION==version.display)?
+				"":getChangeLog(version.display,latestVersion.display);
+
+			// do we need old layout of changelog?
+			if(!isNewer(version,toVersion(MIN_NEW_CHANGELOG_VERSION))) {
+				var nn=structNew("linked");
+				loop struct=notes index="local.ver" item="local.dat" {
+					loop struct=dat index="local.k" item="local.v"{
+						nn[k]=v;
+					}
+				}
+				notes=nn;
+			}
+		}
+		catch(local.ee){
+			local.notes="";
+		}
+		return local.notes;
+	}
 
 
 	/**
@@ -146,10 +119,11 @@ component {
 			string ioid="" restargsource="url")
 		httpmethod="GET" restpath="loader/{version}" {
 
-		createArtifactIfNecessary("jar",version);
+		var version=toVersion(arguments.version);
+		var data=LuceeVersionsDetail(version.display);
 
 		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&"lucee-"&arguments.version&".jar";
+		header name="Location" value=data.jar;
 		return;
 	}
 
@@ -176,17 +150,8 @@ component {
 		required string version restargsource="Path",
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="loader-all/{version}" {
-		return downLoaderNew(version,ioid);
-	}
-
-		/**
-	* only for backward compatibility
-	*/
-	remote function downloadCoreAlias(
-		required string version restargsource="Path",
-		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="core/{version}" {
-		return downloadCoreNew(version,ioid);
+		
+		downLoader(arguments.version,arguments.ioid?:"");
 	}
 
 	remote function echoGET(
@@ -233,11 +198,22 @@ component {
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="download/{version}" {
 
-		createArtifactIfNecessary("lco",version);
+		var version=toVersion(arguments.version);
+		var data=LuceeVersionsDetail(version.display);
 
 		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&arguments.version&".lco";
+		header name="Location" value=data.lco;
 		return;
+	}
+
+			/**
+	* only for backward compatibility
+	*/
+	remote function downloadCoreAlias(
+		required string version restargsource="Path",
+		string ioid="" restargsource="url")
+		httpmethod="GET" restpath="core/{version}" {
+		downloadCore(arguments.version, arguments.ioid?:"");
 	}
 
 
@@ -503,37 +479,27 @@ component {
 		)
 		httpmethod="GET" restpath="list" {
 
-		setting requesttimeout="1000";
-
-		try {
-
-			var s3=new services.legacy.S3(variables.s3Root);
-			var versions=s3.getVersions(flush);
-
-			if(!isNull(url.abc)){
-				return versions;
+		if(arguments.extended) {
+        	throw "argument extended is not supported anymore, get detail info for a specific version to get more details";
+    	}
+    	var rtn=[];
+    	var ignores=["6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT","6.0.1.82"];
+		loop array=luceeVersionsList() index="local.v" {
+			try {
+				if(arrayContainsNoCase(ignores,v)) continue;
+				local.sct=toVersion(local.v);
+				arrayAppend(rtn,
+					{
+						"version":sct.display,
+						"vs":sct.sortable
+					}
+				);
 			}
-
-			var ignores=["6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT","6.0.1.82"];
-			loop array=structKeyArray( versions ) item="local.k" {
-				if ( !structKeyExists( versions[ k ], "version" )
-						|| arrayFind( ignores, versions[k].version ) ){
-					structDelete( versions, k );
-				}
+			catch (any e) {//echo(e);
+				log log="application" type="error" exception=e;
 			}
-
-			if ( extended ) return versions;
-			var arr=[];
-			loop struct=versions index="local.vs" item="local.data" {
-				arrayAppend(arr,{'vs':vs,'version':data.version});
-			}
-			return arr;
 		}
-		catch(e){
-			systemOutput( e, 1, 1 );
-			logger( error=e.message, exception=e, type="error" );
-			return {"type":"error","message":e.message};
-		}
+		return rtn;
 	}
 
 	remote function getDate(required string version restargsource="Path")
