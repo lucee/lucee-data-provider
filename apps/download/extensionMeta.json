@@ -117,5 +117,9 @@
 	},
 	"2BCD080F-4E1E-48F5-BEFE794232A21AF6" : {
 		"src": "https://github.com/lucee/extension-jdbc-jtds"
+	},
+	"811918E2-796C-4354-8374B1F331118AEB": {
+		"src": "https://github.com/lucee/extension-jdbc-duckdb",
+		"labels": "duckdb"
 	}
 }
