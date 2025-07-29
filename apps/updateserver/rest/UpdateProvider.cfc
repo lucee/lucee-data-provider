@@ -50,8 +50,12 @@ component {
 
 		try {
 			var version=toVersion(arguments.version);
-			var list=luceeVersionsList();
-			var data=LuceeVersionsDetail(version.display);
+			var rawList=luceeVersionsListS3();
+			var list=[];
+			loop array=rawList index="local.el" {
+				arrayAppend(list,local.el.version);
+			}
+			var data=LuceeVersionsDetailS3(version.display);
 			var index=arrayFindNoCase(list,version.display);
 			var latest= list[len(list)];
 			var len=arrayLen(list);
@@ -61,9 +65,21 @@ component {
 				,"language":arguments.language
 				,"current":version.display
 				,"latest":latest
-				,"sources":data
-				//,"changelog":isSimpleValue(notes)?{}:notes/*readChangeLog(newest.log)*/
-			}; 
+				,"version": data.version?:""
+
+				,"lastModified": data.lastModified?:""
+				,"size": data.size?:"0"
+				,"etag": data.etag?:""
+				,"lco":data.lco
+				,"jar":data.jar
+				,"light":data.light?:createArtifactURL("light",data.version)
+				,"zero":data.zero?:createArtifactURL("zero",data.version)
+				,"express":data.express?:createArtifactURL("express",data.version)
+				,"war":data.war?:createArtifactURL("war",data.version)
+				,"fb":data.forgebox?:createArtifactURL("fb",data.version)
+				,"fbl":data["forgebox-light"]?:createArtifactURL("fbl",data.version)
+			};
+
 
 			if(arguments.extended) {
 				rtn["otherVersions"]=list;
@@ -72,7 +88,7 @@ component {
 			if(len>index) {
 				rtn["available"]=latest;
 				rtn["message"]="A patch (#latest#) is available for your current version (#version.display#).";
-				rtn["changelog"]=getChangeLogs(version,toVersion(latest));
+				if(arguments.extended) rtn["changelog"]=getChangeLogs(version,toVersion(latest));
 			}
 			else {
 				rtn["message"]="There is no update available for your version (#version.display#). Latest version is [#latest#]."
@@ -119,11 +135,15 @@ component {
 			string ioid="" restargsource="url")
 		httpmethod="GET" restpath="loader/{version}" {
 
-		var version=toVersion(arguments.version);
-		var data=LuceeVersionsDetail(version.display);
+		var _url=createArtifactIfNecessary("jar",version);
 
 		header statuscode="302" statustext="Found";
-		header name="Location" value=data.jar;
+		if(!structKeyExists(local,"_url")) {
+			header name="Location" value="https://cdn.lucee.org/org/lucee/lucee/#arguments.version#/lucee-#arguments.version#.jar";
+		}
+		else {
+			header name="Location" value=local._url;
+		}
 		return;
 	}
 
@@ -136,10 +156,15 @@ component {
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="light/{version}" {
 
-		createArtifactIfNecessary("light",version);
+		var _url=createArtifactIfNecessary("light",version);
 
 		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&"lucee-light-"&arguments.version&".jar";
+		if(!structKeyExists(local,"_url")) {
+			header name="Location" value="https://cdn.lucee.org/org/lucee/lucee/#arguments.version#/lucee-#arguments.version#-light.jar";
+		}
+		else {
+			header name="Location" value=local._url;
+		}
 		return;
 	}
 
@@ -198,13 +223,17 @@ component {
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="download/{version}" {
 
-		var version=toVersion(arguments.version);
-		var data=LuceeVersionsDetail(version.display);
+		var _url=createArtifactIfNecessary("lco",version);
 
 		header statuscode="302" statustext="Found";
-		header name="Location" value=data.lco;
+		if(!structKeyExists(local,"_url")) {
+			header name="Location" value="https://cdn.lucee.org/org/lucee/lucee/#arguments.version#/lucee-#arguments.version#.lco";
+		}
+		else {
+			header name="Location" value=local._url;
+		}
 		return;
-	}
+	} 
 
 			/**
 	* only for backward compatibility
@@ -232,11 +261,14 @@ component {
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="war/{version}" {
 
-		createArtifactIfNecessary("war",version);
-
+		var _url=createArtifactIfNecessary("war",version);
 		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&"lucee-"&arguments.version&".war";
-		return;
+		if(!structKeyExists(local,"_url")) {
+			header name="Location" value="https://cdn.lucee.org/org/lucee/lucee/#arguments.version#/lucee-#arguments.version#.war";
+		}
+		else {
+			header name="Location" value=local._url;
+		}
 	}
 
 
@@ -246,11 +278,14 @@ component {
 		boolean light=false restargsource="url")
 		httpmethod="GET" restpath="forgebox/{version}" {
 
-		createArtifactIfNecessary(light?"fbl":"fb",version);
-
+		var _url=createArtifactIfNecessary(light?"fbl":"fb",version);
 		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&"forgebox-"&(light?"light-":"")&arguments.version&".zip";
-		return;
+		if(!structKeyExists(local,"_url")) {
+			header name="Location" value="https://cdn.lucee.org/org/lucee/lucee/#arguments.version#/lucee-#arguments.version#-forgebox#light?"-light":""#.zip";
+		}
+		else {
+			header name="Location" value=local._url;
+		}
 	}
 
 	/**
@@ -416,18 +451,17 @@ component {
 		) httpmethod="GET" restpath="latest/{version}/{type}/{distribution}/{format}" {
 
 		try {
-			var s3 = new services.legacy.S3( variables.s3Root );
-			var versions = s3.getVersions();
-
+			var list=luceeVersionsListS3(); 
 			if ( arguments.type eq "all" )
 				arguments.type ="";
 			if ( arguments.version eq 0 )
 				arguments.version = "";
 
+			var s3 = new services.legacy.S3( variables.s3Root );
 			
 			var matchedVersion = services.VersionUtils::matchVersion( versions, arguments.type, 
 				arguments.version, arguments.distribution );  // i.e. 06.002.001.0048.000
-
+ 
 			if ( len( matchedVersion ) eq 0 ){
 				header statuscode="404";
 				return "Requested version not found";
@@ -478,24 +512,38 @@ component {
 		boolean flush=false restargsource="url"
 		)
 		httpmethod="GET" restpath="list" {
-
-		if(arguments.extended) {
-        	throw "argument extended is not supported anymore, get detail info for a specific version to get more details";
-    	}
-    	var rtn=[];
-    	var ignores=["6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT","6.0.1.82"];
-		loop array=luceeVersionsList() index="local.v" {
+			
+    	var rtn=arguments.extended?[:]:[];
+		var ignores=["6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT","6.0.1.82"];
+		loop array=luceeVersionsListS3() index="local.el" {
 			try {
-				if(arrayContainsNoCase(ignores,v)) continue;
-				local.sct=toVersion(local.v);
-				arrayAppend(rtn,
-					{
-						"version":sct.display,
-						"vs":sct.sortable
-					}
-				);
+				if(arrayContainsNoCase(ignores,el.version)) continue;
+				local.sct=toVersion(local.el.version);
+				if(!arguments.extended) {
+					arrayAppend(rtn,
+						{
+							"version":sct.display,
+							"vs":sct.sortable
+						});
+				}
+				else {
+					rtn[local.sct.sortable]={
+						"version": sct.display,
+						"lastModified": el.lastModified?:"",
+						"size": el.size?:"0",
+						"etag": el.etag?:"",
+						"lco":el.lco,
+						"jar":el.jar,
+						"light":el.light?:createArtifactURL("light",sct.display),
+						"zero":el.zero?:createArtifactURL("zero",sct.display),
+						"express":el.express?:createArtifactURL("express",sct.display),
+						"war":el.war?:createArtifactURL("war",sct.display),
+						"fb":el.forgebox?:createArtifactURL("fb",sct.display),
+						"fbl":el["forgebox-light"]?:createArtifactURL("fbl",sct.display)
+					};
+				}
 			}
-			catch (any e) {//echo(e);
+			catch (any e) {
 				log log="application" type="error" exception=e;
 			}
 		}
@@ -755,11 +803,29 @@ component {
 	}
 
 	private function createArtifactIfNecessary(type,version) {
-		var s3=new services.legacy.S3(variables.s3Root);
-		var versions=s3.getVersions();
-		var vs=services.VersionUtils::toVersionSortable(version);
+		var versionData=toVersion(arguments.version);
+		
+		if(type=="fusebox") {
+			arguments.type="fb";
+		}
+		if(type=="fusebox-light") {
+			arguments.type="fbl";
+		}
+		
+		try {
+			var data=LuceeVersionsDetailS3(versionData.display);
+		} 
+		catch (ex) {}		
+		systemOutput("--- createArtifactIfNecessary(#type#,#version#) ---" , true);
 
-		if(structKeyExists(versions,vs) && structKeyExists(versions[vs],type)) return;
+		// in case we have a link for it, no action is needed
+		if(!isNull(data[arguments.type])) {
+			return data[arguments.type];
+		}
+		
+
+		var s3=new services.legacy.S3(variables.s3Root);
+
 		thread s3=s3 name=createUUID() _type=type _version=version  {
 			try{
 				setting requesttimeout="10000000";
@@ -769,12 +835,42 @@ component {
 				fileWrite("error.txt",serialize(e));
 			}
 		}
+		
+		var vs=services.VersionUtils::toVersionSortable(version);
+		
+		
+		// TODO we need a solution with join here
 		sleep(20000);
-		versions=s3.getVersions();
-		if(structKeyExists(versions,vs) && structKeyExists(versions[vs],type)) return; // all good, was built in the meantime
+		
+		try {
+			var data=LuceeVersionsDetailS3(versionData.display);
+		} 
+		catch (ex) {}	
+		if(!isNull(data[arguments.type])) {
+			return data[arguments.type];
+		}
 		content type="text/plain";
 		header statuscode="429" statustext="Still Building";
 		echo("artifact #encodeForHtml(type)# for version #encodeForHtml(version)# does not exist yet, but we triggered the build for it. Try again in a couple minutes.");
 		abort;
 	}
+
+	private function createArtifactURL(type,version) {
+		return "#getBaseURL()##arguments.type#/#arguments.version#";
+	}
+	private function getBaseURL() {
+		if(!structKeyExists(variables,"baseURL")) {
+			var raw=getMetaData(this);
+			var tmp=cgi.request_url;
+			var index=findNoCase("/rest/",tmp);
+			tmp=left(tmp,index+6);
+			tmp&=raw.restPath;
+			if(right(tmp,1)!="/") tmp&="/";
+			variables.baseURL=tmp;
+		}
+		return variables.baseURL;
+	}
+
+
+	
 }
