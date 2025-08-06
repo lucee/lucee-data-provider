@@ -3,7 +3,9 @@
  * @restPath /update/provider
  */
 component {
-
+	static {
+		static.DEBUG=false; // TODO read from env var
+	}
 	variables.bundleDownloadService = application.bundleDownloadService;
 	variables.s3Root                = application.coreS3Root;
 	variables.cdnUrl                = application.coreCdnUrl;
@@ -278,7 +280,7 @@ component {
 		boolean light=false restargsource="url")
 		httpmethod="GET" restpath="forgebox/{version}" {
 
-		var _url=createArtifactIfNecessary(light?"fbl":"fb",version);
+		var _url=createArtifactIfNecessary(light?"forgebox-light":"forgebox",version);
 		header statuscode="302" statustext="Found";
 		if(!structKeyExists(local,"_url")) {
 			header name="Location" value="https://cdn.lucee.org/org/lucee/lucee/#arguments.version#/lucee-#arguments.version#-forgebox#light?"-light":""#.zip";
@@ -356,7 +358,7 @@ component {
 		httpmethod="GET" restpath="update-for/{version}" produces="application/lazy" {
 
 		local.info=getInfo(version,ioid,"en");
-		systemOutput(version&"->	"&structkeyExists(info,"available"),true,true);
+		if(static.DEBUG) systemOutput(version&"->	"&structkeyExists(info,"available"),true,true);
 
 
 		if(structkeyExists(info,"available")) return info.available;
@@ -380,7 +382,7 @@ component {
 	}
 	remote string function getChangeLogLastUpdated()
 		httpmethod="GET" restpath="changelogLastUpdated" {
-		// systemOutput("jiraChangelogService.getChangeLogUpdated():" & jiraChangelogService.getChangeLogUpdated(), true);
+		// if(static.DEBUG) systemOutput("jiraChangelogService.getChangeLogUpdated():" & jiraChangelogService.getChangeLogUpdated(), true);
 		return DateTimeFormat(jiraChangelogService.getChangeLogUpdated());
 	}
 
@@ -451,14 +453,14 @@ component {
 		) httpmethod="GET" restpath="latest/{version}/{type}/{distribution}/{format}" {
 
 		try {
-			var list=luceeVersionsListS3(); 
+			var versions=services.VersionUtils::versionArrayToStruct(luceeVersionsListS3());
 			if ( arguments.type eq "all" )
 				arguments.type ="";
 			if ( arguments.version eq 0 )
 				arguments.version = "";
 
 			var s3 = new services.legacy.S3( variables.s3Root );
-			
+			if(static.DEBUG) systemOutput(versions,true);
 			var matchedVersion = services.VersionUtils::matchVersion( versions, arguments.type, 
 				arguments.version, arguments.distribution );  // i.e. 06.002.001.0048.000
  
@@ -497,7 +499,7 @@ component {
 			}
 		}
 		catch(e){
-			systemOutput( e, 1, 1 );
+			if(static.DEBUG) systemOutput( e, 1, 1 );
 			header statuscode="500";
 			logger(text=e.message, exception=e, type="error");
 			echo (e.message);
@@ -552,21 +554,12 @@ component {
 
 	remote function getDate(required string version restargsource="Path")
 		httpmethod="GET" restpath="getdate/{version}" {
-		var mr=new services.legacy.MavenRepo();
-		try{
-			var info=mr.get(version,true);
-			if(!isNull(info.sources.pom.date))
-				return parseDateTime(info.sources.pom.date);
-			else if(!isNull(info.sources.jar.date))
-				return parseDateTime(info.sources.jar.date);
-		} catch(e) {
-			//systemOutput(e.stackTrace, true);
-			var mess=  "maven.getDate() threw " & left(cfcatch.message,100);
-			logger(text=mess, type="error");
-			systemOutput(mess, true, true );
-		}
-
-		return "";
+		var detail=LuceeVersionsDetailS3(version);
+		
+		// TODO get data from LuceeVersionsDetail, make it availabe there
+		//if(static.DEBUG)  systemOutput(LuceeVersionsDetail(version), true, true);
+		
+		return detail.lastModified?:"";
 	}
 
 	remote function readGetOnlyForDebugging(
@@ -599,12 +592,10 @@ component {
 	remote function listMissing(boolean inclFB=false restargsource="url")
 		httpmethod="GET" restpath="list-missing" {
 		setting requesttimeout="100";
-		var s3=new services.legacy.S3(variables.s3Root);
-		var versions=s3.getVersions(true);
-
+		var versions=services.VersionUtils::versionArrayToStruct(luceeVersionsListS3());	
 		var rtn=structNew("linked");
 		var list="jar,lco,war,light,express";
-		if(inclFB)list&=",fb,fbl";
+		if(inclFB)list&=",forgebox,forgebox-light";
 		loop list=list item="type" {
 
 			loop struct=versions index="vs" item="data" {
@@ -628,8 +619,8 @@ component {
 		if(directoryExists(indexDir)) directoryDelete(indexDir, true);
 
 
-			var s3=new services.legacy.S3(variables.s3Root);
-		s3.addMissing(true);
+		var s3=new services.legacy.S3(variables.s3Root);
+		s3.buildLatest(true);
 		return "done";
 	}
 
@@ -805,28 +796,23 @@ component {
 	private function createArtifactIfNecessary(type,version) {
 		var versionData=toVersion(arguments.version);
 		
-		if(type=="fusebox") {
-			arguments.type="fb";
-		}
-		if(type=="fusebox-light") {
-			arguments.type="fbl";
-		}
-		
 		try {
 			var data=LuceeVersionsDetailS3(versionData.display);
 		} 
 		catch (ex) {}		
-		systemOutput("--- createArtifactIfNecessary(#type#,#version#) ---" , true);
+		if(static.DEBUG) systemOutput("--- createArtifactIfNecessary(#type#,#version#) ---" , true);
 
 		// in case we have a link for it, no action is needed
 		if(!isNull(data[arguments.type])) {
+			if(static.DEBUG) systemOutput("--- found a match: "&data[arguments.type], true);
 			return data[arguments.type];
 		}
-		
+		if(static.DEBUG) systemOutput("--- no match found", true);
 
 		var s3=new services.legacy.S3(variables.s3Root);
 
-		thread s3=s3 name=createUUID() _type=type _version=version  {
+		var threadName="t"&createUUID();
+		thread s3=s3 name=threadName _type=type _version=version  {
 			try{
 				setting requesttimeout="10000000";
 				s3.add(_type,_version);
@@ -838,10 +824,11 @@ component {
 		
 		var vs=services.VersionUtils::toVersionSortable(version);
 		
+		// wait for the thread to finish
+		if(static.DEBUG) systemOutput("Waiting for thread #threadName# to finish...", true);
+		threadJoin(threadName,50000);
 		
-		// TODO we need a solution with join here
-		sleep(20000);
-		
+		// check if the artifact was created
 		try {
 			var data=LuceeVersionsDetailS3(versionData.display);
 		} 
@@ -852,7 +839,6 @@ component {
 		content type="text/plain";
 		header statuscode="429" statustext="Still Building";
 		echo("artifact #encodeForHtml(type)# for version #encodeForHtml(version)# does not exist yet, but we triggered the build for it. Try again in a couple minutes.");
-		abort;
 	}
 
 	private function createArtifactURL(type,version) {

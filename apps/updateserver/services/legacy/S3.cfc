@@ -1,4 +1,8 @@
 component {
+	static {
+		static.DEBUG=false; // TODO read from env var
+	}
+
 	variables.providerLog = "update-provider";
 	variables.NL="
 ";
@@ -7,7 +11,7 @@ component {
 	}
 
 	public void function reset() {
-		systemOutput( "s3.reset()", true );
+		if(static.DEBUG) systemOutput( "s3.reset()", true );
 		structDelete( application, "s3VersionData", false );
 		structDelete( application, "expressTemplates", false );
 	}
@@ -16,10 +20,10 @@ component {
 		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
 		if ( !isNull(arguments.exception ) ){
 			WriteLog( text=arguments.text, type=arguments.type, log=variables.providerLog, exception=arguments.exception );
-			systemOutput( arguments.exception, true, true );
+			if(static.DEBUG) systemOutput( arguments.exception, true, true );
 		} else {
 			WriteLog( text=arguments.text, type=arguments.type, log=variables.providerLog );
-			systemOutput( arguments.text, true, true );
+			if(static.DEBUG) systemOutput( arguments.text, true, true );
 		}
 	}
 
@@ -56,34 +60,37 @@ component {
 
 	public function add(required string type, required string version) {
 		setting requesttimeout="10000000";
-		
+
+		if(static.DEBUG) systemOutput("-------- add:#type# --------", true);
 		try {
 			var data=LuceeVersionsDetailS3(version);
 		} 
 		catch (ex) {}	
-		
+		if(static.DEBUG) systemOutput(data, true);
 		var mr=new MavenRepo();
 
 		// move the jar from maven if necessary
 		if(isNull(data.jar)) {
 			maven2S3(mr,version);
-			SystemOutput("add: downloaded jar from maven:"&now(),1,1);
+			if(static.DEBUG) SystemOutput("add: downloaded jar from maven:"&now(),1,1);
 		}
 		var vs=services.VersionUtils::toVersionSortable(version);
 		// create the artifact
 
 		try {
 			if( type != "jar" ){
-				SystemOutput("add: createArtifacts (#type#):"&now(),1,1);
+				if(static.DEBUG) SystemOutput("add: createArtifacts (#type#):"&now(),1,1);
 				createArtifacts(mr,version,type,true);
-				SystemOutput("add: after creating artifact (#type#):"&now(),1,1);
+				if(static.DEBUG) SystemOutput("add: after creating artifact (#type#):"&now(),1,1);
 			}
 		} catch(e){
-			SystemOutput(e.stacktrace,1,1);
+			if(static.DEBUG) SystemOutput(e.stacktrace,1,1);
 		}
 	}
 
 	/*
+
+
 		MARK: Add Missing
 	*/
 	
@@ -97,25 +104,34 @@ component {
 
 		var trg = variables.s3Root & "/org/lucee/lucee/#version#/lucee-#version#.jar";
 		lock name="download from maven-#version#" timeout="1" {
-			systemOutput("downloading from maven-#version#",1,1);
+			if(static.DEBUG) systemOutput("downloading from maven-#version#",1,1);
 			// add the jar
 			var info=mr.get(version, true);
 			if(isNull(info.sources.jar.src)) {
-				systemOutput("404:"&version,1,1);
+				if(static.DEBUG) systemOutput("404:"&version,1,1);
 				return;
 			}
 			var src=info.sources.jar.src;
 			var date=parseDateTime(info.sources.jar.date);
 
 			if (!fileExists(src)) {
-				systemOutput("404:"&src,1,1);
+				if(static.DEBUG) systemOutput("404:"&src,1,1);
 				return;
 			}
 			// copy jar from maven to S3
 			fileCopy(src,trg);
 
-			systemOutput("200:"&trg,1,1);
+			if(static.DEBUG) systemOutput("200:"&trg,1,1);
 		}
+	}
+
+
+	public function buildLatest(includingForgeBox=false) {
+		var list=luceeVersionsList();
+		var latest=list[len(list)];
+		if(static.DEBUG) systemOutput("buildLatest: " & latest, 1, 1);
+		var mr=new MavenRepo();
+		createArtifacts(mr,latest,"",includingForgeBox);
 	}
 
 	/*
@@ -136,67 +152,70 @@ component {
 				try {
 					// check and if necessary create other artifacts
 					var list="lco,war,light,express";
-					if(includingForgeBox)list&=",fb,fbl";
+					if(includingForgeBox)list&=",forgebox,forgebox-light";
 
-					systemOutput("createArtifacts() Starting ( #version# )",1,1);
+					if(static.DEBUG) systemOutput("create #specType# Artifacts(#list#) Starting ( #version# )",1,1);
 					var c= 0;
 
 					loop list=list item="local.type" {
 						if ( len( specType ) && specType!=type ) continue;
 						if (!isNull(data[type])) continue;
+						if(static.DEBUG) systemOutput("create: " & type,1,1);
 						c++;
 						var s = getTickCount();
 						// first we need a local copy of the jar
 						var lcl=getTempDirectory() & "/lucee-"&arguments.version&".jar";
-						try{
+						try {
+							
 							if(!fileExists(lcl)) fileCopy(jarRem,lcl);
 						}
 						catch(e) {
-							systemOutput(e,1,1);
+							if(static.DEBUG) systemOutput(e,1,1);
 							continue;
 						}
+
 						// extract lco and copy to S3
 						if(type=="lco") {
 							var result=createLCO(lcl,arguments.version);
-							systemOutput("lco: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
+							if(static.DEBUG) systemOutput("lco: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
 						}
-						else if(type=="fb") {
+						else if(type=="forgebox" || type=="fb") {
 							var result=createForgeBox(lcl,arguments.version,false);
-							systemOutput("forgebox: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
+							if(static.DEBUG) systemOutput("forgebox: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
 							//abort;
 						}
-						else if(type=="fbl") {
+						else if(type=="forgebox-light" || type=="fbl") {
 							var result=createForgeBox(lcl,arguments.version,true);
-							systemOutput("forgebox-light: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
+							if(static.DEBUG) systemOutput("forgebox-light: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
 						}
 						// create war and copy to S3
 						else if(type=="war") {
 							lock name="build-lucee-war" timeout="10" {
 								var result=createWar(lcl,arguments.version);
 							}
-							systemOutput("war: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
+							if(static.DEBUG) systemOutput("war: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
 						}
 						// create war and copy to S3
 						else if(type=="light") {
 							var result=createLight(lcl,arguments.version);
-							systemOutput("light: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
+							if(static.DEBUG) systemOutput("light: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
 						}
 						else if(type=="express") {
 							lock name="build-lucee-express" timeout="10" {
 								var result=createExpress(lcl,arguments.version);
 							}
-							systemOutput("express: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
+							if(static.DEBUG) systemOutput("express: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
 						}
 						else {
-							systemOutput("unsupported: " & type &":"&arguments.version,1,1);
+							if(static.DEBUG) systemOutput("unsupported: " & type &":"&arguments.version,1,1);
 							c--;
 						}
 					}
-					systemOutput( "--- " & arguments.version & " done #c# artifacts built",1,1);
+					if(static.DEBUG) systemOutput( "--- " & arguments.version & " done #c# artifacts built",1,1);
 				}
 				catch (e){
-					systemOutput("----------------------------------------------",1,1);
-					systemOutput(cfcatch.stacktrace,1,1);
+					if(static.DEBUG) systemOutput("----------------------------------------------",1,1);
+					if(static.DEBUG) systemOutput(cfcatch.stacktrace,1,1);
 					writeLog( text=e.message, exception=e, type="error" );
 				}
 				finally {
@@ -204,7 +223,7 @@ component {
 				}
 			}
 		} catch(e) {
-			systemOutput( "--- " & arguments.version & " already building, skipping, #e.message#",1,1);
+			if(static.DEBUG) systemOutput( "--- " & arguments.version & " already building, skipping, #e.message#",1,1);
 		}
 	}
 
@@ -214,7 +233,7 @@ component {
 	private function createLCO( jar, version ) {
 		var trg = variables.s3Root & "/org/lucee/lucee/#version#/lucee-#version#.lco";
 		if ( fileExists( trg ) ) {
-			systemOutput("--- " & trg & " already built, skipping", true);
+			if(static.DEBUG) systemOutput("--- " & trg & " already built, skipping", true);
 		}
 		try {
 			var temp = getTemp( arguments.version );
@@ -236,10 +255,10 @@ component {
 		MARK: Create WAR
 	*/
 	private function createWar( jar, version ) {
-		systemOutput("--- createWar ---" , true);
+		if(static.DEBUG) systemOutput("--- createWar ---" , true);
 		var war=variables.s3Root & "/org/lucee/lucee/#version#/lucee-#version#.war";
 		if ( fileExists( war ) ) {
-			systemOutput("--- " & war & " already built, skipping", true);
+			if(static.DEBUG) systemOutput("--- " & war & " already built, skipping", true);
 		}
 		else {
 			systemOutput("--- " & war & " not found, creating", true);
@@ -263,8 +282,8 @@ component {
 				build[ name ] = tmp;
 
 			}
-			//systemOutput( "---- createWar", true );
-			//systemOutput( build, true );
+			//if(static.DEBUG) systemOutput( "---- createWar", true );
+			//if(static.DEBUG) systemOutput( build, true );
 
 			// let's zip it
 			zip action="zip" file=warTmp overwrite=true {
@@ -294,7 +313,7 @@ component {
 		var trg=variables.s3Root & "/org/lucee/lucee/#version#/lucee-#version#-light.jar";
 		if ( fileExists( trg ) ) {
 			// avoid double handling for forgebox light builds
-			systemOutput("--- " & trg & " already built, skipping", true);
+			if(static.DEBUG) systemOutput("--- " & trg & " already built, skipping", true);
 			var tempLight = getTempFile( arguments.tempDir, "lucee-light-" & version, "jar");
 			fileCopy( trg, tempLight); // create a local temp file from s3
 			return tempLight;
@@ -356,7 +375,7 @@ component {
 		var sep=server.separator.file;
 		var trg = variables.s3Root & "/org/lucee/lucee/#version#/lucee-#version#-express.zip";
 		if ( fileExists( trg ) ) {
-			systemOutput("--- " & trg & " already built, skipping", true);
+			if(static.DEBUG) systemOutput("--- " & trg & " already built, skipping", true);
 			return trg;
 		}
 		var temp = getTemp( arguments.version );
@@ -384,13 +403,13 @@ component {
 			// unpack the lucee tomcat template
 			var local_tomcat_templates = curr & "build/servers"
 			if ( checkVersionGTE( arguments.version, 6, 2, 1 ) ) {
-				systemOutput("Using Tomcat 11", true);
+				if(static.DEBUG) systemOutput("Using Tomcat 11", true);
 				zip action="unzip" file="#local_tomcat_templates#/#expressTemplates['tomcat-11']#" destination=tmpTom;
 			} else if ( checkVersionGTE( arguments.version, 6, 2 ) ) {
-				systemOutput("Using Tomcat 10", true);
+				if(static.DEBUG) systemOutput("Using Tomcat 10", true);
 				zip action="unzip" file="#local_tomcat_templates#/#expressTemplates['tomcat-10']#" destination=tmpTom;
 			} else {
-				systemOutput("Using Tomcat 9", true);
+				if(static.DEBUG) systemOutput("Using Tomcat 9", true);
 				zip action="unzip" file="#local_tomcat_templates#/#expressTemplates['tomcat-9']#" destination=tmpTom;
 			}
 
@@ -424,7 +443,7 @@ component {
 	private string function createForgeBox(required jar,required string version, boolean light=false) {
 		var trg = variables.s3Root & "/org/lucee/lucee/#version#/lucee-#version#-forgebox#( light ? '-light' : '' )#.zip";
 		if ( fileExists( trg ) ) {
-			systemOutput("--- " & trg & " already built, skipping", true);
+			if(static.DEBUG) systemOutput("--- " & trg & " already built, skipping", true);
 			return trg;
 		}
 		var sep = server.separator.file;
@@ -469,11 +488,11 @@ component {
 				"type":"cf-engines"
 			];
 			if ( checkVersionGTE( arguments.version, 7 ) ){
-				systemOutput( "Using JakartaEE", true );
+				if(static.DEBUG) systemOutput( "Using JakartaEE", true );
 				boxJson[ "JakartaEE" ] = true;
 			}
 			fileWrite( json, boxJson.toJson() );
-			//systemOutput( boxJson.toJson(), true );
+			//if(static.DEBUG) systemOutput( boxJson.toJson(), true );
 
 			// create the war
 			zip action="zip" file=zipTmp overwrite=true {
