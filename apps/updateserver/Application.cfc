@@ -12,8 +12,8 @@ component {
 	this.searchImplicitScopes   = false;
 	this.searchResults          = false;
 	this.scopeCascading         = 'strict';
-	this.s3.accessKeyId         = server.system.environment.S3_EXTENSION_ACCESS_KEY_ID;
-	this.s3.awsSecretKey        = server.system.environment.S3_EXTENSION_SECRET_KEY;
+	this.s3.accessKeyId         = server.system.environment.S3_EXTENSION_ACCESS_KEY_ID ?: "";
+	this.s3.awsSecretKey        = server.system.environment.S3_EXTENSION_SECRET_KEY ?: "";
 	this.allowReload            = IsBoolean( server.system.environment.ALLOW_RELOAD ?: "" ) && server.system.environment.ALLOW_RELOAD;
 
 	function onApplicationStart() {
@@ -27,6 +27,11 @@ component {
 				systemOutput("sentry.json loaded via configImport - LDEV-5371", true);
 				fileDelete( sentry_json );
 			}
+		}
+		if ( len(this.s3.awsSecretKey) == 0 || len(this.s3.accessKeyId) == 0) {
+			systemOutput("ERROR: S3 Credentials Required [ S3_EXTENSION_ACCESS_KEY_ID, S3_EXTENSION_SECRET_KEY ]", true);
+			throw "S3 Credentials Required";
+			return false;
 		}
 		_loadServices();
 	}

@@ -28,8 +28,7 @@ services:
       - 8888:8888
     environment:
       - VIRTUAL_HOST=download.lucee.local
-      - S3_DOWNLOAD_ACCESS_KEY_ID=${S3_DOWNLOAD_ACCESS_KEY_ID:-xxxxxx}
-      - S3_DOWNLOAD_SECRET_KEY=${S3_DOWNLOAD_SECRET_KEY:-xxxxxx}
+      - DOWNLOAD_UPDATE_PROVIDER=${DOWNLOAD_UPDATE_PROVIDER} # defaults to prod, set DOWNLOAD_UPDATE_PROVIDER=http://update:8888/rest/update/provider in .env for local testing
       - SENTRY_ENV=${SENTRY_ENV:-""}
       - SENTRY_DSN=${SENTRY_DSN:-""}
 
@@ -45,10 +44,8 @@ services:
       - 8889:8888
     environment:
       - VIRTUAL_HOST=update.lucee.local
-      - S3_EXTENSION_SECRET_KEY=${S3_EXTENSION_SECRET_KEY:-xxxxxx}
-      - S3_EXTENSION_ACCESS_KEY_ID=${S3_EXTENSION_ACCESS_KEY_ID:-xxxxxx}
-      - S3_DOWNLOAD_SECRET_KEY=${S3_DOWNLOAD_SECRET_KEY:-xxxxxx}
-      - S3_DOWNLOAD_ACCESS_KEY_ID=${S3_DOWNLOAD_ACCESS_KEY_ID:-xxxxxx}
+      - S3_EXTENSION_SECRET_KEY=${S3_EXTENSION_SECRET_KEY}
+      - S3_EXTENSION_ACCESS_KEY_ID=${S3_EXTENSION_ACCESS_KEY_ID}
       - SENTRY_ENV=${SENTRY_ENV:-""}
       - SENTRY_DSN=${SENTRY_DSN:-""}
       - ALLOW_RELOAD=${ALLOW_RELOAD:-"true"}

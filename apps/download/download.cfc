@@ -5,10 +5,7 @@ component {
 
 	variables.EXTENSION_DOWNLOAD="https://extension.lucee.org/rest/extension/provider/{type}/{id}";
 
-	variables.UPDATE_PROVIDER = "https://update.lucee.org/rest/update/provider";
-
-	//variables.UPDATE_PROVIDER = "http://127.0.0.1:8889/rest/update/provider";
-
+	variables.UPDATE_PROVIDER = server.system.environment.DOWNLOAD_UPDATE_PROVIDER ?: "https://update.lucee.org/rest/update/provider";
 
 	function getExtensions(flush=false) localmode=true {
 		if ( arguments.flush || isNull( application.extInfo ) ) {
