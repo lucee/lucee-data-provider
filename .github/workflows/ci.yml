@@ -69,7 +69,7 @@ jobs:
         luceeVersion: ${{ env.luceeVersion }}
         #luceeVersionQuery: ${{ env.luceeVersionQuery }}
         extensionDir: ${{ github.workspace }}/
-        luceeCFConfig: ${{ github.workspace }}/lucee/devops/.CFconfig-update.json5
+        luceeCFConfig: ${{ github.workspace }}/devops/.CFconfig-update.json5
       env:
         testLabels: data-provider-integration
         testAdditional: ${{ github.workspace }}/tests
