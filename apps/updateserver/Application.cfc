@@ -28,12 +28,8 @@ component {
 				fileDelete( sentry_json );
 			}
 		}
-		if ( len(this.s3.awsSecretKey) == 0 || len(this.s3.accessKeyId) == 0) {
-			systemOutput("ERROR: S3 Credentials Required [ S3_EXTENSION_ACCESS_KEY_ID, S3_EXTENSION_SECRET_KEY ]", true);
-			throw "S3 Credentials Required";
-			return false;
-		}
-		_loadServices();
+
+		return _loadServices();
 	}
 
 	function onRequestStart() output=true {
@@ -72,6 +68,14 @@ component {
 		var bundleS3Root = server.system.environment.S3_BUNDLES_ROOT       ?: "s3:///bundle-download/";
 		var bundleCdnUrl = server.system.environment.S3_BUNDLES_CDN_URL    ?: "https://bundle.lucee.org/";
 
+		if ( left( coreS3Root, 3 ) == "s3:"
+				&& ( len(this.s3.awsSecretKey) == 0 || len(this.s3.accessKeyId) == 0) ) {
+			var s3Error = "ERROR: S3 Credentials Required [ S3_EXTENSION_ACCESS_KEY_ID, S3_EXTENSION_SECRET_KEY ],"
+				& " for local testing set S3_CORE_ROOT [#coreS3Root#] to a directory";
+			systemOutput( s3Error, true );
+			return false;
+		}
+
 		var extMetaReader = new services.ExtensionMetadataReader(
 			s3root = extS3Root
 		);
@@ -102,6 +106,8 @@ component {
 		application.extMetaReader         = extMetaReader;
 		application.bundleDownloadService = bundleDownloadService;
 		application.jiraChangelogService  = jiraChangelogService;
+
+		return true;
 	}
 
 }

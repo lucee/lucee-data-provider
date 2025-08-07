@@ -1,26 +1,26 @@
 component {
 
-	variables.EXTENSION_PROVIDER="https://extension.lucee.org/rest/extension/provider/info?withLogo=true&type=all";
-	//variables.EXTENSION_PROVIDER="http://127.0.0.1:8889/rest/extension/provider/info?withLogo=true&type=all";
-
-	variables.EXTENSION_DOWNLOAD="https://extension.lucee.org/rest/extension/provider/{type}/{id}";
-
-	variables.UPDATE_PROVIDER = server.system.environment.DOWNLOAD_UPDATE_PROVIDER ?: "https://update.lucee.org/rest/update/provider";
+	// set EXTENSION_PROVIDER=http://update:8888/rest/extension/provider in .env for local testing
+	variables.EXTENSION_PROVIDER = server.system.environment.EXTENSION_PROVIDER ?: "https://extension.lucee.org/rest/extension/provider";
+	
+	// set DOWNLOAD_UPDATE_PROVIDER=http://update:8888/rest/update/provider in .env for local testing
+	variables.UPDATE_PROVIDER = server.system.environment.UPDATE_PROVIDER ?: "https://update.lucee.org/rest/update/provider";
 
 	function getExtensions(flush=false) localmode=true {
+		var extUrl = EXTENSION_PROVIDER &"/info?withLogo=true&type=all";
 		if ( arguments.flush || isNull( application.extInfo ) ) {
-			http url=EXTENSION_PROVIDER&"&flush="&arguments.flush result="http";
+			http url=extUrl result="http";
 
 			if ( isNull( http.status_code ) || http.status_code != 200 )
-				throw "could not connect to extension provider (#EXTENSION_PROVIDER#)";
+				throw "could not connect to extension provider (#extUrl#)";
 
 			var data = deSerializeJson( http.fileContent, false );
-			if (!structKeyExists( data, "meta" ) ) {
+			if ( !structKeyExists( data, "meta" ) ) {
 				systemOutput( "error fetching extensions, falling back on cache", true);
-				http url=EXTENSION_PROVIDER result="http";
+				http url=extUrl result="http";
 
 				if ( isNull( http.status_code ) || http.status_code != 200 )
-					throw "could not connect to extension provider (#EXTENSION_PROVIDER#)";
+					throw "could not connect to extension provider (#extUrl#)";
 
 				data = deSerializeJson( http.fileContent, false );
 				application.extInfo = data.extensions;
@@ -220,8 +220,12 @@ component {
 			application[ "changelogLastUpdated" ] = lastUpdated;
 			// application.mavenInfo = {};  // not currently used
 			// maven dates are static, only purge if unknown
-			loop collection="#application.mavenDates#" key="local.version" value="local.date" {
-				if ( len(date) eq 0 ) structDelete( application.mavenDates, version );
+			if ( structKeyExists( application, "mavenDates" ) ){
+				loop collection="#application.mavenDates#" key="local.version" value="local.date" {
+					if ( len(date) eq 0 ) structDelete( application.mavenDates, version );
+				}
+			} else {
+				application.mavenDates = {};
 			}
 
 		}
