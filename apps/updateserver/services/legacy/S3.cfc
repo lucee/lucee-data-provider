@@ -181,8 +181,8 @@ component {
 		}
 		getExpressTemplates();
 		// create the missing artifacts
-		loop struct=s3List index="local.vs" item="local.el" {
-			createArtifacts(mr,el,"",includingForgeBox);
+		loop array=s3List item="local.el" {
+			createArtifacts(mr,el.version,"",includingForgeBox);
 		}
 		systemOutput("build complete, all artifacts created in #numberFormat(getTickCount()-started)#,s",1,1);
 		getVersions(true); //force reset();
