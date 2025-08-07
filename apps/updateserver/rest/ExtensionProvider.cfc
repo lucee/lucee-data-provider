@@ -4,8 +4,29 @@
  */
 component {
 
+	static {
+		static.DEBUG = (server.system.environment.DEBUG ?: false);
+	}
+
 	variables.metaReader = application.extMetaReader;
 	variables.cdnURL     = application.extensionsCdnUrl;
+
+	variables.providerLog = "extension-provider";
+
+	private function logger( string text, any exception, type="info" ){
+		// var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
+		if ( !isNull(arguments.exception ) ){
+			if (static.DEBUG) {
+				if ( len(arguments.text ) ) systemOutput( arguments.text, true );
+				systemOutput( arguments.exception, true );
+			} else {
+				writeLog( text=arguments.text, type=arguments.type, log="exception", exception=arguments.exception );
+			}
+		} else {
+			if (static.DEBUG) systemOutput( arguments.text, true);
+			else writeLog( text=arguments.text, type=arguments.type, log=variables.providerLog );
+		}
+	}
 
 	/**
 	 * @httpmethod GET
@@ -34,6 +55,7 @@ component {
 				, coreVersion   = coreVersion
 			);
 		} catch( e ) {
+			logger(exception=e);
 			return e;
 		}
 
@@ -150,6 +172,7 @@ component {
 				, extensions = metaReader.loadMeta()
 			}
 		} catch( any e ) {
+			logger(exception=e);
 			return e;
 		}
 	}

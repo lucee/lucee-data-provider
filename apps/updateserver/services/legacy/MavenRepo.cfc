@@ -1,7 +1,7 @@
 component {
 
 	static {
-		static.DEBUG=false; // TODO read from env var
+		static.DEBUG = (server.system.environment.DEBUG ?: false);
 	}
 	variables.listPattern=	"https://oss.sonatype.org/service/local/lucene/search";
 	//defaultRepo="https://oss.sonatype.org/content/repositories/releases";

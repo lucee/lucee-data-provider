@@ -1,7 +1,7 @@
 component {
 
 	static {
-		static.DEBUG=false; // TODO read from env var
+		static.DEBUG = (server.system.environment.DEBUG ?: false);
 	}
 
 	/**
@@ -200,4 +200,93 @@ component {
 
 		return (v[4] <= arguments.build);
 	}
+
+	public boolean static function isVersion(required string version) {
+		try{
+			toVersion(version);
+			return true;
+		}
+		catch(e) {
+			return false;
+		}
+	}
+
+	public struct static function toVersion(required string version, boolean ignoreInvalidVersion=false){
+		local.arr=listToArray(arguments.version,'.');
+		if(arr.len()==3) {
+			arr[4]="0";
+		}
+		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
+			if(ignoreInvalidVersion) return {};
+			throw ("version number ["&arguments.version&"] is invalid");
+		}
+		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
+
+		// qualifier has an appendix? (BETA,SNAPSHOT)
+		local.qArr=listToArray(arr[4],'-');
+		if(qArr.len()==1 && isNumeric(qArr[1])) local.sct.qualifier=qArr[1]+0;
+		else if(qArr.len()==2 && isNumeric(qArr[1])) {
+			sct.qualifier=qArr[1]+0;
+			sct.qualifier_appendix=qArr[2];
+			if(sct.qualifier_appendix=="SNAPSHOT")sct.qualifier_appendix_nbr=0;
+			else if(sct.qualifier_appendix=="BETA")sct.qualifier_appendix_nbr=50;
+			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
+		}
+		else throw ("version number ["&arguments.version&"] is invalid");
+		sct.pure=
+					sct.major
+					&"."&sct.minor
+					&"."&sct.micro
+					&"."&sct.qualifier;
+		sct.display=
+					sct.pure
+					&(sct.qualifier_appendix==""?"":"-"&sct.qualifier_appendix);
+
+		sct.sortable=repeatString("0",2-len(sct.major))&sct.major
+					&"."&repeatString("0",3-len(sct.minor))&sct.minor
+					&"."&repeatString("0",3-len(sct.micro))&sct.micro
+					&"."&repeatString("0",4-len(sct.qualifier))&sct.qualifier
+					&"."&repeatString("0",3-len(sct.qualifier_appendix_nbr))&sct.qualifier_appendix_nbr;
+		return sct;
+	}
+
+	private boolean static function isNewer(required struct left, required struct right ){
+		// major
+		if(left.major>right.major) return true;
+		if(left.major<right.major) return false;
+
+		// minor
+		if(left.minor>right.minor) return true;
+		if(left.minor<right.minor) return false;
+
+		// micro
+		if(left.micro>right.micro) return true;
+		if(left.micro<right.micro) return false;
+
+		// qualifier
+		if(left.qualifier>right.qualifier) return true;
+		if(left.qualifier<right.qualifier) return false;
+
+		if(left.qualifier_appendix_nbr>right.qualifier_appendix_nbr) return true;
+		if(left.qualifier_appendix_nbr<right.qualifier_appendix_nbr) return false;
+
+		if(left.qualifier_appendix_nbr==75 && right.qualifier_appendix_nbr==75) {
+			if(left.qualifier_appendix>right.qualifier_appendix) return true;
+			if(left.qualifier_appendix<right.qualifier_appendix) return false; // not really necessary
+		}
+		return false;
+	}
+
+	private boolean static function isEqual(required struct left, required struct right ){
+		if(left.major!=right.major) return false;
+		if(left.minor!=right.minor) return false;
+		if(left.micro!=right.micro) return false;
+		if(left.qualifier!=right.qualifier) return false;
+		if(left.qualifier_appendix!=right.qualifier_appendix) return false;
+
+		return true;
+	}
+
+
+
 }

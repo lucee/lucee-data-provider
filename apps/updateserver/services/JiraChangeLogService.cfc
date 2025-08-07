@@ -60,11 +60,13 @@ component accessors=true {
 // PRIVATE HELPERS
 
 	private function _checkForUpdates() {
-		var age = dateDiff( "n", getLastUpdated(), now() );
+		if ( !isNull( getLastUpdated() ) ){
+			var age = dateDiff( "n", getLastUpdated(), now() );
 
-		//systemOutput("jira._checkForUpdates() cache is #age# mins old, max is #getRefreshIntervalMins()#", true );
-		if ( age < variables.getRefreshIntervalMins() ){
-			return;
+			//systemOutput("jira._checkForUpdates() cache is #age# mins old, max is #getRefreshIntervalMins()#", true );
+			if ( age < variables.getRefreshIntervalMins() ){
+				return;
+			}
 		}
 		lock type="exclusive" name="refresh-issues" timeout=0 {
 			setLastUpdated( now() );
