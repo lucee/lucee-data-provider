@@ -424,11 +424,11 @@ component {
 				if ( len(arguments.text ) ) systemOutput( arguments.text, true );
 				systemOutput( arguments.exception, true );
 			} else {
-				WriteLog( text=arguments.text, type=arguments.type, log="exception", exception=arguments.exception );
+				writeLog( text=arguments.text, type=arguments.type, log="exception", exception=arguments.exception );
 			}
 		} else {
 			if (static.DEBUG) systemOutput( arguments.text, true);
-			else WriteLog( text=arguments.text, type=arguments.type, log=variables.providerLog );
+			else writeLog( text=arguments.text, type=arguments.type, log=variables.providerLog );
 		}
 	}
 

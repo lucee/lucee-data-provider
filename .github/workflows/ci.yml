@@ -59,6 +59,7 @@ jobs:
         testAdditional: ${{ github.workspace }}/tests
         testSevices: mysql
         LUCEE_ADMIN_ENABLED: false
+        #DEBUG: true
     - name: Run Lucee Test Suite (testLabels="data-provider-integration")
       uses: lucee/script-runner@main
       #continue-on-error: true
@@ -73,6 +74,8 @@ jobs:
         testAdditional: ${{ github.workspace }}/tests
         testSevices: mysql
         LUCEE_ADMIN_ENABLED: false
+        LUCEE_BASE_CONFIG: ${{ github.workspace }}/lucee/devops/.CFconfig-update.json5
+        #DEBUG: true
 
   build:
     name: Docker build & publish
