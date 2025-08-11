@@ -1,4 +1,4 @@
-# Lucee "Data provider"
+# Lucee Data provider
 
 This repo contains the application code for the following services:
 
