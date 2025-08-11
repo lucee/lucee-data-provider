@@ -18,6 +18,11 @@ component accessors=true {
 			var lexFiles       = _listLexFilesFromBucket();
 			var metaChanged    = false;
 
+			if (meta.recordcount == 0){ 
+				// rebuilding the index takes a while as all extensions need to be re-downloaded and processed
+				setting requesttimeout="#lexFiles.recordcount#*4";
+			}
+
 			for( var lexFile in lexFiles ) {
 				var isNewToUs = !StructKeyExists( existingByFile, lexFile.name )
 				if ( isNewToUs ) {
