@@ -12,8 +12,8 @@ component {
 	this.searchImplicitScopes   = false;
 	this.searchResults          = false;
 	this.scopeCascading         = 'strict';
-	this.s3.accessKeyId         = server.system.environment.S3_EXTENSION_ACCESS_KEY_ID;
-	this.s3.awsSecretKey        = server.system.environment.S3_EXTENSION_SECRET_KEY;
+	this.s3.accessKeyId         = server.system.environment.S3_EXTENSION_ACCESS_KEY_ID ?: "";
+	this.s3.awsSecretKey        = server.system.environment.S3_EXTENSION_SECRET_KEY ?: "";
 	this.allowReload            = IsBoolean( server.system.environment.ALLOW_RELOAD ?: "" ) && server.system.environment.ALLOW_RELOAD;
 
 	function onApplicationStart() {
@@ -28,7 +28,8 @@ component {
 				fileDelete( sentry_json );
 			}
 		}
-		_loadServices();
+
+		return _loadServices();
 	}
 
 	function onRequestStart() output=true {
@@ -60,25 +61,44 @@ component {
 	function _loadServices() {
 		setting requesttimeout=600;
 
-		var coreS3Root   = server.system.environment.S3_CORE_ROOT          ?: "s3:///lucee-downloads/";
-		var coreCdnUrl   = server.system.environment.S3_CORE_CDN_URL       ?: "https://cdn.lucee.org/";
-		var extS3Root    = server.system.environment.S3_EXTENSIONS_ROOT    ?: "s3:///extension-downloads/";
-		var extCdnUrl    = server.system.environment.S3_EXTENSIONS_CDN_URL ?: "https://ext.lucee.org/";
-		var bundleS3Root = server.system.environment.S3_BUNDLES_ROOT       ?: "s3:///bundle-download/";
-		var bundleCdnUrl = server.system.environment.S3_BUNDLES_CDN_URL    ?: "https://bundle.lucee.org/";
+		application.coreS3Root              = server.system.environment.S3_CORE_ROOT          ?: "s3:///lucee-downloads/";
+		application.coreCdnUrl              = server.system.environment.S3_CORE_CDN_URL       ?: "https://cdn.lucee.org/";
+		application.extensionsS3Root        = server.system.environment.S3_EXTENSIONS_ROOT    ?: "s3:///extension-downloads/";
+		application.extensionsCdnUrl        = server.system.environment.S3_EXTENSIONS_CDN_URL ?: "https://ext.lucee.org/";
+		application.bundleS3Root            = server.system.environment.S3_BUNDLES_ROOT       ?: "s3:///bundle-download/";
+		application.bundleCdnUrl            = server.system.environment.S3_BUNDLES_CDN_URL    ?: "https://bundle.lucee.org/";
+		application.downloadsUrl            = server.system.environment.DOWNLOADS_URL         ?: "https://download.lucee.org/";
+		application.updateProviderUrl       = server.system.environment.UPDATE_PROVIDER       ?: "https://update.lucee.org/rest/update/provider/";
+		application.extensionProviderUrl    = server.system.environment.EXTENSION_PROVIDER    ?: "https://extensions.lucee.org/rest/extension/provider/";
+		
+
+		if ( left( application.coreS3Root, 3 ) == "s3:"
+				&& ( len( this.s3.awsSecretKey ) == 0 || len( this.s3.accessKeyId ) == 0) ) {
+			var s3Error = "ERROR: S3 Credentials Required [ S3_EXTENSION_ACCESS_KEY_ID, S3_EXTENSION_SECRET_KEY ],"
+				& " for local testing set S3_CORE_ROOT [#application.coreS3Root#] to a directory";
+			systemOutput( s3Error, true );
+			return false;
+		} else {
+			// always delete local cache to start with a clean slate
+			var versionsCache ="services/legacy/cache/versions.json";
+			if ( fileExists( versionsCache ) ){
+				systemOutput("LOCAL_S3: purging version cache [#versionsCache#]", true);
+				fileDelete( versionsCache );
+			}
+		}
 
 		var extMetaReader = new services.ExtensionMetadataReader(
-			s3root = extS3Root
+			s3root = application.extensionsS3Root
 		);
 
 		var jiraChangelogService = new services.JiraChangelogService(
-			s3root = coreS3Root
+			s3root = application.coreS3Root
 		);
 
 		var bundleDownloadService = new services.BundleDownloadService(
-			  extensionsCdnUrl    = extCdnUrl
-			, bundleS3Root        = bundleS3Root
-			, bundleCdnUrl        = bundleCdnUrl
+			  extensionsCdnUrl    = application.extensionsCdnUrl
+			, bundleS3Root        = application.bundleS3Root
+			, bundleCdnUrl        = application.bundleCdnUrl
 			, extensionMetaReader = extMetaReader
 			, mavenMatcher        = new services.legacy.MavenMatcher()
 		);
@@ -90,13 +110,11 @@ component {
 		jiraChangelogService.updateIssuesAsync();
 		new services.legacy.MavenRepo().list();
 
-		application.coreS3Root            = coreS3Root;
-		application.coreCdnUrl            = coreCdnUrl;
-		application.extensionsCdnUrl      = extCdnUrl;
-		application.extensionsS3Root      = extS3Root;
 		application.extMetaReader         = extMetaReader;
 		application.bundleDownloadService = bundleDownloadService;
 		application.jiraChangelogService  = jiraChangelogService;
+
+		return true;
 	}
 
 }
