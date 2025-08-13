@@ -34,9 +34,6 @@ component accessors=true {
 					metaChanged = true;
 				} else if ( dateCompare( lexFile.dateLastModified, existingByFile[ lexFile.name ].updated ) > 0 ) {
 					// ext was file was modified
-					logger(lexFile.dateLastModified);
-					logger(existingByFile[ lexFile.name ].updated);
-
 					_addLexFile( lexFile, meta, true );
 					metaChanged = true;
 				}
