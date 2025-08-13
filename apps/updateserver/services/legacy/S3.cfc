@@ -8,12 +8,17 @@ component {
 ";
 	public function init(s3Root) {
 		variables.s3Root=arguments.s3Root;
+		if ( !structKeyExists( application, "s3VersionDetail" )) {
+			application.s3VersionDetail = {};
+		}
 	}
 
 	public void function reset() {
 		logger( "s3.reset()");
-		structDelete( application, "s3VersionData", false );
+		structDelete( application, "s3Versions", false );
+		structDelete( application, "s3VersionDetail", false );
 		structDelete( application, "expressTemplates", false );
+		getVersions(flush=true);
 	}
 
 	private function logger( string text, any exception, type="info" ){
@@ -43,14 +48,14 @@ component {
 		lock name="check-version-cache" timeout="2" throwOnTimeout="false" {
 			if (!directoryExists(cacheDir))
 				directoryCreate(cacheDir);
-			if ( isNull(application.s3VersionData) && fileExists( cacheDir & cacheFile ) ){
+			if ( isNull(application.s3Versions) && fileExists( cacheDir & cacheFile ) ){
 				systemOutput("s3List.versions load from cache");
-				application.s3VersionData = deserializeJSON( fileRead(cacheDir & cacheFile), false );
+				application.s3Versions = deserializeJSON( fileRead(cacheDir & cacheFile), false );
 			}
 		}
 
-		if ( !flush && !isNull(application.s3VersionData) )
-			return application.s3VersionData;
+		if ( !flush && !isNull(application.s3Versions) )
+			return application.s3Versions;
 
 		lock name="read-version-metadata" timeout="2" throwOnTimeout="false" {
 			setting requesttimeout="1000";
@@ -62,36 +67,44 @@ component {
 				var data = getLuceeVersionsListS3();
 				if ( len(data) gt 0 ) // only cache good data
 					fileWrite(cacheDir & cacheFile, serializeJSON(data, false) );
-				return application.s3VersionData = data;
+				return application.s3Versions = data;
 			} catch (e){
 				systemOutput("error directory listing versions on s3", true);
 				systemOutput(e, true);
-				if(isNull(application.s3VersionData))
-					return application.s3VersionData;
+				if(isNull(application.s3Versions))
+					return application.s3Versions;
 				throw "cannot read versions from s3 directory";
 			}
 			systemOutput("s3Versions.list [#runId#] FETCHED #numberFormat(getTickCount()-start)#ms, #qry.recordcount# files on s3 found",1,1);
 		}
-		if ( !structKeyExists( application, "s3VersionData" ) ){
+		if ( !structKeyExists( application, "s3Versions" ) ){
 			// lock timed out, still use cache if found
 			if ( fileExists( cacheDir & cacheFile ) ){
 				systemOutput("s3List.versions load from cache (after lock)", true);
 				var data = deserializeJSON( fileRead(cacheDir & cacheFile), false );
-				application.s3VersionData = data;
+				application.s3Versions = data;
 			} else {
 				throw "lock timeout readVersions() no cached found";
 			}
 		}
-		return application.s3VersionData;
+		return application.s3Versions;
 	}
 
 	// this simply gets one version from the versions list
-	// TODO cache this as well
-	public function getLuceeVersionsDetailS3( version ) {
-		if ( left( s3Root, 3 ) == "s3:" ) {
-			return luceeVersionsDetailS3( arguments.version );
+	public function getLuceeVersionsDetail( version ) {
+		if ( !structKeyExists( application, "s3VersionDetail" ) ) {
+			application[ "s3VersionDetail" ] = {};
+		} else if ( structKeyExists( application.s3VersionDetail, version ) ) {
+			return application.s3VersionDetail[ version ];
 		}
-		return getLocalVersionsDetail( arguments.version ); // this is still faster, as it's reading from the cache
+
+		var versionInfo = {};
+		if ( left( s3Root, 3 ) == "s3:" ) {
+			versionInfo = luceeVersionsDetailS3( arguments.version );
+		} else {
+			versionInfo = getLocalVersionsDetail( arguments.version ); // this is still faster, as it's reading from the local cache
+		}
+		return application.s3VersionDetail[ version ] = versionInfo;
 	}
 	
 	// fallback handling for local testing with Lucee jar files in the root directory
@@ -104,7 +117,10 @@ component {
 			var dir = getDirectoryFromPath(jarPath);
 			if (!directoryExists(dir))
 				directoryCreate(dir);
-			return getLocalVersionsDetail(version).jar;
+			var tmpJar = getLocalVersionsDetail(version).jar;
+			logger ("local_S3: copying jar [#tmpJar#] to [#jarPath#]");
+			fileCopy( tmpJar, jarPath );
+			reset();
 		}
 		return jarPath;
 	}
@@ -119,20 +135,16 @@ component {
 	/*
 		MARK: Add
 	*/
-
 	public function add(required string type, required string version) {
 		setting requesttimeout="10000000";
 
 		logger("-------- add:#type# --------");
-		try {
-			var data=LuceeVersionsDetailS3(version);
-		}
-		catch (ex) {}
-		logger(data);
+		var data = getLuceeVersionsDetail(version);
+		//logger(data);
 		var mr=new MavenRepo();
 
 		// move the jar from maven if necessary
-		if(isNull(data.jar)) {
+		if (isNull(data.jar)) {
 			maven2S3(mr,version);
 			logger("add: downloaded jar from maven:"&now());
 		}
@@ -140,11 +152,10 @@ component {
 		// create the artifact
 
 		try {
-			if( type != "jar" ){
+			if ( type != "jar" ){
 				logger("add: createArtifacts (#type#):"&now());
 				new ArtifactBuilder(s3Root).createArtifacts(mr,version,type,true);
-				logger("add: after creating artifact (#type#):"&now());
-				reset();
+				logger("add: artifact created (#type#):"&now());
 			}
 		} catch(e){
 			logger(exception=e.stacktrace);
@@ -154,7 +165,6 @@ component {
 	/*
 		MARK: Add Missing
 	*/
-
 	public function addMissing(includingForgeBox=false, skipMaven=false) {
 		setting requesttimeout="1000000";
 		systemOutput("start:"&now(),1,1);
@@ -200,7 +210,6 @@ component {
 	/*
 		MARK: Helpers
 	*/
-
 	private function maven2S3(mr,version) {
 		if(left(version,1)<5) return;
 		// ignore these versions
@@ -226,7 +235,11 @@ component {
 				return;
 			}
 			// copy jar from maven to S3
-			fileCopy(src,trg);
+			var dir = getDirectoryFromPath(trg);
+			if (!directoryExists(dir))
+				directoryCreate(dir);
+			if (!fileExists(trg))
+				fileCopy(src,trg);
 
 			logger("200:"&trg);
 		}
@@ -235,7 +248,7 @@ component {
 	/**
 	* checks if file exists on S3 and if so redirect to it, if not it copies it to S3 and the next one will have it there.
 	* So nobody has to wait that it is copied over
-    */
+	*/
 	private function fromS3(path,name,async=true) {
 		// if exist we redirect to it
 		if(!isNull(url.show))
@@ -290,7 +303,6 @@ component {
 		return versions;
 	}
 
-
 	private function getLocalVersionsDetail( version ){
 		var versions = getVersions();
 		var _version = arguments.version;
@@ -298,12 +310,11 @@ component {
 			return item.version	== _version;
 		});
 		//systemOutput(serializeJson(var=detail, compact=false), true);
+		if ( arrayLen(detail) eq 0 )
+			throw "Version [#arguments.version#] not found";
 		return detail[1];
 	}
 
-
-
-	
 	/* not used
 	private function sortVersions(data){
 		var keys=structKeyArray(data);

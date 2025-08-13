@@ -18,29 +18,33 @@ component {
 		var s3 = new services.legacy.S3(variables.s3Root);
 
 		var jarRem = s3.getJarPath(version);
-		var data = s3.getLuceeVersionsDetailS3(version);
+		var data = s3.getLuceeVersionsDetail(version);
+
+		var list = "";
+		if ( len( arguments.specType ) ) {
+			list = arguments.specType;
+			if (!isNull(data[arguments.specType])) return; // already built
+		} else {
+			list="lco,war,light,express";
+			if (includingForgeBox) list&=",forgebox,forgebox-light";
+		}
 
 		try {
 			lock name="build-lucee-artifacts-#version#" timeout="1" {
 				try {
-					// check and if necessary create other artifacts
-					var list="lco,war,light,express";
-					if(includingForgeBox)list&=",forgebox,forgebox-light";
 
-					logger("create #specType# Artifacts(#list#) Starting ( #version# )");
+					logger("create Artifacts (#list#) starting ( #version# )");
 					var c= 0;
 					var batchStart = getTickCount();
 
 					loop list=list item="local.type" {
-						if ( len( specType ) && specType!=type ) continue;
-						if (!isNull(data[type])) continue;
+						if (!isNull(data[type])) continue; // already built
 						logger("create: " & type);
 						c++;
 						var s = getTickCount();
 						// first we need a local copy of the jar
 						var lcl=getTempDirectory() & "/lucee-"&arguments.version&".jar";
 						try {
-
 							if(!fileExists(lcl)) fileCopy(jarRem,lcl);
 						}
 						catch(e) {
@@ -48,8 +52,8 @@ component {
 							continue;
 						}
 
-						// extract lco and copy to S3
-						if(type=="lco") {
+						// build artifact and copy to S3
+						if (type=="lco") {
 							var result=createLCO(lcl,arguments.version);
 							logger("lco: " & result & " took " & numberFormat(getTickCount()-s) & "ms");
 						}
@@ -62,17 +66,19 @@ component {
 							var result=createForgeBox(lcl,arguments.version,true);
 							logger("forgebox-light: " & result & " took " & numberFormat(getTickCount()-s) & "ms");
 						}
-						// create war and copy to S3
 						else if(type=="war") {
 							lock name="build-lucee-war" timeout="10" {
 								var result=createWar(lcl,arguments.version);
 							}
 							logger("war: " & result & " took " & numberFormat(getTickCount()-s) & "ms");
 						}
-						// create war and copy to S3
 						else if(type=="light") {
 							var result=createLight(lcl,arguments.version);
 							logger("light: " & result & " took " & numberFormat(getTickCount()-s) & "ms");
+						}
+						else if (type=="zero") {
+							var result=createLight(jar=lcl,version=arguments.version, noArchives=true);
+							logger("zero: " & result & " took " & numberFormat(getTickCount()-s) & "ms");
 						}
 						else if(type=="express") {
 							lock name="build-lucee-express" timeout="10" {
@@ -81,7 +87,7 @@ component {
 							logger("express: " & result & " took " & numberFormat(getTickCount()-s) & "ms");
 						}
 						else {
-							logger("unsupported: " & type &":"&arguments.version);
+							logger(text="ERROR unsupported artifact type: [" & type &"] " & arguments.version, type="ERROR" );
 							c--;
 						}
 					}
@@ -183,16 +189,19 @@ component {
 
 	/*
 		MARK: Create LIGHT
+		@param boolean noArchives aka zero
 	*/
 
-	private function createLight(jar, version, boolean toS3=true, tempDir) {
+	private function createLight(jar, version, boolean toS3=true, tempDir, boolean noArchives=false) {
 		var sep=server.separator.file;
-		var trg=variables.s3Root & "/org/lucee/lucee/#version#/lucee-#version#-light.jar";
+		var suffix = arguments.noArchives ? "zero" : "light";
+		
+		var trg=variables.s3Root & "/org/lucee/lucee/#version#/lucee-#version#-#suffix#.jar";
 		if ( fileExists( trg ) ) {
 			// avoid double handling for forgebox light builds
 			logger("--- " & trg & " already built, skipping" );
 			if ( len( arguments.tempDir ) ) {
-				var tempLight = getTempFile( arguments.tempDir, "lucee-light-" & version, "jar");
+				var tempLight = getTempFile( arguments.tempDir, "lucee-#suffix#-" & version, "jar");
 				fileCopy( trg, tempLight); // create a local temp file from s3
 				return tempLight;
 			} else {
@@ -223,6 +232,15 @@ component {
 			local.tmpCore=temp & "lucee-core-" & createUniqueId(); // the jar
 			directoryCreate(tmpCore);
 			zip action="unzip" file=lcoFile destination=tmpCore;
+
+			if ( arguments.noArchives ) {
+				// delete the lucee-admin.lar and lucee-docs.lar, i.e. lucee zero
+				var lightContext = tmpCore & sep & "resource/context" & sep;
+				loop list="lucee-admin.lar,lucee-doc.lar" item="local.larFile" {
+					fileDelete( lightContext & larFile );
+				}
+			}
+
 			// rewrite manifest
 			var manifest=tmpCore & sep & "META-INF" & sep&"MANIFEST.MF";
 			var content=fileRead(manifest);
@@ -238,7 +256,14 @@ component {
 			zip action="zip" source=tmpLoader file=tmpLoaderFile;
 
 			//if(fileExists(light)) fileDelete(light);
-			if (toS3) fileMove(tmpLoaderFile,trg);
+			if ( arguments.toS3 ) {
+				fileMove( tmpLoaderFile, trg );
+			} else if ( len( arguments.tempDir ) ) {
+				// forgebox light build needs a local copy, finally delete that working directory
+				var tempLight = getTempFile( arguments.tempDir, "lucee-#suffix#-" & version, "jar");
+				fileMove( tmpLoaderFile, tempLight);
+				tmpLoaderFile = tempLight;
+			}
 		}
 		catch( e ){
 			logger(text=e.message, type="error", exception=e);
@@ -246,7 +271,7 @@ component {
 		finally {
 			if (!isNull(temp) && directoryExists(temp)) directoryDelete(temp,true);
 		}
-		return toS3?trg:tmpLoaderFile;
+		return arguments.toS3 ? trg : tmpLoaderFile;
 	}
 
 	/*
@@ -346,11 +371,15 @@ component {
 
 			// create the war
 			var war=temp & "/engine.war";
-			if ( light ) local.lightJar=createLight(jar, version, false, temp);
+			if ( arguments.light ) {
+				local.lightJar = createLight(jar, version, false, temp);
+				if ( !fileExists( local.lightJar ) )
+					throw "ERROR: forgebox light, createLight didn't produce a jar [#local.lightJar#]";
+			}
 
 			zip action="zip" file=war overwrite=true {
 				zipparam source=extDir filter="*.lex" prefix="WEB-INF/lucee-server/context/deploy";
-				zipparam source=( light ? lightJar: jar) entrypath="WEB-INF/lib/lucee#( light ? '-light' : '' )#.jar";
+				zipparam source=( light ? lightJar: jar) entrypath="WEB-INF/lib/lucee#( arguments.light ? '-light' : '' )#.jar";
 				zipparam source=commonDir;
 				zipparam source=warDir;
 			}
