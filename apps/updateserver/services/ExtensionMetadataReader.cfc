@@ -1,5 +1,9 @@
 component accessors=true {
 
+	static {
+		static.DEBUG = (server.system.environment.DEBUG ?: false);
+	}
+
 	property name="s3root"                type="string" default="";
 	property name="extensionMeta"         type="query";
 	property name="extensionVersions"     type="struct";
@@ -13,6 +17,7 @@ component accessors=true {
 
 	function loadMeta( srcMeta="" ) {
 		lock type="exclusive" name="readExtMeta" timeout=0 {
+			logger( "Loading Extension metadata" );
 			var meta           = len( arguments.srcMeta ) ? arguments.srcMeta : _readExistingMetaFileFromS3();
 			var existingByFile = _mapExtensionQueryByFilename( meta );
 			var lexFiles       = _listLexFilesFromBucket();
@@ -21,7 +26,18 @@ component accessors=true {
 			for( var lexFile in lexFiles ) {
 				var isNewToUs = !StructKeyExists( existingByFile, lexFile.name )
 				if ( isNewToUs ) {
-					_addLexFile( lexFile.name, meta );
+					_addLexFile( lexFile, meta, false );
+					metaChanged = true;
+				} else if ( len( existingByFile[ lexFile.name ].updated ) == 0 ) {
+					// tmp workaround, need to add metadata
+					_updateCreatedDate( meta, lexFile );
+					metaChanged = true;
+				} else if ( dateCompare( lexFile.dateLastModified, existingByFile[ lexFile.name ].updated ) > 0 ) {
+					// ext was file was modified
+					logger(lexFile.dateLastModified);
+					logger(existingByFile[ lexFile.name ].updated);
+
+					_addLexFile( lexFile, meta, true );
 					metaChanged = true;
 				}
 			}
@@ -168,7 +184,12 @@ component accessors=true {
 	private function _readExistingMetaFileFromS3() {
 		var metaFile = getS3Root() & "/extensions.json";
 		if ( FileExists( metaFile  ) ) {
-			return DeserializeJson( FileRead( metaFile ), false );
+			var meta = DeserializeJson( FileRead( metaFile ), false );
+			// tmp workaround, need to add metadata
+			if ( ! QueryColumnExists( meta, "updated" ) ) {
+				QueryAddColumn( meta, "updated", "date" ); 
+			}
+			return meta;
 		}
 
 		return _getEmptyExtensionsQuery();
@@ -181,7 +202,7 @@ component accessors=true {
 	}
 
 	private function _getEmptyExtensionsQuery() {
-		return QueryNew( "id,version,versionSortable,name,description,filename,image,category,author,created,releaseType,"
+		return QueryNew( "id,version,versionSortable,name,description,filename,image,category,author,created,updated,releaseType,"
 			& "minLoaderVersion,minCoreVersion,price,currency,disableFull,trial,older,olderName,"
 			& "olderDate,promotionLevel,promotionText,projectUrl,sourceUrl,documentionUrl" );
 	}
@@ -196,21 +217,32 @@ component accessors=true {
 		return mapped;
 	}
 
-	private function _addLexFile( fileName, extensionMetaQuery ) {
-		SystemOutput( "Loading new extension file [#arguments.fileName#] from S3.", true );
+	private function _addLexFile( lexFile, extensionMetaQuery, boolean update=false ) {
+		logger( "Loading new extension file [#arguments.lexFile.name#] from S3, update=#arguments.update#." );
 
 		try {
-			var tmpFile  = _copyRemoteFileToTmpFile( arguments.fileName );
+			var tmpFile  = _copyRemoteFileToTmpFile( arguments.lexFile.name );
 			var qryCols  = ListToArray( arguments.extensionMetaQuery.columnList );
 			var extMeta  = _initExtensionMetaFromManifest( tmpFile, qryCols );
 
-			extMeta.filename        = arguments.fileName;
+			extMeta.filename        = arguments.lexFile.name;
 			extMeta.versionSortable = Len( extMeta.version ) ? VersionUtils::sortableVersionString( extMeta.version ) : "";
 			extMeta.trial           = false; // "TODO"???
 			extMeta.releaseType     = Len( extMeta.releaseType ) ? extMeta.releaseType : "all";
 			extMeta.image           = _getLogoThumbnail( tmpFile );
+			extMeta.updated         = arguments.lexFile.dateLastModified;
 
-			QueryAddRow( arguments.extensionMetaQuery, extMeta );
+			if ( arguments.update ){
+				var existingRow = _getRowNumberByFilename( arguments.extensionMetaQuery, arguments.lexFile.name );
+				if ( existingRow ){
+					logger( "Updated lex file metadata [#arguments.lexfile.name#]");
+					QuerySetRow( arguments.extensionMetaQuery, existingRow, extMeta );
+				} else {
+					logger( "Error updating lex file [#arguments.lexfile.name#], could not find in existing query ", type="error");
+				}
+			} else {
+				QueryAddRow( arguments.extensionMetaQuery, extMeta );
+			}
 
 			_processExtensionJars( tmpFile );
 
@@ -221,14 +253,16 @@ component accessors=true {
 			}
 		} catch( any e ) {
 			// for now, just to get through them all!
-			SystemOutput( "Error processing lex file: [#arguments.fileName#]", true );
+			logger( text="Error processing lex file: [#arguments.lexFile.name#]",exception=e );
 		}
 	}
 
 	private function _readLexManifest( filePath ) {
 		try {
 			var mf = ManifestRead( arguments.filePath );
-		} catch( any e ) {}
+		} catch( any e ) {
+			logger( text="Error reading manifest [#arguments.filePath#]",exception=e );
+		}
 
 		return mf.main ?: {};
 	}
@@ -401,7 +435,7 @@ component accessors=true {
 			}
 			if ( !found ) {
 				changed = true;
-				SystemOutput( "Deleting [#arguments.cachedExts.filename[ i ]#] extension from cached query as it no longer exists in our lex file lookup.", true );
+				logger( "Deleting [#arguments.cachedExts.filename[ i ]#] extension from cached query as it no longer exists in our lex file lookup.");
 				QueryDeleteRow( arguments.cachedExts, i );
 			}
 		}
@@ -429,4 +463,36 @@ component accessors=true {
 		}
 		throw "No extension version available for [#arguments.coreVersion#]";
 	};
+
+	private function _updateCreatedDate( extensionMetaQuery, lexFile) {
+		var existingRow = _getRowNumberByFilename( arguments.extensionMetaQuery, arguments.lexFile.name );
+		if (existingRow > 0) {
+			QuerySetCell( arguments.extensionMetaQuery, "updated", arguments.lexFile.dateLastModified, existingRow );
+		}
+	}
+
+	private function _getRowNumberByFilename( extensionMetaQuery, filename ){
+		for( var i=1; i <= arguments.extensionMetaQuery.recordcount; i++ ) {
+			if ( arguments.extensionMetaQuery.filename[ i ] == arguments.filename ) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	private function logger( string text, any exception, type="info" ){
+		//var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
+		if ( !isNull(arguments.exception ) ){
+			
+			if (static.DEBUG) {
+				if (len(arguments.text)) systemOutput( arguments.text, true, true );
+				systemOutput( arguments.exception, true, true );
+			} else {
+				writeLog( text=arguments.text, type=arguments.type, log="exception", exception=arguments.exception );
+			}
+		} else {
+			if (static.DEBUG) systemOutput( arguments.text, true, true );
+			else writeLog( text=arguments.text, type=arguments.type, log=variables.providerLog );
+		}
+	}
 }
