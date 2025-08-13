@@ -81,10 +81,7 @@ component {
 				return application.s3Versions = data;
 			} catch (e){
 				systemOutput("error directory listing versions on s3", true);
-				systemOutput(e, true);
-				if(isNull(application.s3Versions))
-					return application.s3Versions;
-				throw "cannot read versions from s3 directory";
+				throw(message="cannot read versions from s3 directory", cause=e);
 			}
 			systemOutput("s3Versions.list [#runId#] FETCHED #numberFormat(getTickCount()-start)#ms, #qry.recordcount# files on s3 found",1,1);
 		}

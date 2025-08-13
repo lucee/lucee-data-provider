@@ -9,6 +9,8 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		variables.artifacts = servicesDir & "/legacy/build/servers/";
 		if ( !DirectoryExists( variables.artifacts ))
 			directoryCreate( variables.artifacts );
+
+		application.downloadsUrl = "http://127.0.0.1:8888";
 	}
 
 	function run( testResults , testBox ) {
