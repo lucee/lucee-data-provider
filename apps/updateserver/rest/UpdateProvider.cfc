@@ -259,6 +259,38 @@ component {
 		artifactDownloader( "forgebox-light", version );
 	}
 
+	/*
+		MARK: /localDevRepo
+		only for local development when not using a s3 bucket
+	*/
+	remote function downloadLocalDevRepo(
+			required string mavenPath restargsource="url"
+		)
+		httpmethod="GET,HEAD" restpath="localDevRepo/" {
+
+		if ( left( application.coreS3Root, 3 ) == "s3:" || mavenPath contains ".."){
+			header statuscode=403;
+			echo("access denied");
+			return;
+		}
+		var localMavenPath = application.coreS3Root & arguments.mavenPath;
+		if ( expandPath( application.coreS3Root & arguments.mavenPath) neq localMavenPath ){
+			logger("bad localMavenPath: #localMavenPath#");
+			header statuscode=403;
+			echo("access denied");
+			return;
+		}
+		if ( fileExists( localMavenPath ) ) {
+			header name="Content-disposition" value="attachment;filename=#listlast(localMavenPath,'\/')#";
+			content file="#localMavenPath#" type="application/octet-stream";
+		} else {
+			logger("localMavenPath not found: #localMavenPath#");
+			header statuscode=404;
+			echo("file not found");
+			return;
+		}
+	}
+
 	/**
 	 * MARK: /echo
 	 * echo functions are used by the lucee test suite
@@ -548,6 +580,10 @@ component {
 		var ignores=["6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT","6.0.1.82","7.0.0.202"];
 		var s3 = new services.legacy.S3(variables.s3Root);
 		var versions=s3.getVersions( flush );
+
+		// when working locally, route cdn requests thru /localDevRepo
+		var localMaven = (left( application.coreS3Root, 3 ) != "s3:");
+
 		loop array=versions index="local.el" {
 			try {
 				if(arrayContainsNoCase(ignores,el.version)) continue;
@@ -560,6 +596,8 @@ component {
 						});
 				}
 				else {
+					if (localMaven) el = rewriteLocalMaven(el);
+
 					rtn[local.sct.sortable]={
 						"version": sct.display,
 						"lastModified": el.lastModified?:"",
@@ -582,6 +620,8 @@ component {
 		}
 		return rtn;
 	}
+
+
 
 	remote function getDate(required string version restargsource="Path")
 		httpmethod="GET" restpath="getdate/{version}" {
@@ -694,11 +734,17 @@ component {
 	private function artifactDownloader(type,version) {
 		var _url=createArtifactIfNecessary( type, version );
 		header statuscode="302" statustext="Found";
-		if (!structKeyExists(local,"_url")) {
+		if (structKeyExists(local,"_url")) {
+			header name="Content-disposition" value="attachment;filename=#listlast(local._url,'\/')#";
+			if (left( application.coreS3Root, 3 ) == "s3:"){
+				header name="Location" value=local._url;
+			} else {
+				// route thru /localDevRepo
+				header name="Location" value=rewriteLocalMaven({_url})._url;
+			}
+		} else {
+			// is this reachable, need to handle local dev repo? src is obviously wrong
 			header name="Location" value="#LUCEE_MAVEN_CDN#/#arguments.version#/lucee-#arguments.version#.war";
-		}
-		else {
-			header name="Location" value=local._url;
 		}
 	}
 
@@ -714,7 +760,7 @@ component {
 		logger("createArtifactIfNecessary(#type#,#version#) ---");
 
 		// in case we have a link for it, no action is needed
-		if(!isNull(data[arguments.type])) {
+		if (!isNull(data[arguments.type])) {
 			logger("--- found a match: "&data[arguments.type]);
 			return data[arguments.type];
 		}
@@ -747,19 +793,10 @@ component {
 	}
 
 	private function createArtifactURL(type,version) {
-		return "#getBaseURL()##arguments.type#/#arguments.version#"; // TODO this is problematic on the internal docker during testings
+		return "#getBaseURL()##arguments.type#/#arguments.version#"; 
 	}
 	private function getBaseURL() {
-		if(!structKeyExists(variables,"baseURL")) {
-			var raw=getMetaData(this);
-			var tmp=cgi.request_url; // running locally it's http://update:8888/rest
-			var index=findNoCase("/rest/",tmp);
-			tmp=left(tmp,index+4); // was 6, but the url was wrong!!!
-			tmp&=raw.restPath;
-			if(right(tmp,1)!="/") tmp&="/";
-			variables.baseURL=tmp;
-		}
-		return variables.baseURL;
+		return application.updateProviderUrl;
 	}
 
 	private function getChangeLogs(struct version, struct latestVersion) {
@@ -784,6 +821,20 @@ component {
 			local.notes="";
 		}
 		return local.notes;
+	}
+
+	private function rewriteLocalMaven( src ){
+		var st = [=];
+		var l = len ( application.coreS3Root ) + 1;
+		var baseUrl = getBaseURL();
+		loop collection=#src# key="local.k" value="local.v" {
+			if ( left( v, 1 ) eq "/" ){
+				st[k] = baseUrl & "localDevRepo?mavenPath=#mid(v,l)#";
+			} else {
+				st[k] = v;
+			}
+		}
+		return st;
 	}
 
 }

@@ -11,6 +11,9 @@ component {
 		if ( !structKeyExists( application, "s3VersionDetail" )) {
 			application.s3VersionDetail = {};
 		}
+		if ( !structKeyExists( application, "s3Versions" )) {
+			application.s3Versions = {};
+		}
 	}
 
 	public void function reset() {
@@ -54,7 +57,7 @@ component {
 			}
 		}
 
-		if ( !flush && !isNull(application.s3Versions) )
+		if ( !flush && !isEmpty(application.s3Versions) )
 			return application.s3Versions;
 
 		lock name="read-version-metadata" timeout="2" throwOnTimeout="false" {
@@ -65,8 +68,16 @@ component {
 			try {
 				systemOutput("s3Versions.list [#runId#] START #numberFormat(getTickCount()-start)#ms",1,1);
 				var data = getLuceeVersionsListS3();
-				if ( len(data) gt 0 ) // only cache good data
+				if ( len(data) gt 0 ){ // only cache good data
 					fileWrite(cacheDir & cacheFile, serializeJSON(data, false) );
+					if ( serializeJson( application.s3Versions ) neq SerializeJson( data ) ){
+						// only ping on change
+						application.s3Versions = data;
+						var downloadRefeshUrl = "#application.downloadsUrl#?type=snapshots&reset=force";
+						logger("Versions updated, pinging [#downloadRefeshUrl#]");
+						cfhttp(url=downloadRefeshUrl);
+					}
+				}
 				return application.s3Versions = data;
 			} catch (e){
 				systemOutput("error directory listing versions on s3", true);

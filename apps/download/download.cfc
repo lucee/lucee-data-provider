@@ -1,10 +1,12 @@
 component {
 
-	// set EXTENSION_PROVIDER=http://update:8888/rest/extension/provider in .env for local testing
-	variables.EXTENSION_PROVIDER = server.system.environment.EXTENSION_PROVIDER ?: "https://extension.lucee.org/rest/extension/provider";
+	// provider urls are to communicate between the docker instances, so they need different urls
+
+	// set EXTENSION_PROVIDER_INT=http://update:8888/rest/extension/provider in .env for local testing
+	variables.EXTENSION_PROVIDER = server.system.environment.EXTENSION_PROVIDER_INT ?: "https://extension.lucee.org/rest/extension/provider";
 	
-	// set DOWNLOAD_UPDATE_PROVIDER=http://update:8888/rest/update/provider in .env for local testing
-	variables.UPDATE_PROVIDER = server.system.environment.UPDATE_PROVIDER ?: "https://update.lucee.org/rest/update/provider";
+	// set DOWNLOAD_UPDATE_PROVIDER_INT=http://update:8888/rest/update/provider in .env for local testing
+	variables.UPDATE_PROVIDER = server.system.environment.UPDATE_PROVIDER_INT ?: "https://update.lucee.org/rest/update/provider";
 
 	function getExtensions(flush=false) localmode=true {
 		var extUrl = EXTENSION_PROVIDER &"/info?withLogo=true&type=all";

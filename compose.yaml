@@ -28,8 +28,10 @@ services:
       - 8888:8888
     environment:
       - VIRTUAL_HOST=download.lucee.local
-      - UPDATE_PROVIDER=${UPDATE_PROVIDER} # defaults to prod, set UPDATE_PROVIDER=http://update:8888/rest/update in .env for local testing
-      - EXTENSION_PROVIDER=${EXTENSION_PROVIDER} # defaults to prod, set EXTENSION_PROVIDER=http://update:8888/rest/extension in .env for local testing
+      - UPDATE_PROVIDER=${UPDATE_PROVIDER}                # defaults to prod, set UPDATE_PROVIDER=http://127.0.0.1:8889/rest/update/ in .env for local testing
+      - UPDATE_PROVIDER_INT=${UPDATE_PROVIDER_INT}        # defaults to prod, set UPDATE_PROVIDER_INT=http://update:8888/rest/update/ in .env for local testing (docker)
+      - EXTENSION_PROVIDER=${EXTENSION_PROVIDER}          # defaults to prod, set EXTENSION_PROVIDER=http://127.0.0.1:8889/rest/extension/ in .env for local testing
+      - EXTENSION_PROVIDER_INT=${EXTENSION_PROVIDER_INT}  # defaults to prod, set EXTENSION_PROVIDER_INT=http://update:8888/rest/extension/ in .env for local testing (docker)
       - SENTRY_ENV=${SENTRY_ENV:-""}
       - SENTRY_DSN=${SENTRY_DSN:-""}
       - DEBUG=${DEBUG:-"false"}
@@ -52,6 +54,9 @@ services:
       - S3_CORE_ROOT=${S3_CORE_ROOT} 
       - S3_EXTENSIONS_ROOT=${S3_EXTENSIONS_ROOT}
       - S3_BUNDLES_ROOT=${S3_BUNDLES_ROOT}
+      - DOWNLOADS_URL=${DOWNLOADS_URL}
+      - UPDATE_PROVIDER=${UPDATE_PROVIDER} # defaults to prod, set UPDATE_PROVIDER=http://update:8888/rest/update in .env for local testing
+      - EXTENSION_PROVIDER=${EXTENSION_PROVIDER} # defaults to prod, set EXTENSION_PROVIDER=http://update:8888/rest/extension in .env for local testing
       - SENTRY_ENV=${SENTRY_ENV:-""}
       - SENTRY_DSN=${SENTRY_DSN:-""}
       - ALLOW_RELOAD=${ALLOW_RELOAD:-"true"}

@@ -42,7 +42,7 @@
 	lang.installer['linux-x64']="Linux (x64)";
 	lang.installer['linux-aarch64']="Linux (aarch64)";
 
-	cdnURL="https://cdn.lucee.org/";
+	cdnURL="https://cdn.lucee.org/"; // now comes from the provider
 	cdnURLExt="https://ext.lucee.org/";
 	MAX=1000;
 
@@ -157,7 +157,7 @@
 									<div class="fontStyle">
 									<cfif structKeyExists(dw,"express")>
 										<cfif doS3.express>
-											<cfset uri="#cdnURL##dw.express#">
+											<cfset uri="#dw.express#">
 										<cfelse>
 											<cfset uri="#baseURL#express/#dw.version#">
 										</cfif>
@@ -172,7 +172,7 @@
 									<cfset str="">
 									<cfloop list="win64,linux-x64,linux-aarch64" item="kk">
 										<cfif !structKeyExists(dw,kk)><cfcontinue></cfif>
-										<cfset uri="#cdnURL##dw[kk]#">
+										<cfset uri="#dw[kk]#">
 										<cfset str&='<li><a href="#uri#">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
 										<span class="glyphicon glyphicon-info-sign"></span>
 									</span></li>'>
@@ -182,7 +182,7 @@
 									<!--- jar --->
 									<cfif structKeyExists(dw,"jar")>
 										<cfif doS3.jar>
-											<cfset uri="#cdnURL##dw.jar#">
+											<cfset uri="#dw.jar#">
 										<cfelse>
 											<cfset uri="#baseURL#loader/#dw.version#">
 										</cfif>
@@ -194,7 +194,7 @@
 									</cfif>
 									<cfif structKeyExists(dw,"light")>
 										<cfif doS3.light>
-											<cfset uri="#cdnURL##dw.light#">
+											<cfset uri="#dw.light#">
 										<cfelse>
 											<cfset uri="#baseURL#light/#dw.version#">
 										</cfif>
@@ -205,7 +205,7 @@
 									 </cfif>
 									 <cfif structKeyExists(dw,"zero")>
 										<cfif doS3.zero>
-										   <cfset uri="#cdnURL##dw.zero#">
+										   <cfset uri="#dw.zero#">
 										<cfelse>
 										   <cfset uri="#baseURL#zero/#dw.version#">
 										</cfif>
@@ -218,7 +218,7 @@
 									 <!--- core --->
 									 <cfif structKeyExists(dw,"lco")>
 										<cfif doS3.lco>
-											<cfset uri="#cdnURL##dw.lco#">
+											<cfset uri="#dw.lco#">
 										<cfelse>
 											<cfset uri="#baseURL#core/#dw.version#">
 										</cfif>
@@ -231,7 +231,7 @@
 									 <!--- WAR --->
 									 <cfif structKeyExists(dw,"war")>
 										<cfif doS3.war>
-											<cfset uri="#cdnURL##dw.war#">
+											<cfset uri="#dw.war#">
 										<cfelse>
 											<cfset uri="#baseURL#war/#dw.version#">
 										</cfif>
@@ -359,7 +359,7 @@
 									<cfif structKeyExists(dw,"express")>
 										<div class="row_odd divHeight">
 											<cfif doS3.express>
-												<cfset uri="#cdnURL##dw.express#">
+												<cfset uri="#dw.express#">
 											<cfelse>
 												<cfset uri="#baseURL#express/#dw.version#">
 											</cfif>
@@ -378,7 +378,7 @@
 										<cfloop list="win64,linux-x64,linux-aarch64" item="kk">
 											<cfif !structKeyExists(dw,kk)><cfcontinue></cfif>
 												<cfset count++>
-												<cfset uri="#cdnURL##dw[kk]#">
+												<cfset uri="#dw[kk]#">
 												<cfif count GT 1>
 													<cfset str&='<br>'>
 												</cfif>
@@ -401,7 +401,7 @@
 									<div class="row_odd jarDiv">
 										<cfif structKeyExists(dw,"jar")>
 											<cfif doS3.jar>
-												<cfset uri="#cdnURL##dw.jar#">
+												<cfset uri="#dw.jar#">
 											<cfelse>
 												<cfset uri="#baseURL#loader/#dw.version#">
 											</cfif>
@@ -414,7 +414,7 @@
 										</cfif>
 										<cfif structKeyExists(dw,"light")>
 											<cfif doS3.light>
-												<cfset uri="#cdnURL##dw.light#">
+												<cfset uri="#dw.light#">
 											<cfelse>
 												<cfset uri="#baseURL#light/#dw.version#">
 											</cfif>
@@ -427,7 +427,7 @@
 										</cfif>
 										<cfif structKeyExists(dw,"zero")>
 											<cfif doS3.zero>
-												<cfset uri="#cdnURL##dw.zero#">
+												<cfset uri="#dw.zero#">
 											<cfelse>
 												<cfset uri="#baseURL#zero/#dw.version#">
 											</cfif>
@@ -443,7 +443,7 @@
 									<cfif structKeyExists(dw,"lco")>
 										<div class="row_even divHeight">
 											<cfif doS3.lco>
-												<cfset uri="#cdnURL##dw.lco#">
+												<cfset uri="#dw.lco#">
 											<cfelse>
 												<cfset uri="#baseURL#core/#dw.version#">
 											</cfif>
@@ -458,7 +458,7 @@
 									<cfif structKeyExists(dw,"war")>
 										<div class="row_odd divHeight">
 											<cfif doS3.war>
-												<cfset uri="#cdnURL##dw.war#">
+												<cfset uri="#dw.war#">
 											<cfelse>
 												<cfset uri="#baseURL#war/#dw.version#">
 											</cfif>
