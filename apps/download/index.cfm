@@ -161,7 +161,7 @@
 										<cfelse>
 											<cfset uri="#baseURL#express/#dw.version#">
 										</cfif>
-										<li><a href="#uri#">Express</a>
+										<li><a href="#uri#" rel="nofollow">Express</a>
 											<span  class="triggerIcon pointer" style="color :##01798A" title="#lang.express#">
 												<span class="glyphicon glyphicon-info-sign"></span>
 											</span>
@@ -173,7 +173,7 @@
 									<cfloop list="win64,linux-x64,linux-aarch64" item="kk">
 										<cfif !structKeyExists(dw,kk)><cfcontinue></cfif>
 										<cfset uri="#dw[kk]#">
-										<cfset str&='<li><a href="#uri#">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
+										<cfset str&='<li><a href="#uri#" rel="nofollow">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
 										<span class="glyphicon glyphicon-info-sign"></span>
 									</span></li>'>
 									</cfloop>
@@ -187,7 +187,7 @@
 											<cfset uri="#baseURL#loader/#dw.version#">
 										</cfif>
 
-										<li><a href="#(uri)#">lucee.jar</a>
+										<li><a href="#uri#" rel="nofollow">lucee.jar</a>
 											<span  class="triggerIcon pointer" style="color :##01798A" title="#lang.jar#">
 												<span class="glyphicon glyphicon-info-sign"></span></li>
 											</span>
@@ -199,7 +199,7 @@
 											<cfset uri="#baseURL#light/#dw.version#">
 										</cfif>
 
-										<li><a href="#(uri)#">lucee-light.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled, "Lucee light"'>
+										<li><a href="#uri#" rel="nofollow">lucee-light.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled, "Lucee light"'>
 										   <span class="glyphicon glyphicon-info-sign"></span>
 										</span></li>
 									 </cfif>
@@ -210,7 +210,7 @@
 										   <cfset uri="#baseURL#zero/#dw.version#">
 										</cfif>
 
-										<li><a href="#(uri)#">lucee-zero.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled or doc and admin bundles, "Lucee zero"'>
+										<li><a href="#uri#" rel="nofollow">lucee-zero.jar</a><span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled or doc and admin bundles, "Lucee zero"'>
 										   <span class="glyphicon glyphicon-info-sign"></span>
 										</span></li>
 									 </cfif>
@@ -223,7 +223,7 @@
 											<cfset uri="#baseURL#core/#dw.version#">
 										</cfif>
 
-										<li><a href="#(uri)#" >Core</a>
+										<li><a href="#uri#" rel="nofollow">Core</a>
 											<span class="triggerIcon pointer" style="color :##01798A" title='#lang.core#'>
 												<span class="glyphicon glyphicon-info-sign"></span>
 											</span></li>
@@ -237,7 +237,7 @@
 										</cfif>
 
 										<li>
-											<a href="#(uri)#" title="#lang.war#">WAR</a>
+											<a href="#uri#" title="#lang.war#" rel="nofollow">WAR</a>
 											<span class="triggerIcon pointer" style="color :##01798A" title="#lang.war#">
 												<span class="glyphicon glyphicon-info-sign"></span>
 											</span>
@@ -364,7 +364,7 @@
 												<cfset uri="#baseURL#express/#dw.version#">
 											</cfif>
 											<div class="fontStyle">
-												<a href="#uri#">Express</a>
+												<a href="#uri#" rel="nofollow">Express</a>
 													<span  class="triggerIcon pointer" style="color :##01798A" title="#lang.express#">
 													<span class="glyphicon glyphicon-info-sign"></span>
 												</span>
@@ -382,7 +382,8 @@
 												<cfif count GT 1>
 													<cfset str&='<br>'>
 												</cfif>
-												<cfset str&='<a href="#uri#">#lang.installer[kk]# Installer</a> <span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
+												<cfset str&='<a href="#uri#" rel="nofollow">#lang.installer[kk]# Installer</a> ' 
+													&'<span  class="triggerIcon pointer" style="color :##01798A" title="#lang.installer[kk]# Installer">
 											<span class="glyphicon glyphicon-info-sign"></span>
 										</span>'>
 										</cfloop>
@@ -406,7 +407,7 @@
 												<cfset uri="#baseURL#loader/#dw.version#">
 											</cfif>
 
-											<div class="fontStyle"><a href="#(uri)#">lucee.jar</a>
+											<div class="fontStyle"><a href="#uri#" rel="nofollow">lucee.jar</a>
 												<span  class="triggerIcon pointer" style="color :##01798A" title="#lang.jar#">
 													<span class="glyphicon glyphicon-info-sign"></span>
 												</span>
@@ -419,7 +420,7 @@
 												<cfset uri="#baseURL#light/#dw.version#">
 											</cfif>
 
-											<div class="fontStyle"><a href="#(uri)#">lucee-light.jar</a>
+											<div class="fontStyle"><a href="#uri#" rel="nofollow">lucee-light.jar</a>
 												<span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled, "Lucee light"'>
 													<span class="glyphicon glyphicon-info-sign"></span>
 												</span>
@@ -432,7 +433,7 @@
 												<cfset uri="#baseURL#zero/#dw.version#">
 											</cfif>
 
-											<div class="fontStyle"><a href="#(uri)#">lucee-zero.jar</a>
+											<div class="fontStyle"><a href="#uri#" rel="nofollow">lucee-zero.jar</a>
 												<span  class="triggerIcon pointer" style="color :##01798A" title='Lucee Jar file without any Extensions bundled or doc and admin bundles, "Lucee zero"'>
 													<span class="glyphicon glyphicon-info-sign"></span>
 												</span>
@@ -447,7 +448,7 @@
 											<cfelse>
 												<cfset uri="#baseURL#core/#dw.version#">
 											</cfif>
-											<div class="fontStyle"><a href="#(uri)#" >Core</a>
+											<div class="fontStyle"><a href="#uri#" rel="nofollow">Core</a>
 												<span class="triggerIcon pointer" style="color :##01798A" title='#lang.core#'>
 													<span class="glyphicon glyphicon-info-sign"></span>
 												</span>
@@ -463,7 +464,7 @@
 												<cfset uri="#baseURL#war/#dw.version#">
 											</cfif>
 
-											<div class="fontStyle"><a href="#(uri)#" title="#lang.war#">WAR</a>
+											<div class="fontStyle"><a href="#uri#" title="#lang.war#" rel="nofollow">WAR</a>
 												<span class="triggerIcon pointer" style="color :##01798A" title="#lang.war#">
 													<span class="glyphicon glyphicon-info-sign"></span>
 												</span>
@@ -622,7 +623,7 @@
 										<div  class="clog-detail collapse #uid#_release_id row_alter" style="text-align:center;">
 								</cfif>
 								<div <cfif ind MOD 2 eq 0>class="row_alterEven textStyle textWrap"<cfelse>class="row_alterOdd textStyle textWrap"</cfif>>
-									<a href="#cdnURLExt##el.filename#"
+									<a href="#cdnURLExt##el.filename#" rel="nofollow"
 										<cfif !isEmpty(el.meta.mincoreversion)>
 											title="Requires Lucee #encodeForHTMLAttribute(el.meta.mincoreversion)#" 
 										</cfif>
