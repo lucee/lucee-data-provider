@@ -68,20 +68,28 @@ component {
 			try {
 				systemOutput("s3Versions.list [#runId#] START #numberFormat(getTickCount()-start)#ms",1,1);
 				var data = getLuceeVersionsListS3();
-				if ( len(data) gt 0 ){ // only cache good data
-					fileWrite(cacheDir & cacheFile, serializeJSON(data, false) );
+				if ( len( data ) gt 0 ){ // only cache good data
+					fileWrite( cacheDir & cacheFile, serializeJSON( data, false) );
 					if ( serializeJson( application.s3Versions ) neq SerializeJson( data ) ){
 						// only ping on change
 						application.s3Versions = data;
-						var downloadRefeshUrl = "#application.downloadsUrl#?type=snapshots&reset=force";
-						logger("Versions updated, pinging [#downloadRefeshUrl#]");
-						cfhttp(url=downloadRefeshUrl);
+						if ( structKeyExists( application, "downloadsUrl" ) ){
+							var downloadRefeshUrl = "#application.downloadsUrl#?type=snapshots&reset=force";
+							logger("Versions updated, pinging [#downloadRefeshUrl#]");
+							try {
+								cfhttp( url=downloadRefeshUrl );
+							} catch (e){
+								throw(message="error returned updating download server [#downloadRefeshUrl#]", cause=e);
+							}
+						} else {
+							logger("Versions updated, not pinging due to missing application.downloadsUrl");
+						}
 					}
 				}
 				return application.s3Versions = data;
 			} catch (e){
-				systemOutput("error directory listing versions on s3", true);
-				throw(message="cannot read versions from s3 directory", cause=e);
+				systemOutput( "error directory listing versions on s3", true );
+				throw( message="cannot read versions from s3 directory", cause=e );
 			}
 			systemOutput("s3Versions.list [#runId#] FETCHED #numberFormat(getTickCount()-start)#ms, #qry.recordcount# files on s3 found",1,1);
 		}
