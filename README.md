@@ -20,13 +20,16 @@ S3_CORE_ROOT=/var/local_s3/lucee_downloads/
 S3_EXTENSIONS_ROOT=/var/local_s3/lucee_ext/
 S3_BUNDLES_ROOT=/var/local_s3/lucee_bundles/
 UPDATE_PROVIDER=http://127.0.0.1:8889/rest/update/provider/
-UPDATE_PROVIDER_INT=http://update:8889/rest/update/provider/ # internal docker networking
+UPDATE_PROVIDER_INT=http://update:8888/rest/update/provider/ # internal docker networking
 EXTENSION_PROVIDER=http://127.0.0.1:8889/rest/extension/provider/
-EXTENSION_PROVIDER_INT=http://update:8889/rest/extension/provider/ # internal docker networking
+EXTENSION_PROVIDER_INT=http://update:8888/rest/extension/provider/ # internal docker networking
 DOWNLOADS_URL=http://download:8888/
 ```
 
-Create folders under `local_s3` and place a few sample Lucee full jars in `lucee_downloads`, and extension lex files in `lucee_ext`
+Create folders under `local_s3`
+
+- in `lucee_downloads` place a few sample Lucee full jars
+- in `lucee_ext` place some sample extension lex files
 
 The run `docker compose up`
 
