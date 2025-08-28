@@ -173,7 +173,10 @@ component accessors=true {
 	private function _readExistingMetaFileFromS3() {
 		var metaFile = getS3Root() & "/extensions.json";
 		if ( FileExists( metaFile  ) ) {
-			return DeserializeJson( FileRead( metaFile ), false );
+			// LDEV-5699 temp hotfix for incorrect sorting
+			var meta = DeserializeJson( FileRead( metaFile ), false );
+			QuerySort( meta, "id,versionSortable", "asc,desc" );
+			return meta;
 		}
 
 		return _getEmptyExtensionsQuery();
