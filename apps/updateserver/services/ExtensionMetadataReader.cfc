@@ -36,7 +36,7 @@ component accessors=true {
 			}
 
 			if ( metaChanged ) {
-				QuerySort( meta, "name,id,versionSortable", "asc,asc,desc" );
+				QuerySort( meta, "id,versionSortable", "asc,desc" );
 				_writeMetaFileToS3( meta );
 			}
 
