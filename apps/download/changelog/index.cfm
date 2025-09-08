@@ -41,6 +41,7 @@
 </script>
 --->
 <cflock type="exclusive" name="changelogReport-#url.version#" timeout=1 throwontimeout="false">
+	<cfsilent>
 	<cfscript>
 		buildStarted = getTickCount();
 		systemOutput("building changelog for #url.version#, please wait......", true);
@@ -117,7 +118,7 @@
 		//ticketTypes={};
 		//ticketLabels={};
 	</cfscript>
-
+	</cfsilent>
 	<cfsavecontent variable="changelog_report">
 		<cfoutput>
 			<!DOCTYPE html>
@@ -131,7 +132,9 @@
 					<cfinclude template="../_linkbar.cfm">
 					<h2 class="display-3">Lucee Server Changelogs - #url.version#</h2>
 				</div>
+				<cfsilent>
 				<cfloop array="#arrVersions#" item="_version" index="idx">
+					
 					<cfscript>
 						version = versions[ _version ].version;
 						if (idx lt ArrayLen(arrVersions)){
@@ -163,7 +166,7 @@
 							_version: _version,
 							type: versions[_version].type,
 							prevVersion: prevVersion,
-							versionReleaseDate = versionReleaseDate,
+							versionReleaseDate: versionReleaseDate,
 							changelog: changelog,
 							header: header,
 							versionTitle: versionTitle
@@ -188,6 +191,7 @@
 						
 					</cfscript>
 				</cfloop>
+				</cfsilent>
 				<cfset lastMajor = "">
 				<div class="versionList">
 					<cfloop array="#arrChangeLogs#" item="luceeVersion">
@@ -196,10 +200,18 @@
 								Lucee Releases:
 							</cfif>
 							<cfset lastMajor = left(LuceeVersion.version, 3)>
-							<b><a href="?version=#left(luceeVersion.version,3)#">#left(LuceeVersion.version, 3)#</a>&nbsp;</b>&nbsp;
-							<a href="?version=#left(luceeVersion.version,3)####luceeVersion.version#">#luceeVersion.version#</a>&nbsp;
+							<b><a href="?version=#left(luceeVersion.version,3)#" 
+								data-version="#left(LuceeVersion.version, 3)#"
+								data-status="#stMajorVersion[left(LuceeVersion.version, 3)] ?: 'Active'#"
+								title="View all #left(LuceeVersion.version, 3)# releases - Status: #stMajorVersion[left(LuceeVersion.version, 3)] ?: 'Active'#">#left(LuceeVersion.version, 3)#</a>&nbsp;</b>&nbsp;
+							<a href="?version=#left(luceeVersion.version,3)####luceeVersion.version#" 
+								data-version="#luceeVersion.version#"
+								data-type="#luceeVersion.type#"
+								data-release-date="#luceeVersion.versionReleaseDate#"
+								data-git-tag="https://github.com/lucee/Lucee/tree/#listFirst(luceeVersion.version, '-')#"
+								title="View changelog for #luceeVersion.version# - Type: #luceeVersion.type# - Released: #luceeVersion.versionReleaseDate#"
+								>#luceeVersion.version#</a>&nbsp;
 						</cfif>
-						
 					</cfloop>
 				</div>
 				<cfif stMajorVersion[ url.version ] eq "false">
@@ -250,10 +262,27 @@
 							<tr>
 								<td colspan="4">
 								<#lv.header# class="modal-title" id="#lv.version#">
-									<b><a href="?version=#left(lv.version,3)####lv.version#">Lucee #lv.versionTitle#</a></b>
+									<b><a href="?version=#left(lv.version,3)####lv.version#"
+										data-version="#lv.version#"
+										data-type="#lv.type#"
+										data-release-date="#lv.versionReleaseDate#"
+										data-status="#stMajorVersion[left(lv.version,3)] ?: 'Active'#"
+										data-git-tag="https://github.com/lucee/Lucee/tree/#listFirst(lv.version, '-')#"
+										title="Lucee #lv.version# Details - Type: #uCase(left(lv.type,1)) & right(lv.type, len(lv.type)-1)# - Released: #lv.versionReleaseDate# - Status: #stMajorVersion[left(lv.version,3)] ?: 'Active'#">Lucee #lv.versionTitle#</a></b>
+									<cfif lv.type eq "releases">
+										<span class="badge badge-success ml-1" title="Production Ready">STABLE</span>
+									<cfelseif lv.type eq "rc">
+										<span class="badge badge-warning ml-1" title="Release Candidate - Pre-release">RC</span>
+									<cfelseif lv.type eq "beta">
+										<span class="badge badge-info ml-1" title="Beta Version - Testing">BETA</span>
+									<cfelseif lv.type eq "snapshots">
+										<span class="badge badge-secondary ml-1" title="Development Build - Not for Production">SNAPSHOT</span>
+									<cfelseif lv.type eq "alpha">
+										<span class="badge badge-dark ml-1" title="Alpha Version - Early Testing">ALPHA</span>
+									</cfif>
 									<small>
-										<span class="mr-2">#lv.versionReleaseDate#</span>
-										<a href="../?#lv.type#=#lv._version###core" title="Jump to Downloads"><span class="glyphicon glyphicon-download-alt"></span></a>
+										<time class="mr-2" datetime="#lv.versionReleaseDate#" data-release-date="#lv.versionReleaseDate#">#lv.versionReleaseDate#</time>
+										<a href="../?#lv.type#=#lv._version###core" title="Jump to Downloads for #lv.version#"><span class="glyphicon glyphicon-download-alt"></span></a>
 									</small>
 								</#lv.header#>
 								</td>
@@ -262,18 +291,33 @@
 							<cfloop struct="#lv.changelog#" index="ver" item="tickets">
 								<cfloop struct="#tickets#" index="id" item="ticket">
 									<cfif !StructKeyExists(changelogTicketList, ticket.id)>
-										<tr valign="top">
-											<td nowrap><a href="https://bugs.lucee.org/browse/#id#" target="blank" class="mr-1">#id#</a></td>
-											<td><span class="label label-#getBadgeForType(ticket.type)# mr-1" data-ticket-type="#ticket.type#">#ticket.type#</span></td>
+										<tr valign="top" 
+											data-ticket-id="#id#" 
+											data-ticket-type="#ticket.type#" 
+											data-fix-versions="#arrayToList(ticket.fixVersions, ',')#"
+											<cfif len(ticket.labels)>data-labels="#arrayToList(ticket.labels, ',')#"</cfif>>
+											<td nowrap><a href="https://bugs.lucee.org/browse/#id#" target="blank" class="mr-1" 
+												data-ticket-id="#id#"
+												title="View #ticket.type# ticket #id# on JIRA">#id#</a></td>
+											<td><span class="label label-#getBadgeForType(ticket.type)# mr-1" 
+												data-ticket-type="#ticket.type#"
+												title="#ticket.type# - #ticket.summary#">#ticket.type#</span></td>
 											<td>#encodeForHtml(wrap(ticket.summary,70))#
 											<cfif len(ticket.labels)>
 												<br>
-												<cfloop array="#ticket.labels#" item="label">
-													<span class="label label-default">#encodeForHtml(label)#</span>
-												</cfloop>
+												<div class="ticket-labels">
+													<cfloop array="#ticket.labels#" item="label">
+														<span class="label label-default">#encodeForHtml(label)#</span>
+													</cfloop>
+												</div>
 											</cfif>
 											</td>
-											<td style="max-width:250px;">#encodeForHtml(wrap(arrayToList(ticket.fixVersions,", "),15))#</td>
+											<td style="max-width:250px;" data-fix-versions="#encodeForHtmlAttribute(arrayToList(ticket.fixVersions, ', '))#"
+												title="Fixed in versions: #arrayToList(ticket.fixVersions, ', ')#">
+												<cfloop array="#ticket.fixVersions#" item="fixVersion" index="i">
+													<span data-git-tag="https://github.com/lucee/Lucee/tree/#listFirst(fixVersion, '-')#">#fixVersion#</span><cfif i lt arrayLen(ticket.fixVersions)>, </cfif>
+												</cfloop>
+											</td>
 										</tr>
 										<cfset changelogTicketList[ticket.id] = true>
 									</cfif>
@@ -292,6 +336,10 @@
 		systemOutput("Changelog for [#url.version#] built in #numberFormat(getTickCount()-buildStarted)#ms", true);
 		if ( !structKeyExists( application, "changeLogReport" ) )
 			application.changeLogReport = {};
+		// cleanup excessive whitespace while preserving readability
+		changelog_report = rereplace( changelog_report, "\t+", "", "all" );
+		changelog_report = rereplace( changelog_report, " {2,}", " ", "all" );
+		changelog_report = rereplace( changelog_report, "\n\s+", chr(10), "all" );
 		application.changeLogReport[ url.version ] = changelog_report;
 		if ( structKeyExists(application, "changeLogReportOld" ) )
 			structDelete( application[ "changeLogReportOld" ], url.version );
