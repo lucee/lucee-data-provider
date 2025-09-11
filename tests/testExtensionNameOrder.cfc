@@ -22,7 +22,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 				var dir = getDirectoryFromPath(getCurrentTemplatePath());
 				// Lucee will convert {COLUMNS,DATA} JSON to a query automatically
 				var qry = deserializeJson(FileRead("staticArtifacts/testExtensionNameOrder.json"), false);
-				exp
+				expect(qry).toBeQuery();
 				
 				// Use a fresh reader to ensure no caching effects
 				var extMetaReader = new services.ExtensionMetadataReader();
