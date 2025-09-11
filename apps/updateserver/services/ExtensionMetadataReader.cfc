@@ -11,9 +11,9 @@ component accessors=true {
 		variables._simpleCache = StructNew( "max:100" );
 	}
 
-	function loadMeta( srcMeta="" ) {
+	function loadMeta( query srcMeta ) {
 		lock type="exclusive" name="readExtMeta" timeout=0 {
-			var meta           = len( arguments.srcMeta ) ? arguments.srcMeta : _readExistingMetaFileFromS3();
+			var meta           = isQuery( arguments.srcMeta ) ? arguments.srcMeta : _readExistingMetaFileFromS3();
 			var existingByFile = _mapExtensionQueryByFilename( meta );
 			var lexFiles       = _listLexFilesFromBucket();
 			var metaChanged    = false;
@@ -75,6 +75,8 @@ component accessors=true {
 
 			if ( !arguments.all ) {
 				extensions = _stripAllButLatestVersions( extensions );
+				// After grouping to latest version, sort by name (and versionSortable desc for tie-breaker)
+				QuerySort( extensions, "name,versionSortable", "asc,desc" );
 			}
 
 			if ( arguments.type != "all" ) {
