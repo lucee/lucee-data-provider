@@ -76,7 +76,14 @@ component accessors=true {
 			if ( !arguments.all ) {
 				extensions = _stripAllButLatestVersions( extensions );
 				// After grouping to latest version, sort by name (case-insensitive, and versionSortable desc for tie-breaker)
-				QuerySort( extensions, "name,versionSortable", "textnocase,desc" );
+				QuerySort( extensions, function( row1, row2 ) {
+					var nameCompare = compareNoCase( row1.name, row2.name );
+					if ( nameCompare != 0 ) return nameCompare;
+					// Tie-breaker: sort by versionSortable descending
+					if ( row1.versionSortable > row2.versionSortable ) return -1;
+					if ( row1.versionSortable < row2.versionSortable ) return 1;
+					return 0;
+				} );
 			}
 
 			if ( arguments.type != "all" ) {
