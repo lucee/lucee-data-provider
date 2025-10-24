@@ -75,8 +75,8 @@ component accessors=true {
 
 			if ( !arguments.all ) {
 				extensions = _stripAllButLatestVersions( extensions );
-				// After grouping to latest version, sort by name (and versionSortable desc for tie-breaker)
-				QuerySort( extensions, "name,versionSortable", "asc,desc" );
+				// After grouping to latest version, sort by name (case-insensitive, and versionSortable desc for tie-breaker)
+				QuerySort( extensions, "name,versionSortable", "textnocase,desc" );
 			}
 
 			if ( arguments.type != "all" ) {
