@@ -99,7 +99,6 @@
 					<cfinclude template="../_linkbar.cfm">
 					<h2 class="display-3">Lucee Server Changelogs - #url.version#</h2>
 				</div>
-				<cfsilent>
 				<cfset lastMajor = "">
 				<div class="versionList">
 					<cfloop array="#arrChangeLogs#" item="luceeVersion">
