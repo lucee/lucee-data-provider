@@ -88,7 +88,7 @@ component accessors=true {
 				} catch(e) {
 					continue;
 				}
-				if ( fvs < from || fvs > to ) continue;
+				if ( fvs <= from || fvs > to ) continue;
 				if( !structKeyExists( sct, fv ) )
 					sct[ fv ] = structNew( "linked" );
 				if (arguments.detailed)
