@@ -62,48 +62,15 @@
 		}
 		versions=tmp;
 
-		major = {};
-		preRelease = {};
-		// add types
-		//releases,snapshots,rc,beta
-		loop struct=versions index="vs" item="data" {
-			if(findNoCase("-snapshot",data.version)) data['type']="snapshots";
-			else if(findNoCase("-rc",data.version)) data['type']="rc";
-			else if(findNoCase("-beta",data.version)) data['type']="beta";
-			else if(findNoCase("-alpha",data.version)) data['type']="alpha";
-			else data['type']="releases";
-			data['versionNoAppendix']=data.version;
-			if ( data.type != "snapshots" ) {
-				major[ vs ] = data;
-			} else {
-				// need to find latest pre release builds
-				if ( structKeyExists( data, "versionSorted" ) ){
-					v = ArrayToList( ArraySlice( listToArray( data.versionSorted,"." ), 1 , 2 ), "." );
-					preRelease[ v ] = {
-						versionSorted: data.versionSorted,
-						versionNoAppendix: data.versionNoAppendix
-					};
-				}
-			}
-		}
-		// avoid showingh a snapshot for a release etc
-		structEach( preRelease, function( k, v ) {
-			var releaseVersionSorted = left( v.versionSorted, len( v.versionSorted ) -4 );
-			// check for RC / BETA / SNAPSHOT with the same version
-			arrayEach( [ ".050",".100",".075" ], function( i ){
-				if ( structKeyExists( major, releaseVersionSorted & arguments.i ) )
-					structDelete( preRelease, k );
-			});
-		});
-		structEach( preRelease, function( k, v ) {
-			major[ v.versionSorted ] = {
-				version: v.versionNoAppendix,
-				type: "snapshot"
-			};
-		});
+		// Use changelog.cfc to process versions
+		changelogService = CreateObject( "component", "changelog" ).init( download );
+		processedVersions = changelogService.processVersions( versions );
+		major = processedVersions.major;
 
-		arrVersions = structKeyArray(major).reverse().sort("text","desc");
-		arrChangeLogs = [];
+		arrVersions = changelogService.getSortedVersions( major );
+
+		// Build changelog data array using the new method
+		arrChangeLogs = changelogService.buildChangelogData( major, arrVersions, url.version );
 
 		function getBadgeForType( type ) {
 			switch(arguments.type){
@@ -132,66 +99,6 @@
 					<cfinclude template="../_linkbar.cfm">
 					<h2 class="display-3">Lucee Server Changelogs - #url.version#</h2>
 				</div>
-				<cfsilent>
-				<cfloop array="#arrVersions#" item="_version" index="idx">
-					
-					<cfscript>
-						version = versions[ _version ].version;
-						if (idx lt ArrayLen(arrVersions)){
-							prevVersion = versions[arrVersions[ idx + 1 ]].version;
-						} else {
-							prevVersion = structKeyArray(versions);
-							prevVersion = versions[prevVersion[arrayLen(prevVersion)]].version;
-						}
-						versionTitle = version;
-						switch(versions[_version].type){
-							case "releases":
-								header="h2";
-								versionTitle &= " Stable";
-								break;
-							default:
-								header="h4";
-						}
-						changelog = {};
-						versionReleaseDate = "";
-						if ( left( version, 3 ) eq url.version ){
-							changeLog = download.getChangelog( prevVersion, version, false, true );
-							versionReleaseDate = download.getReleaseDate(version);
-						}
-						if (!isStruct(changelog))
-							changelog = {};
-
-						arrayAppend(arrChangeLogs, {
-							version: version,
-							_version: _version,
-							type: versions[_version].type,
-							prevVersion: prevVersion,
-							versionReleaseDate: versionReleaseDate,
-							changelog: changelog,
-							header: header,
-							versionTitle: versionTitle
-						});
-						/*
-						structEach(changeLog, function(cl){
-							structEach(changeLog[cl], function( ticket ){
-								var _type= changeLog[ cl ][ ticket ].type;
-								if ( !structKeyExists( ticketTypes, _type ) )
-									ticketTypes[ _type ]=0;
-								ticketTypes[ _type ]++;
-
-								var _labels = changeLog [cl ][ ticket ].labels;
-								arrayEach(_labels, function(_label) {
-									if (!structKeyExists( ticketLabels, _label ) )
-										ticketLabels[_label]=0;
-									ticketLabels[_label]++;
-								});
-							});
-						});
-						*/
-						
-					</cfscript>
-				</cfloop>
-				</cfsilent>
 				<cfset lastMajor = "">
 				<div class="versionList">
 					<cfloop array="#arrChangeLogs#" item="luceeVersion">
@@ -288,7 +195,9 @@
 								</td>
 							</tr>
 							<cfset changelogTicketList = {}>
-							<cfloop struct="#lv.changelog#" index="ver" item="tickets">
+							<cfset sortedVersionKeys = changelogService.getSortedChangelogVersions( lv.changelog, url.version )>
+							<cfloop array="#sortedVersionKeys#" index="ver">
+								<cfset tickets = lv.changelog[ ver ]>
 								<cfloop struct="#tickets#" index="id" item="ticket">
 									<cfif !StructKeyExists(changelogTicketList, ticket.id)>
 										<tr valign="top" 

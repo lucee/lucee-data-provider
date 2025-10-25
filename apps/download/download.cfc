@@ -126,14 +126,21 @@ component {
 
 	function getVersions(flush) {
 		if(!structKeyExists(application,"extVer") || arguments.flush) {
-			http url="#UPDATE_PROVIDER#/list/" & "?extended=true"&(arguments.flush?"&flush=true":"") result="local.res" throwOnError=true;
+			var flushParam = arguments.flush ? "&flush=true" : "";
+			var requestUrl = UPDATE_PROVIDER & "/list/?extended=true" & flushParam;
+			//systemOutput("getVersions() fetching fresh data from: " & requestUrl, true);
+			http url="#requestUrl#" result="local.res" throwOnError=true;
 			var versions = deserializeJson(res.fileContent);
 			if ( isStruct(versions) && structKeyExists(versions, "message") ) {
-				systemOutput("download page falling back on cached versions", true);
+				//systemOutput("download page falling back on cached versions", true);
 				http url=listURL&"?extended=true" result="local.res";
 				versions = deserializeJson(res.fileContent);
 			}
+			//var keys = structKeyArray( versions );
+			//systemOutput("getVersions() returned " & arrayLen(keys) & " versions, first: " & keys[1] & ", last: " & keys[arrayLen(keys)], true);
 			application.extVer = versions;
+		} else {
+			//systemOutput("getVersions() returning cached data from application.extVer", true);
 		}
 		return application.extVer;
 	}
@@ -174,15 +181,25 @@ component {
 			var restMethod = "changelog";
 			if (arguments.detailed)
 				restMethod &= "Detailed";
-			var changeLogUrl = "#UPDATE_PROVIDER#/#restMethod#/"&arguments.versionFrom&"/"&arguments.versionTo;
+			var changeLogUrl = UPDATE_PROVIDER & "/" & restMethod & "/" & arguments.versionFrom & "/" & arguments.versionTo;
+			//systemOutput("getChangelog() fetching fresh data from: " & changeLogUrl & " (id: " & id & ")", true);
 			var res="";
-			//systemOutput(changeLogUrl, true);
 			try{
 				http url="#changeLogUrl#" result="local.res" throwOnError="true";
 				var res= deserializeJson(res.fileContent);
+				//if ( isStruct(res) && structCount(res) gt 0 ) {
+				//	var versions = structKeyArray( res );
+				//	systemOutput("getChangelog() returned data for " & arrayLen(versions) & " version(s), first: " & versions[1] & ", last: " & versions[arrayLen(versions)], true);
+				//} else {
+				//	systemOutput("getChangelog() returned empty or invalid data", true);
+				//}
 				application.jiraChangeLog[ id ]= res;
-			}catch(e) {}
+			}catch(e) {
+				//systemOutput("getChangelog() HTTP call failed: " & e.message, true);
+			}
 			if (len(res)==0) return "";
+		} else {
+			//systemOutput("getChangelog() returning cached data for id: " & id, true);
 		}
 		return application.jiraChangeLog[ id ]?:"";
 	}

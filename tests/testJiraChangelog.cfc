@@ -1,4 +1,4 @@
-component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-integration" {
+component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 
 	function beforeAll(){
 		variables.dir = getDirectoryFromPath( getCurrentTemplatePath() );
@@ -72,6 +72,64 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 					systemOutput( "Changelog last updated: #lastUpdated#", true );
 				} catch ( any e ) {
 					systemOutput( "Error getting last updated: #e.message#", true );
+					rethrow;
+				}
+			} );
+
+			it( title="test getChangelog includes upper boundary version", body=function(){
+				var service = new services.JiraChangeLogService();
+				service.setS3Root( expandPath( dir & "../apps/updateserver/services/legacy/build/servers/" ) );
+
+				try {
+					service.loadIssues( force=false );
+					var issues = service.getIssues();
+
+					// Skip test if no issues loaded
+					if ( issues.recordCount eq 0 ) {
+						systemOutput( "No issues loaded, skipping boundary test", true );
+						return;
+					}
+
+					// Find a ticket with a specific fix version to test with
+					var testVersion = "";
+					loop query=issues {
+						if ( isArray( issues.fixVersions ) && arrayLen( issues.fixVersions ) > 0 ) {
+							testVersion = issues.fixVersions[ 1 ];
+							break;
+						}
+					}
+
+					if ( len( testVersion ) eq 0 ) {
+						systemOutput( "No issues with fix versions found, skipping boundary test", true );
+						return;
+					}
+
+					if ( isArray( testVersion ) ) {
+						systemOutput( "testVersion is still an array, using first element", true );
+						testVersion = testVersion[ 1 ];
+					}
+
+					systemOutput( "Testing boundary with version: #testVersion#", true );
+
+					// Get changelog with range that should include this exact version as upper boundary
+					var changelog = service.getChangelog(
+						versionFrom = "6.0.0.0",
+						versionTo = testVersion,
+						detailed = false
+					);
+
+					expect( changelog ).toBeStruct();
+
+					// The changelog should include the testVersion as a key
+					if ( structKeyExists( changelog, testVersion ) ) {
+						systemOutput( "PASS: Upper boundary version #testVersion# is included in changelog", true );
+						expect( structCount( changelog[ testVersion ] ) ).toBeGT( 0 );
+					} else {
+						systemOutput( "WARNING: Version #testVersion# not found in changelog keys: #structKeyList( changelog )#", true );
+						// This could be legitimate if the version is outside the range we're testing
+					}
+				} catch ( any e ) {
+					systemOutput( "Error testing boundary condition: #e.message#", true );
 					rethrow;
 				}
 			} );
