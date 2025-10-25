@@ -110,10 +110,39 @@ component accessors=true {
 
 	private function _fetchIssues() {
 		systemOutput("-- start fetching issues from jira --- ", true);
-		var jira = new services.legacy.Jira( getJiraServer() );
-		var issues = jira.listIssues( project:"LDEV", stati: [ "Deployed", "Done", "QA", "Resolved" ] ).issues;
+		var jira = new services.JiraCloud({ domain: getJiraServer() });
+		var issuesArray = jira.searchIssues(jql="project=LDEV AND status in (Deployed, Done, QA, Resolved)");
+		var issuesQuery = _issuesArrayToQuery(issuesArray);
 		systemOutput("-- finished fetching issues from jira --- ", true);
-		return issues;
+		return issuesQuery;
+	}
+
+	private query function _issuesArrayToQuery(required array issues) {
+		var qry = _getEmptyIssuesQuery();
+
+		loop array=arguments.issues item="issue" {
+			queryAddRow( qry );
+			querySetCell( qry, "id", issue.id );
+			querySetCell( qry, "key", issue.key );
+			querySetCell( qry, "summary", issue.fields.summary ?: "" );
+			querySetCell( qry, "self", issue.self );
+			querySetCell( qry, "type", issue.fields.issuetype.name ?: "" );
+			querySetCell( qry, "created", len( issue.fields.created ?: "" ) ? parseDateTime( issue.fields.created ) : "" );
+			querySetCell( qry, "updated", len( issue.fields.updated ?: "" ) ? parseDateTime( issue.fields.updated ) : "" );
+			querySetCell( qry, "priority", issue.fields.priority.name ?: "" );
+			querySetCell( qry, "status", issue.fields.status.name ?: "" );
+			
+			var fixVersions = [];
+			if (isArray(issue.fields.fixVersions)) {
+				loop array=issue.fields.fixVersions item="fv" {
+					arrayAppend(fixVersions, fv.name);
+				}
+			}
+			querySetCell(qry, "fixVersions", fixVersions);
+			querySetCell(qry, "labels", issue.fields.labels ?: []);
+		}
+
+		return qry;
 	}
 
 	private function _readExistingIssuesFromS3() {
@@ -131,7 +160,7 @@ component accessors=true {
 	}
 
 	private function _getEmptyIssuesQuery() {
-		return QueryNew( "id,key,summary,self,type,created,updated,priority,status,fixVersions" );
+		return QueryNew( "id,key,summary,self,type,created,updated,priority,status,fixVersions,labels" );
 	}
 
 }
