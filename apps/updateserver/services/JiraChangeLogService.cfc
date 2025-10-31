@@ -109,11 +109,11 @@ component accessors=true {
 	}
 
 	private function _fetchIssues() {
-		systemOutput("-- start fetching issues from jira --- ", true);
+		systemOutput( "[#dateTimeFormat(now(), "long")#] -- start fetching issues from jira --- ", true);
 		var jira = new services.JiraCloud({ domain: getJiraServer() });
 		var issuesArray = jira.searchIssues(jql="project=LDEV AND status in (Deployed, Done, QA, Resolved)");
 		var issuesQuery = _issuesArrayToQuery(issuesArray);
-		systemOutput("-- finished fetching issues from jira --- ", true);
+		systemOutput( "[#dateTimeFormat(now(), "long")#] -- finished fetching issues from jira --- ", true);
 		return issuesQuery;
 	}
 
@@ -150,6 +150,8 @@ component accessors=true {
 		if ( FileExists( issues ) ) {
 			systemOutput("jira._readExistingIssuesFromS3", true);
 			return DeserializeJson( FileRead( issues ), false );
+		} else {
+			systemOutput("jira._readExistingIssuesFromS3 - no existing issues file [#issues#]", true);
 		}
 		return _getEmptyIssuesQuery();
 	}

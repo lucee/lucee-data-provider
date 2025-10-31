@@ -1,11 +1,16 @@
 component accessors=true {
 
+	static {
+		static.DEBUG = (server.system.environment.DEBUG ?: false);
+	}
+
 	property name="s3root"                type="string" default="";
 	property name="extensionMeta"         type="query";
 	property name="extensionVersions"     type="struct";
 	property name="bundleDownloadService" type="any";
 
 	reset();
+	variables.providerLog = "update-provider";
 
 	function reset() {
 		variables._simpleCache = StructNew( "max:100" );
@@ -13,20 +18,29 @@ component accessors=true {
 
 	function loadMeta( query srcMeta ) {
 		lock type="exclusive" name="readExtMeta" timeout=0 {
-			var meta           = isQuery( arguments.srcMeta ) ? arguments.srcMeta : _readExistingMetaFileFromS3();
+			logger( "Loading Extension metadata" );
+			var meta           = len( arguments.srcMeta ) ? arguments.srcMeta : _readExistingMetaFileFromS3();
 			var existingByFile = _mapExtensionQueryByFilename( meta );
 			var lexFiles       = _listLexFilesFromBucket();
 			var metaChanged    = false;
 
 			if (meta.recordcount == 0){ 
 				// rebuilding the index takes a while as all extensions need to be re-downloaded and processed
-				setting requesttimeout="#lexFiles.recordcount#*4";
+				setting requesttimeout="#(lexFiles.recordcount*4)#";
 			}
 
 			for( var lexFile in lexFiles ) {
 				var isNewToUs = !StructKeyExists( existingByFile, lexFile.name )
 				if ( isNewToUs ) {
-					_addLexFile( lexFile.name, meta );
+					_addLexFile( lexFile, meta, false );
+					metaChanged = true;
+				} else if ( len( existingByFile[ lexFile.name ].updated ) == 0 ) {
+					// tmp workaround, need to add metadata
+					_updateCreatedDate( meta, lexFile );
+					metaChanged = true;
+				} else if ( dateCompare( lexFile.dateLastModified, existingByFile[ lexFile.name ].updated ) > 0 ) {
+					// ext was file was modified
+					_addLexFile( lexFile, meta, true );
 					metaChanged = true;
 				}
 			}
@@ -182,9 +196,11 @@ component accessors=true {
 	private function _readExistingMetaFileFromS3() {
 		var metaFile = getS3Root() & "/extensions.json";
 		if ( FileExists( metaFile  ) ) {
-			// LDEV-5699 temp hotfix for incorrect sorting
 			var meta = DeserializeJson( FileRead( metaFile ), false );
-			QuerySort( meta, "id,versionSortable", "asc,desc" );
+			// tmp workaround, need to add metadata
+			if ( ! QueryColumnExists( meta, "updated" ) ) {
+				QueryAddColumn( meta, "updated", "date" ); 
+			}
 			return meta;
 		}
 
@@ -198,7 +214,7 @@ component accessors=true {
 	}
 
 	private function _getEmptyExtensionsQuery() {
-		return QueryNew( "id,version,versionSortable,name,description,filename,image,category,author,created,releaseType,"
+		return QueryNew( "id,version,versionSortable,name,description,filename,image,category,author,created,updated,releaseType,"
 			& "minLoaderVersion,minCoreVersion,price,currency,disableFull,trial,older,olderName,"
 			& "olderDate,promotionLevel,promotionText,projectUrl,sourceUrl,documentionUrl" );
 	}
@@ -213,21 +229,32 @@ component accessors=true {
 		return mapped;
 	}
 
-	private function _addLexFile( fileName, extensionMetaQuery ) {
-		SystemOutput( "Loading new extension file [#arguments.fileName#] from S3.", true );
+	private function _addLexFile( lexFile, extensionMetaQuery, boolean update=false ) {
+		logger( "Loading new extension file [#arguments.lexFile.name#] from S3, update=#arguments.update#." );
 
 		try {
-			var tmpFile  = _copyRemoteFileToTmpFile( arguments.fileName );
+			var tmpFile  = _copyRemoteFileToTmpFile( arguments.lexFile.name );
 			var qryCols  = ListToArray( arguments.extensionMetaQuery.columnList );
 			var extMeta  = _initExtensionMetaFromManifest( tmpFile, qryCols );
 
-			extMeta.filename        = arguments.fileName;
+			extMeta.filename        = arguments.lexFile.name;
 			extMeta.versionSortable = Len( extMeta.version ) ? VersionUtils::sortableVersionString( extMeta.version ) : "";
 			extMeta.trial           = false; // "TODO"???
 			extMeta.releaseType     = Len( extMeta.releaseType ) ? extMeta.releaseType : "all";
 			extMeta.image           = _getLogoThumbnail( tmpFile );
+			extMeta.updated         = arguments.lexFile.dateLastModified;
 
-			QueryAddRow( arguments.extensionMetaQuery, extMeta );
+			if ( arguments.update ){
+				var existingRow = _getRowNumberByFilename( arguments.extensionMetaQuery, arguments.lexFile.name );
+				if ( existingRow ){
+					logger( "Updated lex file metadata [#arguments.lexfile.name#]");
+					QuerySetRow( arguments.extensionMetaQuery, existingRow, extMeta );
+				} else {
+					logger( "Error updating lex file [#arguments.lexfile.name#], could not find in existing query ", type="error");
+				}
+			} else {
+				QueryAddRow( arguments.extensionMetaQuery, extMeta );
+			}
 
 			_processExtensionJars( tmpFile );
 
@@ -238,14 +265,16 @@ component accessors=true {
 			}
 		} catch( any e ) {
 			// for now, just to get through them all!
-			SystemOutput( "Error processing lex file: [#arguments.fileName#]", true );
+			logger( text="Error processing lex file: [#arguments.lexFile.name#]",exception=e, type="error" );
 		}
 	}
 
 	private function _readLexManifest( filePath ) {
 		try {
 			var mf = ManifestRead( arguments.filePath );
-		} catch( any e ) {}
+		} catch( any e ) {
+			logger( text="Error reading manifest [#arguments.filePath#]",exception=e, type="error" );
+		}
 
 		return mf.main ?: {};
 	}
@@ -418,7 +447,7 @@ component accessors=true {
 			}
 			if ( !found ) {
 				changed = true;
-				SystemOutput( "Deleting [#arguments.cachedExts.filename[ i ]#] extension from cached query as it no longer exists in our lex file lookup.", true );
+				logger( "Deleting [#arguments.cachedExts.filename[ i ]#] extension from cached query as it no longer exists in our lex file lookup.");
 				QueryDeleteRow( arguments.cachedExts, i );
 			}
 		}
@@ -446,4 +475,67 @@ component accessors=true {
 		}
 		throw "No extension version available for [#arguments.coreVersion#]";
 	};
+
+	private function _updateCreatedDate( extensionMetaQuery, lexFile) {
+		var existingRow = _getRowNumberByFilename( arguments.extensionMetaQuery, arguments.lexFile.name );
+		if (existingRow > 0) {
+			QuerySetCell( arguments.extensionMetaQuery, "updated", arguments.lexFile.dateLastModified, existingRow );
+		} else {
+			logger( "Error updating lex file [#arguments.lexfile.name#], could not find in existing query ", type="error");
+		}
+	}
+
+	private function _getRowNumberByFilename( extensionMetaQuery, filename ){
+		for( var i=1; i <= arguments.extensionMetaQuery.recordcount; i++ ) {
+			if ( arguments.extensionMetaQuery.filename[ i ] == arguments.filename ) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	private function logger( string text, any exception, type="info", boolean forceSentry=false ){
+		//var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
+		if ( !isNull(arguments.exception ) ){
+
+			if (static.DEBUG) {
+				if (len(arguments.text)) systemOutput( arguments.text, true, true );
+				systemOutput( arguments.exception, true, true );
+			} else {
+				writeLog( text=arguments.text, type=arguments.type, log="exception", exception=arguments.exception );
+				// Send errors and warnings to Sentry (case insensitive check)
+				var normalizedType = lCase( arguments.type );
+				if ( normalizedType == "error" || normalizedType == "warning" || normalizedType == "warn" ) {
+					try {
+						var sentryExtra = {};
+						// Include custom text as context if provided
+						if ( len( arguments.text ) ) {
+							sentryExtra[ "logText" ] = arguments.text;
+						}
+						application.sentryLogger.logException(
+							exception = arguments.exception,
+							level = arguments.type,
+							extra = sentryExtra
+						);
+					} catch ( any e ) {
+						// Don't let Sentry failures break anything
+					}
+				}
+			}
+		} else {
+			if (static.DEBUG) {
+				systemOutput( arguments.text, true, true );
+			} else {
+				writeLog( text=arguments.text, type=arguments.type, log="application" );
+				// Send to Sentry if forceSentry is true
+				if ( arguments.forceSentry ) {
+					try {
+						application.sentryLogger.logMessage( message=arguments.text, level=arguments.type );
+					} catch ( any e ) {
+						// Don't let Sentry failures break anything
+					}
+				}
+			}
+		}
+	}
 }
