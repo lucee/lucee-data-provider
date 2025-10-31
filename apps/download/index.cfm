@@ -129,16 +129,21 @@
 						 beta:"Beta",
 						 snapshots:"Snapshot"
 					  }>
-					  <cfset mainsubjects={
-						 edge:"Bleeding Edge",
-						 stable: "Stable",
-						 lts:"LTS (Long Term Support)"
-					  }>
+					  <cfset mainsubjects=[
+						 edge:"Stable 7.0",
+						 stable: "Stable 6.2",
+						 lts:"5.4 LTS (Long Term Support)"
+					  ]>
 
 					  <table  border=0 cellpadding="25" cellspacing="5" width="100%">
 						 <tr>
-							<cfset lists={stable="releases,rc,beta,snapshots",edge:"rc,beta,snapshots",lts:"releases,rc,snapshots"}>
-							<cfloop list="stable,edge,lts" item="mainType">
+							<!-- removed beta -->
+							<cfset lists={
+								stable="releases,rc,snapshots",
+								edge:"releases,rc,snapshots",
+								lts:"releases,rc,snapshots"
+							}>
+							<cfloop list="edge,stable,lts" item="mainType">
 							<td valign="top"><div class="panel-body">
 								<div class="bg-primary BoxWidth text-white"><h2>#mainsubjects[mainType]#</h2></div>
 								<div class="desc descDiv row_even">
