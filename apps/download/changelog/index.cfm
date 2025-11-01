@@ -9,9 +9,10 @@
 		"6.0": true,
 		"6.1": true,
 		"6.2": true,
-		"7.0": true
+		"7.0": true,
+		"7.1": true
 	}; // todo pull this out of known verions
-	defaultMajorVersion = "6.2";
+	defaultMajorVersion = "7.0";
 	param name="url.version" default="";
 	if ( !structKeyExists( stMajorVersion, url.version ) ){
 		if (structKeyExists( stMajorVersion, left( url.version, 3 ) ) )
@@ -102,22 +103,27 @@
 				<cfset lastMajor = "">
 				<div class="versionList">
 					<cfloop array="#arrChangeLogs#" item="luceeVersion">
-						<cfif lastMajor neq left(luceeVersion.version, 3) and luceeVersion.type neq "snapshots">
+						<cfif lastMajor neq left(luceeVersion.version, 3) and luceeVersion.type neq "snapshots" and (structcount(luceeVersion.changelog) or luceeVersion.type eq "releases" or luceeVersion.type eq "rc")>
 							<cfif len(lastMajor) eq 0>
 								Lucee Releases:
 							</cfif>
 							<cfset lastMajor = left(LuceeVersion.version, 3)>
-							<b><a href="?version=#left(luceeVersion.version,3)#" 
+							<b><a href="?version=#left(luceeVersion.version,3)#"
 								data-version="#left(LuceeVersion.version, 3)#"
 								data-status="#stMajorVersion[left(LuceeVersion.version, 3)] ?: 'Active'#"
 								title="View all #left(LuceeVersion.version, 3)# releases - Status: #stMajorVersion[left(LuceeVersion.version, 3)] ?: 'Active'#">#left(LuceeVersion.version, 3)#</a>&nbsp;</b>&nbsp;
-							<a href="?version=#left(luceeVersion.version,3)####luceeVersion.version#" 
-								data-version="#luceeVersion.version#"
-								data-type="#luceeVersion.type#"
-								data-release-date="#luceeVersion.versionReleaseDate#"
-								data-git-tag="https://github.com/lucee/Lucee/tree/#listFirst(luceeVersion.version, '-')#"
-								title="View changelog for #luceeVersion.version# - Type: #luceeVersion.type# - Released: #luceeVersion.versionReleaseDate#"
-								>#luceeVersion.version#</a>&nbsp;
+							<!--- Only show detailed versions for 5.4 and above --->
+							<cfif val( left( luceeVersion.version, 3 ) ) gte 5.4>
+								<a href="?version=#left(luceeVersion.version,3)####luceeVersion.version#"
+									data-version="#luceeVersion.version#"
+									data-type="#luceeVersion.type#"
+									data-release-date="#luceeVersion.versionReleaseDate#"
+									data-git-tag="https://github.com/lucee/Lucee/tree/#listFirst(luceeVersion.version, '-')#"
+									title="View changelog for #luceeVersion.version# - Type: #luceeVersion.type# - Released: #luceeVersion.versionReleaseDate#"
+									>#luceeVersion.version#</a>&nbsp;
+							<cfelse>
+								&nbsp;
+							</cfif>
 						</cfif>
 					</cfloop>
 				</div>
@@ -159,7 +165,7 @@
 				<hr>
 				<table cellSpacing=0 border=0 cellPadding=2 width="100%" class="changelogs table-striped">
 					<cfloop array="#arrChangeLogs#" item="lv">
-						<cfif structcount(lv.changelog) and left(lv.version,3) eq url.version>
+						<cfif (structcount(lv.changelog) or lv.type eq "releases" or lv.type eq "rc") and left(lv.version,3) eq url.version>
 							<cfif row neq 0>
 								<tr>
 									<td colspan="4"><hr></td>
