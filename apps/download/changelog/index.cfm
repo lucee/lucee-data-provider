@@ -73,6 +73,9 @@
 		// Build changelog data array using the new method
 		arrChangeLogs = changelogService.buildChangelogData( major, arrVersions, url.version );
 
+		// Remove duplicate tickets from stable releases that also appear in their RC/Beta/Alpha
+		arrChangeLogs = changelogService.deduplicateStableReleaseTickets( arrChangeLogs );
+
 		function getBadgeForType( type ) {
 			switch(arguments.type){
 				case "bug":
@@ -227,10 +230,12 @@
 												</div>
 											</cfif>
 											</td>
-											<td style="max-width:250px;" data-fix-versions="#encodeForHtmlAttribute(arrayToList(ticket.fixVersions, ', '))#"
-												title="Fixed in versions: #arrayToList(ticket.fixVersions, ', ')#">
-												<cfloop array="#ticket.fixVersions#" item="fixVersion" index="i">
-													<span data-git-tag="https://github.com/lucee/Lucee/tree/#listFirst(fixVersion, '-')#">#fixVersion#</span><cfif i lt arrayLen(ticket.fixVersions)>, </cfif>
+											<cfset sortedFixVersions = duplicate(ticket.fixVersions)>
+											<cfset sortedFixVersions.sort("text")>
+											<td style="max-width:250px;" data-fix-versions="#encodeForHtmlAttribute(arrayToList(sortedFixVersions, ', '))#"
+												title="Fixed in versions: #arrayToList(sortedFixVersions, ', ')#">
+												<cfloop array="#sortedFixVersions#" item="fixVersion" index="i">
+													<a href="https://github.com/lucee/Lucee/commits/#listFirst(fixVersion, '-')#/" target="_blank" title="View commits for #fixVersion# on GitHub">#fixVersion#</a><cfif i lt arrayLen(sortedFixVersions)>, </cfif>
 												</cfloop>
 											</td>
 										</tr>
