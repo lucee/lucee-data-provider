@@ -199,6 +199,62 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( result[ 3 ].prevVersion ).toBe( "7.0.0.388-RC" );
 			});
 
+			it( "should use RC as prevVersion for stable release with same base version", function() {
+				var versions = {
+					"06.002.003.0035.100": {
+						"version": "6.2.3.35",
+						"type": "releases"
+					},
+					"06.002.003.0035.075": {
+						"version": "6.2.3.35-RC",
+						"type": "rc"
+					},
+					"06.002.003.0034.100": {
+						"version": "6.2.3.34",
+						"type": "releases"
+					}
+				};
+
+				var arrVersions = [ "06.002.003.0035.100", "06.002.003.0035.075", "06.002.003.0034.100" ];
+
+				var result = changelog.buildChangelogData( versions, arrVersions, "6.2" );
+
+				// Stable 6.2.3.35 should use RC 6.2.3.35-RC as prevVersion, not 6.2.3.34
+				expect( result[ 1 ].version ).toBe( "6.2.3.35" );
+				expect( result[ 1 ].type ).toBe( "releases" );
+				expect( result[ 1 ].prevVersion ).toBe( "6.2.3.35-RC" );
+
+				// RC should use stable 6.2.3.34 as prevVersion
+				expect( result[ 2 ].version ).toBe( "6.2.3.35-RC" );
+				expect( result[ 2 ].type ).toBe( "rc" );
+				expect( result[ 2 ].prevVersion ).toBe( "6.2.3.34" );
+			});
+
+			it( "should use beta as prevVersion for stable release when no RC exists", function() {
+				var versions = {
+					"06.002.003.0035.100": {
+						"version": "6.2.3.35",
+						"type": "releases"
+					},
+					"06.002.003.0035.050": {
+						"version": "6.2.3.35-BETA",
+						"type": "beta"
+					},
+					"06.002.003.0034.100": {
+						"version": "6.2.3.34",
+						"type": "releases"
+					}
+				};
+
+				var arrVersions = [ "06.002.003.0035.100", "06.002.003.0035.050", "06.002.003.0034.100" ];
+
+				var result = changelog.buildChangelogData( versions, arrVersions, "6.2" );
+
+				// Stable 6.2.3.35 should use BETA 6.2.3.35-BETA as prevVersion
+				expect( result[ 1 ].version ).toBe( "6.2.3.35" );
+				expect( result[ 1 ].prevVersion ).toBe( "6.2.3.35-BETA" );
+			});
+
 		});
 	}
 

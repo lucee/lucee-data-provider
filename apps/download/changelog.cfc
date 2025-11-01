@@ -137,6 +137,26 @@ component {
 			// Determine previous version for changelog range
 			if ( idx lt arrayLen( arguments.arrVersions ) ) {
 				prevVersion = arguments.versions[ arguments.arrVersions[ idx + 1 ] ].version;
+
+				// If current version is a stable release, check if there's an RC/Beta/Alpha with same base version
+				if ( arguments.versions[ _version ].type eq "releases" ) {
+					var baseVersion = listFirst( version, "-" );
+					//systemOutput( "Stable release #version#: looking for RC/Beta/Alpha with base version #baseVersion#, current prevVersion=#prevVersion#", true );
+					// Look through all versions to find RC/Beta/Alpha with matching base
+					loop array=arguments.arrVersions index="local.checkIdx" item="local.checkKey" {
+						var checkVersion = arguments.versions[ checkKey ].version;
+						var checkType = arguments.versions[ checkKey ].type;
+						var checkBase = listFirst( checkVersion, "-" );
+						// If we find an RC/Beta/Alpha with the same base version, use it as prevVersion
+						if ( ( checkType eq "rc" || checkType eq "beta" || checkType eq "alpha" )
+							&& checkBase eq baseVersion ) {
+							//systemOutput( "Found match: #checkVersion# (type=#checkType#, base=#checkBase#), setting as prevVersion", true );
+							prevVersion = checkVersion;
+							break;
+						}
+					}
+					//systemOutput( "Final prevVersion for stable #version# is #prevVersion#", true );
+				}
 			} else {
 				// Last version - use the oldest version from the sorted array (last item)
 				var lastKey = arguments.arrVersions[ arrayLen( arguments.arrVersions ) ];
@@ -157,7 +177,12 @@ component {
 			var changelog = {};
 			var versionReleaseDate = "";
 			if ( left( version, len( arguments.majorVersionFilter ) ) eq arguments.majorVersionFilter ) {
-				changelog = variables.download.getChangelog( prevVersion, version, false, true );
+				// For RC/Beta/Alpha, use the base version (without suffix) as upper bound to include tickets tagged without suffix
+				var changelogVersion = version;
+				if ( arguments.versions[ _version ].type eq "rc" || arguments.versions[ _version ].type eq "beta" || arguments.versions[ _version ].type eq "alpha" ) {
+					changelogVersion = listFirst( version, "-" );
+				}
+				changelog = variables.download.getChangelog( prevVersion, changelogVersion, false, true );
 				versionReleaseDate = variables.download.getReleaseDate( version );
 			}
 
@@ -178,6 +203,61 @@ component {
 		}
 
 		return arrChangeLogs;
+	}
+
+	/**
+	 * Remove duplicate tickets from stable releases that also appear in their RC/Beta/Alpha
+	 * Handles two cases:
+	 * 1. Same base version (e.g., 6.2.3.35 stable and 6.2.3.35-RC)
+	 * 2. Different base version where stable's prevVersion is RC/Beta/Alpha (e.g., 6.2.2.91 stable with prevVersion 6.2.2.90-RC)
+	 * @arrChangeLogs The changelog data array from buildChangelogData
+	 * @returns The deduplicated changelog data array
+	 */
+	function deduplicateStableReleaseTickets( required array arrChangeLogs ) localmode=true {
+		// Build a lookup map by version for quick access
+		versionLookup = {};
+		loop array=arguments.arrChangeLogs index="changelog" {
+			versionLookup[ changelog.version ] = changelog;
+		}
+
+		// Process each stable release
+		loop array=arguments.arrChangeLogs index="changelog" {
+			if ( changelog.type eq "releases" && structCount( changelog.changelog ) > 0 ) {
+				stableRelease = changelog;
+				prevVersion = stableRelease.prevVersion;
+
+				// Check if prevVersion is an RC/Beta/Alpha
+				isPrevRC = ( findNoCase( "-rc", prevVersion ) || findNoCase( "-beta", prevVersion ) || findNoCase( "-alpha", prevVersion ) );
+
+				// If prevVersion is RC/Beta/Alpha and exists in our data, deduplicate
+				if ( isPrevRC && structKeyExists( versionLookup, prevVersion ) ) {
+					rcRelease = versionLookup[ prevVersion ];
+
+					if ( structCount( rcRelease.changelog ) > 0 ) {
+						// Build a list of all ticket IDs in the RC changelog
+						rcTicketIds = {};
+						loop collection=rcRelease.changelog index="ver" item="tickets" {
+							loop collection=tickets index="ticketId" item="ticketData" {
+								rcTicketIds[ ticketId ] = true;
+							}
+						}
+
+						// Remove those tickets from the stable changelog
+						loop collection=stableRelease.changelog index="ver" item="tickets" {
+							ticketsToKeep = {};
+							loop collection=tickets index="ticketId" item="ticketData" {
+								if ( !structKeyExists( rcTicketIds, ticketId ) ) {
+									ticketsToKeep[ ticketId ] = ticketData;
+								}
+							}
+							stableRelease.changelog[ ver ] = ticketsToKeep;
+						}
+					}
+				}
+			}
+		}
+
+		return arguments.arrChangeLogs;
 	}
 
 	/**
