@@ -118,6 +118,9 @@
 			<p>Lucee Server and Extensions</p>
 		</div>
 
+		<h3>Lucee 5.4 is EOL (no longer receiving any security updates) as of December, 31st 2025<h3>
+		<h2>Lucee 6.2 is the new LTS Release</h2>
+
 				<cfif type EQ "releases" or type EQ "snapshots" or type EQ "abc" or type EQ "beta" or type EQ "rc">
 
 				   <cfif true>
@@ -131,8 +134,8 @@
 					  }>
 					  <cfset mainsubjects=[
 						 edge:"Stable 7.0",
-						 stable: "Stable 6.2",
-						 lts:"5.4 LTS (Long Term Support)"
+						 stable: "6.2 LTS (Long Term Support)",
+						 lts:"5.4 (EOL - Dec 31st, 2025)"
 					  ]>
 
 					  <table  border=0 cellpadding="25" cellspacing="5" width="100%">
