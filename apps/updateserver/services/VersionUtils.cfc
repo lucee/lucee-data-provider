@@ -12,7 +12,18 @@ component {
 
 		// OSGi compatible version
 		if( arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
-			return version;
+			// Fallback for non-4-part versions (e.g., "13.2.1" or "6.2.1-jre8")
+			local.rtn = "";
+			for ( local.i = 1; i <= arrayLen( arr ); i++ ) {
+				local.v = REReplace( arr[ i ], "[a-zA-Z-]", "", "all" ); // Strip letters and dashes
+				local.paddingLength = ( i == 1 ) ? 2 : ( i == 2 || i == 3 ) ? 3 : 4;
+				v = ( len( v ) < paddingLength ) ? repeatString( "0", paddingLength - len( v ) ) & v : v;
+				rtn &= ( i == 1 ? "" : "." ) & v;
+			}
+			if ( arrayLen( arr ) <= 3 ) {
+				rtn &= ".0000"; // Add .0000 for 3-part versions
+			}
+			return rtn;
 		}
 		local.sct = {major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
 

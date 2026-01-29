@@ -179,16 +179,29 @@ component accessors=true {
 		);
 	}
 
+	// this happens once at startup / init
 	private function _readExistingMetaFileFromS3() {
 		var metaFile = getS3Root() & "/extensions.json";
 		if ( FileExists( metaFile  ) ) {
-			// LDEV-5699 temp hotfix for incorrect sorting
 			var meta = DeserializeJson( FileRead( metaFile ), false );
-			QuerySort( meta, "id,versionSortable", "asc,desc" );
-			return meta;
+			return _updateExtensionSorting( meta );
 		}
-
 		return _getEmptyExtensionsQuery();
+	}
+
+	/* 
+		LDEV-5699, LDEV-6089
+		Reprocesses all versionSortable values on startup to apply current business rules.
+		This ensures legacy data with incorrect sorting is fixed automatically.
+	*/ 
+	private function _updateExtensionSorting( meta ){
+		for ( var i = 1; i <= meta.recordCount; i++ ) {
+			if ( len( meta.version[ i ] ) ) {
+				meta.versionSortable[ i ] = VersionUtils::sortableVersionString( meta.version[ i ] );
+			}
+		}
+		QuerySort( meta, "id,versionSortable", "asc,desc" );
+		return meta;
 	}
 
 	private function _writeMetaFileToS3( meta ) {
