@@ -90,12 +90,15 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 						return;
 					}
 
-					// Find a ticket with a specific fix version to test with
+					// Find a ticket with a specific fix version to test with (skip versions with spaces like "Websocket-client 2.3.0.8")
 					var testVersion = "";
 					loop query=issues {
 						if ( isArray( issues.fixVersions ) && arrayLen( issues.fixVersions ) > 0 ) {
-							testVersion = issues.fixVersions[ 1 ];
-							break;
+							var fv = issues.fixVersions[ 1 ];
+							if ( !find( " ", fv ) ) {
+								testVersion = fv;
+								break;
+							}
 						}
 					}
 
