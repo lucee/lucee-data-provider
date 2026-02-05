@@ -95,7 +95,8 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 					loop query=issues {
 						if ( isArray( issues.fixVersions ) && arrayLen( issues.fixVersions ) > 0 ) {
 							var fv = issues.fixVersions[ 1 ];
-							if ( !find( " ", fv ) ) {
+							if ( isArray( fv ) ) fv = fv[ 1 ];
+							if ( isSimpleValue( fv ) && !find( " ", fv ) ) {
 								testVersion = fv;
 								break;
 							}
