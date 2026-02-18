@@ -140,7 +140,7 @@
 							<!-- removed beta -->
 							<cfset lists={
 								stable="releases,rc,snapshots",
-								edge:"releases,rc,snapshots",
+								edge:"releases,beta,rc,snapshots",
 								lts:"releases,rc,snapshots"
 							}>
 							<cfloop list="edge,stable,lts" item="mainType">
