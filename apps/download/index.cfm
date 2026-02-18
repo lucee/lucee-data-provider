@@ -84,18 +84,18 @@
 	}
 
 	// latest
-	edgeMajor="7";
-	stableMajor="6"
-	ltsMajor="5";
+	edgeMajorMinor="7.1";
+	stableMajorMinor="7.0";
+	ltsMajorMinor="6.2";
 	latest={"edge":{},"lts":{},stable:{}};
 	alias = {};
-	alias[ltsMajor]="lts";
-	alias[edgeMajor]="edge";
-	alias[stableMajor]="stable";
+	alias[ltsMajorMinor]="lts";
+	alias[edgeMajorMinor]="edge";
+	alias[stableMajorMinor]="stable";
 	loop struct=variables.VERSIONS index="key" item="val" {
-		l=int(listFirst(key,'.'));
-		if (!structKeyExists(alias, l)) continue;
-		mv=alias[l];
+		mm=int( listFirst( key, '.' ) ) & "." & int( listGetAt( key, 2, '.' ) );
+		if (!structKeyExists(alias, mm)) continue;
+		mv=alias[mm];
 
 		if (!structKeyExists(latest[mv], val.type) || key>latest[mv][val.type].versionSorted) {
 			latest[mv][val.type]=val;
@@ -118,9 +118,6 @@
 			<p>Lucee Server and Extensions</p>
 		</div>
 
-		<h3>Lucee 5.4 is EOL (no longer receiving any security updates) as of December, 31st 2025<h3>
-		<h2>Lucee 6.2 is the new LTS Release</h2>
-
 				<cfif type EQ "releases" or type EQ "snapshots" or type EQ "abc" or type EQ "beta" or type EQ "rc">
 
 				   <cfif true>
@@ -133,9 +130,9 @@
 						 snapshots:"Snapshot"
 					  }>
 					  <cfset mainsubjects=[
-						 edge:"Stable 7.0",
-						 stable: "6.2 LTS (Long Term Support)",
-						 lts:"5.4 (EOL - Dec 31st, 2025)"
+						 edge:"Edge 7.1",
+						 stable: "Stable 7.0",
+						 lts:"6.2 LTS (Long Term Support)"
 					  ]>
 
 					  <table  border=0 cellpadding="25" cellspacing="5" width="100%">
@@ -143,7 +140,7 @@
 							<!-- removed beta -->
 							<cfset lists={
 								stable="releases,rc,snapshots",
-								edge:"releases,rc,snapshots",
+								edge:"releases,beta,rc,snapshots",
 								lts:"releases,rc,snapshots"
 							}>
 							<cfloop list="edge,stable,lts" item="mainType">
