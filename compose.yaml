@@ -28,10 +28,13 @@ services:
       - 8888:8888
     environment:
       - VIRTUAL_HOST=download.lucee.local
-      - S3_DOWNLOAD_ACCESS_KEY_ID=${S3_DOWNLOAD_ACCESS_KEY_ID:-xxxxxx}
-      - S3_DOWNLOAD_SECRET_KEY=${S3_DOWNLOAD_SECRET_KEY:-xxxxxx}
+      - UPDATE_PROVIDER=${UPDATE_PROVIDER}                # defaults to prod, set UPDATE_PROVIDER=http://127.0.0.1:8889/rest/update/ in .env for local testing
+      - UPDATE_PROVIDER_INT=${UPDATE_PROVIDER_INT}        # defaults to prod, set UPDATE_PROVIDER_INT=http://update:8888/rest/update/ in .env for local testing (docker)
+      - EXTENSION_PROVIDER=${EXTENSION_PROVIDER}          # defaults to prod, set EXTENSION_PROVIDER=http://127.0.0.1:8889/rest/extension/ in .env for local testing
+      - EXTENSION_PROVIDER_INT=${EXTENSION_PROVIDER_INT}  # defaults to prod, set EXTENSION_PROVIDER_INT=http://update:8888/rest/extension/ in .env for local testing (docker)
       - SENTRY_ENV=${SENTRY_ENV:-""}
       - SENTRY_DSN=${SENTRY_DSN:-""}
+      - DEBUG=${DEBUG:-"false"}
 
   update:
     build:
@@ -45,10 +48,16 @@ services:
       - 8889:8888
     environment:
       - VIRTUAL_HOST=update.lucee.local
-      - S3_EXTENSION_SECRET_KEY=${S3_EXTENSION_SECRET_KEY:-xxxxxx}
-      - S3_EXTENSION_ACCESS_KEY_ID=${S3_EXTENSION_ACCESS_KEY_ID:-xxxxxx}
-      - S3_DOWNLOAD_SECRET_KEY=${S3_DOWNLOAD_SECRET_KEY:-xxxxxx}
-      - S3_DOWNLOAD_ACCESS_KEY_ID=${S3_DOWNLOAD_ACCESS_KEY_ID:-xxxxxx}
+      - S3_EXTENSION_SECRET_KEY=${S3_EXTENSION_SECRET_KEY}
+      - S3_EXTENSION_ACCESS_KEY_ID=${S3_EXTENSION_ACCESS_KEY_ID}
+      # optionally use a local directory for testing
+      - S3_CORE_ROOT=${S3_CORE_ROOT} 
+      - S3_EXTENSIONS_ROOT=${S3_EXTENSIONS_ROOT}
+      - S3_BUNDLES_ROOT=${S3_BUNDLES_ROOT}
+      - DOWNLOADS_URL=${DOWNLOADS_URL}
+      - UPDATE_PROVIDER=${UPDATE_PROVIDER} # defaults to prod, set UPDATE_PROVIDER=http://update:8888/rest/update in .env for local testing
+      - EXTENSION_PROVIDER=${EXTENSION_PROVIDER} # defaults to prod, set EXTENSION_PROVIDER=http://update:8888/rest/extension in .env for local testing
       - SENTRY_ENV=${SENTRY_ENV:-""}
       - SENTRY_DSN=${SENTRY_DSN:-""}
       - ALLOW_RELOAD=${ALLOW_RELOAD:-"true"}
+      - DEBUG=${DEBUG:-"false"}

@@ -6,7 +6,7 @@ jobs:
     name: Java build
     runs-on: ubuntu-latest
     env:
-      luceeVersion: 6.2.0.321
+      luceeVersion: 6.2.2.91
       #luceeVersionQuery: 6.0.3/all/jar
     steps:
     - uses: actions/checkout@v4
@@ -59,6 +59,7 @@ jobs:
         testAdditional: ${{ github.workspace }}/tests
         testSevices: mysql
         LUCEE_ADMIN_ENABLED: false
+        DEBUG: true
     - name: Run Lucee Test Suite (testLabels="data-provider-integration")
       uses: lucee/script-runner@main
       #continue-on-error: true
@@ -68,11 +69,18 @@ jobs:
         luceeVersion: ${{ env.luceeVersion }}
         #luceeVersionQuery: ${{ env.luceeVersionQuery }}
         extensionDir: ${{ github.workspace }}/
+        luceeCFConfig: ${{ github.workspace }}/devops/.CFconfig-update.json5
       env:
         testLabels: data-provider-integration
         testAdditional: ${{ github.workspace }}/tests
         testSevices: mysql
         LUCEE_ADMIN_ENABLED: false
+        DEBUG: true
+    - name: debug failure
+      if: ${{ failure() }}
+      run: |
+          pwd
+          ls -lR ${{ github.workspace }}
 
   build:
     name: Docker build & publish

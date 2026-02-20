@@ -3,28 +3,60 @@
  * @restPath /update/provider
  */
 component {
-
+	static {
+		static.DEBUG = (server.system.environment.DEBUG ?: false);
+	}
 	variables.bundleDownloadService = application.bundleDownloadService;
 	variables.s3Root                = application.coreS3Root;
 	variables.cdnUrl                = application.coreCdnUrl;
 	variables.jiraChangelogService  = application.jiraChangelogService;
 
 	variables.providerLog = "update-provider";
+	variables.LUCEE_MAVEN_CDN = "https://cdn.lucee.org/org/lucee/lucee";
 
 	ALL_VERSION="0.0.0.0";
 	MIN_UPDATE_VERSION="5.0.0.254";
 	MIN_NEW_CHANGELOG_VERSION="5.3.0.0";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
 
-	private function logger( string text, any exception, type="info" ){
-		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
-		if ( !isNull(arguments.exception ) )
-			WriteLog( text=log, type=arguments.type, log=variables.providerLog, exception=arguments.exception );
-		else
-			WriteLog( text=log, type=arguments.type, log=variables.providerLog );
+	private function logger( string text, any exception, type="info", boolean forceSentry=false ){
+		// var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
+		if ( !isNull(arguments.exception ) ){
+			if (static.DEBUG) {
+				if ( len(arguments.text ) ) systemOutput( arguments.text, true );
+				systemOutput( arguments.exception, true );
+			} else {
+				WriteLog( text=arguments.text, type=arguments.type, log="exception", exception=arguments.exception );
+				// Send errors and warnings to Sentry (case insensitive check)
+				var normalizedType = lCase( arguments.type );
+				if ( normalizedType == "error" || normalizedType == "warning" || normalizedType == "warn" ) {
+					try {
+						application.sentryLogger.logException( exception=arguments.exception, level=arguments.type );
+					} catch ( any e ) {
+						// Don't let Sentry failures break anything
+					}
+				}
+			}
+		} else {
+			if (static.DEBUG) {
+				systemOutput( arguments.text, true);
+			} else {
+				WriteLog( text=arguments.text, type=arguments.type, log=variables.providerLog );
+				// Send to Sentry if forceSentry is true
+				if ( arguments.forceSentry ) {
+					try {
+						application.sentryLogger.logMessage( message=arguments.text, level=arguments.type );
+					} catch ( any e ) {
+						// Don't let Sentry failures break anything
+					}
+				}
+			}
+		}
 	}
 
+
 	/**
+	* MARK: /info
 	* if there is a update the function is returning a struct like this:
 	* {"type":"info"
 	* ,"language":arguments.language
@@ -41,93 +73,59 @@ component {
 	* @langauage language f the requesting user
 	*/
 	remote struct function getInfo(
-		required string version restargsource="Path",
-		string ioid="" restargsource="url",
-		string language="en" restargsource="url")
+			required string version restargsource="Path",
+			string ioid="" restargsource="url",
+			string language="en" restargsource="url",
+			string extended=true restargsource="url")
 		httpmethod="GET" restpath="info/{version}" {
 
-
-		try{
-			local.version=toVersion(arguments.version);
-
-			// no updates for versions smaller than ...
-			if(ALL_VERSION!=version.display && !isNewer(version,toVersion(MIN_UPDATE_VERSION)))
-				return {
-					"type":"warning",
-					"message":"Version ["&version.display&"] can not be updated from within the Lucee Administrator.  Please update Lucee by replacing the lucee.jar, which can be downloaded from [http://download.lucee.org]"};
-
-
-
-			local.s3=new services.legacy.S3(variables.s3Root);
-			var versions=s3.getVersions();
-			var keys=structKeyArray(versions);
-			arraySort(keys,"textnocase");
-			var latest = {};
-			latest.version = versions[keys[arrayLen(keys)]].version;
-			var latestVersion=toVersion(latest.version);
-
-			// others
-			latest.otherVersions=[];
-			var maxSnap=400;
-			var maxRel=100;
-			if(ALL_VERSION!=version.display) {
-				for(var i=arrayLen(keys);i>=1;i--) {
-					var el=versions[keys[i]];
-					if(findNoCase("-SNAPSHOT",el.version)) {
-						if ( ( --maxSnap )<=0 ) continue;
-					}
-					else {
-						if ( ( --maxRel )<=0 ) continue;
-					}
-					arrayPrepend(latest.otherVersions,el.version);
-				}
+		try {
+			var s3 = new services.legacy.S3(variables.s3Root);
+			var rawList = s3.getVersions();
+			var version = services.VersionUtils::toVersion(arguments.version);
+			var list = [];
+			loop array=rawList index="local.el" {
+				arrayAppend(list,local.el.version);
 			}
-
-			// no update
-			if(ALL_VERSION!=version.display && !isNewer(latestVersion,version))
-				return {
-					"type":"info",
-					"message":"There is no update available for your version (#version.display#). Latest version is [#latestVersion.display#].",
-					"otherVersions":latest.otherVersions?:[]
-				};
-
-			try {
-				var newChangeLog=isNewer(version,toVersion(MIN_NEW_CHANGELOG_VERSION));
-				local.notes=(ALL_VERSION==version.display)?
-					"":getChangeLog(version.display,latestVersion.display);
-
-				// do we need old layout of changelog?
-				if(!isNewer(version,toVersion(MIN_NEW_CHANGELOG_VERSION))) {
-					var nn=structNew("linked");
-					loop struct=notes index="local.ver" item="local.dat" {
-					    loop struct=dat index="local.k" item="local.v"{
-					        nn[k]=v;
-					    }
-					}
-					notes=nn;
-				}
-			}
-			catch(local.ee){
-				local.notes="";
-			}
-
-			var msgAppendix="";
-			if(ALL_VERSION!=version.display && !isNewer(version,toVersion(MIN_WIN_UPDATE_VERSION)))
-				msgAppendix="
-				<div class=""error"">Warning! <br/>
-				If this Lucee install is on a Windows based computer/server, please do not use the updater for this version due to a bug.  Instead download the latest lucee.jar from <a href=""http://stable.lucee.org/download/?type=snapshots"">here</a> and replace your existing lucee.jar with it.  This is a one-time workaround.";
-
-
-
-			return {
+			var data = s3.getLuceeVersionsDetail( version.display );
+			var index = arrayFindNoCase( list, version.display );
+			var latest = list[len(list)];
+			var len = arrayLen( list );
+			arrayDeleteAt( list,index );
+			var rtn= {
 				"type":"info"
 				,"language":arguments.language
 				,"current":version.display
-				,"available":latestVersion.display
-				,"otherVersions":latest.otherVersions?:[]
-				,"message":"A patch (#latestVersion.display#) is available for your current version (#version.display#)."&msgAppendix
-				,"changelog":isSimpleValue(notes)?{}:notes/*readChangeLog(newest.log)*/
-			}; // TODO get the right version for given version
+				,"latest":latest
+				,"version": data.version?:""
+
+				,"lastModified": data.lastModified?:""
+				,"size": data.size?:"0"
+				,"etag": data.etag?:""
+				,"lco":data.lco?:createArtifactURL("lco",data.version)
+				,"jar":data.jar
+				,"light":data.light?:createArtifactURL("light",data.version)
+				,"zero":data.zero?:createArtifactURL("zero",data.version)
+				,"express":data.express?:createArtifactURL("express",data.version)
+				,"war":data.war?:createArtifactURL("war",data.version)
+				,"fb":data.forgebox?:createArtifactURL("fb",data.version)
+				,"fbl":data["forgebox-light"]?:createArtifactURL("fbl",data.version)
+			};
+
+
+			if(arguments.extended) {
+				rtn["otherVersions"]=list;
+			}
+			// we have an update?
+			if(len>index) {
+				rtn["available"]=latest;
+				rtn["message"]="A patch (#latest#) is available for your current version (#version.display#).";
+				if(arguments.extended) rtn["changelog"]=getChangeLogs(version, services.VersionUtils::toVersion(latest));
+			}
+			else {
+				rtn["message"]="There is no update available for your version (#version.display#). Latest version is [#latest#]."
+			}
+			return rtn;
 		}
 		catch(e){
 			logger( text=e.message, exception=e, type="error" );
@@ -135,66 +133,194 @@ component {
 		}
 	}
 
-
-
-	/**
-	* function to download Lucee Loader file (lucee.jar)
-	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
+	/*
+	MARK: /download
 	*/
-	remote function downLoader(
+	remote function downloadCore(
 			required string version restargsource="Path",
 			string ioid="" restargsource="url")
-		httpmethod="GET" restpath="loader/{version}" {
+		httpmethod="GET,HEAD" restpath="download/{version}" {
 
-		createArtifactIfNecessary("jar",version);
-
-		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&"lucee-"&arguments.version&".jar";
-		return;
+		artifactDownloader( "lco", version );
 	}
 
 	/**
-	* function to download Light Lucee Loader file (lucee-light.jar)
-	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
+	 * MARK: /core
 	*/
-	remote function downLight(
-		required string version restargsource="Path",
-		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="light/{version}" {
+	remote function downloadCoreAlias(
+			required string version restargsource="Path",
+			string ioid="" restargsource="url")
+		httpmethod="GET,HEAD" restpath="core/{version}" {
 
-		createArtifactIfNecessary("light",version);
-
-		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&"lucee-light-"&arguments.version&".jar";
-		return;
+		artifactDownloader( "lco", version );
 	}
 
+	/**
+	 * MARK: /lco
+	*/
+	remote function downloadLco(
+			required string version restargsource="Path",
+			string ioid="" restargsource="url")
+		httpmethod="GET,HEAD" restpath="lco/{version}" {
+
+		artifactDownloader( "lco", version );
+	}
+
+	/**
+	 * MARK: /loader
+	*/
+	remote function downloadLoader(
+			required string version restargsource="Path",
+			string ioid="" restargsource="url")
+		httpmethod="GET,HEAD" restpath="loader/{version}" {
+
+		artifactDownloader( "loader", version );
+	}
+	
 	/**
 	* only for backward compatibility
 	*/
 	remote function downLoaderAll(
-		required string version restargsource="Path",
-		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="loader-all/{version}" {
-		return downLoaderNew(version,ioid);
+			required string version restargsource="Path",
+			string ioid="" restargsource="url")
+		httpmethod="GET,HEAD" restpath="loader-all/{version}" {
+
+		artifactDownloader( "loader", version );
 	}
 
-		/**
-	* only for backward compatibility
+	/**
+	 * MARK: /jar
 	*/
-	remote function downloadCoreAlias(
-		required string version restargsource="Path",
-		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="core/{version}" {
-		return downloadCoreNew(version,ioid);
+	remote function downloadJar(
+			required string version restargsource="Path",
+			string ioid="" restargsource="url")
+		httpmethod="GET,HEAD" restpath="jar/{version}" {
+
+		artifactDownloader( "loader", version );
 	}
 
+	/*
+	MARK: /express
+	*/
+	remote function downloadExpress(
+			required string version restargsource="Path",
+			string ioid="" restargsource="url")
+		httpmethod="GET,HEAD" restpath="express/{version}" {
+
+		artifactDownloader( "express", version );
+	}
+
+	/**
+	 * MARK: /light
+	*/
+	remote function downloadLight(
+			required string version restargsource="Path",
+			string ioid="" restargsource="url")
+		httpmethod="GET,HEAD" restpath="light/{version}" {
+
+		artifactDownloader( "light", version );
+	}
+
+	/**
+	 * MARK: /zero
+	*/
+	remote function downloadZero(
+			required string version restargsource="Path",
+			string ioid="" restargsource="url")
+		httpmethod="GET,HEAD" restpath="zero/{version}" {
+
+		artifactDownloader( "zero", version );
+	}
+
+	/**
+	 * MARK: /war
+	*/
+
+	remote function downloadWar(
+			required string version restargsource="Path",
+			string ioid="" restargsource="url")
+		httpmethod="GET,HEAD" restpath="war/{version}" {
+
+		artifactDownloader( "war", version );
+	}
+
+	/*
+	MARK: /forgebox
+	*/
+	remote function downloadForgebox(
+			required string version restargsource="Path",
+			string ioid="" restargsource="url",
+			boolean light=false restargsource="url")
+		httpmethod="GET,HEAD" restpath="forgebox/{version}" {
+
+		artifactDownloader( light?"forgebox-light":"forgebox", version );
+	}
+
+	/*
+	MARK: /fb
+	*/
+	remote function downloadForgeboxAlias(
+			required string version restargsource="Path",
+			string ioid="" restargsource="url",
+			boolean light=false restargsource="url")
+		httpmethod="GET,HEAD" restpath="fb/{version}" {
+
+		artifactDownloader( "forgebox", version );
+	}
+
+	/*
+		MARK: /fbl
+	*/
+	remote function downloadForgeboxLight(
+			required string version restargsource="Path",
+			string ioid="" restargsource="url")
+		httpmethod="GET,HEAD" restpath="fbl/{version}" {
+
+		artifactDownloader( "forgebox-light", version );
+	}
+
+	/*
+		MARK: /localDevRepo
+		only for local development when not using a s3 bucket
+	*/
+	remote function downloadLocalDevRepo(
+			required string mavenPath restargsource="url"
+		)
+		httpmethod="GET,HEAD" restpath="localDevRepo/" {
+
+		if ( left( application.coreS3Root, 3 ) == "s3:" || mavenPath contains ".."){
+			header statuscode=403;
+			echo("access denied");
+			return;
+		}
+		var localMavenPath = application.coreS3Root & arguments.mavenPath;
+		if ( expandPath( application.coreS3Root & arguments.mavenPath) neq localMavenPath ){
+			logger("bad localMavenPath: #localMavenPath#");
+			header statuscode=403;
+			echo("access denied");
+			return;
+		}
+		if ( fileExists( localMavenPath ) ) {
+			header name="Content-disposition" value="attachment;filename=#listlast(localMavenPath,'\/')#";
+			content file="#localMavenPath#" type="application/octet-stream";
+		} else {
+			logger("localMavenPath not found: #localMavenPath#");
+			header statuscode=404;
+			echo("file not found");
+			return;
+		}
+	}
+
+	/**
+	 * MARK: /echo
+	 * echo functions are used by the lucee test suite
+	*/
 	remote function echoGET(
-				string statusCode="" restargsource="url",
-				string mimeType="" restargsource="url",
-				string charset="" restargsource="url")
-			httpmethod="GET"
-			restpath="echoGet" {
+			string statusCode="" restargsource="url",
+			string mimeType="" restargsource="url",
+			string charset="" restargsource="url")
+		httpmethod="GET" restpath="echoGet" {
+
 		return _echo(arguments.statusCode, arguments.mimeType, arguments.charset);
 	}
 	remote function echoPOST() httpmethod="POST" restpath="echoPost" {return _echo();}
@@ -228,56 +354,8 @@ component {
 		return sct;
 	}
 
-	remote function downloadCore(
-		required string version restargsource="Path",
-		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="download/{version}" {
-
-		createArtifactIfNecessary("lco",version);
-
-		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&arguments.version&".lco";
-		return;
-	}
-
-
-
 	/**
-	* function to download Lucee Core file
-	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
-	*/
-	remote function downloadWarHead(required string version restargsource="Path", string ioid="" restargsource="url")
-		httpmethod="HEAD" restpath="war/{version}" {
-			return downloadWar(version, ioid);
-	}
-
-	remote function downloadWar(
-		required string version restargsource="Path",
-		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="war/{version}" {
-
-		createArtifactIfNecessary("war",version);
-
-		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&"lucee-"&arguments.version&".war";
-		return;
-	}
-
-
-	remote function downloadForgebox(
-		required string version restargsource="Path",
-		string ioid="" restargsource="url",
-		boolean light=false restargsource="url")
-		httpmethod="GET" restpath="forgebox/{version}" {
-
-		createArtifactIfNecessary(light?"fbl":"fb",version);
-
-		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&"forgebox-"&(light?"light-":"")&arguments.version&".zip";
-		return;
-	}
-
-	/**
+	 * MARK: /download/{bundlename}/{bundleversion}
 	 * function to load 3rd party Bundle file, for example "/antlr/2.7.6"
 	 * relocate to a download URL or directly serve the download as a binary (application/zip).
 	 *
@@ -345,41 +423,45 @@ component {
 		httpmethod="GET" restpath="update-for/{version}" produces="application/lazy" {
 
 		local.info=getInfo(version,ioid,"en");
-		systemOutput(version&"->	"&structkeyExists(info,"available"),true,true);
-
+		logger(version&"->	"&structkeyExists(info,"available"));
 
 		if(structkeyExists(info,"available")) return info.available;
 		return "";
 	}
 
+	/*
+	* MARK: /changelog
+	*/
 	remote struct function getChangeLog(
-		required string versionFrom restargsource="Path",
-		required string versionTo restargsource="Path")
+			required string versionFrom restargsource="Path",
+			required string versionTo restargsource="Path")
 		httpmethod="GET" restpath="changelog/{versionFrom}/{versionTo}" {
 
 		return jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo );
 	}
 
 	remote struct function getChangeLogExtended(
-		required string versionFrom restargsource="Path",
-		required string versionTo restargsource="Path")
+			required string versionFrom restargsource="Path",
+			required string versionTo restargsource="Path")
 		httpmethod="GET" restpath="changelogDetailed/{versionFrom}/{versionTo}" {
 
 		return jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo, detailed=true );
 	}
 	remote string function getChangeLogLastUpdated()
 		httpmethod="GET" restpath="changelogLastUpdated" {
-		// systemOutput("jiraChangelogService.getChangeLogUpdated():" & jiraChangelogService.getChangeLogUpdated(), true);
+		// logger("jiraChangelogService.getChangeLogUpdated():" & jiraChangelogService.getChangeLogUpdated());
+		if (isNull(jiraChangelogService.getChangeLogUpdated())) return now();
 		return DateTimeFormat(jiraChangelogService.getChangeLogUpdated());
 	}
 
 	/**
-	* function to get all dependencies (bundles) for a specific version
-	* @version version to get bundles for
+	 * MARK: /dependencies
+	 * function to get all dependencies (bundles) for a specific version
+	 * @version version to get bundles for
 	*/
 	remote function downloadDependencies(
-		required string version restargsource="Path",
-		string ioid="" restargsource="url")
+			required string version restargsource="Path",
+			string ioid="" restargsource="url")
 		httpmethod="GET" restpath="dependencies/{version}" {
 
 		setting requesttimeout="1000";
@@ -388,6 +470,7 @@ component {
 			local.path=mr.getDependencies(version);
 		}
 		catch(e){
+			logger( exception=e, type="error" );
 			//return e;
 			return {"type":"error","message":"The version #version# is not available."};
 		}
@@ -402,8 +485,8 @@ component {
 	* @version version to get bundles for
 	*/
 	remote function getDependencies(
-		required string version restargsource="Path",
-		string ioid="" restargsource="url")
+			required string version restargsource="Path",
+			string ioid="" restargsource="url")
 		httpmethod="GET" restpath="dependencies-read/{version}" {
 
 		setting requesttimeout="1000";
@@ -412,11 +495,17 @@ component {
 			return mr.getOSGiDependencies(version,true);
 		}
 		catch(e){
+			logger( exception=e, type="error" );
 			return {"type":"error","message":"The version #version# is not available."};
 		}
 	}
 
-	remote function getExpressTemplates() httpmethod="GET" restpath="expressTemplates" {
+	/*
+	MARK: /expressTemplates
+	*/
+
+	remote function getExpressTemplates()
+		httpmethod="GET" restpath="expressTemplates" {
 		var s3 = new services.legacy.S3( variables.s3Root );
 		var expressTemplates = duplicate( s3.getExpressTemplates() );
 		loop collection=#expressTemplates# key="local.key" item="local.item"{
@@ -432,6 +521,10 @@ component {
 		jiraChangelogService.updateIssuesAsync(); // async
 	}
 
+	/*
+	MARK: /latest
+	*/
+
 	remote function getLatest(
 			string version restargsource="path",
 			string type restargsource="path", // stable rc beta snapshot all
@@ -440,16 +533,14 @@ component {
 		) httpmethod="GET" restpath="latest/{version}/{type}/{distribution}/{format}" {
 
 		try {
-			var s3 = new services.legacy.S3( variables.s3Root );
-			var versions = s3.getVersions();
-
+			var s3 = new services.legacy.S3(variables.s3Root);
+			var versions=services.VersionUtils::versionArrayToStruct(s3.getVersions());
 			if ( arguments.type eq "all" )
 				arguments.type ="";
 			if ( arguments.version eq 0 )
 				arguments.version = "";
 
-			
-			var matchedVersion = services.VersionUtils::matchVersion( versions, arguments.type, 
+			var matchedVersion = services.VersionUtils::matchVersion( versions, arguments.type,
 				arguments.version, arguments.distribution );  // i.e. 06.002.001.0048.000
 
 			if ( len( matchedVersion ) eq 0 ){
@@ -458,7 +549,7 @@ component {
 			}
 			if ( len( arguments.format ) eq 0)
 				arguments.format = "redirect";
-			
+
 
 			var _version = versions[ matchedVersion ].version; // i.e 6.2.1.48-SNAPSHOT
 
@@ -487,77 +578,85 @@ component {
 			}
 		}
 		catch(e){
-			systemOutput( e, 1, 1 );
 			header statuscode="500";
 			logger(text=e.message, exception=e, type="error");
 			echo (e.message);
 		}
 	}
 
+	/*
+	MARK: /list
+	*/
 
 	remote function readList(
-		boolean force=false restargsource="url",
-		string type='all' restargsource="url",
-		boolean extended=false restargsource="url",
-		boolean flush=false restargsource="url"
+			boolean force=false restargsource="url",
+			string type='all' restargsource="url",
+			boolean extended=false restargsource="url",
+			boolean flush=false restargsource="url"
 		)
 		httpmethod="GET" restpath="list" {
 
-		setting requesttimeout="1000";
+		var rtn=arguments.extended?[:]:[];
+		var ignores=["6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT","6.0.1.82","7.0.0.202"];
+		var s3 = new services.legacy.S3(variables.s3Root);
+		var versions=s3.getVersions( flush );
 
-		try {
+		// when working locally, route cdn requests thru /localDevRepo
+		var localMaven = (left( application.coreS3Root, 3 ) != "s3:");
 
-			var s3=new services.legacy.S3(variables.s3Root);
-			var versions=s3.getVersions(flush);
+		loop array=versions index="local.el" {
+			try {
+				if(arrayContainsNoCase(ignores,el.version)) continue;
+				local.sct=services.VersionUtils::toVersion(el.version);
+				if(!arguments.extended) {
+					arrayAppend(rtn,
+						{
+							"version":sct.display,
+							"vs":sct.sortable
+						});
+				}
+				else {
+					if (localMaven) el = rewriteLocalMaven(el);
 
-			if(!isNull(url.abc)){
-				return versions;
-			}
-
-			var ignores=["6.0.0.12-SNAPSHOT","6.0.0.13-SNAPSHOT","6.0.1.82"];
-			loop array=structKeyArray( versions ) item="local.k" {
-				if ( !structKeyExists( versions[ k ], "version" )
-						|| arrayFind( ignores, versions[k].version ) ){
-					structDelete( versions, k );
+					rtn[local.sct.sortable]={
+						"version": sct.display,
+						"lastModified": el.lastModified?:"",
+						"size": el.size?:"0",
+						"etag": el.etag?:"",
+						"lco":el.lco ?: createArtifactURL("lco",sct.display),
+						"jar":el.jar,
+						"light":el.light?:createArtifactURL("light",sct.display),
+						"zero":el.zero?:createArtifactURL("zero",sct.display),
+						"express":el.express?:createArtifactURL("express",sct.display),
+						"war":el.war?:createArtifactURL("war",sct.display),
+						"fb":el.forgebox?:createArtifactURL("fb",sct.display),
+						"fbl":el["forgebox-light"]?:createArtifactURL("fbl",sct.display)
+					};
 				}
 			}
-
-			if ( extended ) return versions;
-			var arr=[];
-			loop struct=versions index="local.vs" item="local.data" {
-				arrayAppend(arr,{'vs':vs,'version':data.version});
+			catch (any e) {
+				logger( exception=e, type="error" );
 			}
-			return arr;
 		}
-		catch(e){
-			systemOutput( e, 1, 1 );
-			logger( error=e.message, exception=e, type="error" );
-			return {"type":"error","message":e.message};
-		}
+		return rtn;
 	}
+
+
 
 	remote function getDate(required string version restargsource="Path")
 		httpmethod="GET" restpath="getdate/{version}" {
-		var mr=new services.legacy.MavenRepo();
-		try{
-			var info=mr.get(version,true);
-			if(!isNull(info.sources.pom.date))
-				return parseDateTime(info.sources.pom.date);
-			else if(!isNull(info.sources.jar.date))
-				return parseDateTime(info.sources.jar.date);
-		} catch(e) {
-			//systemOutput(e.stackTrace, true);
-			var mess=  "maven.getDate() threw " & left(cfcatch.message,100);
-			logger(text=mess, type="error");
-			systemOutput(mess, true, true );
-		}
+		var s3 = new services.legacy.S3(variables.s3Root);
+		var detail=s3.getLuceeVersionsDetail(version);
 
-		return "";
+		// TODO get data from LuceeVersionsDetail, make it availabe there
+		//if(static.DEBUG)  systemOutput(LuceeVersionsDetail(version), true, true);
+
+		return detail.lastModified?:"";
 	}
 
 	remote function readGetOnlyForDebugging(
-		required string version restargsource="Path"
-		,boolean extended restargsource="url")
+			required string version restargsource="Path"
+			,boolean extended restargsource="url")
 		httpmethod="GET" restpath="get/{version}" {
 
 		setting requesttimeout="1000";
@@ -566,31 +665,20 @@ component {
 			return mr.get(arguments.version,arguments.extended);
 		}
 		catch(e){
+			logger( exception=e, type="error" );
 			return {"type":"error","message":e.message};
 		}
 	}
 
-	remote function downloadExpress(
-		required string version restargsource="Path",
-		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="express/{version}" {
-
-		createArtifactIfNecessary("express",version);
-
-		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&"lucee-express-"&arguments.version&".zip";
-		return;
-	}
-
-	remote function listMissing(boolean inclFB=false restargsource="url")
+	remote function listMissing(
+			boolean inclFB=false restargsource="url")
 		httpmethod="GET" restpath="list-missing" {
 		setting requesttimeout="100";
-		var s3=new services.legacy.S3(variables.s3Root);
-		var versions=s3.getVersions(true);
-
+		var s3 = new services.legacy.S3(variables.s3Root);
+		var versions=services.VersionUtils::versionArrayToStruct(s3.getVersions());
 		var rtn=structNew("linked");
 		var list="jar,lco,war,light,express";
-		if(inclFB)list&=",fb,fbl";
+		if(inclFB)list&=",forgebox,forgebox-light";
 		loop list=list item="type" {
 
 			loop struct=versions index="vs" item="data" {
@@ -604,6 +692,7 @@ component {
 	}
 
 	/**
+	 * MARK: /buildLatest
 	* this functions triggers that everything is prepared/build for future requests
 	* @version version to get bundles for
 	*/
@@ -613,96 +702,9 @@ component {
 		var indexDir=getDirectoryFromPath(getCurrentTemplatePath())&"index/";
 		if(directoryExists(indexDir)) directoryDelete(indexDir, true);
 
-
-			var s3=new services.legacy.S3(variables.s3Root);
-		s3.addMissing(true);
+		var s3=new services.legacy.S3(variables.s3Root);
+		s3.buildLatest(true);
 		return "done";
-	}
-
-	private boolean function isVersion(required string version) {
-		try{
-			toVersion(version);
-			return true;
-		}
-		catch(e) {
-			return false;
-		}
-	}
-
-	private struct function toVersion(required string version, boolean ignoreInvalidVersion=false){
-		local.arr=listToArray(arguments.version,'.');
-		if(arr.len()==3) {
-			arr[4]="0";
-		}
-		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
-			if(ignoreInvalidVersion) return {};
-			throw ("version number ["&arguments.version&"] is invalid");
-		}
-		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
-
-		// qualifier has an appendix? (BETA,SNAPSHOT)
-		local.qArr=listToArray(arr[4],'-');
-		if(qArr.len()==1 && isNumeric(qArr[1])) local.sct.qualifier=qArr[1]+0;
-		else if(qArr.len()==2 && isNumeric(qArr[1])) {
-			sct.qualifier=qArr[1]+0;
-			sct.qualifier_appendix=qArr[2];
-			if(sct.qualifier_appendix=="SNAPSHOT")sct.qualifier_appendix_nbr=0;
-			else if(sct.qualifier_appendix=="BETA")sct.qualifier_appendix_nbr=50;
-			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
-		}
-		else throw ("version number ["&arguments.version&"] is invalid");
-		sct.pure=
-					sct.major
-					&"."&sct.minor
-					&"."&sct.micro
-					&"."&sct.qualifier;
-		sct.display=
-					sct.pure
-					&(sct.qualifier_appendix==""?"":"-"&sct.qualifier_appendix);
-
-		sct.sortable=repeatString("0",2-len(sct.major))&sct.major
-					&"."&repeatString("0",3-len(sct.minor))&sct.minor
-					&"."&repeatString("0",3-len(sct.micro))&sct.micro
-					&"."&repeatString("0",4-len(sct.qualifier))&sct.qualifier
-					&"."&repeatString("0",3-len(sct.qualifier_appendix_nbr))&sct.qualifier_appendix_nbr;
-		return sct;
-	}
-
-	private boolean function isNewer(required struct left, required struct right ){
-		// major
-		if(left.major>right.major) return true;
-		if(left.major<right.major) return false;
-
-		// minor
-		if(left.minor>right.minor) return true;
-		if(left.minor<right.minor) return false;
-
-		// micro
-		if(left.micro>right.micro) return true;
-		if(left.micro<right.micro) return false;
-
-		// qualifier
-		if(left.qualifier>right.qualifier) return true;
-		if(left.qualifier<right.qualifier) return false;
-
-		if(left.qualifier_appendix_nbr>right.qualifier_appendix_nbr) return true;
-		if(left.qualifier_appendix_nbr<right.qualifier_appendix_nbr) return false;
-
-		if(left.qualifier_appendix_nbr==75 && right.qualifier_appendix_nbr==75) {
-			if(left.qualifier_appendix>right.qualifier_appendix) return true;
-			if(left.qualifier_appendix<right.qualifier_appendix) return false; // not really necessary
-		}
-		return false;
-	}
-
-	private boolean function isEqual(required struct left, required struct right ){
-		if(left.major!=right.major) return false;
-		if(left.minor!=right.minor) return false;
-		if(left.micro!=right.micro) return false;
-		if(left.qualifier!=right.qualifier) return false;
-		if(left.qualifier_appendix!=right.qualifier_appendix) return false;
-
-		return true;
 	}
 
 	private function s3Exists(name) {
@@ -715,49 +717,6 @@ component {
 		}
 		application.exists[name]=false;
 		return false;
-	}
-
-	/**
-	* checks if file exists on S3 and if so redirect to it, if not it copies it to S3 and the next one will have it there.
-	* So nobody has to wait that it is copied over
-	*/
-	private function fromS3(path,name,async=true) {
-
-		// if exist we redirect to it
-			if(!isNull(url.show))
-				throw ((!isNull(application.exists[name]) && application.exists[name])&":"&fileExists(variables.s3Root&name)&"->"&(variables.s3Root&name));
-
-			var hasDef=(!isNull(application.exists[name]) && application.exists[name]);
-			if(hasDef || fileExists(variables.s3Root&name)) {
-				application.exists[name]=true;
-				header statuscode="302" statustext="Found";
-				header name="Location" value=variables.cdnURL&name;
-				return true;
-			}
-			// if not exist we make ready for the next
-			else {
-
-				if(async && isNull(url.show)) {
-					thread src=path trg=variables.s3Root&name {
-						lock timeout=1000 name=src {
-							if(!fileExists(trg) && fileSize(src)>100000) // we do this because it was created by a thread blocking this thread
-								_fileCopy(src,trg);
-						}
-					}
-				}
-				else {
-					var src=path;
-					var trg=variables.s3Root&name;
-					lock timeout=1000 name=src {
-						if(!fileExists(trg) && fileSize(src)>100000) {// we do this because it was created by a thread blocking this thread
-							_fileCopy(src,trg);
-							if(!isNull(url.show))
-								throw ("fileExists: "&fileExists(src)&" + "&fileExists(trg));
-						}
-					}
-				}
-			}
-			return false;
 	}
 
 	private function _fileCopy(src,trg) {
@@ -782,33 +741,120 @@ component {
 
 
 	private function fileSize(path) {
-	    var dir=getDirectoryFromPath(path);
-	    var file=listLast(path,'\/');
-	    directory filter=file name="local.res" directory=dir action="list";
-	    return res.recordcount==1?res.size:0;
+		var dir=getDirectoryFromPath(path);
+		var file=listLast(path,'\/');
+		directory filter=file name="local.res" directory=dir action="list";
+		return res.recordcount==1?res.size:0;
 	}
 
-	private function createArtifactIfNecessary(type,version) {
-		var s3=new services.legacy.S3(variables.s3Root);
-		var versions=s3.getVersions();
-		var vs=services.VersionUtils::toVersionSortable(version);
+	/*
+	MARK: artifactDownloader
+	*/
+	
+	private function artifactDownloader( type, version ) {
+		var _url=createArtifactIfNecessary( type, version );
+		header statuscode="302" statustext="Found";
+		if (structKeyExists(local,"_url")) {
+			header name="Content-disposition" value="attachment;filename=#listlast( _url, '\/' )#";
+			if (left( application.coreS3Root, 3 ) == "s3:"){
+				header name="Location" value=_url;
+			} else {
+				// route thru /localDevRepo
+				header name="Location" value=rewriteLocalMaven( { _url } )._url;
+			}
+		} else {
+			// is this reachable, need to handle local dev repo? src is obviously wrong
+			header name="Location" value="#LUCEE_MAVEN_CDN#/#arguments.version#/lucee-#arguments.version#.#arguments.type#";
+		}
+	}
 
-		if(structKeyExists(versions,vs) && structKeyExists(versions[vs],type)) return;
-		thread s3=s3 name=createUUID() _type=type _version=version  {
+	/*
+	MARK: createArtifactIfNecessary
+	*/
+
+	private function createArtifactIfNecessary( type , version ) {
+		var versionData=services.VersionUtils::toVersion( arguments.version );
+		var s3=new services.legacy.S3( variables.s3Root );
+		var data=s3.getLuceeVersionsDetail( versionData.display );
+		
+		logger("createArtifactIfNecessary(#type#,#version#) ---");
+
+		// in case we have a link for it, no action is needed
+		if (!isNull(data[arguments.type])) {
+			logger("--- found a match: "&data[arguments.type]);
+			return data[arguments.type];
+		}
+		logger("--- no match found, creating artifact");
+
+		var threadName="t"&createUUID();
+		thread s3=s3 name=threadName _type=type _version=version  {
 			try{
-				setting requesttimeout="10000000";
 				s3.add(_type,_version);
 			}
 			catch(e){
-				fileWrite("error.txt",serialize(e));
+				logger( exception=e, type="error" );
 			}
 		}
-		sleep(20000);
-		versions=s3.getVersions();
-		if(structKeyExists(versions,vs) && structKeyExists(versions[vs],type)) return; // all good, was built in the meantime
+
+		// wait for the thread to finish
+		logger("Waiting for thread #threadName# to finish...");
+		threadJoin(threadName,50000);
+
+		// check if the artifact was created
+		var data=s3.getLuceeVersionsDetail(versionData.display);
+		
+		if(!isNull(data[arguments.type])) {
+			return data[arguments.type];
+		}
 		content type="text/plain";
 		header statuscode="429" statustext="Still Building";
 		echo("artifact #encodeForHtml(type)# for version #encodeForHtml(version)# does not exist yet, but we triggered the build for it. Try again in a couple minutes.");
 		abort;
 	}
+
+	private function createArtifactURL(type,version) {
+		return "#getBaseURL()##arguments.type#/#arguments.version#"; 
+	}
+	private function getBaseURL() {
+		return application.updateProviderUrl;
+	}
+
+	private function getChangeLogs(struct version, struct latestVersion) {
+		try {
+			var newChangeLog=services.VersionUtils::isNewer(version, services.VersionUtils::toVersion(MIN_NEW_CHANGELOG_VERSION));
+			local.notes=(ALL_VERSION==version.display)?
+				"":getChangeLog(version.display,latestVersion.display);
+
+			// do we need old layout of changelog?
+			if(!services.VersionUtils::isNewer(version, services.VersionUtils::toVersion(MIN_NEW_CHANGELOG_VERSION))) {
+				var nn=structNew("linked");
+				loop struct=notes index="local.ver" item="local.dat" {
+					loop struct=dat index="local.k" item="local.v"{
+						nn[k]=v;
+					}
+				}
+				notes=nn;
+			}
+		}
+		catch(local.ee){
+			logger( exception=ee, type="error" );
+			local.notes="";
+		}
+		return local.notes;
+	}
+
+	private function rewriteLocalMaven( src ){
+		var st = [=];
+		var l = len ( application.coreS3Root ) + 1;
+		var baseUrl = getBaseURL();
+		loop collection=#src# key="local.k" value="local.v" {
+			if ( left( v, 1 ) eq "/" ){
+				st[k] = baseUrl & "localDevRepo?mavenPath=#mid(v,l)#";
+			} else {
+				st[k] = v;
+			}
+		}
+		return st;
+	}
+
 }
