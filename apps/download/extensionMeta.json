@@ -121,5 +121,86 @@
 	"811918E2-796C-4354-8374B1F331118AEB": {
 		"src": "https://github.com/lucee/extension-jdbc-duckdb",
 		"labels": "duckdb"
+	},
+	"FA79A831-7D30-4D8A-B7F300DECEB00001": {
+		"docs": "https://docs.lucee.org/recipes/lucee-step-debugger.html",
+		"src": "https://github.com/lucee/extension-debugger",
+		"labels": "debugger"
+	},
+	"058215B3-5544-4392-A187A1649EB5CA90": {
+		"docs": "https://docs.lucee.org/recipes/websocket-extension.html",
+		"src": "https://github.com/lucee/extension-websocket-client",
+		"labels": "websockets"
+	},
+	"0F5DEC68-DB34-42BB-A1C1B609175D7C57": {
+		"src": "https://github.com/lucee/extension-jdbc-exasol",
+		"labels": "exasol"
+	},
+	"0F6E1F35-32A0-4B8C-B5A4BBA87EE621A8": {
+		"src": "https://github.com/lucee/extension-couchbase",
+		"labels": "couchbase"
+	},
+	"1A1FA05C-CF89-4834-9BC71D617046A6A8": {
+		"src": "https://github.com/lucee/extension-git",
+		"labels": "git"
+	},
+	"261114AC-7372-4CA8-BA7090895E01682D": {
+		"src": "https://github.com/lucee/extension-ec2",
+		"labels": "ec2"
+	},
+	"337A9955-C0FA-848F-0B3F0AEBA155CA9B": {
+		"src": "https://github.com/lucee/extension-jdbc-teradata",
+		"labels": "teradata"
+	},
+	"465E1E35-2425-4F4E-8B3FAB638BD7280A": {
+		"src": "https://github.com/lucee/extension-jdbc-h2",
+		"labels": "h2"
+	},
+	"64B91581-2F6D-4316-8F21279369EB6F82": {
+		"src": "https://github.com/lucee/extension-poi",
+		"labels": "poi,spreadsheet"
+	},
+	"6DD4728A-AB0C-4F67-9DCE1A91A8ACD114": {
+		"src": "https://github.com/lucee/extension-jdbc-hsqldb",
+		"labels": "hsqldb"
+	},
+	"71BF38A8-6AC8-4704-8BC02C29893F56B3": {
+		"src": "https://github.com/lucee/extension-infinispan",
+		"labels": "infinispan,cache"
+	},
+	"97EB5427-F051-4684-91EBA6DBB5C5203F": {
+		"src": "https://github.com/lucee/extension-scheduler-classic",
+		"labels": "scheduler"
+	},
+	"A71D636B-D668-4D93-886F9A5D34A9343D": {
+		"docs": "https://docs.lucee.org/recipes/yaml-processing.html",
+		"src": "https://github.com/lucee/yaml-extension",
+		"labels": "yaml"
+	},
+	"CED6227E-0F49-6367-A68D21AACA6B07E8": {
+		"src": "https://github.com/lucee/extension-administrator",
+		"labels": "admin"
+	},
+	"D46D49C3-EB85-8D97-30BEC2F38561E985": {
+		"src": "https://github.com/lucee/extension-documentation",
+		"labels": "documentation"
+	},
+	"D6700FE4-E168-4512-9B95E1AE7784A3A5": {
+		"src": "https://github.com/lucee/extension-kinesis",
+		"labels": "kinesis,aws"
+	},
+	"DFE10517-14CE-4D8B-89A68091D9A6C81E": {
+		"src": "https://github.com/lucee/extension-jdbc-athena",
+		"labels": "athena,aws"
+	},
+	"E0ACA85A-22DB-48FF-B2D6CD89D5D1709F": {
+		"docs": "https://docs.lucee.org/recipes/dynamodb-cache-extension.html",
+		"src": "https://github.com/lucee/extension-dynamodb",
+		"labels": "dynamodb,aws"
+	},
+	"E99E43A5-C10E-41E9-878BFC82BAAD99CE": {
+		"docs": "https://docs.lucee.org/recipes/scheduler-quartz.html",
+		"src": "https://github.com/lucee/extension-quartz",
+		"labels": "quartz,scheduler"
 	}
 }
