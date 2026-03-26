@@ -29,14 +29,14 @@ component {
 			}
 			data['versionNoAppendix'] = data.version;
 
-			if ( data.type != "snapshots" ) {
+			if ( data.type != "snapshots" && data.type != "alpha" ) {
 				major[ vs ] = data;
 			} else {
 				// Track all snapshots - key (vs) is already the sorted version
-				// Extract major version from key: "07" from "07.000.001.0044.000"
-				var majorVersion = listFirst( vs, "." );
+				// Extract major.minor version from key: "07.000" from "07.000.001.0044.000"
+				var majorVersion = listFirst( vs, "." ) & "." & listGetAt( vs, 2, "." );
 
-				// Keep only the latest snapshot per major version (highest key)
+				// Keep only the latest snapshot per major.minor version (highest key)
 				if ( !structKeyExists( snapshots, majorVersion ) || vs > snapshots[ majorVersion ].key ) {
 					snapshots[ majorVersion ] = {
 						key: vs,

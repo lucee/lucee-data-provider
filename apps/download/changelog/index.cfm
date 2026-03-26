@@ -106,7 +106,7 @@
 				<cfset lastMajor = "">
 				<div class="versionList">
 					<cfloop array="#arrChangeLogs#" item="luceeVersion">
-						<cfif lastMajor neq left(luceeVersion.version, 3) and luceeVersion.type neq "snapshots" and (structcount(luceeVersion.changelog) or luceeVersion.type eq "releases" or luceeVersion.type eq "rc")>
+						<cfif lastMajor neq left(luceeVersion.version, 3) and luceeVersion.type neq "snapshots" and (structcount(luceeVersion.changelog) or luceeVersion.type eq "releases" or luceeVersion.type eq "rc" or luceeVersion.type eq "beta")>
 							<cfif len(lastMajor) eq 0>
 								Lucee Releases:
 							</cfif>
@@ -114,7 +114,7 @@
 							<b><a href="?version=#left(luceeVersion.version,3)#"
 								data-version="#left(LuceeVersion.version, 3)#"
 								data-status="#stMajorVersion[left(LuceeVersion.version, 3)] ?: 'Active'#"
-								title="View all #left(LuceeVersion.version, 3)# releases - Status: #stMajorVersion[left(LuceeVersion.version, 3)] ?: 'Active'#">#left(LuceeVersion.version, 3)#</a>&nbsp;</b>&nbsp;
+								title="View all #left(luceeVersion.version, 3)# releases - Status: #stMajorVersion[left(LuceeVersion.version, 3)] ?: 'Active'#">#left(LuceeVersion.version, 3)#</a>&nbsp;</b>&nbsp;
 							<!--- Only show detailed versions for 5.4 and above --->
 							<cfif val( left( luceeVersion.version, 3 ) ) gte 5.4>
 								<a href="?version=#left(luceeVersion.version,3)####luceeVersion.version#"
