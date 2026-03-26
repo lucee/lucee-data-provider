@@ -202,5 +202,14 @@
 		"docs": "https://docs.lucee.org/recipes/scheduler-quartz.html",
 		"src": "https://github.com/lucee/extension-quartz",
 		"labels": "quartz,scheduler"
+	},
+	"7FA79F92-0018-47F5-8C80E6C608C573BE": {
+		"src": "https://github.com/lucee/extension-jsonata",
+		"labels": "jsonata"
+	},
+	"17AB52DE-B300-A94B-E058FC978BE4542D": {
+		"docs": "https://docs.lucee.org/categories/crypto.html",
+		"src": "https://github.com/lucee/extension-crypto",
+		"labels": "crypto"
 	}
 }
