@@ -1,5 +1,8 @@
 component {
 
+	static {
+		static.DEBUG = (server.system.environment.DEBUG ?: false);
+	}
 
 	/**
 	 * Takes an OSGi compatible version string and returns as a "sortable"
@@ -119,60 +122,71 @@ component {
 		};
 	}
 
-	public static function matchVersion( versions, type, version, distribution ){
-		//systemOutput(versions.toJson(), true);
-		//systemOutput("", true);
-		//systemOutput("-------[#type#][#version#][#distribution#]------------", true);
-		var arrVersions = structKeyArray( arguments.versions ).reverse();
 
+	public static function versionArrayToStruct(array versions) {
+		var rtn=[:];
+		loop array=arguments.versions item="local.data" {
+			rtn[data.version] = data;
+		}
+		return rtn;
+	}
+
+	public static function matchVersion( versions, type, version, distribution ){
+		if(isArray(versions)) {
+			// convert array to struct
+			arguments.versions = versionArrayToStruct(arguments.versions);
+		}
+
+		var arrVersions = structKeyArray( arguments.versions ).reverse();
+ 
 		loop array="#arrVersions#" index="local.i" value="local.v" {
 			var _version = versions[ local.v ].version;
 			var _type = listToArray( _version, "-" ); // [ "6.2.0.317", "RC" ]
-			//systemOutput({_version, _type}, true);
+			//if(static.DEBUG) systemOutput({_version, _type}, true);
 			if ( arrayLen( _type ) eq 2 && arguments.type eq "stable" ){
 				// version has a suffix, i.e. 6.2.1.55-SNAPSHOT, stable versions have no suffix
-				//systemOutput("version has a suffix, not stable", true);
+				//if(static.DEBUG) systemOutput("version has a suffix, not stable", true);
 				continue;
 			} else if ( len( arguments.type ) gt 0 && arguments.type neq "stable" ){
 				if ( arrayLen( _type ) eq 1
 						|| ( _type[ 2 ] neq arguments.type) ){
-					//systemOutput("wrong type", true);
+					//if(static.DEBUG) systemOutput("wrong type", true);
 					continue;
 				}
 			}
 
 			if ( len( arguments.version ) eq 0
 					&& structKeyExists( versions[ local.v ], arguments.distribution ) ){
-				//systemOutput("match for the first version for the requested distribution", true);
+				//if(static.DEBUG) systemOutput("match for the first version for the requested distribution", true);
 				return v;
 			}
 			var versionMatches = findNoCase( arguments.version, _version );
 			if ( versionMatches neq 1 ) {
-				//systemOutput("requested version prefix does not match this version", true);
+				//if(static.DEBUG) systemOutput("requested version prefix does not match this version", true);
 				continue;
 			}
 			// at this point, the versions prefix match
 			if ( versionMatches eq 1 && len( _type[ 1 ] ) eq len( arguments.version ) ) {
-				//systemOutput("exact version match", true);
+				//if(static.DEBUG) systemOutput("exact version match", true);
 				if ( structKeyExists( versions[ local.v ], arguments.distribution ) ){
-					//systemOutput("exact version match", true);
+					//if(static.DEBUG) systemOutput("exact version match", true);
 					return v;
 				} else {
-					//systemOutput("exact version match, no distribution", true);
+					//if(static.DEBUG) systemOutput("exact version match, no distribution", true);
 					return "";
 				}
 			} else {
 				// avoid 6.2.1.55 matching 6.2.1.5
 				if ( ( len( arguments.version ) lt len( _type[ 1 ] )
 						&& mid( _type[ 1 ], len( arguments.version ) + 1, 1 ) neq "." )) {
-					//systemOutput("avoid partial match", true);
+					//if(static.DEBUG) systemOutput("avoid partial match", true);
 					continue;
 				}
 			}
 			if ( structKeyExists( versions[ local.v ], arguments.distribution ) ){
 				return v; // match on version and distribution
 			} else {
-				//systemOutput("match but missing distribution", true);
+				//if(static.DEBUG) systemOutput("match but missing distribution", true);
 				continue; //
 			}
 		}
@@ -197,4 +211,93 @@ component {
 
 		return (v[4] <= arguments.build);
 	}
+
+	public boolean static function isVersion(required string version) {
+		try{
+			toVersion(version);
+			return true;
+		}
+		catch(e) {
+			return false;
+		}
+	}
+
+	public struct static function toVersion(required string version, boolean ignoreInvalidVersion=false){
+		local.arr=listToArray(arguments.version,'.');
+		if(arr.len()==3) {
+			arr[4]="0";
+		}
+		if(arr.len()!=4 || !isNumeric(arr[1]) || !isNumeric(arr[2]) || !isNumeric(arr[3])) {
+			if(ignoreInvalidVersion) return {};
+			throw ("version number ["&arguments.version&"] is invalid");
+		}
+		local.sct={major:arr[1]+0,minor:arr[2]+0,micro:arr[3]+0,qualifier_appendix:"",qualifier_appendix_nbr:100};
+
+		// qualifier has an appendix? (BETA,SNAPSHOT)
+		local.qArr=listToArray(arr[4],'-');
+		if(qArr.len()==1 && isNumeric(qArr[1])) local.sct.qualifier=qArr[1]+0;
+		else if(qArr.len()==2 && isNumeric(qArr[1])) {
+			sct.qualifier=qArr[1]+0;
+			sct.qualifier_appendix=qArr[2];
+			if(sct.qualifier_appendix=="SNAPSHOT")sct.qualifier_appendix_nbr=0;
+			else if(sct.qualifier_appendix=="BETA")sct.qualifier_appendix_nbr=50;
+			else sct.qualifier_appendix_nbr=75; // every other appendix is better than SNAPSHOT
+		}
+		else throw ("version number ["&arguments.version&"] is invalid");
+		sct.pure=
+					sct.major
+					&"."&sct.minor
+					&"."&sct.micro
+					&"."&sct.qualifier;
+		sct.display=
+					sct.pure
+					&(sct.qualifier_appendix==""?"":"-"&sct.qualifier_appendix);
+
+		sct.sortable=repeatString("0",2-len(sct.major))&sct.major
+					&"."&repeatString("0",3-len(sct.minor))&sct.minor
+					&"."&repeatString("0",3-len(sct.micro))&sct.micro
+					&"."&repeatString("0",4-len(sct.qualifier))&sct.qualifier
+					&"."&repeatString("0",3-len(sct.qualifier_appendix_nbr))&sct.qualifier_appendix_nbr;
+		return sct;
+	}
+
+	private boolean static function isNewer(required struct left, required struct right ){
+		// major
+		if(left.major>right.major) return true;
+		if(left.major<right.major) return false;
+
+		// minor
+		if(left.minor>right.minor) return true;
+		if(left.minor<right.minor) return false;
+
+		// micro
+		if(left.micro>right.micro) return true;
+		if(left.micro<right.micro) return false;
+
+		// qualifier
+		if(left.qualifier>right.qualifier) return true;
+		if(left.qualifier<right.qualifier) return false;
+
+		if(left.qualifier_appendix_nbr>right.qualifier_appendix_nbr) return true;
+		if(left.qualifier_appendix_nbr<right.qualifier_appendix_nbr) return false;
+
+		if(left.qualifier_appendix_nbr==75 && right.qualifier_appendix_nbr==75) {
+			if(left.qualifier_appendix>right.qualifier_appendix) return true;
+			if(left.qualifier_appendix<right.qualifier_appendix) return false; // not really necessary
+		}
+		return false;
+	}
+
+	private boolean static function isEqual(required struct left, required struct right ){
+		if(left.major!=right.major) return false;
+		if(left.minor!=right.minor) return false;
+		if(left.micro!=right.micro) return false;
+		if(left.qualifier!=right.qualifier) return false;
+		if(left.qualifier_appendix!=right.qualifier_appendix) return false;
+
+		return true;
+	}
+
+
+
 }
