@@ -184,17 +184,20 @@ component {
 		var v = listToArray(arguments.version, ".");
 		while (v.len() < 4) v.append(0); // Normalize to 4 components
 
-		if ( v[ 1 ] > arguments.major ) return false;
-		if  (v[ 1 ] < arguments.major ) return true;
+		if ( v[ 1 ] > arguments.major ) return true;
+		if ( v[ 1 ] < arguments.major ) return false;
 
 		// same major, check deeper
-		if  (v[ 2 ] > arguments.minor ) return false;
-		if  (v[ 2 ] < arguments.minor ) return true;
+		if ( len( arguments.minor ) == 0 ) return true;
+		if ( v[ 2 ] > arguments.minor ) return true;
+		if ( v[ 2 ] < arguments.minor ) return false;
 
 		// same minor, check deeper
-		if ( v[ 3 ] > arguments.patch ) return false;
-		if ( v[ 3 ] < arguments.patch ) return true;
+		if ( len( arguments.patch ) == 0 ) return true;
+		if ( v[ 3 ] > arguments.patch ) return true;
+		if ( v[ 3 ] < arguments.patch ) return false;
 
-		return (v[4] <= arguments.build);
+		if ( len( arguments.build ) == 0 ) return true;
+		return (v[4] >= arguments.build);
 	}
 }

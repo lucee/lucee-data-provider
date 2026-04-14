@@ -440,21 +440,23 @@ component accessors=true {
 	}
 
 	private function _filterByCoreVersion( required query extensions, required string coreVersion ) {
-		var v = listToArray( arguments.coreVersion, "." );
+		var cv = arguments.coreVersion; // avoids scope cascading in closure
 		var filtered = queryFilter( arguments.extensions, function( row ){
 			if ( len( row.minCoreVersion ) == 0 ) return true;
-			var _v = v; // avoids scope cascading 4x
-			return valid =services.versionUtils::checkVersionGTE( row.minCoreVersion, _v[ 1 ], _v[ 2 ], _v[ 3 ], _v[ 4 ] );
+			var _v = listToArray( row.minCoreVersion, "." );
+			while ( _v.len() < 4 ) _v.append( 0 );
+			return services.versionUtils::checkVersionGTE( cv, val( _v[ 1 ] ), val( _v[ 2 ] ), val( _v[ 3 ] ), val( _v[ 4 ] ) );
 		});
 		return filtered;
 	}
 
 	private function _getLatestVersion( extVersions, coreVersion ) {
 		if ( len( arguments.coreVersion ) == 0 ) return arguments.extVersions._latest;
-		var cv = listToArray( arguments.coreVersion, "." );
 		loop collection="#arguments.extVersions#" key="local.k" value="local.v" {
-			if (k == "_latest") continue;
-			if ( services.versionUtils::checkVersionGTE( v.minCoreVersion, cv[ 1 ], cv[ 2 ], cv[ 3 ], cv[ 4 ] ) )
+			if ( k == "_latest" ) continue;
+			var _v = listToArray( v.minCoreVersion, "." );
+			while ( _v.len() < 4 ) _v.append( 0 );
+			if ( services.versionUtils::checkVersionGTE( arguments.coreVersion, val( _v[ 1 ] ), val( _v[ 2 ] ), val( _v[ 3 ] ), val( _v[ 4 ] ) ) )
 				return k;
 		}
 		throw "No extension version available for [#arguments.coreVersion#]";
