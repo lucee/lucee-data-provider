@@ -1,0 +1,16 @@
+services:
+  maven-bridge:
+    build: .
+    image: lucee-maven-bridge:latest
+    environment:
+      EXTENSION_PROVIDER: "https://www.forgebox.io"
+      GROUP_ID: "org.lucee"
+      CACHE_TTL_MINUTES: "60"
+      TIMEOUT: "300"
+      LUCEE_ADMIN_PASSWORD: "change-me"
+    volumes:
+      - "./www:/var/www"
+    ports:
+      - "8856:8888"
+
+# Maven repo base URL: http://localhost:8856/
