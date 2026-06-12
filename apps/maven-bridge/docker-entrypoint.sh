@@ -2,8 +2,10 @@
 set -e
 
 PORT="${PORT:-8080}"
-sed -i "s/listen 0.0.0.0:8080 default_server/listen 0.0.0.0:${PORT} default_server/" /etc/nginx/conf.d/default.conf
 
-nginx -t
+# Cloud Run requires listening on $PORT; the Lucee image defaults to 8888.
+if [ "$PORT" != "8888" ]; then
+  sed -i "s/port=\"8888\"/port=\"${PORT}\"/" /usr/local/tomcat/conf/server.xml
+fi
 
-exec supervisord -c /etc/supervisor/supervisord.conf
+exec /usr/local/tomcat/bin/catalina.sh run

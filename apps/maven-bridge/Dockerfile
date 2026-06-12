@@ -1,15 +1,13 @@
-FROM lucee/lucee:7.0.3.12-SNAPSHOT-nginx-tomcat11.0-jdk21-temurin-noble
+FROM lucee/lucee:7.0.3.12-SNAPSHOT
 
 ENV LUCEE_ADMIN_ENABLED=false
-ENV PORT=8080
 
 RUN mkdir -p /var/www
 COPY www/ /var/www/
 
 COPY lucee-config.json /opt/lucee/server/lucee-server/context/.CFConfig.json
-COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 
-# Route .lex/.pom downloads through Tomcat; metadata is served as static files from /var/www
+# Route .lex/.pom downloads through Lucee; metadata is served as static files from /var/www
 RUN sed -i '/<url-pattern>\*\.cfml<\/url-pattern>/a\        <url-pattern>*.lex</url-pattern>\n        <url-pattern>*.pom</url-pattern>' /usr/local/tomcat/conf/web.xml
 
 RUN mkdir -p /var/www/logs \
