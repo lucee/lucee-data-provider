@@ -33,7 +33,7 @@ Group metadata (XML): `http://localhost:8856/org/lucee/maven-metadata.xml`
 
 Example artifact metadata: `http://localhost:8856/org/lucee/redis-extension/maven-metadata.xml`
 
-> On startup the bridge syncs Maven metadata files under `{webroot}/{groupId path}/`. Dynamic paths (`.lex` redirects) are handled via `Application.cfc` → `onMissingTemplate`.
+> On startup the bridge syncs Maven metadata files under `{webroot}/{groupId path}/`. Dynamic paths (`.lex` redirects) are proxied to Tomcat via nginx. The container listens on **`PORT` (default `8080`)** for Google Cloud Run, matching the production Lucee nginx images (`devops/Dockerfile.base`).
 
 ## Configure Lucee 7 to use the bridge
 
@@ -58,7 +58,7 @@ LUCEE_MVN_REPO_RELEASES=http://localhost:8856/
 Or in Docker for a Lucee container on the same compose network:
 
 ```
-LUCEE_MVN_REPO_RELEASES=http://maven-bridge:8888/
+LUCEE_MVN_REPO_RELEASES=http://maven-bridge:8080/
 LUCEE_EXTENSIONPROVIDERS=org.lucee
 ```
 
@@ -70,6 +70,7 @@ LUCEE_EXTENSIONPROVIDERS=org.lucee
 | `GROUP_ID` | `org.lucee` | Maven groupId served by this bridge |
 | `CACHE_TTL_MINUTES` | `60` | How long to cache the provider index before automatic refresh |
 | `TIMEOUT` | `300` | HTTP timeout (seconds) for provider requests and request timeout |
+| `PORT` | `8080` | HTTP listen port (nginx); set by Google Cloud Run |
 | `LUCEE_ADMIN_PASSWORD` | — | Lucee administrator password |
 
 ## Examples

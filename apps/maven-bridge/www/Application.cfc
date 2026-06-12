@@ -18,13 +18,16 @@ component {
 		application.bridgeWebroot = getWebroot();
 		application.bridgeSupport = new org.lucee.mavenbridge.BridgeSupport(application.bridgeConfig);
 		application.bridgeProxy = new org.lucee.mavenbridge.proxy.BridgeProxy();
-		application.bridgeSupport.syncRepository(application.bridgeWebroot);
 		return true;
 	}
 
 	public boolean function onRequestStart() {
 		if (!structKeyExists(application, "bridgeWebroot")) {
 			onApplicationStart();
+		}
+		if (!structKeyExists(application, "bridgeSynced")) {
+			application.bridgeSupport.syncRepository(application.bridgeWebroot);
+			application.bridgeSynced = true;
 		}
 		if (isFlushRequest()) {
 			request.cacheFlushed = true;

@@ -11,6 +11,6 @@ services:
     volumes:
       - "./www:/var/www"
     ports:
-      - "8856:8888"
+      - "8856:8080"
 
 # Maven repo base URL: http://localhost:8856/
