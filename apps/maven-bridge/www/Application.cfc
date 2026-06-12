@@ -48,7 +48,7 @@ component {
 	private void function ensureBridgeConfig() {
 		if (!structKeyExists(application, "bridgeConfig")) {
 			application.bridgeConfig = {
-				provider: trim(server.system.environment.EXTENSION_PROVIDER ?: "https://extension.lucee.org"),
+				provider: trim(server.system.environment.EXTENSION_PROVIDER ?: "https://www.forgebox.io"),
 				groupId: trim(server.system.environment.GROUP_ID ?: "org.lucee"),
 				cacheTtlMinutes: val(server.system.environment.CACHE_TTL_MINUTES ?: 60),
 				timeout: val(server.system.environment.TIMEOUT ?: 300)
