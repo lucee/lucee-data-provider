@@ -88,8 +88,8 @@ component {
 
 	public static array function defaultProviders() {
 		return [
-			{ "provider": "https://www.forgebox.io", "groupId": "io.forgebox" },
-			{ "provider": "https://extension.lucee.org", "groupId": "org.lucee" }
+			{ "provider": "https://www.forgebox.io", "groupId": "io.forgebox" }
+			//,{ "provider": "https://extension.lucee.org", "groupId": "org.lucee" }
 		];
 	}
 
