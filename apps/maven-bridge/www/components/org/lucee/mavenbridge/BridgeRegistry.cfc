@@ -75,6 +75,52 @@ component {
 		}
 	}
 
+	public static array function parseProviders(required string env) {
+		var raw = trim(arguments.env);
+		if (!len(raw)) {
+			return [];
+		}
+		if (left(raw, 1) == "[") {
+			return normalizeProviderEntries(deserializeJSON(raw));
+		}
+		return normalizeProviderEntries(listToArray(raw));
+	}
+
+	public static array function defaultProviders() {
+		return [
+			{ "provider": "https://www.forgebox.io", "groupId": "io.forgebox" },
+			{ "provider": "https://extension.lucee.org", "groupId": "org.lucee" }
+		];
+	}
+
+	private static array function normalizeProviderEntries(required array entries) {
+		var providers = [];
+		for (var entry in arguments.entries) {
+			if (isStruct(entry)) {
+				if (len(trim(entry.provider ?: "")) && len(trim(entry.groupId ?: ""))) {
+					arrayAppend(providers, {
+						"provider": trim(entry.provider),
+						"groupId": trim(entry.groupId)
+					});
+				}
+				continue;
+			}
+			var pair = trim(toString(entry));
+			if (!len(pair)) {
+				continue;
+			}
+			var pos = find("|", pair);
+			if (pos < 2) {
+				continue;
+			}
+			arrayAppend(providers, {
+				"provider": trim(left(pair, pos - 1)),
+				"groupId": trim(mid(pair, pos + 1))
+			});
+		}
+		return providers;
+	}
+
 	private array function getSupportsByPathLength() {
 		var supports = [];
 		for (var groupId in structKeyArray(variables.supports)) {

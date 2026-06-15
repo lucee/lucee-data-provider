@@ -58,7 +58,7 @@ component {
 	private array function parseBridgeProviders() {
 		var raw = trim(server.system.environment.EXTENSION_PROVIDERS ?: "");
 		if (len(raw)) {
-			return parseProviderEnv(raw);
+			return org.lucee.mavenbridge.BridgeRegistry::parseProviders(raw);
 		}
 
 		var provider = trim(server.system.environment.EXTENSION_PROVIDER ?: "");
@@ -70,53 +70,7 @@ component {
 			}];
 		}
 
-		return defaultBridgeProviders();
-	}
-
-	private array function defaultBridgeProviders() {
-		return [
-			{ "provider": "https://www.forgebox.io", "groupId": "io.forgebox" },
-			{ "provider": "https://extension.lucee.org", "groupId": "org.lucee" }
-		];
-	}
-
-	private array function parseProviderEnv(required string env) {
-		var raw = trim(arguments.env);
-		if (!len(raw)) {
-			return [];
-		}
-		if (left(raw, 1) == "[") {
-			return normalizeProviderEntries(deserializeJSON(raw));
-		}
-		return normalizeProviderEntries(listToArray(raw));
-	}
-
-	private array function normalizeProviderEntries(required array entries) {
-		var providers = [];
-		for (var entry in arguments.entries) {
-			if (isStruct(entry)) {
-				if (len(trim(entry.provider ?: "")) && len(trim(entry.groupId ?: ""))) {
-					arrayAppend(providers, {
-						"provider": trim(entry.provider),
-						"groupId": trim(entry.groupId)
-					});
-				}
-				continue;
-			}
-			var pair = trim(toString(entry));
-			if (!len(pair)) {
-				continue;
-			}
-			var pos = find("|", pair);
-			if (pos < 2) {
-				continue;
-			}
-			arrayAppend(providers, {
-				"provider": trim(left(pair, pos - 1)),
-				"groupId": trim(mid(pair, pos + 1))
-			});
-		}
-		return providers;
+		return org.lucee.mavenbridge.BridgeRegistry::defaultProviders();
 	}
 
 	private function createBridgeRegistry(required struct config) {
