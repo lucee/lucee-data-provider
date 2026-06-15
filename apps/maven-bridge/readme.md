@@ -1,6 +1,6 @@
 # Extension Provider Maven Bridge
 
-A small Lucee Docker app that exposes a **Maven repository layout** backed by a legacy Lucee **REST extension provider** (`extension.lucee.org`, ForgeBox, or your own update server).
+A small Lucee Docker app that exposes a **Maven repository layout** backed by one or more legacy Lucee **REST extension providers** (`extension.lucee.org`, ForgeBox, or your own update server).
 
 Use it while migrating Lucee 6-style extension providers to the Lucee 7+ Maven GroupId model.
 
@@ -25,11 +25,14 @@ Repository base URL: `http://localhost:8856/`
 
 Health check: `http://localhost:8856/health.cfm`
 
-Flush cache and resync from provider: `http://localhost:8856/health.cfm?flush=true`
+Flush cache and resync from providers: `http://localhost:8856/health.cfm?flush=true`
 
-Group index (HTML): `http://localhost:8856/org/lucee/`
+Default group indexes:
 
-Group metadata (XML): `http://localhost:8856/org/lucee/maven-metadata.xml`
+| GroupId | Provider | URL |
+|---------|----------|-----|
+| `io.forgebox` | ForgeBox | `http://localhost:8856/io/forgebox/` |
+| `org.lucee` | extension.lucee.org | `http://localhost:8856/org/lucee/` |
 
 Example artifact metadata: `http://localhost:8856/org/lucee/redis-extension/maven-metadata.xml`
 
@@ -41,7 +44,7 @@ Point release repositories at the bridge (server or web context):
 
 ```json
 {
-  "extensionProviders": ["org.lucee"],
+  "extensionProviders": ["io.forgebox", "org.lucee"],
   "maven": {
     "repository": ["http://localhost:8856/"]
   }
@@ -51,7 +54,7 @@ Point release repositories at the bridge (server or web context):
 Environment variables:
 
 ```
-LUCEE_EXTENSIONPROVIDERS=org.lucee
+LUCEE_EXTENSIONPROVIDERS=io.forgebox,org.lucee
 LUCEE_MVN_REPO_RELEASES=http://localhost:8856/
 ```
 
@@ -59,31 +62,42 @@ Or in Docker for a Lucee container on the same compose network:
 
 ```
 LUCEE_MVN_REPO_RELEASES=http://maven-bridge:8080/
-LUCEE_EXTENSIONPROVIDERS=org.lucee
+LUCEE_EXTENSIONPROVIDERS=io.forgebox,org.lucee
 ```
 
 ## Bridge environment
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `EXTENSION_PROVIDER` | `https://extension.lucee.org` | REST extension provider base URL |
-| `GROUP_ID` | `org.lucee` | Maven groupId served by this bridge |
-| `CACHE_TTL_MINUTES` | `60` | How long to cache the provider index before automatic refresh |
+| `EXTENSION_PROVIDERS` | ForgeBox → `io.forgebox`, extension.lucee.org → `org.lucee` | Comma-separated `providerUrl\|groupId` pairs, or JSON array |
+| `EXTENSION_PROVIDER` | — | Legacy single-provider mode (use with `GROUP_ID`) |
+| `GROUP_ID` | — | Legacy single-provider Maven groupId |
+| `CACHE_TTL_MINUTES` | `60` | How long to cache each provider index before automatic refresh |
 | `TIMEOUT` | `300` | HTTP timeout (seconds) for provider requests and request timeout |
 | `PORT` | `8080` | HTTP listen port (Tomcat); set by Google Cloud Run |
 | `LUCEE_ADMIN_PASSWORD` | — | Lucee administrator password |
 
-## Examples
+### Multiple providers
 
-Bridge ForgeBox instead of extension.lucee.org:
+Pipe-separated pairs (recommended in Docker Compose):
 
 ```yaml
 environment:
-  EXTENSION_PROVIDER: "https://www.forgebox.io"
-  GROUP_ID: "org.lucee"
+  EXTENSION_PROVIDERS: "https://www.forgebox.io|io.forgebox,https://extension.lucee.org|org.lucee"
 ```
 
-Bridge a local update server:
+JSON array:
+
+```yaml
+environment:
+  EXTENSION_PROVIDERS: >-
+    [
+      {"provider":"https://www.forgebox.io","groupId":"io.forgebox"},
+      {"provider":"https://extension.lucee.org","groupId":"org.lucee"}
+    ]
+```
+
+Legacy single provider:
 
 ```yaml
 environment:
@@ -95,10 +109,12 @@ environment:
 
 ```
 www/
-  Application.cfc                         → config, sync repo files, route /org/*
+  Application.cfc                         → config, sync repo files, route /org/* and /io/*
   index.cfm                               → root info
   org/lucee/                              → generated Maven tree (gitignored)
+  io/forgebox/                            → generated Maven tree (gitignored)
   components/org/lucee/mavenbridge/
+    BridgeRegistry.cfc                    → routes paths to provider/groupId mappings
     BridgeSupport.cfc                     → fetch REST index, sync + build responses
     proxy/BridgeProxy.cfc                 → HTTP dispatch for dynamic paths (.lex)
 ```
@@ -113,7 +129,7 @@ flowchart LR
   CDN[Extension CDN]
 
   Lucee7 -->|"GET /org/lucee/ (HTML)"| Bridge
-  Lucee7 -->|"GET /org/lucee/maven-metadata.xml"| Bridge
+  Lucee7 -->|"GET /io/forgebox/ (HTML)"| Bridge
   Lucee7 -->|"GET .../{artifactId}/maven-metadata.xml"| Bridge
   Lucee7 -->|"HEAD/GET .../*.lex"| Bridge
   Bridge -->|"GET /rest/extension/provider/info"| Provider
@@ -143,7 +159,6 @@ Older Lucee versions can keep using the HTML group index. Newer Lucee (LDEV-6405
 
 ## Limitations
 
-- Serves one `GROUP_ID` per container instance
 - Snapshot metadata is simplified (enough for basic `-SNAPSHOT` resolution)
 - `.lex` downloads redirect through the REST provider's `/full/{id}` endpoint rather than proxying bytes
 - ArtifactIds are derived from provider filenames (`redis.extension-1.2.3.lex` → `redis-extension`)

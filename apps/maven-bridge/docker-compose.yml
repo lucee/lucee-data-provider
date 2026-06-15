@@ -3,8 +3,7 @@ services:
     build: .
     image: lucee-maven-bridge:latest
     environment:
-      EXTENSION_PROVIDER: "https://www.forgebox.io"
-      GROUP_ID: "org.lucee"
+      EXTENSION_PROVIDERS: "https://www.forgebox.io|io.forgebox,https://extension.lucee.org|org.lucee"
       CACHE_TTL_MINUTES: "60"
       TIMEOUT: "300"
       LUCEE_ADMIN_PASSWORD: "change-me"

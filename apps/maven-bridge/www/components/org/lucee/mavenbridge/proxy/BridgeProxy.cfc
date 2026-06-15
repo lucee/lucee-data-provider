@@ -9,25 +9,24 @@ component {
 	}
 
 	private struct function invokePath(required string path) {
-		var support = getSupport();
+		var registry = getRegistry();
 		var cleanPath = normalizePath(arguments.path);
 
 		if (cleanPath == "/health" || cleanPath == "/healthcheck") {
-			return healthResponse(support);
+			return healthResponse(registry);
 		}
 
 		if (cleanPath == "/") {
-			return textResponse(200, "text/plain; charset=utf-8", support.describe());
+			return textResponse(200, "text/plain; charset=utf-8", registry.describe());
 		}
 
-		var parsed = support.parseMavenPath(cleanPath);
-		if (parsed.type == "unknown") {
+		var resolved = registry.resolve(cleanPath);
+		if (resolved.parsed.type == "unknown") {
 			return textResponse(404, "text/plain; charset=utf-8", "Not found");
 		}
 
-		if (parsed.groupId != support.getGroupId()) {
-			return textResponse(404, "text/plain; charset=utf-8", "Group [#parsed.groupId#] is not served by this bridge");
-		}
+		var support = resolved.support;
+		var parsed = resolved.parsed;
 
 		try {
 			switch (parsed.type) {
@@ -60,8 +59,8 @@ component {
 		writeOutput(arguments.response.body ?: "");
 	}
 
-	private function getSupport() {
-		return application.bridgeSupport;
+	private function getRegistry() {
+		return application.bridgeRegistry;
 	}
 
 	private struct function artifactFileResponse(required any support, required string artifactId, required string version, required string extension) {
@@ -82,14 +81,24 @@ component {
 		};
 	}
 
-	private struct function healthResponse(required any support) {
-		var index = support.getIndex();
+	private struct function healthResponse(required any registry) {
+		var providers = [];
+		var artifactCount = 0;
+		for (var support in registry.getSupports()) {
+			var index = support.getIndex();
+			artifactCount += structCount(index.artifacts);
+			arrayAppend(providers, {
+				"provider": support.getProviderUrl(),
+				"groupId": support.getGroupId(),
+				"artifactCount": structCount(index.artifacts),
+				"cachedAt": index.cachedAt
+			});
+		}
+
 		var body = {
 			"status": "ok",
-			"provider": support.getProviderUrl(),
-			"groupId": support.getGroupId(),
-			"artifactCount": structCount(index.artifacts),
-			"cachedAt": index.cachedAt
+			"providers": providers,
+			"artifactCount": artifactCount
 		};
 		if (structKeyExists(url, "flush")) {
 			var flush = url.flush;

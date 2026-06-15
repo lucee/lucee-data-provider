@@ -29,15 +29,15 @@ component {
 
 	public struct function getIndex() {
 		ensureIndex();
-		return application.mavenBridgeIndex;
+		return application.mavenBridgeIndex[variables.groupId];
 	}
 
 	public struct function flushCache(required string webroot) {
 		if (structKeyExists(application, "mavenBridgeIndex")) {
-			structDelete(application, "mavenBridgeIndex");
+			structDelete(application.mavenBridgeIndex, variables.groupId);
 		}
 		syncRepository(arguments.webroot);
-		return application.mavenBridgeIndex;
+		return getIndex();
 	}
 
 	public struct function parseMavenPath(required string path) {
@@ -352,13 +352,16 @@ component {
 	// --- index loading ---
 
 	private void function ensureIndex() {
-		if (structKeyExists(application, "mavenBridgeIndex")) {
-			var ageMinutes = dateDiff("n", application.mavenBridgeIndex.cachedAt, now());
+		if (!structKeyExists(application, "mavenBridgeIndex")) {
+			application.mavenBridgeIndex = {};
+		}
+		if (structKeyExists(application.mavenBridgeIndex, variables.groupId)) {
+			var ageMinutes = dateDiff("n", application.mavenBridgeIndex[variables.groupId].cachedAt, now());
 			if (ageMinutes < variables.cacheTtlMinutes) {
 				return;
 			}
 		}
-		application.mavenBridgeIndex = loadIndex();
+		application.mavenBridgeIndex[variables.groupId] = loadIndex();
 		if (structKeyExists(application, "bridgeWebroot")) {
 			syncRepository(application.bridgeWebroot);
 		}

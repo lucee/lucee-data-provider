@@ -25,4 +25,6 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=30s --retries=3 \
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # docker build -t lucee-maven-bridge .
-# docker run -d -p 8856:8080 -e EXTENSION_PROVIDER=https://extension.lucee.org lucee-maven-bridge
+# docker run -d -p 8856:8080 \
+#   -e EXTENSION_PROVIDERS='https://www.forgebox.io|io.forgebox,https://extension.lucee.org|org.lucee' \
+#   lucee-maven-bridge
