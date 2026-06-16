@@ -26,5 +26,5 @@ ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # docker build -t lucee-maven-bridge .
 # docker run -d -p 8856:8080 \
-#   -e EXTENSION_PROVIDERS='https://www.forgebox.io|io.forgebox,https://extension.lucee.org|org.lucee' \
+#   -e EXTENSION_PROVIDERS='https://www.forgebox.io|io.forgebox,https://extension.lucee.org|org.lucee|https://cdn.lucee.org/' \
 #   lucee-maven-bridge
