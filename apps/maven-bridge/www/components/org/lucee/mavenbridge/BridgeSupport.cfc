@@ -149,7 +149,8 @@ component {
 			"<!DOCTYPE html>",
 			"<html><head><title>#encodeForHtml(variables.groupId)#</title></head><body>",
 			"<h1>#encodeForHtml(variables.groupId)#</h1>",
-			"<pre>"
+			"<pre>",
+			'<a href="maven-metadata.xml">maven-metadata.xml</a>' & chr(10)
 		];
 
 		for (var artifactId in artifactIds) {
