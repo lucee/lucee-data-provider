@@ -1,4 +1,4 @@
-FROM lucee/lucee:7.0.3.12-SNAPSHOT
+FROM lucee/lucee:7.0.5.32-SNAPSHOT
 
 ENV LUCEE_ADMIN_ENABLED=false
 
