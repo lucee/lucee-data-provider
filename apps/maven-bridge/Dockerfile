@@ -7,8 +7,8 @@ COPY www/ /var/www/
 
 COPY lucee-config.json /opt/lucee/server/lucee-server/context/.CFConfig.json
 
-# Route .lex/.pom downloads through Lucee; metadata is served as static files from /var/www
-RUN sed -i '/<url-pattern>\*\.cfml<\/url-pattern>/a\        <url-pattern>*.lex</url-pattern>\n        <url-pattern>*.pom</url-pattern>' /usr/local/tomcat/conf/web.xml
+# Route Maven metadata and artifact downloads through Lucee (upstream mirror + REST fallback).
+RUN sed -i '/<url-pattern>\*\.cfml<\/url-pattern>/a\        <url-pattern>*.xml</url-pattern>\n        <url-pattern>*.lex</url-pattern>\n        <url-pattern>*.pom</url-pattern>' /usr/local/tomcat/conf/web.xml
 
 RUN mkdir -p /var/www/logs \
  && ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/application.log \

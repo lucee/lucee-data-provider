@@ -29,13 +29,21 @@ component {
 		var parsed = resolved.parsed;
 
 		try {
+			if (support.hasUpstream() && isUpstreamContentType(parsed.type)) {
+				return upstreamContentResponse(support, parsed);
+			}
+
 			switch (parsed.type) {
 				case "group-index":
 					return htmlResponse(200, support.buildGroupIndexHtml());
 				case "group-metadata":
 					return xmlResponse(200, support.buildGroupMetadata());
+				case "artifact-index":
+					return htmlResponse(200, support.buildArtifactIndexHtml(parsed.artifactId));
 				case "artifact-metadata":
 					return xmlResponse(200, support.buildArtifactMetadata(parsed.artifactId));
+				case "version-index":
+					return htmlResponse(200, support.buildVersionIndexHtml(parsed.artifactId, parsed.version));
 				case "version-metadata":
 					return xmlResponse(200, support.buildVersionMetadata(parsed.artifactId, parsed.version));
 				case "artifact-file":
@@ -64,6 +72,18 @@ component {
 	}
 
 	private struct function artifactFileResponse(required any support, required string artifactId, required string version, required string extension) {
+		if (support.hasUpstream()) {
+			var upstreamPath = support.toUpstreamRelativePath({
+				"type": "artifact-file",
+				"artifactId": arguments.artifactId,
+				"version": arguments.version,
+				"extension": arguments.extension
+			});
+			if (support.upstreamResourceExists(upstreamPath)) {
+				return redirectResponse(support.getUpstreamUrl() & upstreamPath);
+			}
+		}
+
 		if (arguments.extension == "pom") {
 			return xmlResponse(200, support.buildMinimalPom(arguments.artifactId, arguments.version));
 		}
@@ -73,10 +93,53 @@ component {
 			return textResponse(404, "text/plain; charset=utf-8", "No [#arguments.extension#] artifact for [#support.getGroupId()#:#arguments.artifactId#:#arguments.version#]");
 		}
 
+		return redirectResponse(downloadUrl);
+	}
+
+	private boolean function isUpstreamContentType(required string type) {
+		return listFindNoCase(
+			"group-index,group-metadata,artifact-index,artifact-metadata,version-index,version-metadata",
+			arguments.type
+		) > 0;
+	}
+
+	private struct function upstreamContentResponse(required any support, required struct parsed) {
+		var relativePath = support.toUpstreamRelativePath(arguments.parsed);
+		try {
+			var content = support.getCachedUpstreamContent(application.bridgeWebroot, relativePath);
+			return textResponse(200, content.contentType, content.body);
+		} catch (any e) {
+			if (e.type != "bridge.upstream.notfound") {
+				rethrow;
+			}
+		}
+		return synthesizedContentResponse(arguments.support, arguments.parsed);
+	}
+
+	private struct function synthesizedContentResponse(required any support, required struct parsed) {
+		switch (arguments.parsed.type) {
+			case "group-index":
+				return htmlResponse(200, support.buildGroupIndexHtml());
+			case "group-metadata":
+				return xmlResponse(200, support.buildGroupMetadata());
+			case "artifact-index":
+				return htmlResponse(200, support.buildArtifactIndexHtml(parsed.artifactId));
+			case "artifact-metadata":
+				return xmlResponse(200, support.buildArtifactMetadata(parsed.artifactId));
+			case "version-index":
+				return htmlResponse(200, support.buildVersionIndexHtml(parsed.artifactId, parsed.version));
+			case "version-metadata":
+				return xmlResponse(200, support.buildVersionMetadata(parsed.artifactId, parsed.version));
+			default:
+				return textResponse(404, "text/plain; charset=utf-8", "Not found");
+		}
+	}
+
+	private struct function redirectResponse(required string location) {
 		return {
 			"statusCode": 302,
 			"contentType": "text/plain; charset=utf-8",
-			"location": downloadUrl,
+			"location": arguments.location,
 			"body": ""
 		};
 	}
@@ -85,14 +148,21 @@ component {
 		var providers = [];
 		var artifactCount = 0;
 		for (var support in registry.getSupports()) {
-			var index = support.getIndex();
-			artifactCount += structCount(index.artifacts);
-			arrayAppend(providers, {
+			var provider = {
 				"provider": support.getProviderUrl(),
-				"groupId": support.getGroupId(),
-				"artifactCount": structCount(index.artifacts),
-				"cachedAt": index.cachedAt
-			});
+				"groupId": support.getGroupId()
+			};
+			if (support.hasUpstream()) {
+				provider["upstream"] = support.getUpstreamUrl();
+				provider["mode"] = "upstream-mirror";
+			} else {
+				var index = support.getIndex();
+				artifactCount += structCount(index.artifacts);
+				provider["artifactCount"] = structCount(index.artifacts);
+				provider["cachedAt"] = index.cachedAt;
+				provider["mode"] = "rest-provider";
+			}
+			arrayAppend(providers, provider);
 		}
 
 		var body = {

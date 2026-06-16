@@ -6,6 +6,7 @@ component {
 			var config = duplicate(arguments.sharedConfig);
 			config.provider = trim(entry.provider);
 			config.groupId = trim(entry.groupId);
+			config.upstream = trim(entry.upstream ?: "");
 			if (!len(config.provider) || !len(config.groupId)) {
 				continue;
 			}
@@ -33,7 +34,8 @@ component {
 			var support = variables.supports[groupId];
 			arrayAppend(providers, {
 				"provider": support.getProviderUrl(),
-				"groupId": support.getGroupId()
+				"groupId": support.getGroupId(),
+				"upstream": support.hasUpstream() ? support.getUpstreamUrl() : ""
 			});
 		}
 		arraySort(providers, function(a, b) {
@@ -98,10 +100,14 @@ component {
 		for (var entry in arguments.entries) {
 			if (isStruct(entry)) {
 				if (len(trim(entry.provider ?: "")) && len(trim(entry.groupId ?: ""))) {
-					arrayAppend(providers, {
+					var providerEntry = {
 						"provider": trim(entry.provider),
 						"groupId": trim(entry.groupId)
-					});
+					};
+					if (len(trim(entry.upstream ?: ""))) {
+						providerEntry["upstream"] = trim(entry.upstream);
+					}
+					arrayAppend(providers, providerEntry);
 				}
 				continue;
 			}
@@ -109,14 +115,18 @@ component {
 			if (!len(pair)) {
 				continue;
 			}
-			var pos = find("|", pair);
-			if (pos < 2) {
+			var segments = listToArray(pair, "|");
+			if (arrayLen(segments) < 2) {
 				continue;
 			}
-			arrayAppend(providers, {
-				"provider": trim(left(pair, pos - 1)),
-				"groupId": trim(mid(pair, pos + 1))
-			});
+			var providerEntry = {
+				"provider": trim(segments[1]),
+				"groupId": trim(segments[2])
+			};
+			if (arrayLen(segments) >= 3 && len(trim(segments[3]))) {
+				providerEntry["upstream"] = trim(segments[3]);
+			}
+			arrayAppend(providers, providerEntry);
 		}
 		return providers;
 	}

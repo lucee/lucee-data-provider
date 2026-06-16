@@ -33,6 +33,14 @@ component {
 			request.cacheFlushed = true;
 			flushBridgeCache();
 		}
+
+		var path = currentRequestPath();
+		if (isMavenRepoPath(path)) {
+			ensureBridgeComponents();
+			application.bridgeProxy.render(application.bridgeProxy.invoke(path));
+			return false;
+		}
+
 		return true;
 	}
 
@@ -111,6 +119,18 @@ component {
 
 	private string function getWebroot() {
 		return getDirectoryFromPath(getCurrentTemplatePath());
+	}
+
+	private string function currentRequestPath() {
+		var path = trim(cgi.path_info ?: "");
+		if (!len(path) || path == "/") {
+			path = trim(cgi.script_name ?: "");
+		}
+		return normalizeTargetPage(path);
+	}
+
+	private boolean function isMavenRepoPath(required string path) {
+		return reFindNoCase("^/(org|io)/", arguments.path) == 1;
 	}
 
 	private string function normalizeTargetPage(required string targetPage) {

@@ -5,6 +5,7 @@ component {
 	public function init(required struct config) {
 		variables.providerUrl = trim(config.provider);
 		variables.groupId = trim(config.groupId);
+		variables.upstreamUrl = normalizeUpstreamUrl(config.upstream ?: "");
 		variables.cacheTtlMinutes = val(config.cacheTtlMinutes ?: 60);
 		variables.timeout = val(config.timeout ?: 300);
 		if (variables.cacheTtlMinutes < 1) {
@@ -25,6 +26,117 @@ component {
 
 	public string function getGroupId() {
 		return variables.groupId;
+	}
+
+	public boolean function hasUpstream() {
+		return len(variables.upstreamUrl) > 0;
+	}
+
+	public string function getUpstreamUrl() {
+		return variables.upstreamUrl;
+	}
+
+	public string function toUpstreamRelativePath(required struct parsed) {
+		var groupPath = replace(variables.groupId, ".", "/", "all");
+
+		switch (arguments.parsed.type) {
+			case "group-index":
+				return groupPath & "/index.html";
+			case "group-metadata":
+				return groupPath & "/maven-metadata.xml";
+			case "artifact-index":
+				return groupPath & "/" & arguments.parsed.artifactId & "/index.html";
+			case "artifact-metadata":
+				return groupPath & "/" & arguments.parsed.artifactId & "/maven-metadata.xml";
+			case "version-index":
+				return groupPath & "/" & arguments.parsed.artifactId & "/" & arguments.parsed.version & "/index.html";
+			case "version-metadata":
+				return groupPath & "/" & arguments.parsed.artifactId & "/" & arguments.parsed.version & "/maven-metadata.xml";
+			case "artifact-file":
+				var fileName = arguments.parsed.artifactId & "-" & arguments.parsed.version & "." & arguments.parsed.extension;
+				return groupPath & "/" & arguments.parsed.artifactId & "/" & arguments.parsed.version & "/" & fileName;
+			default:
+				return "";
+		}
+	}
+
+	public struct function fetchUpstreamResource(required string relativePath, string method="get") {
+		var rel = replace(arguments.relativePath, "\", "/", "all");
+		while (left(rel, 1) == "/") {
+			rel = mid(rel, 2);
+		}
+		var uri = variables.upstreamUrl & rel;
+
+		cfhttp(url=uri, method=arguments.method, timeout=variables.timeout, result="local.res") {};
+
+		var status = val(listFirst(toString(res.statusCode), " "));
+		var contentType = "";
+		if (structKeyExists(res, "responseheader")) {
+			var headers = res.responseheader;
+			if (isStruct(headers)) {
+				contentType = headers["Content-Type"] ?: headers["content-type"] ?: "";
+			}
+		}
+
+		return {
+			"statusCode": status,
+			"body": res.fileContent ?: "",
+			"contentType": contentType,
+			"url": uri
+		};
+	}
+
+	public boolean function upstreamResourceExists(required string relativePath) {
+		var fetched = fetchUpstreamResource(arguments.relativePath, "head");
+		return fetched.statusCode == 200;
+	}
+
+	public struct function getCachedUpstreamContent(required string webroot, required string relativePath) {
+		var rel = replace(arguments.relativePath, "\", "/", "all");
+		while (left(rel, 1) == "/") {
+			rel = mid(rel, 2);
+		}
+		var localFile = ensureTrailingSlash(arguments.webroot) & rel;
+		var refresh = true;
+
+		if (fileExists(localFile)) {
+			var ageMinutes = dateDiff("n", getFileInfo(localFile).lastmodified, now());
+			refresh = ageMinutes >= variables.cacheTtlMinutes;
+		}
+
+		if (refresh) {
+			var fetched = fetchUpstreamResource(rel);
+			if (fetched.statusCode == 404) {
+				throw(message="Upstream not found [#rel#]", type="bridge.upstream.notfound");
+			}
+			if (fetched.statusCode != 200) {
+				throw(message="Upstream [#fetched.url#] returned HTTP #fetched.statusCode#", type="bridge.upstream");
+			}
+			ensureDirectory(getDirectoryFromPath(localFile));
+			fileWrite(localFile, fetched.body);
+			return {
+				"statusCode": 200,
+				"body": fetched.body,
+				"contentType": len(fetched.contentType) ? fetched.contentType : contentTypeForPath(rel)
+			};
+		}
+
+		return {
+			"statusCode": 200,
+			"body": fileRead(localFile),
+			"contentType": contentTypeForPath(rel)
+		};
+	}
+
+	public string function contentTypeForPath(required string relativePath) {
+		var path = lCase(arguments.relativePath);
+		if (right(path, 4) == ".xml") {
+			return "application/xml; charset=utf-8";
+		}
+		if (right(path, 5) == ".html") {
+			return "text/html; charset=utf-8";
+		}
+		return "application/octet-stream";
 	}
 
 	public struct function getIndex() {
@@ -58,9 +170,15 @@ component {
 		var remainder = mid(arguments.path, len(prefix) + 2);
 		var parts = listToArray(remainder, "/");
 
-		if (arrayLen(parts) == 1 && parts[1] == "maven-metadata.xml") {
-			rtn.type = "group-metadata";
+		if (arrayLen(parts) == 1) {
+			if (parts[1] == "maven-metadata.xml") {
+				rtn.type = "group-metadata";
+				rtn.groupId = variables.groupId;
+				return rtn;
+			}
+			rtn.type = "artifact-index";
 			rtn.groupId = variables.groupId;
+			rtn.artifactId = parts[1];
 			return rtn;
 		}
 
@@ -68,6 +186,14 @@ component {
 			rtn.type = "artifact-metadata";
 			rtn.groupId = variables.groupId;
 			rtn.artifactId = parts[1];
+			return rtn;
+		}
+
+		if (arrayLen(parts) == 2) {
+			rtn.type = "version-index";
+			rtn.groupId = variables.groupId;
+			rtn.artifactId = parts[1];
+			rtn.version = parts[2];
 			return rtn;
 		}
 
@@ -313,16 +439,29 @@ component {
 	}
 
 	public string function describe() {
-		var index = getIndex();
-		return "Lucee extension provider Maven bridge#chr(10)#"
+		var lines = "Lucee extension provider Maven bridge#chr(10)#"
 			& "Provider: #variables.providerUrl##chr(10)#"
-			& "GroupId:  #variables.groupId##chr(10)#"
-			& "Artifacts: #structCount(index.artifacts)##chr(10)#"
-			& "Cached at: #index.cachedAt##chr(10)#"
-			& "Try: /#replace(variables.groupId, '.', '/', 'all')#/";
+			& "GroupId:  #variables.groupId##chr(10)#";
+		if (hasUpstream()) {
+			lines &= "Upstream: #variables.upstreamUrl##chr(10)#";
+		}
+		if (!hasUpstream()) {
+			var index = getIndex();
+			lines &= "Artifacts: #structCount(index.artifacts)##chr(10)#"
+				& "Cached at: #index.cachedAt##chr(10)#";
+		} else {
+			lines &= "Mode:     upstream mirror (REST fallback for missing artifacts)#chr(10)#";
+		}
+		lines &= "Try: /#replace(variables.groupId, '.', '/', 'all')#/";
+		return lines;
 	}
 
 	public void function syncRepository(required string webroot) {
+		if (hasUpstream()) {
+			syncUpstreamRepository(arguments.webroot);
+			return;
+		}
+
 		var groupPath = replace(variables.groupId, ".", "/", "all");
 		var baseDir = ensureTrailingSlash(arguments.webroot) & groupPath & "/";
 
@@ -366,6 +505,31 @@ component {
 		if (structKeyExists(application, "bridgeWebroot")) {
 			syncRepository(application.bridgeWebroot);
 		}
+	}
+
+	private void function syncUpstreamRepository(required string webroot) {
+		var groupPath = replace(variables.groupId, ".", "/", "all");
+		for (var relativePath in [
+			groupPath & "/maven-metadata.xml",
+			groupPath & "/index.html"
+		]) {
+			try {
+				getCachedUpstreamContent(arguments.webroot, relativePath);
+			} catch (any e) {
+				// Group files may not exist yet on upstream during migration.
+			}
+		}
+	}
+
+	private string function normalizeUpstreamUrl(required string upstream) {
+		var normalized = trim(arguments.upstream);
+		if (!len(normalized)) {
+			return "";
+		}
+		if (right(normalized, 1) != "/") {
+			normalized &= "/";
+		}
+		return normalized;
 	}
 
 	private struct function loadIndex() {
