@@ -7,7 +7,6 @@ services:
     volumes:
       - "./www:/var/www"
     ports:
-      - "8855:8888" # tomcat (direct)
-      - "8055:8888" # primary URL (Lucee 7 image has no nginx on 80)
+      - "8055:8080" # PORT (Cloud Run compatible)
 
 # docker compose up -d

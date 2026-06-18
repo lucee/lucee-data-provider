@@ -11,10 +11,15 @@ RUN mkdir -p /var/www/logs \
  && ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/application.log \
  && ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/exception.log
 
-EXPOSE 8888
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=30s --start-period=30s --retries=3 \
-  CMD curl -fsS "http://127.0.0.1:8888/health.cfm" || exit 1
+  CMD sh -c 'curl -fsS "http://127.0.0.1:${PORT:-8080}/health.cfm" || exit 1'
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # docker build -t lucee-skill .
-# docker run -d -p 8055:8888 -p 8855:8888 lucee-skill
+# docker run -d -p 8055:8080 lucee-skill
