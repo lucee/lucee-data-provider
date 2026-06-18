@@ -1,0 +1,13 @@
+services:
+  lucee:
+    build: .
+    image: lucee-skill:latest
+    environment:
+      LUCEE_ADMIN_PASSWORD: "change-me"
+    volumes:
+      - "./www:/var/www"
+    ports:
+      - "8855:8888" # tomcat (direct)
+      - "8055:8888" # primary URL (Lucee 7 image has no nginx on 80)
+
+# docker compose up -d
