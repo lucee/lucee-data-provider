@@ -1,15 +1,15 @@
 #FROM lucee/lucee:6.0.3.1-tomcat9.0-jdk11-temurin-jammy
-FROM lucee/lucee:6.2.0.321-light-nginx-tomcat10.1-jre21-temurin-jammy
+FROM lucee/lucee:6.2.2.91-SNAPSHOT-light-nginx-tomcat11.0-jre21-temurin-noble
 ADD https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.20.0/jmx_prometheus_javaagent-0.20.0.jar /opt/lucee/bin/prometheus-java-agent.jar
 ENV JAVA_OPTS="-javaagent:/opt/lucee/bin/prometheus-java-agent.jar=9090:/opt/lucee/conf/prometheus/config.yml"
 ENV LUCEE_ADMIN_ENABLED=false
 RUN  mkdir -p /opt/lucee/server/lucee-server/deploy && \
 mkdir -p /opt/lucee/server/lucee-server/context && \
-wget -nv https://ext.lucee.org/sentry-extension-5.5.2.15.lex -O /opt/lucee/server/lucee-server/deploy/sentry-extension.lex && \
-wget -nv https://ext.lucee.org/s3-extension-2.0.2.21.lex -O /opt/lucee/server/lucee-server/deploy/s3-extension-2.0.2.21.lex && \
-wget -nv https://ext.lucee.org/image-extension-2.0.0.29.lex -O /opt/lucee/server/lucee-server/deploy/image-extension-2.0.0.29.lex && \
-wget -nv https://ext.lucee.org/esapi-extension-2.2.4.18.lex -O /opt/lucee/server/lucee-server/deploy/esapi-extension-2.2.4.18.lex && \
-wget -nv https://ext.lucee.org/compress-extension-1.0.0.15.lex -O /opt/lucee/server/lucee-server/deploy/compress-extension-1.0.0.15.lex
+wget -nv https://ext.lucee.org/sentry-extension-5.6.0.0-SNAPSHOT.lex -O /opt/lucee/server/lucee-server/deploy/sentry-extension-5.6.0.0-SNAPSHOT.lex && \
+wget -nv https://ext.lucee.org/s3-extension-2.0.3.0.lex -O /opt/lucee/server/lucee-server/deploy/s3-extension-2.0.3.0.lex && \
+wget -nv https://ext.lucee.org/image-extension-2.0.0.31-SNAPSHOT.lex -O /opt/lucee/server/lucee-server/deploy/image-extension-2.0.0.31-SNAPSHOT.lex && \
+wget -nv https://ext.lucee.org/esapi-extension-2.6.0.1.lex -O /opt/lucee/server/lucee-server/deploy/esapi-extension-2.6.0.1.lex && \
+wget -nv https://ext.lucee.org/compress-extension-1.0.0.16.lex -O /opt/lucee/server/lucee-server/deploy/compress-extension-1.0.0.16.lex
 
 RUN mkdir -p /var/www && mkdir -p /var/www/logs \
 && ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/application.log \
@@ -26,7 +26,8 @@ RUN mkdir -p /var/www && mkdir -p /var/www/logs \
 && ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/scope.log \
 && ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/search.log \
 && ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/thread.log \
-&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/update-provider.log
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/update-provider.log \
+&& ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/extension-provider.log
 
 #ENV LUCEE_LOGGING_FORCE_LEVEL=info
 #ENV LUCEE_LOGGING_FORCE_APPENDER=console

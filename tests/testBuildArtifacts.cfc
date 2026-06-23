@@ -14,17 +14,21 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 	function run( testResults , testBox ) {
 		describe( "test build artifacts", function() {
 			// javax, tomcat 9
+			it(title="check valid artifacts are produced, 5.4.8.2", body=function(){
+				buildArtifacts( "lucee-5.4.8.2" );
+			});
+			// javax, tomcat 9
 			it(title="check valid artifacts are produced, 6.0.3.1", body=function(){
 				buildArtifacts( "lucee-6.0.3.1" );
 			});
 			// jakarta & javax, tomcat 10
-			it(title="check valid artifacts are produced, 6.2.0.30-SNAPSHOT", body=function(){
-				buildArtifacts( "lucee-6.2.0.30-SNAPSHOT" );
+			it(title="check valid artifacts are produced, 6.2.2.91", body=function(){
+				buildArtifacts( "lucee-6.2.2.91" );
 			});
 
 			// jakarta, tomcat 11
-			it(title="check valid artifacts are produced, 7.0.0.159-SNAPSHOT", body=function(){
-				buildArtifacts( "lucee-7.0.0.159-SNAPSHOT" );
+			it(title="check valid artifacts are produced, 7.0.0.325-SNAPSHOT", body=function(){
+				buildArtifacts( "lucee-7.0.0.325-SNAPSHOT" );
 			});
 		});
 	}

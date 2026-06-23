@@ -12,6 +12,10 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 
 	function run( testResults , testBox ) {
 		describe( "check all bundles in stable lucee release manifests are supported", function() {
+			it(title="6.2.2.91", body=function(){
+				checkRequiredBundlesAreSupported( "6.2.2.91" );
+			});
+
 			it(title="6.0.3.1", body=function(){
 				checkRequiredBundlesAreSupported( "6.0.3.1" );
 			});

@@ -137,6 +137,12 @@
             "level": "error",
             "layout": "classic"
         },
+        "extension-provider": {
+            "appender": "resource",
+            "appenderArguments": "path:{lucee-config}/logs/extension-provider.log",
+            "level": "error",
+            "layout": "classic"
+        },
         "exception": {
             "appender": "resource",
             "appenderArguments": "path:{lucee-config}/logs/exception.log",
