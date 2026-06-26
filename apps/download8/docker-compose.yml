@@ -1,0 +1,12 @@
+services:
+  lucee:
+    build: .
+    image: lucee-download8:latest
+    environment:
+      LUCEE_ADMIN_PASSWORD: "change-me"
+    volumes:
+      - "./www:/var/www"
+    ports:
+      - "8056:8080" # PORT (Cloud Run compatible)
+
+# docker compose up -d
