@@ -1,5 +1,5 @@
-<cfinclude template="../functions.cfm">
 <cfscript>
+util = application.util;
 
 // Params
 groupId    = url.groupId    ?: "org.lucee";
@@ -9,20 +9,20 @@ if (!len(artifactId)) {
 	location("/", false);
 }
 
-displayName  = artifactDisplayName(artifactId);
+displayName  = util.artifactDisplayName(artifactId);
 mavenCoords  = groupId & ":" & artifactId;
 
 // Load all versions for this extension, sorted newest first, no alpha
 try {
 	allVersions = LuceeExtension(groupId, artifactId);
-	allVersions = allVersions.filter(function(v) { return getType(v) != "alpha"; });
-	arraySort(allVersions, function(a, b) { return versionCompare(b, a); });
+	allVersions = allVersions.filter(function(v) { return util.getType(v) != "alpha"; });
+	arraySort(allVersions, function(a, b) { return util.versionCompare(b, a); });
 } catch(e) {
 	allVersions = [];
 }
 
 // Fetch metadata (name, description, image, minCoreVersion) from latest version
-extName           = artifactDisplayName(artifactId);
+extName           = util.artifactDisplayName(artifactId);
 extDescription    = "";
 extImage          = "";
 extId             = "";
@@ -31,7 +31,7 @@ extMinCoreVersion = "";
 if (!arrayIsEmpty(allVersions)) {
 	try {
 		cacheKey   = "extMeta_" & groupId & "_" & artifactId;
-		cachedMeta = dlCacheGet(cacheKey);
+		cachedMeta = util.dlCacheGet(cacheKey);
 
 		// always use whatever is cached (name/image) — even if stale
 		if (!isEmpty(cachedMeta.displayName ?: "")) extName  = cachedMeta.displayName;
@@ -47,7 +47,7 @@ if (!arrayIsEmpty(allVersions)) {
 				try {
 					local.meta = LuceeExtension(attributes.gid, attributes.aid, attributes.vers[1], true);
 					if (structKeyExists(local.meta, "metadata")) {
-						dlCachePut(attributes.ckey, {
+						util.dlCachePut(attributes.ckey, {
 							displayName: local.meta.metadata.name  ?: "",
 							image:       local.meta.metadata.image ?: "",
 							cachedAt:    now()
@@ -69,7 +69,7 @@ if (!arrayIsEmpty(allVersions)) {
 			if (!isEmpty(meta.MinCoreVersion  ?: "")) extMinCoreVersion = meta.MinCoreVersion;
 			// write back to cache if it was missing or stale
 			if (cacheStale || !structKeyExists(cachedMeta, "cachedAt")) {
-				dlCachePut(cacheKey, { displayName: extName, image: extImage, cachedAt: now() });
+				util.dlCachePut(cacheKey, { displayName: extName, image: extImage, cachedAt: now() });
 			}
 		}
 	} catch(e) { /* metadata unavailable */ }
@@ -78,7 +78,7 @@ if (!arrayIsEmpty(allVersions)) {
 // Pick the best version for install snippets: latest release, else latest overall
 snippetVer = "";
 for (sv in allVersions) {
-	if (getType(sv) == "release") { snippetVer = sv; break; }
+	if (util.getType(sv) == "release") { snippetVer = sv; break; }
 }
 if (!len(snippetVer) && !arrayIsEmpty(allVersions)) snippetVer = allVersions[1];
 
@@ -94,12 +94,12 @@ groups = {
 };
 
 for (ver in allVersions) {
-	verType  = getType(ver);
+	verType  = util.getType(ver);
 	groupKey = verType;
 	if (!structKeyExists(groups, groupKey)) groups[groupKey] = [];
 
 	verCacheKey = "extVer_" & groupId & "_" & artifactId & "_" & ver;
-	verCached   = dlCacheGet(verCacheKey);
+	verCached   = util.dlCacheGet(verCacheKey);
 
 	if (!isEmpty(verCached)) {
 		arrayAppend(groups[groupKey], verCached);
@@ -110,21 +110,21 @@ for (ver in allVersions) {
 			try { verMinCore = latestMeta.metadata.MinCoreVersion ?: ""; } catch(e) { verMinCore = ""; }
 			verEntry = {
 				version:      latestMeta.version      ?: ver,
-				lastModified: parseDate(latestMeta.lastModified ?: ""),
+				lastModified: util.parseDate(latestMeta.lastModified ?: ""),
 				type:         verType,
 				minCore:      verMinCore
 			};
 		} else {
 			verEntry = { version: ver, lastModified: "", type: verType, minCore: "" };
 		}
-		dlCachePut(verCacheKey, verEntry);
+		util.dlCachePut(verCacheKey, verEntry);
 		arrayAppend(groups[groupKey], verEntry);
 	}
 }
 
 // sort each group descending (allVersions already sorted, but groups built in loop order)
 for (gk in groups) {
-	arraySort(groups[gk], function(a, b) { return versionCompare(b.version, a.version); });
+	arraySort(groups[gk], function(a, b) { return util.versionCompare(b.version, a.version); });
 }
 
 groupMeta = {

@@ -1,6 +1,6 @@
 
-<cfinclude template="../functions.cfm">
 <cfscript>
+util = application.util;
 start=getTickCount();
 
 // ── Config ──────────────────────────────────────────────────────────
@@ -10,19 +10,19 @@ DOCKER_DOCS = "https://docs.lucee.org/recipes/docker.html";
 FORUM_URL   = "https://dev.lucee.org/c/news/release/8";
 
 // ── Load Lucee versions (stale-while-revalidate) ─────────────────────
-versCache    = dlCacheGet("luceeVersionsList");
+versCache    = util.dlCacheGet("luceeVersionsList");
 allVersions  = versCache.data ?: [];
 versCacheAge = structKeyExists(versCache, "cachedAt") ? dateDiff("n", versCache.cachedAt, now()) : 999;
 
 if (!arrayLen(allVersions)) {
 	// cold cache — must wait
 	try { allVersions = LuceeVersionsList(); } catch(e) { allVersions = []; }
-	dlCachePut("luceeVersionsList", { data: allVersions, cachedAt: now() });
+	util.dlCachePut("luceeVersionsList", { data: allVersions, cachedAt: now() });
 } else if (versCacheAge >= 5) {
 	// stale — serve cached, refresh in background
 	thread action="run" name="refresh-versions-list-#getTickCount()#" {
 		try {
-			dlCachePut("luceeVersionsList", { data: LuceeVersionsList(), cachedAt: now() });
+			util.dlCachePut("luceeVersionsList", { data: LuceeVersionsList(), cachedAt: now() });
 		} catch(e) {}
 	}
 }
@@ -31,8 +31,8 @@ if (!arrayLen(allVersions)) {
 minorMap = {};
 
 for (ver in allVersions) {
-	verType  = getType(ver);
-	verMinor = getMinor(ver);
+	verType  = util.getType(ver);
+	verMinor = util.getMinor(ver);
 	if (!len(verMinor)) continue;
 	
 	if (verMinor=="7.2") continue;
@@ -50,18 +50,18 @@ for (ver in allVersions) {
 
 	if (verType == "release") {
 		minorMap[verMinor].hasRelease = true;
-		if (!len(minorMap[verMinor].latestRelease) || versionCompare(ver, minorMap[verMinor].latestRelease) > 0)
+		if (!len(minorMap[verMinor].latestRelease) || util.versionCompare(ver, minorMap[verMinor].latestRelease) > 0)
 			minorMap[verMinor].latestRelease = ver;
 	} else if (verType == "beta" || verType == "rc") {
 		minorMap[verMinor].hasBeta = true;
-		if (!len(minorMap[verMinor].latestBeta) || versionCompare(ver, minorMap[verMinor].latestBeta) > 0)
+		if (!len(minorMap[verMinor].latestBeta) || util.versionCompare(ver, minorMap[verMinor].latestBeta) > 0)
 			minorMap[verMinor].latestBeta = ver;
 	}
 }
 
 // Sort minors descending to find tracks
 allMinors = structKeyArray(minorMap);
-arraySort(allMinors, function(a,b) { return versionCompare(b,a); });
+arraySort(allMinors, function(a,b) { return util.versionCompare(b,a); });
 
 edgeMinors  = [];
 stableMinor = "";
@@ -81,10 +81,10 @@ edgeMinor = arrayLen(edgeMinors) ? edgeMinors[1] : "";
 
 function getLuceeVersionsDetail(v) {
 	local.cacheKey = "luceeVerDetail_" & v;
-	local.cached   = dlCacheGet(local.cacheKey);
+	local.cached   = util.dlCacheGet(local.cacheKey);
 	if (!isEmpty(local.cached)) return local.cached;
 	local.detail = LuceeVersionsDetail(v);
-	dlCachePut(local.cacheKey, local.detail);
+	util.dlCachePut(local.cacheKey, local.detail);
 	return local.detail;
 }
 
@@ -94,14 +94,14 @@ function buildTrack(minor, useLatest="release") {
 	local.d   = minorMap[minor];
 	local.ver = (useLatest == "beta") ? d.latestBeta : d.latestRelease;
 	if (!len(local.ver)) return {};
-	local.isRelease = (getType(local.ver) == "release");
+	local.isRelease = (util.getType(local.ver) == "release");
 	try {
 		local.detail = getLuceeVersionsDetail(local.ver);
 	} catch(e) {
 		local.detail = {};
 	}
-	// Start from CDN defaults for releases, then let the API override any key it provides
-	local.links = local.isRelease ? cdnLinks(local.ver) : {};
+	// Start from util.CDN defaults for releases, then let the API override any key it provides
+	local.links = local.isRelease ? util.cdnLinks(local.ver) : {};
 	for (local.k in local.detail) {
 		if (local.k != "lastModified" && local.k != "pom" && len(local.detail[local.k])) {
 			local.links[local.k] = local.detail[local.k];
@@ -117,7 +117,7 @@ if (len(stableMinor)  && minorMap[stableMinor].hasRelease)
 	tracks.stable = buildTrack(stableMinor, "release");
 tracks.edgeList = [];
 // render edge cards lowest minor first (ascending), so e.g. 7.1 before 8.0
-arraySort(edgeMinors, function(a,b) { return versionCompare(a,b); });
+arraySort(edgeMinors, function(a,b) { return util.versionCompare(a,b); });
 for (em in edgeMinors) {
 	if (minorMap[em].hasBeta) arrayAppend(tracks.edgeList, buildTrack(em, "beta"));
 }
@@ -128,14 +128,14 @@ function loadGroupExtensions(groupId) {
 		local.artifacts = LuceeExtension(groupId);
 		arrayEach(local.artifacts, function(artifactId) {
 			local.cacheKey = "extMeta_" & groupId & "_" & artifactId;
-			local.cached   = dlCacheGet(local.cacheKey);
+			local.cached   = util.dlCacheGet(local.cacheKey);
 			local.name      = local.cached.displayName   ?: "";
 			local.image     = local.cached.image         ?: "";
 			local.latestVer = local.cached.latestVersion ?: "";
 
 			if (!len(local.name)) {
 				// not cached yet — use slug name and fire a background thread to populate cache
-				local.name = artifactDisplayName(artifactId);
+				local.name = util.artifactDisplayName(artifactId);
 				thread action="run" name="cache-ext-#groupId#-#artifactId#" gid=groupId aid=artifactId ckey=local.cacheKey {
 					try {
 						local.versions = LuceeExtension(attributes.gid, attributes.aid);
@@ -158,7 +158,7 @@ function loadGroupExtensions(groupId) {
 							});
 							local.pickVer = local.versions[1];
 							local.meta    = LuceeExtension(attributes.gid, attributes.aid, local.pickVer, true);
-							dlCachePut(attributes.ckey, {
+							util.dlCachePut(attributes.ckey, {
 								displayName:   local.meta.metadata.name  ?: "",
 								image:         local.meta.metadata.image ?: "",
 								latestVersion: local.pickVer,
@@ -232,7 +232,7 @@ function loadGroupExtensions(groupId) {
 			<div class="track-card-header">
 				<span class="track-badge lts">LTS</span>
 				<div class="track-meta">
-					<h2>#formatVersion(t.version)#</h2>
+					<h2>#util.formatVersion(t.version)#</h2>
 					<div class="track-label">Long-Term Support — #t.minor#.x</div>
 				</div>
 			</div>
@@ -240,22 +240,22 @@ function loadGroupExtensions(groupId) {
 				<p class="track-desc">Production-hardened, security-patched for the long haul. Recommended for enterprise deployments.</p>
 				<div class="dl-group-label">Popular downloads</div>
 				<ul class="dl-list">
-					<li><a href="https://hub.docker.com/r/lucee/lucee/tags?name=#encodeForHTMLAttribute(t.version)#" target="_blank">Docker Images</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['docker'])#">i</i></li>
-					<li><a href="#lnk['linux-x64']#">Linux x64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['linux-x64'])#">i</i></li>
-					<li><a href="#lnk['linux-aarch64']#">Linux aarch64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['linux-aarch64'])#">i</i></li>
-					<li><a href="#lnk.jar#">lucee.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['jar'])#">i</i></li>
-					<li><a href="#lnk.lco#">Core (.lco)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['lco'])#">i</i></li>
+					<li><a href="https://hub.docker.com/r/lucee/lucee/tags?name=#encodeForHTMLAttribute(t.version)#" target="_blank">Docker Images</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['docker'])#">i</i></li>
+					<li><a href="#lnk['linux-x64']#">Linux x64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['linux-x64'])#">i</i></li>
+					<li><a href="#lnk['linux-aarch64']#">Linux aarch64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['linux-aarch64'])#">i</i></li>
+					<li><a href="#lnk.jar#">lucee.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['jar'])#">i</i></li>
+					<li><a href="#lnk.lco#">Core (.lco)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['lco'])#">i</i></li>
 				</ul>
 				<details class="dl-other-formats">
 					<summary class="dl-group-label">Other downloads</summary>
 					<ul class="dl-list">
-						<li><a href="#lnk.win64#">Windows x64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['win64'])#">i</i></li>
-						<li><a href="#lnk.express#">Express (ZIP)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['express'])#">i</i></li>
-						<li><a href="#lnk.light#">lucee-light.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['light'])#">i</i></li>
+						<li><a href="#lnk.win64#">Windows x64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['win64'])#">i</i></li>
+						<li><a href="#lnk.express#">Express (ZIP)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['express'])#">i</i></li>
+						<li><a href="#lnk.light#">lucee-light.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['light'])#">i</i></li>
 						<cfif structKeyExists(lnk,"zero")>
-						<li><a href="#lnk.zero#">lucee-zero.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['zero'])#">i</i></li>
+						<li><a href="#lnk.zero#">lucee-zero.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['zero'])#">i</i></li>
 						</cfif>
-						<li><a href="#lnk.war#">WAR</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['war'])#">i</i></li>
+						<li><a href="#lnk.war#">WAR</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['war'])#">i</i></li>
 					</ul>
 				</details>
 			</div>
@@ -274,7 +274,7 @@ function loadGroupExtensions(groupId) {
 			<div class="track-card-header">
 				<span class="track-badge stable">Stable</span>
 				<div class="track-meta">
-					<h2>#formatVersion(t.version)#</h2>
+					<h2>#util.formatVersion(t.version)#</h2>
 					<div class="track-label">Latest stable — #t.minor#.x</div>
 				</div>
 			</div>
@@ -282,22 +282,22 @@ function loadGroupExtensions(groupId) {
 				<p class="track-desc">The current production-ready release with the latest features and improvements.</p>
 				<div class="dl-group-label">Popular downloads</div>
 				<ul class="dl-list">
-					<li><a href="https://hub.docker.com/r/lucee/lucee/tags?name=#encodeForHTMLAttribute(t.version)#" target="_blank">Docker Images</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['docker'])#">i</i></li>
-					<li><a href="#lnk['linux-x64']#">Linux x64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['linux-x64'])#">i</i></li>
-					<li><a href="#lnk['linux-aarch64']#">Linux aarch64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['linux-aarch64'])#">i</i></li>
-					<li><a href="#lnk.jar#">lucee.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['jar'])#">i</i></li>
-					<li><a href="#lnk.lco#">Core (.lco)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['lco'])#">i</i></li>
+					<li><a href="https://hub.docker.com/r/lucee/lucee/tags?name=#encodeForHTMLAttribute(t.version)#" target="_blank">Docker Images</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['docker'])#">i</i></li>
+					<li><a href="#lnk['linux-x64']#">Linux x64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['linux-x64'])#">i</i></li>
+					<li><a href="#lnk['linux-aarch64']#">Linux aarch64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['linux-aarch64'])#">i</i></li>
+					<li><a href="#lnk.jar#">lucee.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['jar'])#">i</i></li>
+					<li><a href="#lnk.lco#">Core (.lco)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['lco'])#">i</i></li>
 				</ul>
 				<details class="dl-other-formats">
 					<summary class="dl-group-label">Other downloads</summary>
 					<ul class="dl-list">
-						<li><a href="#lnk.win64#">Windows x64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['win64'])#">i</i></li>
-						<li><a href="#lnk.express#">Express (ZIP)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['express'])#">i</i></li>
-						<li><a href="#lnk.light#">lucee-light.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['light'])#">i</i></li>
+						<li><a href="#lnk.win64#">Windows x64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['win64'])#">i</i></li>
+						<li><a href="#lnk.express#">Express (ZIP)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['express'])#">i</i></li>
+						<li><a href="#lnk.light#">lucee-light.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['light'])#">i</i></li>
 						<cfif structKeyExists(lnk,"zero")>
-						<li><a href="#lnk.zero#">lucee-zero.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['zero'])#">i</i></li>
+						<li><a href="#lnk.zero#">lucee-zero.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['zero'])#">i</i></li>
 						</cfif>
-						<li><a href="#lnk.war#">WAR</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['war'])#">i</i></li>
+						<li><a href="#lnk.war#">WAR</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['war'])#">i</i></li>
 					</ul>
 				</details>
 			</div>
@@ -315,7 +315,7 @@ function loadGroupExtensions(groupId) {
 			<div class="track-card-header">
 				<span class="track-badge edge">Edge</span>
 				<div class="track-meta">
-					<h2>#formatVersion(t.version)#</h2>
+					<h2>#util.formatVersion(t.version)#</h2>
 					<div class="track-label">Beta preview — #t.minor#.x</div>
 				</div>
 			</div>
@@ -325,21 +325,21 @@ function loadGroupExtensions(groupId) {
 				<div class="dl-group-label">Downloads</div>
 				<ul class="dl-list">
 					<cfif structKeyExists(lnk,"jar")>
-					<li><a href="#lnk.jar#">lucee.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['jar'])#">i</i></li>
+					<li><a href="#lnk.jar#">lucee.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['jar'])#">i</i></li>
 					</cfif>
 					<cfif structKeyExists(lnk,"light")>
-					<li><a href="#lnk.light#">lucee-light.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['light'])#">i</i></li>
+					<li><a href="#lnk.light#">lucee-light.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['light'])#">i</i></li>
 					</cfif>
 					<cfif structKeyExists(lnk,"zero")>
-					<li><a href="#lnk.zero#">lucee-zero.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['zero'])#">i</i></li>
+					<li><a href="#lnk.zero#">lucee-zero.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['zero'])#">i</i></li>
 					</cfif>
 					<cfif structKeyExists(lnk,"lco")>
-					<li><a href="#lnk.lco#">Core (.lco)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['lco'])#">i</i></li>
+					<li><a href="#lnk.lco#">Core (.lco)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['lco'])#">i</i></li>
 					</cfif>
 					<cfif structKeyExists(lnk,"express")>
-					<li><a href="#lnk.express#">Express (ZIP)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['express'])#">i</i></li>
+					<li><a href="#lnk.express#">Express (ZIP)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['express'])#">i</i></li>
 					</cfif>
-					<li><a href="https://hub.docker.com/r/lucee/lucee/tags?name=#encodeForHTMLAttribute(t.version)#" target="_blank">Docker Images</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(DL_INFO['docker'])#">i</i></li>
+					<li><a href="https://hub.docker.com/r/lucee/lucee/tags?name=#encodeForHTMLAttribute(t.version)#" target="_blank">Docker Images</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['docker'])#">i</i></li>
 				</ul>
 			</div>
 			<div class="track-card-footer">

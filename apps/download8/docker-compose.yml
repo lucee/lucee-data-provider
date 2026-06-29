@@ -6,7 +6,7 @@ services:
       LUCEE_ADMIN_PASSWORD: "lamiinne"
     volumes:
       - "./www:/var/www"
-      - "./functions.cfm:/var/functions.cfm"
+      - "./components:/var/components"
     ports:
       - "8056:8080" # PORT (Cloud Run compatible)
 

@@ -1,5 +1,5 @@
-<cfinclude template="../functions.cfm">
 <cfscript>
+util = application.util;
 
 LTS_MINOR   = "6.2";
 GROUP_ID    = "org.lucee";
@@ -7,16 +7,16 @@ FORUM_URL   = "https://dev.lucee.org/c/news/release/8";
 
 function buildLinks(ver) {
 	local.cacheKey = "luceeVerDetail_" & ver;
-	local.detail   = dlCacheGet(local.cacheKey);
+	local.detail   = util.dlCacheGet(local.cacheKey);
 	if (isEmpty(local.detail)) {
 		try {
 			local.detail = LuceeVersionsDetail(ver);
-			dlCachePut(local.cacheKey, local.detail);
+			util.dlCachePut(local.cacheKey, local.detail);
 		} catch(e) { local.detail = {}; }
 	}
-	// start with CDN defaults for releases, then overlay API data
-	local.isRelease = (getType(ver) == "release");
-	local.links = local.isRelease ? cdnLinks(formatVersion(ver)) : {};
+	// start with util.CDN defaults for releases, then overlay API data
+	local.isRelease = (util.getType(ver) == "release");
+	local.links = local.isRelease ? util.cdnLinks(util.formatVersion(ver)) : {};
 	for (local.k in local.detail) {
 		if (local.k != "lastModified" && local.k != "pom" && len(local.detail[local.k])) {
 			local.links[local.k] = local.detail[local.k];
@@ -31,17 +31,17 @@ typeFilter  = lCase(url.type ?: "");
 minorFilter = url.minor ?: "";
 
 // versions list — stale-while-revalidate (shared cache with index.cfm)
-versCache    = dlCacheGet("luceeVersionsList");
+versCache    = util.dlCacheGet("luceeVersionsList");
 allVersions  = versCache.data ?: [];
 versCacheAge = structKeyExists(versCache, "cachedAt") ? dateDiff("n", versCache.cachedAt, now()) : 999;
 
 if (!arrayLen(allVersions)) {
 	try { allVersions = LuceeVersionsList(); } catch(e) { allVersions = []; }
-	dlCachePut("luceeVersionsList", { data: allVersions, cachedAt: now() });
+	util.dlCachePut("luceeVersionsList", { data: allVersions, cachedAt: now() });
 } else if (versCacheAge >= 5) {
 	thread action="run" name="refresh-versions-list-v-#getTickCount()#" {
 		try {
-			dlCachePut("luceeVersionsList", { data: LuceeVersionsList(), cachedAt: now() });
+			util.dlCachePut("luceeVersionsList", { data: LuceeVersionsList(), cachedAt: now() });
 		} catch(e) {}
 	}
 }
@@ -54,8 +54,8 @@ minorData  = {}; // minor → sorted version list
 SUPPRESS_MINORS = ["7.2"];
 
 for (ver in allVersions) {
-	if (getType(ver) == "alpha") continue;
-	verMinor = getMinor(ver);
+	if (util.getType(ver) == "alpha") continue;
+	verMinor = util.getMinor(ver);
 	if (arrayFindNoCase(SUPPRESS_MINORS, verMinor)) continue;
 	if (!len(verMinor)) continue;
 	if (!structKeyExists(minorData, verMinor)) {
@@ -69,15 +69,15 @@ for (ver in allVersions) {
 for (m in allMinors) {
 	releaseBaseVersions = {};
 	for (v in minorData[m]) {
-		if (getType(v) == "release") releaseBaseVersions[formatVersion(v)] = true;
+		if (util.getType(v) == "release") releaseBaseVersions[util.formatVersion(v)] = true;
 	}
 	minorData[m] = minorData[m].filter(function(v) {
-		return getType(v) == "release" || !structKeyExists(releaseBaseVersions, formatVersion(v));
+		return util.getType(v) == "release" || !structKeyExists(releaseBaseVersions, util.formatVersion(v));
 	});
 }
 
 // Sort minors desc
-arraySort(allMinors, function(a,b) { return versionCompare(b,a); });
+arraySort(allMinors, function(a,b) { return util.versionCompare(b,a); });
 
 // Classify minors into tracks
 edgeMinors  = [];
@@ -87,7 +87,7 @@ for (m in allMinors) {
 	hasR = false;
 	hasB = false;
 	for (v in minorData[m]) {
-		vt = getType(v);
+		vt = util.getType(v);
 		if (vt == "release") hasR = true;
 		if (vt == "beta" || vt == "rc") hasB = true;
 	}
@@ -131,7 +131,7 @@ if (len(minorFilter)) {
 // Apply type filter (e.g. snapshot-only)
 if (len(typeFilter)) {
 	for (fm in showMinors) {
-		minorData[fm] = minorData[fm].filter(function(v) { return getType(v) == typeFilter; });
+		minorData[fm] = minorData[fm].filter(function(v) { return util.getType(v) == typeFilter; });
 	}
 	// drop minors with no remaining versions
 	showMinors = showMinors.filter(function(m) { return !arrayIsEmpty(minorData[m]); });
@@ -139,7 +139,7 @@ if (len(typeFilter)) {
 
 // Sort versions within each minor desc
 for (m in minorData) {
-	arraySort(minorData[m], function(a,b) { return versionCompare(b,a); });
+	arraySort(minorData[m], function(a,b) { return util.versionCompare(b,a); });
 }
 
 typeLabels = {
@@ -217,7 +217,7 @@ typeLabels = {
 					</thead>
 					<tbody>
 					<cfloop array="#minorData[minor]#" item="ver">
-						<cfset vtype = getType(ver)>
+						<cfset vtype = util.getType(ver)>
 						<!--- Skip snapshots unless explicitly requested via type=snapshot --->
 						<cfif vtype == "snapshot" && typeFilter != "snapshot"><cfcontinue></cfif>
 						<cfset rowNum++>
@@ -225,45 +225,45 @@ typeLabels = {
 							<!--- First 10: render with full download links --->
 							<cfset lnk = buildLinks(ver)>
 							<tr>
-								<td><strong>#encodeForHTML(formatVersion(ver))#</strong></td>
+								<td><strong>#encodeForHTML(util.formatVersion(ver))#</strong></td>
 								<td><span class="version-type-badge #vtype#">#encodeForHTML(typeLabels[vtype] ?: vtype)#</span></td>
 								<td>
 									<div class="dl-links">
 										<cfif structKeyExists(lnk,"win64")>
-										<a href="/download.cfm?version=#encodeForURL(ver)#&type=win64" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['win64'])#">Windows</a>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=win64" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['win64'])#">Windows</a>
 										</cfif>
 										<cfif structKeyExists(lnk,"linux-x64")>
-										<a href="/download.cfm?version=#encodeForURL(ver)#&type=linux-x64" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['linux-x64'])#">Linux x64</a>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=linux-x64" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['linux-x64'])#">Linux x64</a>
 										</cfif>
 										<cfif structKeyExists(lnk,"linux-aarch64")>
-										<a href="/download.cfm?version=#encodeForURL(ver)#&type=linux-aarch64" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['linux-aarch64'])#">Linux arm64</a>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=linux-aarch64" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['linux-aarch64'])#">Linux arm64</a>
 										</cfif>
 										<cfif structKeyExists(lnk,"express")>
-										<a href="/download.cfm?version=#encodeForURL(ver)#&type=express" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['express'])#">Express</a>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=express" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['express'])#">Express</a>
 										</cfif>
 										<cfif structKeyExists(lnk,"jar")>
-										<a href="/download.cfm?version=#encodeForURL(ver)#&type=jar" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['jar'])#">lucee.jar</a>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=jar" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['jar'])#">lucee.jar</a>
 										</cfif>
 										<cfif structKeyExists(lnk,"light")>
-										<a href="/download.cfm?version=#encodeForURL(ver)#&type=light" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['light'])#">lucee-light.jar</a>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=light" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['light'])#">lucee-light.jar</a>
 										</cfif>
 										<cfif structKeyExists(lnk,"zero")>
-										<a href="/download.cfm?version=#encodeForURL(ver)#&type=zero" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['zero'])#">lucee-zero.jar</a>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=zero" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['zero'])#">lucee-zero.jar</a>
 										</cfif>
 										<cfif structKeyExists(lnk,"lco")>
-										<a href="/download.cfm?version=#encodeForURL(ver)#&type=lco" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['lco'])#">Core (.lco)</a>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=lco" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['lco'])#">Core (.lco)</a>
 										</cfif>
 										<cfif structKeyExists(lnk,"war")>
-										<a href="/download.cfm?version=#encodeForURL(ver)#&type=war" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['war'])#">WAR</a>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=war" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['war'])#">WAR</a>
 										</cfif>
-										<a href="https://hub.docker.com/r/lucee/lucee/tags?name=#encodeForURL(listFirst(ver,'-'))#" target="_blank" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['docker'])#">Docker</a>
+										<a href="https://hub.docker.com/r/lucee/lucee/tags?name=#encodeForURL(listFirst(ver,'-'))#" target="_blank" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['docker'])#">Docker</a>
 									</div>
 								</td>
 							</tr>
 						<cfelse>
 							<!--- Beyond first 10: lazy row, links fetched on demand --->
 							<tr class="ver-lazy" data-version="#encodeForHTMLAttribute(ver)#" style="display:none">
-								<td><strong>#encodeForHTML(formatVersion(ver))#</strong></td>
+								<td><strong>#encodeForHTML(util.formatVersion(ver))#</strong></td>
 								<td><span class="version-type-badge #vtype#">#encodeForHTML(typeLabels[vtype] ?: vtype)#</span></td>
 								<td class="dl-lazy"><span class="text-muted">Loading…</span></td>
 							</tr>

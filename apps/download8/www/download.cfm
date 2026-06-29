@@ -1,5 +1,5 @@
-<cfinclude template="../functions.cfm">
 <cfscript>
+util = application.util;
 groupId    = url.groupId    ?: "";
 artifactId = url.artifactId ?: "";
 version    = url.version    ?: "";
@@ -10,22 +10,21 @@ dlType     = url.type       ?: ""; // for server downloads: win64, linux-x64, ja
 if (len(version) && len(dlType) && !len(artifactId)) {
 	dlUrl = "";
 
-	// check application cache first (populated by versions.cfm / index.cfm)
 	cacheKey = "luceeVerDetail_" & version;
-	detail   = application[cacheKey] ?: {};
+	detail   = util.dlCacheGet(cacheKey);
 
 	if (isEmpty(detail)) {
 		try {
 			detail = LuceeVersionsDetail(version);
-			application[cacheKey] = detail;
+			util.dlCachePut(cacheKey, detail);
 		} catch(e) { detail = {}; }
 	}
 
-	// get URL from detail, fall back to CDN pattern for releases
+	// get URL from detail, fall back to util.CDN pattern for releases
 	if (structKeyExists(detail, dlType) && len(detail[dlType])) {
 		dlUrl = detail[dlType];
-	} else if (getType(version) == "release") {
-		cdn = cdnLinks(formatVersion(version));
+	} else if (util.getType(version) == "release") {
+		cdn = util.cdnLinks(util.formatVersion(version));
 		dlUrl = cdn[dlType] ?: "";
 	}
 
@@ -49,10 +48,10 @@ if (!len(groupId) || !len(artifactId)) {
 if (!len(version)) {
 	try {
 		versions = LuceeExtension(groupId, artifactId);
-		versions = versions.filter(function(v) { return getType(v) != "alpha"; });
-		arraySort(versions, function(a, b) { return versionCompare(b, a); });
+		versions = versions.filter(function(v) { return util.getType(v) != "alpha"; });
+		arraySort(versions, function(a, b) { return util.versionCompare(b, a); });
 		for (v in versions) {
-			if (getType(v) == "release") { version = v; break; }
+			if (util.getType(v) == "release") { version = v; break; }
 		}
 		if (!len(version) && !arrayIsEmpty(versions)) version = versions[1];
 	} catch(e) {}
