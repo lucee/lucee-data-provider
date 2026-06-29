@@ -174,7 +174,6 @@ function loadGroupExtensions(groupId) {
 			if (!len(local.name)) local.name = util.artifactDisplayName(artifactId);
 			
 			if (isEmpty(local.cached)) {
-				dump(serializeJson(local));
 				// no cache entry at all — fire background thread to populate it
 				thread action="run" name="cache-ext-#groupId#-#artifactId#" gid=groupId aid=artifactId ckey=local.cacheKey {
 					// always write something so we don't re-fire on every request
