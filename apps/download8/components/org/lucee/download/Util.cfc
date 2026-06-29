@@ -1,8 +1,8 @@
 component accessors="false" {
 
-	variables.CDN = "https://cdn.lucee.org/";
+	this.CDN = "https://cdn.lucee.org/";
 
-	variables.DL_INFO = {
+	this.DL_INFO = {
 		"win64":         "Windows x64 installer — guided setup wizard, installs Lucee as a Windows service with Tomcat included.",
 		"linux-x64":     "Linux x64 installer — shell installer for 64-bit Linux, sets up Lucee as a system service with Tomcat.",
 		"linux-aarch64": "Linux aarch64 installer — same as the x64 installer but for ARM64 (Apple Silicon, Ampere, AWS Graviton).",
@@ -72,14 +72,14 @@ component accessors="false" {
 
 	function cdnLinks(ver) {
 		return {
-			win64:           variables.CDN & "lucee-" & ver & "-windows-x64-installer.exe",
-			"linux-x64":     variables.CDN & "lucee-" & ver & "-linux-x64-installer.run",
-			"linux-aarch64": variables.CDN & "lucee-" & ver & "-linux-aarch64-installer.run",
-			express:         variables.CDN & "lucee-express-" & ver & ".zip",
-			jar:             variables.CDN & "lucee-" & ver & ".jar",
-			light:           variables.CDN & "lucee-light-" & ver & ".jar",
-			lco:             variables.CDN & ver & ".lco",
-			war:             variables.CDN & "lucee-" & ver & ".war"
+			win64:           this.CDN & "lucee-" & ver & "-windows-x64-installer.exe",
+			"linux-x64":     this.CDN & "lucee-" & ver & "-linux-x64-installer.run",
+			"linux-aarch64": this.CDN & "lucee-" & ver & "-linux-aarch64-installer.run",
+			express:         this.CDN & "lucee-express-" & ver & ".zip",
+			jar:             this.CDN & "lucee-" & ver & ".jar",
+			light:           this.CDN & "lucee-light-" & ver & ".jar",
+			lco:             this.CDN & ver & ".lco",
+			war:             this.CDN & "lucee-" & ver & ".war"
 		};
 	}
 
@@ -114,9 +114,13 @@ component accessors="false" {
 
 	function dlCachePut(key, value) {
 		variables.cache[key] = value;
-		try {
-			fileWrite(getCacheDirectory() & server.separator.file & key & ".json", serializeJSON(value));
-		} catch(e) {}
+		local.file = getCacheDirectory() & server.separator.file & key & ".json";
+		local.json = serializeJSON(value);
+		lock name="dlCachePut_#key#" type="exclusive" timeout="5" {
+			try {
+				fileWrite(local.file, local.json);
+			} catch(e) {}
+		}
 	}
 
 }

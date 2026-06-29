@@ -24,7 +24,12 @@ component {
 				// ── Extension metadata (name, image, latest version) ─────────
 				for (local.groupId in ["org.lucee", "io.forgebox"]) {
 					try {
-						local.artifacts = LuceeExtension(local.groupId);
+						local.artCacheKey = "extArtifacts_" & local.groupId;
+					local.artCache    = local.util.dlCacheGet(local.artCacheKey);
+					local.artifacts   = (!isEmpty(local.artCache) && structKeyExists(local.artCache, "data"))
+						? local.artCache.data
+						: LuceeExtension(local.groupId);
+					local.util.dlCachePut(local.artCacheKey, { data: local.artifacts, cachedAt: now() });
 						for (local.artifactId in local.artifacts) {
 							thread action="run"
 								name = "warm-ext-#local.groupId#-#local.artifactId#"
@@ -36,9 +41,8 @@ component {
 									local.cacheKey = "extMeta_" & attributes.gid & "_" & attributes.aid;
 									if (!isEmpty(local.util.dlCacheGet(local.cacheKey))) return;
 									local.vers = LuceeExtension(attributes.gid, attributes.aid);
-									local.vers = local.vers.filter(function(v) {
-										return !findNoCase("-alpha", lCase(v));
-									});
+									local.nonAlpha = local.vers.filter(function(v) { return !findNoCase("-alpha", lCase(v)); });
+									if (!arrayIsEmpty(local.nonAlpha)) local.vers = local.nonAlpha;
 									if (arrayIsEmpty(local.vers)) return;
 									arraySort(local.vers, function(a, b) {
 										local.a = listToArray(listFirst(a,"-"), ".");

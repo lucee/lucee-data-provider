@@ -15,6 +15,7 @@ allVersions  = versCache.data ?: [];
 versCacheAge = structKeyExists(versCache, "cachedAt") ? dateDiff("n", versCache.cachedAt, now()) : 999;
 
 if (!arrayLen(allVersions)) {
+	
 	// cold cache — must wait
 	try { allVersions = LuceeVersionsList(); } catch(e) { allVersions = []; }
 	util.dlCachePut("luceeVersionsList", { data: allVersions, cachedAt: now() });
@@ -110,39 +111,78 @@ function buildTrack(minor, useLatest="release") {
 	return { minor: minor, version: local.ver, isRelease: local.isRelease, links: local.links, detail: local.detail };
 }
 
-tracks = {};
-if (len(LTS_MINOR)    && structKeyExists(minorMap, LTS_MINOR) && minorMap[LTS_MINOR].hasRelease)
-	tracks.lts    = buildTrack(LTS_MINOR, "release");
-if (len(stableMinor)  && minorMap[stableMinor].hasRelease)
-	tracks.stable = buildTrack(stableMinor, "release");
-tracks.edgeList = [];
-// render edge cards lowest minor first (ascending), so e.g. 7.1 before 8.0
 arraySort(edgeMinors, function(a,b) { return util.versionCompare(a,b); });
-for (em in edgeMinors) {
-	if (minorMap[em].hasBeta) arrayAppend(tracks.edgeList, buildTrack(em, "beta"));
+tracksCache    = util.dlCacheGet("luceeOverviewTracks");
+tracksCacheAge = structKeyExists(tracksCache, "cachedAt") ? dateDiff("n", tracksCache.cachedAt, now()) : 999;
+
+if (!isEmpty(tracksCache) && structKeyExists(tracksCache, "tracks")) {
+	tracks = tracksCache.tracks;
+	if (tracksCacheAge >= 10) {
+		// stale — serve cached, rebuild in background
+		thread action="run" name="refresh-tracks-#getTickCount()#"
+			minorMap=minorMap edgeMinors=edgeMinors ltsMinor=LTS_MINOR stableMinor=stableMinor {
+			local.tracks = {};
+			if (structKeyExists(attributes.minorMap, attributes.ltsMinor) && attributes.minorMap[attributes.ltsMinor].hasRelease)
+				local.tracks.lts    = buildTrack(attributes.ltsMinor, "release");
+			if (len(attributes.stableMinor) && attributes.minorMap[attributes.stableMinor].hasRelease)
+				local.tracks.stable = buildTrack(attributes.stableMinor, "release");
+			local.tracks.edgeList = [];
+			for (local.em in attributes.edgeMinors) {
+				if (attributes.minorMap[local.em].hasBeta) arrayAppend(local.tracks.edgeList, buildTrack(local.em, "beta"));
+			}
+			util.dlCachePut("luceeOverviewTracks", { tracks: local.tracks, cachedAt: now() });
+		}
+	}
+} else {
+	// cold cache — build synchronously
+	tracks = {};
+	if (structKeyExists(minorMap, LTS_MINOR) && minorMap[LTS_MINOR].hasRelease)
+		tracks.lts    = buildTrack(LTS_MINOR, "release");
+	if (len(stableMinor) && minorMap[stableMinor].hasRelease)
+		tracks.stable = buildTrack(stableMinor, "release");
+	tracks.edgeList = [];
+	for (em in edgeMinors) {
+		if (minorMap[em].hasBeta) arrayAppend(tracks.edgeList, buildTrack(em, "beta"));
+	}
+	util.dlCachePut("luceeOverviewTracks", { tracks: tracks, cachedAt: now() });
 }
 // ── Load Extensions ──────────────────────────────────────────────────
 function loadGroupExtensions(groupId) {
 	local.result = [];
 	try {
-		local.artifacts = LuceeExtension(groupId);
+		local.artCacheKey = "extArtifacts_" & groupId;
+		local.artCache    = util.dlCacheGet(local.artCacheKey);
+		local.artCacheAge = structKeyExists(local.artCache, "cachedAt") ? dateDiff("n", local.artCache.cachedAt, now()) : 999;
+		if (!isEmpty(local.artCache) && structKeyExists(local.artCache, "data")) {
+			local.artifacts = local.artCache.data;
+			if (local.artCacheAge >= 10) {
+				thread action="run" name="refresh-artifacts-#groupId#-#getTickCount()#" gid=groupId ckey=local.artCacheKey {
+					try { util.dlCachePut(attributes.ckey, { data: LuceeExtension(attributes.gid), cachedAt: now() }); } catch(e) {}
+				}
+			}
+		} else {
+			local.artifacts = LuceeExtension(groupId);
+			util.dlCachePut(local.artCacheKey, { data: local.artifacts, cachedAt: now() });
+		}
 		arrayEach(local.artifacts, function(artifactId) {
 			local.cacheKey = "extMeta_" & groupId & "_" & artifactId;
 			local.cached   = util.dlCacheGet(local.cacheKey);
 			local.name      = local.cached.displayName   ?: "";
 			local.image     = local.cached.image         ?: "";
 			local.latestVer = local.cached.latestVersion ?: "";
-
-			if (!len(local.name)) {
-				// not cached yet — use slug name and fire a background thread to populate cache
-				local.name = util.artifactDisplayName(artifactId);
+			// always fall back to slug name for display — even if cached with an empty name
+			if (!len(local.name)) local.name = util.artifactDisplayName(artifactId);
+			
+			if (isEmpty(local.cached)) {
+				dump(serializeJson(local));
+				// no cache entry at all — fire background thread to populate it
 				thread action="run" name="cache-ext-#groupId#-#artifactId#" gid=groupId aid=artifactId ckey=local.cacheKey {
+					// always write something so we don't re-fire on every request
+					local.entry = { displayName: util.artifactDisplayName(attributes.aid), image: "", latestVersion: "", cachedAt: now() };
 					try {
 						local.versions = LuceeExtension(attributes.gid, attributes.aid);
-						local.versions = local.versions.filter(function(v) {
-							local.t = lCase(v);
-							return !findNoCase("-alpha", local.t);
-						});
+						local.nonAlpha = local.versions.filter(function(v) { return !findNoCase("-alpha", lCase(v)); });
+						if (!arrayIsEmpty(local.nonAlpha)) local.versions = local.nonAlpha;
 						if (!arrayIsEmpty(local.versions)) {
 							arraySort(local.versions, function(a,b) {
 								local.a = listToArray(listFirst(a,"-"), ".");
@@ -158,14 +198,15 @@ function loadGroupExtensions(groupId) {
 							});
 							local.pickVer = local.versions[1];
 							local.meta    = LuceeExtension(attributes.gid, attributes.aid, local.pickVer, true);
-							util.dlCachePut(attributes.ckey, {
-								displayName:   local.meta.metadata.name  ?: "",
+							local.entry = {
+								displayName:   len(local.meta.metadata.name ?: "") ? local.meta.metadata.name : util.artifactDisplayName(attributes.aid),
 								image:         local.meta.metadata.image ?: "",
 								latestVersion: local.pickVer,
 								cachedAt:      now()
-							});
+							};
 						}
 					} catch(e) {}
+					util.dlCachePut(attributes.ckey, local.entry);
 				}
 			}
 
@@ -407,10 +448,10 @@ arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCas
 					<div>
 						<h3>#encodeForHTML(ext.displayName)#</h3>
 						<div class="ext-artifact">#encodeForHTML(ext.groupId)#:#encodeForHTML(ext.artifactId)#</div>
+						<cfif len(ext.latestVersion)>
+						<div class="ext-card-version">#encodeForHTML(ext.latestVersion)#</div>
+						</cfif>
 					</div>
-					<cfif len(ext.latestVersion)>
-					<span class="ext-card-version">#encodeForHTML(ext.latestVersion)#</span>
-					</cfif>
 					<span class="ext-card-arrow">→</span>
 				</div>
 				<div class="ext-card-footer">

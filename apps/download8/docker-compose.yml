@@ -7,6 +7,7 @@ services:
     volumes:
       - "./www:/var/www"
       - "./components:/var/components"
+      - "./cache:/var/cache"
     ports:
       - "8056:8080" # PORT (Cloud Run compatible)
 

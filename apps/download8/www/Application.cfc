@@ -1,7 +1,7 @@
 component {
 	this.name = "lucee-downloads";
 
-	this.componentPaths = [
+	this.componentMappings = [
       {
          "physical": "/var/components/",
          "archive": "",
@@ -9,11 +9,9 @@ component {
       }
    ];
 
-	function onApplicationStart() {
-		application.util = new org.lucee.download.Util();
-	}
-
 	function onRequestStart() {
-		if (!structKeyExists(application, "util")) onApplicationStart();
+		if(isNull(application.util ) || !isNull(url.flush) ) {
+			application.util = new org.lucee.download.Util();
+		}
 	}
 }

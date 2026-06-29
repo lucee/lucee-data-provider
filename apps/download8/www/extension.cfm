@@ -12,16 +12,38 @@ if (!len(artifactId)) {
 displayName  = util.artifactDisplayName(artifactId);
 mavenCoords  = groupId & ":" & artifactId;
 
-// Load all versions for this extension, sorted newest first, no alpha
-try {
-	allVersions = LuceeExtension(groupId, artifactId);
-	allVersions = allVersions.filter(function(v) { return util.getType(v) != "alpha"; });
-	arraySort(allVersions, function(a, b) { return util.versionCompare(b, a); });
-} catch(e) {
-	allVersions = [];
+// Load all versions — cached, stale-while-revalidate 10 min
+verListKey   = "extVersions_" & groupId & "_" & artifactId;
+verListCache = util.dlCacheGet(verListKey);
+verListAge   = structKeyExists(verListCache, "cachedAt") ? dateDiff("n", verListCache.cachedAt, now()) : 999;
+
+if (!isEmpty(verListCache) && structKeyExists(verListCache, "data")) {
+	allVersions = verListCache.data;
+	if (verListAge >= 10) {
+		thread action="run" name="refresh-extver-#groupId#-#artifactId#-#getTickCount()#"
+			gid=groupId aid=artifactId ckey=verListKey {
+			try {
+				local.v = LuceeExtension(attributes.gid, attributes.aid);
+				local.na = local.v.filter(function(v) { return util.getType(v) != "alpha"; });
+				if (!arrayIsEmpty(local.na)) local.v = local.na;
+				arraySort(local.v, function(a,b) { return util.versionCompare(b,a); });
+				util.dlCachePut(attributes.ckey, { data: local.v, cachedAt: now() });
+			} catch(e) {}
+		}
+	}
+} else {
+	try {
+		allVersions = LuceeExtension(groupId, artifactId);
+		nonAlpha = allVersions.filter(function(v) { return util.getType(v) != "alpha"; });
+		if (!arrayIsEmpty(nonAlpha)) allVersions = nonAlpha;
+		arraySort(allVersions, function(a, b) { return util.versionCompare(b, a); });
+	} catch(e) {
+		allVersions = [];
+	}
+	util.dlCachePut(verListKey, { data: allVersions, cachedAt: now() });
 }
 
-// Fetch metadata (name, description, image, minCoreVersion) from latest version
+// Fetch full detail (name, description, image, id, minCoreVersion) — cached, stale-while-revalidate 60 min
 extName           = util.artifactDisplayName(artifactId);
 extDescription    = "";
 extImage          = "";
@@ -29,50 +51,51 @@ extId             = "";
 extMinCoreVersion = "";
 
 if (!arrayIsEmpty(allVersions)) {
-	try {
-		cacheKey   = "extMeta_" & groupId & "_" & artifactId;
-		cachedMeta = util.dlCacheGet(cacheKey);
+	detailKey   = "extDetail_" & groupId & "_" & artifactId;
+	detailCache = util.dlCacheGet(detailKey);
+	detailAge   = structKeyExists(detailCache, "cachedAt") ? dateDiff("n", detailCache.cachedAt, now()) : 999;
 
-		// always use whatever is cached (name/image) — even if stale
-		if (!isEmpty(cachedMeta.displayName ?: "")) extName  = cachedMeta.displayName;
-		if (!isEmpty(cachedMeta.image       ?: "")) extImage = cachedMeta.image;
-
-		cacheAge    = structKeyExists(cachedMeta, "cachedAt") ? dateDiff("n", cachedMeta.cachedAt, now()) : 999;
-		cacheStale  = (cacheAge >= 60); // older than 1 hour
-
-		if (cacheStale) {
-			// fire background refresh — don't block the request
-			thread action="run" name="refresh-ext-#groupId#-#artifactId#-#getTickCount()#"
-				gid=groupId aid=artifactId ckey=cacheKey vers=allVersions {
+	if (!isEmpty(detailCache) && structKeyExists(detailCache, "extName")) {
+		extName           = detailCache.extName;
+		extDescription    = detailCache.extDescription;
+		extImage          = detailCache.extImage;
+		extId             = detailCache.extId;
+		extMinCoreVersion = detailCache.extMinCoreVersion;
+		if (detailAge >= 60) {
+			thread action="run" name="refresh-extdetail-#groupId#-#artifactId#-#getTickCount()#"
+				gid=groupId aid=artifactId ckey=detailKey ver=allVersions[1] slug=extName {
 				try {
-					local.meta = LuceeExtension(attributes.gid, attributes.aid, attributes.vers[1], true);
-					if (structKeyExists(local.meta, "metadata")) {
-						util.dlCachePut(attributes.ckey, {
-							displayName: local.meta.metadata.name  ?: "",
-							image:       local.meta.metadata.image ?: "",
-							cachedAt:    now()
-						});
-					}
+					local.meta = LuceeExtension(attributes.gid, attributes.aid, attributes.ver, true).metadata ?: {};
+					util.dlCachePut(attributes.ckey, {
+						extName:           len(local.meta.name           ?: "") ? local.meta.name           : attributes.slug,
+						extDescription:    local.meta.description    ?: "",
+						extImage:          local.meta.image          ?: "",
+						extId:             local.meta.id             ?: "",
+						extMinCoreVersion: local.meta.MinCoreVersion ?: "",
+						cachedAt:          now()
+					});
 				} catch(e) {}
 			}
 		}
-
-		// always do the full fetch for the detail fields (description, id, MinCoreVersion)
-		// these are not cached — they're only needed on the detail page
-		latestMeta = LuceeExtension(groupId, artifactId, allVersions[1], true);
-		if (structKeyExists(latestMeta, "metadata")) {
-			meta = latestMeta.metadata;
-			if (!isEmpty(meta.name            ?: "")) extName           = meta.name;
-			if (!isEmpty(meta.description     ?: "")) extDescription    = meta.description;
-			if (!isEmpty(meta.image           ?: "")) extImage          = meta.image;
-			if (!isEmpty(meta.id              ?: "")) extId             = meta.id;
-			if (!isEmpty(meta.MinCoreVersion  ?: "")) extMinCoreVersion = meta.MinCoreVersion;
-			// write back to cache if it was missing or stale
-			if (cacheStale || !structKeyExists(cachedMeta, "cachedAt")) {
-				util.dlCachePut(cacheKey, { displayName: extName, image: extImage, cachedAt: now() });
-			}
-		}
-	} catch(e) { /* metadata unavailable */ }
+	} else {
+		try {
+			latestMeta = LuceeExtension(groupId, artifactId, allVersions[1], true);
+			meta = latestMeta.metadata ?: {};
+			extName           = len(meta.name           ?: "") ? meta.name           : extName;
+			extDescription    = meta.description    ?: "";
+			extImage          = meta.image          ?: "";
+			extId             = meta.id             ?: "";
+			extMinCoreVersion = meta.MinCoreVersion ?: "";
+		} catch(e) {}
+		util.dlCachePut(detailKey, {
+			extName:           extName,
+			extDescription:    extDescription,
+			extImage:          extImage,
+			extId:             extId,
+			extMinCoreVersion: extMinCoreVersion,
+			cachedAt:          now()
+		});
+	}
 }
 
 // Pick the best version for install snippets: latest release, else latest overall
@@ -90,7 +113,8 @@ groups = {
 	release:  [],
 	rc:       [],
 	beta:     [],
-	snapshot: []
+	snapshot: [],
+	alpha:    []
 };
 
 for (ver in allVersions) {
@@ -131,10 +155,11 @@ groupMeta = {
 	release:  { label: "Releases",            badge: "release"  },
 	rc:       { label: "Release Candidates",   badge: "rc"       },
 	beta:     { label: "Betas",                badge: "beta"     },
-	snapshot: { label: "Snapshots",            badge: "snapshot" }
+	snapshot: { label: "Snapshots",            badge: "snapshot" },
+	alpha:    { label: "Alpha",                badge: "alpha"    }
 };
 
-typeOrder = ["release","rc","beta","snapshot"];
+typeOrder = ["release","rc","beta","snapshot","alpha"];
 VERSIONS_PREVIEW = 5;
 </cfscript>
 <!DOCTYPE html>
