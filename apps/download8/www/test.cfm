@@ -22,6 +22,25 @@ dump(dateDiff("n",info.dateLastModified,now())&" min")
 dump(dateDiff("h",info.dateLastModified,now())&" h")
 
 
+try{
+file="/downloads/test.txt";
+if(!fileExists(file)) {
+	fileWrite(file,"")
+}
+info=fileInfo(file);
+dump(info);
+
+dump(dateDiff("s",info.dateLastModified,now())&" sec")
+dump(dateDiff("n",info.dateLastModified,now())&" min")
+dump(dateDiff("h",info.dateLastModified,now())&" h")
+
+}
+catch(ex) {
+echo(ex);
+}
+
+
+try{
 file=expandPath("/downloads/test.txt");
 if(!fileExists(file)) {
 	fileWrite(file,"")
@@ -33,7 +52,10 @@ dump(dateDiff("s",info.dateLastModified,now())&" sec")
 dump(dateDiff("n",info.dateLastModified,now())&" min")
 dump(dateDiff("h",info.dateLastModified,now())&" h")
 
-
+}
+catch(ex) {
+echo(ex);
+}
 
 
 
