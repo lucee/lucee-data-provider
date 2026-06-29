@@ -1,8 +1,7 @@
 
+<cfinclude template="../functions.cfm">
 <cfscript>
 start=getTickCount();
-
-include "../functions.cfm";
 
 // ── Config ──────────────────────────────────────────────────────────
 LTS_MINOR   = "6.2";
