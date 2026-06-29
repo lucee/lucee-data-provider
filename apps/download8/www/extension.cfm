@@ -1,41 +1,5 @@
+<cfinclude template="../functions.cfm">
 <cfscript>
-function artifactDisplayName(artifactId) {
-	local.words  = listToArray(artifactId, "-");
-	local.result = [];
-	for (local.w in local.words) {
-		arrayAppend(local.result, uCase(left(local.w,1)) & lCase(right(local.w, len(local.w)-1)));
-	}
-	return arrayToList(local.result, " ");
-}
-
-function versionCompare(v1, v2) {
-	local.a = listToArray(listFirst(v1,"-"), ".");
-	local.b = listToArray(listFirst(v2,"-"), ".");
-	local.len = max(arrayLen(local.a), arrayLen(local.b));
-	for (local.i = 1; local.i <= local.len; local.i++) {
-		local.n1 = val(local.a[local.i] ?: "0");
-		local.n2 = val(local.b[local.i] ?: "0");
-		if (local.n1 > local.n2) return 1;
-		if (local.n1 < local.n2) return -1;
-	}
-	return 0;
-}
-
-function getType(ver) {
-	local.v = lCase(ver);
-	if (findNoCase("-snapshot", local.v)) return "snapshot";
-	if (findNoCase("-beta",     local.v)) return "beta";
-	if (findNoCase("-alpha",    local.v)) return "alpha";
-	if (findNoCase("-rc",       local.v)) return "rc";
-	return "release";
-}
-
-function parseDate(dateStr) {
-	try {
-		if (len(trim(dateStr))) return dateFormat(parseDateTime(dateStr), "mmm d, yyyy");
-	} catch(e) {}
-	return "";
-}
 
 // Params
 groupId    = url.groupId    ?: "org.lucee";
@@ -66,6 +30,35 @@ extMinCoreVersion = "";
 
 if (!arrayIsEmpty(allVersions)) {
 	try {
+		cacheKey   = "extMeta_" & groupId & "_" & artifactId;
+		cachedMeta = application[cacheKey] ?: {};
+
+		// always use whatever is cached (name/image) — even if stale
+		if (!isEmpty(cachedMeta.displayName ?: "")) extName  = cachedMeta.displayName;
+		if (!isEmpty(cachedMeta.image       ?: "")) extImage = cachedMeta.image;
+
+		cacheAge    = structKeyExists(cachedMeta, "cachedAt") ? dateDiff("n", cachedMeta.cachedAt, now()) : 999;
+		cacheStale  = (cacheAge >= 60); // older than 1 hour
+
+		if (cacheStale) {
+			// fire background refresh — don't block the request
+			thread action="run" name="refresh-ext-#groupId#-#artifactId#-#getTickCount()#"
+				gid=groupId aid=artifactId ckey=cacheKey vers=allVersions {
+				try {
+					local.meta = LuceeExtension(attributes.gid, attributes.aid, attributes.vers[1], true);
+					if (structKeyExists(local.meta, "metadata")) {
+						application[attributes.ckey] = {
+							displayName: local.meta.metadata.name        ?: "",
+							image:       local.meta.metadata.image       ?: "",
+							cachedAt:    now()
+						};
+					}
+				} catch(e) {}
+			}
+		}
+
+		// always do the full fetch for the detail fields (description, id, MinCoreVersion)
+		// these are not cached — they're only needed on the detail page
 		latestMeta = LuceeExtension(groupId, artifactId, allVersions[1], true);
 		if (structKeyExists(latestMeta, "metadata")) {
 			meta = latestMeta.metadata;
@@ -74,6 +67,10 @@ if (!arrayIsEmpty(allVersions)) {
 			if (!isEmpty(meta.image           ?: "")) extImage          = meta.image;
 			if (!isEmpty(meta.id              ?: "")) extId             = meta.id;
 			if (!isEmpty(meta.MinCoreVersion  ?: "")) extMinCoreVersion = meta.MinCoreVersion;
+			// write back to cache if it was missing or stale
+			if (cacheStale || !structKeyExists(cachedMeta, "cachedAt")) {
+				application[cacheKey] = { displayName: extName, image: extImage, cachedAt: now() };
+			}
 		}
 	} catch(e) { /* metadata unavailable */ }
 }
@@ -85,7 +82,10 @@ for (sv in allVersions) {
 }
 if (!len(snippetVer) && !arrayIsEmpty(allVersions)) snippetVer = allVersions[1];
 
-// Group versions by type, fetching full metadata (download=true) for each
+// Group versions by type.
+// Only the latest version gets download=true (lex URL) — already fetched above as latestMeta.
+// All other versions use a lightweight fetch (no Maven HEAD request).
+// Version metadata is immutable, so cache forever in application scope.
 groups = {
 	release:  [],
 	rc:       [],
@@ -97,27 +97,28 @@ for (ver in allVersions) {
 	verType  = getType(ver);
 	groupKey = verType;
 	if (!structKeyExists(groups, groupKey)) groups[groupKey] = [];
-	verMinCore = "";
-	try {
-		verMeta = LuceeExtension(groupId, artifactId, ver, true);
-		if (structKeyExists(verMeta, "metadata") && !isEmpty(verMeta.metadata.MinCoreVersion ?: "")) {
-			verMinCore = verMeta.metadata.MinCoreVersion;
+
+	verCacheKey = "extVer_" & groupId & "_" & artifactId & "_" & ver;
+	verCached   = application[verCacheKey] ?: {};
+
+	if (!isEmpty(verCached)) {
+		arrayAppend(groups[groupKey], verCached);
+	} else {
+		// reuse latestMeta for the latest version (already fetched), no API call for others
+		isLatest = (ver == allVersions[1]);
+		if (isLatest && isDefined("latestMeta")) {
+			try { verMinCore = latestMeta.metadata.MinCoreVersion ?: ""; } catch(e) { verMinCore = ""; }
+			verEntry = {
+				version:      latestMeta.version      ?: ver,
+				lastModified: parseDate(latestMeta.lastModified ?: ""),
+				type:         verType,
+				minCore:      verMinCore
+			};
+		} else {
+			verEntry = { version: ver, lastModified: "", type: verType, minCore: "" };
 		}
-		arrayAppend(groups[groupKey], {
-			version:      verMeta.version      ?: ver,
-			lastModified: parseDate(verMeta.lastModified ?: ""),
-			lex:          verMeta.lex          ?: "",
-			type:         verType,
-			minCore:      verMinCore
-		});
-	} catch(e) {
-		arrayAppend(groups[groupKey], {
-			version:      ver,
-			lastModified: "",
-			lex:          "",
-			type:         verType,
-			minCore:      ""
-		});
+		application[verCacheKey] = verEntry;
+		arrayAppend(groups[groupKey], verEntry);
 	}
 }
 
@@ -141,7 +142,7 @@ VERSIONS_PREVIEW = 5;
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>#encodeForHTML(displayName)# Extension — Lucee Downloads</title>
+	<title><cfoutput>#encodeForHTML(displayName)# Extension — Lucee Downloads</cfoutput></title>
 	<link rel="icon" type="image/png" href="/res/favicon.png">
 	<link rel="stylesheet" href="/res/download.css">
 </head>
@@ -308,9 +309,7 @@ VERSIONS_PREVIEW = 5;
 							<td class="text-muted">#len(ext.minCore) ? encodeForHTML(ext.minCore) & "+" : "—"#</td>
 							<td>
 								<div class="dl-links">
-									<cfif len(ext.lex)>
-									<a class="btn-dl primary" href="#encodeForHTMLAttribute(ext.lex)#">Download</a>
-									</cfif>
+									<a class="btn-dl primary" href="/download.cfm?groupId=#encodeForURL(groupId)#&artifactId=#encodeForURL(artifactId)#&version=#encodeForURL(ext.version)#">Download</a>
 								</div>
 							</td>
 						</tr>

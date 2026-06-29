@@ -1,94 +1,42 @@
+
 <cfscript>
+start=getTickCount();
+
+include "../functions.cfm";
+
 // ── Config ──────────────────────────────────────────────────────────
 LTS_MINOR   = "6.2";
 GROUP_ID    = "org.lucee";
 DOCKER_DOCS = "https://docs.lucee.org/recipes/docker.html";
 FORUM_URL   = "https://dev.lucee.org/c/news/release/8";
 
-// ── Download format descriptions ────────────────────────────────────
-DL_INFO = {
-	"win64":         "Windows x64 installer — guided setup wizard, installs Lucee as a Windows service with Tomcat included.",
-	"linux-x64":     "Linux x64 installer — shell installer for 64-bit Linux, sets up Lucee as a system service with Tomcat.",
-	"linux-aarch64": "Linux aarch64 installer — same as the x64 installer but for ARM64 (Apple Silicon, Ampere, AWS Graviton).",
-	"express":       "Express ZIP — no installation needed. Unzip and run the start script. Ideal for local development or quick evaluation.",
-	"jar":           "lucee.jar — drop into your servlet engine's lib/classpath folder. Lucee will download any missing dependency bundles on first start.",
-	"light":         "lucee-light.jar — minimal Lucee jar with no bundled extensions. Smaller footprint; extensions are fetched on demand.",
-	"lco":           "Core (.lco) — Lucee Core update file. Copy to the patches/ folder of an existing installation to update the core without reinstalling.",
-	"war":           "WAR — Web ARchive for deployment on any Java Servlet container (Tomcat, Jetty, WildFly, etc.).",
-	"zero":          "lucee-zero.jar — Lucee with zero bundled extensions. The smallest possible footprint; every extension is loaded on demand.",
-	"docker":        "Docker Images — pre-built Lucee + Tomcat images on Docker Hub. Best for containerised and cloud deployments."
-};
+// ── Load Lucee versions (stale-while-revalidate) ─────────────────────
+versCache    = application["luceeVersionsList"] ?: {};
+allVersions  = versCache.data ?: [];
+versCacheAge = structKeyExists(versCache, "cachedAt") ? dateDiff("n", versCache.cachedAt, now()) : 999;
 
-// ── Helper functions ─────────────────────────────────────────────────
-function getMinor(ver) {
-	local.base  = listFirst(ver, "-");
-	local.parts = listToArray(base, ".");
-	if (arrayLen(parts) >= 2) return parts[1] & "." & parts[2];
-	return "";
-}
-
-function getType(ver) {
-	local.v = lCase(ver);
-	if (findNoCase("-snapshot", v)) return "snapshot";
-	if (findNoCase("-beta",     v)) return "beta";
-	if (findNoCase("-alpha",    v)) return "alpha";
-	if (findNoCase("-rc",       v)) return "rc";
-	return "release";
-}
-
-function formatVersion(ver) {
-	return listFirst(ver, "-"); // strip suffix for display
-}
-
-function parseDate(dateStr) {
-	// "June, 24 2024 08:08:41 +0000" or empty
-	try {
-		if (len(trim(dateStr))) return dateFormat(parseDateTime(dateStr), "mmm d, yyyy");
-	} catch(e) {}
-	return "";
-}
-
-function artifactDisplayName(artifactId) {
-	// "administrator-extension" → "Administrator Extension"
-	local.words = listToArray(artifactId, "-");
-	local.result = [];
-	for (local.w in words) {
-		arrayAppend(result, uCase(left(w, 1)) & lCase(right(w, len(w)-1)));
+if (!arrayLen(allVersions)) {
+	// cold cache — must wait
+	try { allVersions = LuceeVersionsList(); } catch(e) { allVersions = []; }
+	application["luceeVersionsList"] = { data: allVersions, cachedAt: now() };
+} else if (versCacheAge >= 5) {
+	// stale — serve cached, refresh in background
+	thread action="run" name="refresh-versions-list-#getTickCount()#" {
+		try {
+			application["luceeVersionsList"] = { data: LuceeVersionsList(), cachedAt: now() };
+		} catch(e) {}
 	}
-	return arrayToList(result, " ");
-}
-
-function versionCompare(v1, v2) {
-	// compare dotted numeric version strings, returns -1/0/1
-	local.a = listToArray(listFirst(v1,"-"), ".");
-	local.b = listToArray(listFirst(v2,"-"), ".");
-	local.len = max(arrayLen(a), arrayLen(b));
-	for (local.i = 1; i <= len; i++) {
-		local.n1 = val(a[i] ?: "0");
-		local.n2 = val(b[i] ?: "0");
-		if (n1 > n2) return 1;
-		if (n1 < n2) return -1;
-	}
-	return 0;
-}
-
-// ── Load Lucee versions ──────────────────────────────────────────────
-try {
-	allVersions = LuceeVersionsList();
-} catch(e) {
-	allVersions = [];
 }
 
 // Group by minor → { hasRelease, hasBeta, latestRelease, latestBeta, versions[] }
 minorMap = {};
 
-SUPPRESS_MINORS = ["7.2"];
-
 for (ver in allVersions) {
 	verType  = getType(ver);
 	verMinor = getMinor(ver);
 	if (!len(verMinor)) continue;
-	if (arrayFindNoCase(SUPPRESS_MINORS, verMinor)) continue;
+	
+	if (verMinor=="7.2") continue;
 
 	if (!structKeyExists(minorMap, verMinor)) {
 		minorMap[verMinor] = {
@@ -132,24 +80,13 @@ for (minor in allMinors) {
 // keep backwards-compat alias for versions.cfm track filter (uses first edge minor)
 edgeMinor = arrayLen(edgeMinors) ? edgeMinors[1] : "";
 
-CDN = "https://cdn.lucee.org/";
-
-// Build CDN download URLs for a release version
-function cdnLinks(ver) {
-	return {
-		win64:         CDN & "lucee-" & ver & "-windows-x64-installer.exe",
-		"linux-x64":   CDN & "lucee-" & ver & "-linux-x64-installer.run",
-		"linux-aarch64": CDN & "lucee-" & ver & "-linux-aarch64-installer.run",
-		express:       CDN & "lucee-express-" & ver & ".zip",
-		jar:           CDN & "lucee-" & ver & ".jar",
-		light:         CDN & "lucee-light-" & ver & ".jar",
-		lco:           CDN & ver & ".lco",
-		war:           CDN & "lucee-" & ver & ".war"
-	};
-}
-
-function getLuceeVersionsDetail(v) cachedWithin=1000 {
-	return LuceeVersionsDetail(v);
+function getLuceeVersionsDetail(v) {
+	local.cacheKey = "luceeVerDetail_" & v;
+	local.cached   = application[local.cacheKey] ?: {};
+	if (!isEmpty(local.cached)) return local.cached;
+	local.detail = LuceeVersionsDetail(v);
+	application[local.cacheKey] = local.detail;
+	return local.detail;
 }
 
 // Build track structs: { minor, version, isRelease, links }
@@ -185,54 +122,66 @@ arraySort(edgeMinors, function(a,b) { return versionCompare(a,b); });
 for (em in edgeMinors) {
 	if (minorMap[em].hasBeta) arrayAppend(tracks.edgeList, buildTrack(em, "beta"));
 }
-
-function getLuceeExtension(g,a,v) cachedwithin=1000 {
-	return LuceeExtension(g, a, v, true);
-}
-
 // ── Load Extensions ──────────────────────────────────────────────────
 function loadGroupExtensions(groupId) {
 	local.result = [];
 	try {
 		local.artifacts = LuceeExtension(groupId);
 		arrayEach(local.artifacts, function(artifactId) {
-			try {
-				local.extVersions = LuceeExtension(groupId, artifactId);
-				local.extVersions = local.extVersions.filter(function(v) { return getType(v) != "alpha"; });
-				if (!arrayIsEmpty(local.extVersions)) {
-					arraySort(local.extVersions, function(a, b) { return versionCompare(b, a); });
-					local.latestRelVer = "";
-					for (local.ev in local.extVersions) {
-						if (getType(local.ev) == "release") { local.latestRelVer = local.ev; break; }
-					}
-					local.pickVer   = len(local.latestRelVer) ? local.latestRelVer : local.extVersions[1];
-					local.extDetail = getLuceeExtension(groupId, artifactId, local.pickVer, true);
-					local.extName   = artifactDisplayName(artifactId);
-					if (!isEmpty(local.extDetail.metadata.name  ?: "")) local.extName  = local.extDetail.metadata.name;
-					local.extImage  = local.extDetail.metadata.image ?: "";
-					arrayAppend(result, {
-						groupId:      groupId,
-						artifactId:   artifactId,
-						displayName:  local.extName,
-						image:        local.extImage,
-						version:      local.extDetail.version ?: local.pickVer,
-						lastModified: parseDate(local.extDetail.lastModified ?: ""),
-						lex:          local.extDetail.lex ?: "",
-						hasRelease:   len(local.latestRelVer)
-					});
+			local.cacheKey = "extMeta_" & groupId & "_" & artifactId;
+			local.cached   = application[local.cacheKey] ?: {};
+			local.name      = local.cached.displayName   ?: "";
+			local.image     = local.cached.image         ?: "";
+			local.latestVer = local.cached.latestVersion ?: "";
+
+			if (!len(local.name)) {
+				// not cached yet — use slug name and fire a background thread to populate cache
+				local.name = artifactDisplayName(artifactId);
+				thread action="run" name="cache-ext-#groupId#-#artifactId#" gid=groupId aid=artifactId ckey=local.cacheKey {
+					try {
+						local.versions = LuceeExtension(attributes.gid, attributes.aid);
+						local.versions = local.versions.filter(function(v) {
+							local.t = lCase(v);
+							return !findNoCase("-alpha", local.t);
+						});
+						if (!arrayIsEmpty(local.versions)) {
+							arraySort(local.versions, function(a,b) {
+								local.a = listToArray(listFirst(a,"-"), ".");
+								local.b = listToArray(listFirst(b,"-"), ".");
+								local.len = max(arrayLen(local.a), arrayLen(local.b));
+								for (local.i=1; local.i<=local.len; local.i++) {
+									local.n1 = val(local.a[local.i] ?: "0");
+									local.n2 = val(local.b[local.i] ?: "0");
+									if (local.n1 > local.n2) return -1;
+									if (local.n1 < local.n2) return 1;
+								}
+								return 0;
+							});
+							local.pickVer = local.versions[1];
+							local.meta    = LuceeExtension(attributes.gid, attributes.aid, local.pickVer, true);
+							application[attributes.ckey] = {
+								displayName:   local.meta.metadata.name  ?: "",
+								image:         local.meta.metadata.image ?: "",
+								latestVersion: local.pickVer,
+								cachedAt:      now()
+							};
+						}
+					} catch(e) {}
 				}
-			} catch(e) { /* skip broken extension */ }
-		}, true, 50); // parallel=true, maxThreads=10
+			}
+
+			arrayAppend(result, {
+				groupId:      groupId,
+				artifactId:   artifactId,
+				displayName:  local.name,
+				image:        local.image,
+				latestVersion: local.latestVer
+			});
+		}, true, 20);
 	} catch(e) {}
 	return local.result;
 }
 
-extensions = [];
-for (gid in ["org.lucee", "io.forgebox"]) {
-	extensions.addAll(loadGroupExtensions(gid));
-}
-// sort all extensions alphabetically by display name
-arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCase(b.displayName)); });
 </cfscript>
 <!DOCTYPE html>
 <html lang="en">
@@ -244,7 +193,6 @@ arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCas
 	<link rel="stylesheet" href="/res/download.css">
 </head>
 <body>
-
 <cfoutput>
 
 <!--- ── Header ── --->
@@ -313,7 +261,7 @@ arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCas
 				</details>
 			</div>
 			<div class="track-card-footer">
-				<a href="/versions.cfm?track=lts">All releases <span class="icon-arrow-right"></span></a>
+				<a href="/versions.cfm?track=lts&minor=#encodeForURL(t.minor)#">All releases <span class="icon-arrow-right"></span></a>
 				<a href="/versions.cfm?track=all&minor=#encodeForURL(t.minor)#&type=snapshot" class="text-muted text-small">All snapshots</a>
 			</div>
 		</article>
@@ -355,7 +303,7 @@ arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCas
 				</details>
 			</div>
 			<div class="track-card-footer">
-				<a href="/versions.cfm?track=stable">All releases <span class="icon-arrow-right"></span></a>
+				<a href="/versions.cfm?track=stable&minor=#encodeForURL(t.minor)#">All releases <span class="icon-arrow-right"></span></a>
 				<a href="/versions.cfm?track=all&minor=#encodeForURL(t.minor)#&type=snapshot" class="text-muted text-small">All snapshots</a>
 			</div>
 		</article>
@@ -396,8 +344,8 @@ arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCas
 				</ul>
 			</div>
 			<div class="track-card-footer">
-				<a href="/versions.cfm?track=all&minor=#encodeForURL(t.minor)#">All releases <span class="icon-arrow-right"></span></a>
-				<a href="/versions.cfm?track=all&minor=#encodeForURL(t.minor)#&type=snapshot" class="text-muted text-small">All snapshots</a>
+				<a href="/versions.cfm?track=edge&minor=#encodeForURL(t.minor)#">All releases <span class="icon-arrow-right"></span></a>
+				<a href="/versions.cfm?track=edge&minor=#encodeForURL(t.minor)#&type=snapshot" class="text-muted text-small">All snapshots</a>
 			</div>
 		</article>
 		</cfloop>
@@ -418,6 +366,18 @@ arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCas
 <hr class="section-divider">
 
 <!--- ── Extensions ── --->
+<cfscript>
+extensions = [];
+for (gid in ["org.lucee", "io.forgebox"]) {
+	extensions.addAll(loadGroupExtensions(gid));
+}
+
+// sort all extensions alphabetically by display name
+arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCase(b.displayName)); });
+
+
+</cfscript>
+
 <section class="extensions-section" id="extensions">
 	<div class="ext-section-header">
 		<h2 class="section-title" style="margin-bottom:0;">Extensions</h2>
@@ -436,7 +396,9 @@ arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCas
 		<div class="ext-grid" id="ext-grid">
 		<cfloop array="#extensions#" item="ext">
 			<cfflush>
-			<article class="ext-card" data-name="#lCase(encodeForHTMLAttribute(ext.displayName))#">
+			<div class="ext-card" role="link" tabindex="0"
+				onclick="location.href='/extension.cfm?groupId=#encodeForURL(ext.groupId)#&artifactId=#encodeForURL(ext.artifactId)#'"
+				data-name="#lCase(encodeForHTMLAttribute(ext.displayName))#">
 				<div class="ext-card-header">
 					<cfif len(ext.image)>
 					<img class="ext-card-logo"
@@ -447,26 +409,15 @@ arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCas
 						<h3>#encodeForHTML(ext.displayName)#</h3>
 						<div class="ext-artifact">#encodeForHTML(ext.groupId)#:#encodeForHTML(ext.artifactId)#</div>
 					</div>
-				</div>
-				<div class="ext-card-body">
-					<div class="ext-version-row">
-						<span class="ext-version">#encodeForHTML(ext.version)#</span>
-						<cfif len(ext.lastModified)>
-						<span class="ext-date">#encodeForHTML(ext.lastModified)#</span>
-						</cfif>
-					</div>
-					<cfif !ext.hasRelease>
-					<div class="text-small" style="margin-top:4px;color:##c0392b;">No release yet</div>
+					<cfif len(ext.latestVersion)>
+					<span class="ext-card-version">#encodeForHTML(ext.latestVersion)#</span>
 					</cfif>
+					<span class="ext-card-arrow">→</span>
 				</div>
 				<div class="ext-card-footer">
-					<cfif len(ext.lex)>
-					<a class="btn-dl primary" href="#encodeForHTMLAttribute(ext.lex)#">Download</a>
-					</cfif>
-					<a href="/extension.cfm?groupId=#encodeForURL(ext.groupId)#&artifactId=#encodeForURL(ext.artifactId)#">All versions <span class="icon-arrow-right"></span></a>
-					<a href="https://mvnrepository.com/artifact/#encodeForURL(ext.groupId)#/#encodeForURL(ext.artifactId)#" target="_blank" class="text-muted text-small">Maven</a>
+					<a class="ext-dl-btn" href="/download.cfm?groupId=#encodeForURL(ext.groupId)#&artifactId=#encodeForURL(ext.artifactId)#" onclick="event.stopPropagation()">Download .lex</a>
 				</div>
-			</article>
+			</div>
 		</cfloop>
 		</div>
 	</cfif>

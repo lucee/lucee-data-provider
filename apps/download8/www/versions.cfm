@@ -1,100 +1,48 @@
+<cfinclude template="../functions.cfm">
 <cfscript>
 LTS_MINOR   = "6.2";
 GROUP_ID    = "org.lucee";
 FORUM_URL   = "https://dev.lucee.org/c/news/release/8";
-CDN         = "https://cdn.lucee.org/";
-
-DL_INFO = {
-	"win64":         "Windows x64 installer — guided setup wizard, installs Lucee as a Windows service with Tomcat included.",
-	"linux-x64":     "Linux x64 installer — shell installer for 64-bit Linux, sets up Lucee as a system service with Tomcat.",
-	"linux-aarch64": "Linux aarch64 installer — same as the x64 installer but for ARM64 (Apple Silicon, Ampere, AWS Graviton).",
-	"express":       "Express ZIP — no installation needed. Unzip and run the start script. Ideal for local development or quick evaluation.",
-	"jar":           "lucee.jar — drop into your servlet engine's lib/classpath folder. Lucee will download any missing dependency bundles on first start.",
-	"light":         "lucee-light.jar — minimal Lucee jar with no bundled extensions. Smaller footprint; extensions are fetched on demand.",
-	"lco":           "Core (.lco) — Lucee Core update file. Copy to the patches/ folder of an existing installation to update the core without reinstalling.",
-	"war":           "WAR — Web ARchive for deployment on any Java Servlet container (Tomcat, Jetty, WildFly, etc.).",
-	"zero":          "lucee-zero.jar — Lucee with zero bundled extensions. The smallest possible footprint; every extension is loaded on demand.",
-	"docker":        "Docker Images — pre-built Lucee + Tomcat images on Docker Hub. Best for containerised and cloud deployments."
-};
-
-function cdnLinks(ver) {
-	return {
-		win64:           CDN & "lucee-" & ver & "-windows-x64-installer.exe",
-		"linux-x64":     CDN & "lucee-" & ver & "-linux-x64-installer.run",
-		"linux-aarch64": CDN & "lucee-" & ver & "-linux-aarch64-installer.run",
-		express:         CDN & "lucee-express-" & ver & ".zip",
-		jar:             CDN & "lucee-" & ver & ".jar",
-		light:           CDN & "lucee-light-" & ver & ".jar",
-		lco:             CDN & ver & ".lco",
-		war:             CDN & "lucee-" & ver & ".war"
-	};
-}
 
 function buildLinks(ver) {
+	local.cacheKey = "luceeVerDetail_" & ver;
+	local.detail   = application[local.cacheKey] ?: {};
+	if (isEmpty(local.detail)) {
+		try {
+			local.detail = LuceeVersionsDetail(ver);
+			application[local.cacheKey] = local.detail;
+		} catch(e) { local.detail = {}; }
+	}
+	// start with CDN defaults for releases, then overlay API data
 	local.isRelease = (getType(ver) == "release");
-	// start with CDN defaults for releases
 	local.links = local.isRelease ? cdnLinks(formatVersion(ver)) : {};
-	try {
-		local.detail = LuceeVersionsDetail(ver);
-		
-		for (local.k in local.detail) {
-			if (local.k != "lastModified" && local.k != "pom" && len(local.detail[local.k])) {
-				local.links[local.k] = local.detail[local.k];
-			}
+	for (local.k in local.detail) {
+		if (local.k != "lastModified" && local.k != "pom" && len(local.detail[local.k])) {
+			local.links[local.k] = local.detail[local.k];
 		}
-	} catch(e) {}
+	}
 	return local.links;
 }
 
-function getMinor(ver) {
-	local.base  = listFirst(ver, "-");
-	local.parts = listToArray(base, ".");
-	if (arrayLen(parts) >= 2) return parts[1] & "." & parts[2];
-	return "";
-}
-
-function getType(ver) {
-	local.v = lCase(ver);
-	if (findNoCase("-snapshot", v)) return "snapshot";
-	if (findNoCase("-beta",     v)) return "beta";
-	if (findNoCase("-alpha",    v)) return "alpha";
-	if (findNoCase("-rc",       v)) return "rc";
-	return "release";
-}
-
-function formatVersion(ver) {
-	return listFirst(ver, "-");
-}
-
-function versionCompare(v1, v2) {
-	local.a = listToArray(listFirst(v1,"-"), ".");
-	local.b = listToArray(listFirst(v2,"-"), ".");
-	local.len = max(arrayLen(a), arrayLen(b));
-	for (local.i = 1; i <= len; i++) {
-		local.n1 = val(a[i] ?: "0");
-		local.n2 = val(b[i] ?: "0");
-		if (n1 > n2) return 1;
-		if (n1 < n2) return -1;
-	}
-	return 0;
-}
-
-function parseDate(dateStr) {
-	try {
-		if (len(trim(dateStr))) return dateFormat(parseDateTime(dateStr), "mmm d, yyyy");
-	} catch(e) {}
-	return "";
-}
-
 // Determine which track/minor we are showing
-track      = lCase(url.track ?: "all");
-typeFilter = lCase(url.type ?: "");
-minorFilter = url.minor ?: ""; // optional: restrict to a specific minor (e.g. 8.0)
+track       = lCase(url.track ?: "all");
+typeFilter  = lCase(url.type ?: "");
+minorFilter = url.minor ?: "";
 
-try {
-	allVersions = LuceeVersionsList();
-} catch(e) {
-	allVersions = [];
+// versions list — stale-while-revalidate (shared cache with index.cfm)
+versCache    = application["luceeVersionsList"] ?: {};
+allVersions  = versCache.data ?: [];
+versCacheAge = structKeyExists(versCache, "cachedAt") ? dateDiff("n", versCache.cachedAt, now()) : 999;
+
+if (!arrayLen(allVersions)) {
+	try { allVersions = LuceeVersionsList(); } catch(e) { allVersions = []; }
+	application["luceeVersionsList"] = { data: allVersions, cachedAt: now() };
+} else if (versCacheAge >= 5) {
+	thread action="run" name="refresh-versions-list-v-#getTickCount()#" {
+		try {
+			application["luceeVersionsList"] = { data: LuceeVersionsList(), cachedAt: now() };
+		} catch(e) {}
+	}
 }
 
 // Map minor → edge/stable/lts
@@ -114,6 +62,17 @@ for (ver in allVersions) {
 		arrayAppend(allMinors, verMinor);
 	}
 	arrayAppend(minorData[verMinor], ver);
+}
+
+// Drop RC/beta/snapshot if a release with the same base version exists
+for (m in allMinors) {
+	releaseBaseVersions = {};
+	for (v in minorData[m]) {
+		if (getType(v) == "release") releaseBaseVersions[formatVersion(v)] = true;
+	}
+	minorData[m] = minorData[m].filter(function(v) {
+		return getType(v) == "release" || !structKeyExists(releaseBaseVersions, formatVersion(v));
+	});
 }
 
 // Sort minors desc
@@ -191,6 +150,7 @@ typeLabels = {
 </cfscript>
 <!DOCTYPE html>
 <html lang="en">
+<cfoutput>
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
@@ -200,7 +160,7 @@ typeLabels = {
 </head>
 <body>
 
-<cfoutput>
+
 
 <header class="site-header">
 	<a href="/" class="logo">
@@ -245,6 +205,7 @@ typeLabels = {
 					<cfif len(mtype)><span class="track-badge #mtype#">#uCase(mtype)#</span></cfif>
 				</div>
 
+				<cfset rowNum = 0>
 				<table class="versions-table">
 					<thead>
 						<tr>
@@ -256,48 +217,62 @@ typeLabels = {
 					<tbody>
 					<cfloop array="#minorData[minor]#" item="ver">
 						<cfset vtype = getType(ver)>
-						<!--- Skip snapshots unless explicitly requested --->
-						<cfif vtype == "snapshot" && track != "edge" && track != "all"><cfcontinue></cfif>
-						<cfset lnk = buildLinks(ver)>
-						<tr>
-							<td><strong>#encodeForHTML(formatVersion(ver))#</strong></td>
-							<td><span class="version-type-badge #vtype#">#encodeForHTML(typeLabels[vtype] ?: vtype)#</span></td>
-							<td>
-								<div class="dl-links">
-									<cfif structKeyExists(lnk,"win64")>
-									<a href="#encodeForHTMLAttribute(lnk.win64)#" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['win64'])#">Windows</a>
-									</cfif>
-									<cfif structKeyExists(lnk,"linux-x64")>
-									<a href="#encodeForHTMLAttribute(lnk['linux-x64'])#" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['linux-x64'])#">Linux x64</a>
-									</cfif>
-									<cfif structKeyExists(lnk,"linux-aarch64")>
-									<a href="#encodeForHTMLAttribute(lnk['linux-aarch64'])#" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['linux-aarch64'])#">Linux arm64</a>
-									</cfif>
-									<cfif structKeyExists(lnk,"express")>
-									<a href="#encodeForHTMLAttribute(lnk.express)#" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['express'])#">Express</a>
-									</cfif>
-									<cfif structKeyExists(lnk,"jar")>
-									<a href="#encodeForHTMLAttribute(lnk.jar)#" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['jar'])#">lucee.jar</a>
-									</cfif>
-									<cfif structKeyExists(lnk,"light")>
-									<a href="#encodeForHTMLAttribute(lnk.light)#" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['light'])#">lucee-light.jar</a>
-									</cfif>
-									<cfif structKeyExists(lnk,"zero")>
-									<a href="#encodeForHTMLAttribute(lnk.zero)#" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['zero'])#">lucee-zero.jar</a>
-									</cfif>
-									<cfif structKeyExists(lnk,"lco")>
-									<a href="#encodeForHTMLAttribute(lnk.lco)#" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['lco'])#">Core (.lco)</a>
-									</cfif>
-									<cfif structKeyExists(lnk,"war")>
-									<a href="#encodeForHTMLAttribute(lnk.war)#" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['war'])#">WAR</a>
-									</cfif>
-									<a href="https://hub.docker.com/r/lucee/lucee/tags?name=#encodeForURL(listFirst(ver,'-'))#" target="_blank" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['docker'])#">Docker</a>
-								</div>
-							</td>
-						</tr>
+						<!--- Skip snapshots unless explicitly requested via type=snapshot --->
+						<cfif vtype == "snapshot" && typeFilter != "snapshot"><cfcontinue></cfif>
+						<cfset rowNum++>
+						<cfif rowNum lte 10>
+							<!--- First 10: render with full download links --->
+							<cfset lnk = buildLinks(ver)>
+							<tr>
+								<td><strong>#encodeForHTML(formatVersion(ver))#</strong></td>
+								<td><span class="version-type-badge #vtype#">#encodeForHTML(typeLabels[vtype] ?: vtype)#</span></td>
+								<td>
+									<div class="dl-links">
+										<cfif structKeyExists(lnk,"win64")>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=win64" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['win64'])#">Windows</a>
+										</cfif>
+										<cfif structKeyExists(lnk,"linux-x64")>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=linux-x64" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['linux-x64'])#">Linux x64</a>
+										</cfif>
+										<cfif structKeyExists(lnk,"linux-aarch64")>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=linux-aarch64" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['linux-aarch64'])#">Linux arm64</a>
+										</cfif>
+										<cfif structKeyExists(lnk,"express")>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=express" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['express'])#">Express</a>
+										</cfif>
+										<cfif structKeyExists(lnk,"jar")>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=jar" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['jar'])#">lucee.jar</a>
+										</cfif>
+										<cfif structKeyExists(lnk,"light")>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=light" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['light'])#">lucee-light.jar</a>
+										</cfif>
+										<cfif structKeyExists(lnk,"zero")>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=zero" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['zero'])#">lucee-zero.jar</a>
+										</cfif>
+										<cfif structKeyExists(lnk,"lco")>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=lco" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['lco'])#">Core (.lco)</a>
+										</cfif>
+										<cfif structKeyExists(lnk,"war")>
+										<a href="/download.cfm?version=#encodeForURL(ver)#&type=war" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['war'])#">WAR</a>
+										</cfif>
+										<a href="https://hub.docker.com/r/lucee/lucee/tags?name=#encodeForURL(listFirst(ver,'-'))#" target="_blank" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(DL_INFO['docker'])#">Docker</a>
+									</div>
+								</td>
+							</tr>
+						<cfelse>
+							<!--- Beyond first 10: lazy row, links fetched on demand --->
+							<tr class="ver-lazy" data-version="#encodeForHTMLAttribute(ver)#" style="display:none">
+								<td><strong>#encodeForHTML(formatVersion(ver))#</strong></td>
+								<td><span class="version-type-badge #vtype#">#encodeForHTML(typeLabels[vtype] ?: vtype)#</span></td>
+								<td class="dl-lazy"><span class="text-muted">Loading…</span></td>
+							</tr>
+						</cfif>
 					</cfloop>
 					</tbody>
 				</table>
+				<cfif rowNum gt 10>
+				<button class="show-more-versions" data-shown="10" data-per-page="10">Show more versions (#rowNum - 10# remaining)</button>
+				</cfif>
 			</div>
 		</cfloop>
 	</cfif>
@@ -320,6 +295,33 @@ typeLabels = {
 	</span>
 </footer>
 
+<script>
+document.querySelectorAll('.show-more-versions').forEach(function(btn) {
+	btn.addEventListener('click', function() {
+		var table  = btn.previousElementSibling;
+		var lazy   = Array.from(table.querySelectorAll('tr.ver-lazy[style*="display:none"]'));
+		var perPage = parseInt(btn.dataset.perPage) || 10;
+		var batch  = lazy.slice(0, perPage);
+
+		batch.forEach(function(tr) {
+			tr.style.display = '';
+			var ver  = tr.dataset.version;
+			var cell = tr.querySelector('.dl-lazy');
+			fetch('/versionlinks.cfm?version=' + encodeURIComponent(ver))
+				.then(function(r) { return r.text(); })
+				.then(function(html) { cell.innerHTML = html; })
+				.catch(function() { cell.innerHTML = ''; });
+		});
+
+		var remaining = lazy.length - batch.length;
+		if (remaining > 0) {
+			btn.textContent = 'Show more versions (' + remaining + ' remaining)';
+		} else {
+			btn.remove();
+		}
+	});
+});
+</script>
 </cfoutput>
 </body>
 </html>

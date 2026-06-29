@@ -1,4 +1,3 @@
 component {
-	this.name="lucee-downloads";
-
+	this.name = "lucee-downloads";
 }

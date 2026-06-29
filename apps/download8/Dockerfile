@@ -3,6 +3,7 @@ FROM --platform=linux/amd64 lucee/lucee:8.0.0.156-SNAPSHOT-nginx-amd64
 ENV LUCEE_ADMIN_ENABLED=false
 
 RUN mkdir -p /var/www
+COPY functions.cfm /var/functions.cfm
 COPY www/ /var/www/
 
 COPY lucee-config.json /opt/lucee/server/lucee-server/context/.CFConfig.json
