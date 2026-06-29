@@ -10,6 +10,35 @@ dump(dateDiff("s",started,now())&" sec")
 dump(dateDiff("n",started,now())&" min")
 dump(dateDiff("h",started,now())&" h")
 
+file=expandPath("test.txt");
+if(!fileExists(file)) {
+	fileWrite(file,"")
+}
+info=fileInfo(file);
+dump(info);
+
+dump(dateDiff("s",info.dateLastModified,now())&" sec")
+dump(dateDiff("n",info.dateLastModified,now())&" min")
+dump(dateDiff("h",info.dateLastModified,now())&" h")
+
+
+file=expandPath("/downloads/test.txt");
+if(!fileExists(file)) {
+	fileWrite(file,"")
+}
+info=fileInfo(file);
+dump(info);
+
+dump(dateDiff("s",info.dateLastModified,now())&" sec")
+dump(dateDiff("n",info.dateLastModified,now())&" min")
+dump(dateDiff("h",info.dateLastModified,now())&" h")
+
+
+
+
+
+
+
 if(isNull(url.test))abort;
 // LuceeExtension()
 res["fastest"]=1000000000;
