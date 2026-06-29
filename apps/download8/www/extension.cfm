@@ -1,6 +1,5 @@
 <cfinclude template="../functions.cfm">
 <cfscript>
-cacheSetDirectory(server.system.environment.CACHE_DIRECTORY ?: getDirectoryFromPath(getDirectoryFromPath(getCurrentTemplatePath())));
 
 // Params
 groupId    = url.groupId    ?: "org.lucee";
@@ -32,7 +31,7 @@ extMinCoreVersion = "";
 if (!arrayIsEmpty(allVersions)) {
 	try {
 		cacheKey   = "extMeta_" & groupId & "_" & artifactId;
-		cachedMeta = cacheGet(cacheKey);
+		cachedMeta = dlCacheGet(cacheKey);
 
 		// always use whatever is cached (name/image) — even if stale
 		if (!isEmpty(cachedMeta.displayName ?: "")) extName  = cachedMeta.displayName;
@@ -48,7 +47,7 @@ if (!arrayIsEmpty(allVersions)) {
 				try {
 					local.meta = LuceeExtension(attributes.gid, attributes.aid, attributes.vers[1], true);
 					if (structKeyExists(local.meta, "metadata")) {
-						cachePut(attributes.ckey, {
+						dlCachePut(attributes.ckey, {
 							displayName: local.meta.metadata.name  ?: "",
 							image:       local.meta.metadata.image ?: "",
 							cachedAt:    now()
@@ -70,7 +69,7 @@ if (!arrayIsEmpty(allVersions)) {
 			if (!isEmpty(meta.MinCoreVersion  ?: "")) extMinCoreVersion = meta.MinCoreVersion;
 			// write back to cache if it was missing or stale
 			if (cacheStale || !structKeyExists(cachedMeta, "cachedAt")) {
-				cachePut(cacheKey, { displayName: extName, image: extImage, cachedAt: now() });
+				dlCachePut(cacheKey, { displayName: extName, image: extImage, cachedAt: now() });
 			}
 		}
 	} catch(e) { /* metadata unavailable */ }
@@ -100,7 +99,7 @@ for (ver in allVersions) {
 	if (!structKeyExists(groups, groupKey)) groups[groupKey] = [];
 
 	verCacheKey = "extVer_" & groupId & "_" & artifactId & "_" & ver;
-	verCached   = cacheGet(verCacheKey);
+	verCached   = dlCacheGet(verCacheKey);
 
 	if (!isEmpty(verCached)) {
 		arrayAppend(groups[groupKey], verCached);
@@ -118,7 +117,7 @@ for (ver in allVersions) {
 		} else {
 			verEntry = { version: ver, lastModified: "", type: verType, minCore: "" };
 		}
-		cachePut(verCacheKey, verEntry);
+		dlCachePut(verCacheKey, verEntry);
 		arrayAppend(groups[groupKey], verEntry);
 	}
 }

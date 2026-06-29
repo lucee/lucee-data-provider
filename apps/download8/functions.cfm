@@ -67,22 +67,31 @@ function versionCompare(v1, v2) {
 }
 
 // ── Three-tier cache: memory → file → fetch ───────────────────────────
-// Call cacheSetDirectory(path) once at startup / request start to configure.
-// cacheGet(key)        → returns the cached value or {} if not found
-// cachePut(key, value) → writes to memory and file
+// getCacheDirectory() resolves and initialises the cache dir once per request.
+// dlCacheGet(key)        → returns the cached value or {} if not found
+// dlCachePut(key, value) → writes to memory and file
 
-function cacheSetDirectory(dir) {
-	application["__cacheDir"] = dir;
-	if (!directoryExists(dir)) directoryCreate(dir, true, true);
+function getCacheDirectory() {
+	local.dir = application["__cacheDir"] ?: "";
+	if (len(local.dir)) return local.dir;
+	// default: parent of www/ (i.e. apps/download8/) — resolved relative to this file
+	local.dir = getDirectoryFromPath(getCurrentTemplatePath());
+	if (right(local.dir, 1) == server.separator.file)
+		local.dir = left(local.dir, len(local.dir) - 1);
+	local.dir = getDirectoryFromPath(local.dir);
+	// allow env-var override
+	local.dir = server.system.environment.CACHE_DIRECTORY ?: local.dir;
+	if (!directoryExists(local.dir)) directoryCreate(local.dir, true, true);
+	application["__cacheDir"] = local.dir;
+	return local.dir;
 }
 
-function cacheGet(key) {
+function dlCacheGet(key) {
 	// 1. memory
 	local.val = application[key] ?: {};
 	if (!isEmpty(local.val)) return local.val;
 	// 2. file
-	local.dir  = application["__cacheDir"] ?: "";
-	if (!len(local.dir)) return {};
+	local.dir  = getCacheDirectory();
 	local.file = local.dir & server.separator.file & key & ".json";
 	if (fileExists(local.file)) {
 		try {
@@ -94,10 +103,9 @@ function cacheGet(key) {
 	return {};
 }
 
-function cachePut(key, value) {
+function dlCachePut(key, value) {
 	application[key] = value;
-	local.dir = application["__cacheDir"] ?: "";
-	if (!len(local.dir)) return;
+	local.dir = getCacheDirectory();
 	try {
 		fileWrite(local.dir & server.separator.file & key & ".json", serializeJSON(value));
 	} catch(e) {}

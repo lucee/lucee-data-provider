@@ -1,6 +1,5 @@
 <cfinclude template="../functions.cfm">
 <cfscript>
-cacheSetDirectory(server.system.environment.CACHE_DIRECTORY ?: getDirectoryFromPath(getDirectoryFromPath(getCurrentTemplatePath())));
 
 ver = url.version ?: "";
 if (!len(ver)) {
@@ -11,11 +10,11 @@ if (!len(ver)) {
 
 function buildLinks(ver) {
 	local.cacheKey = "luceeVerDetail_" & ver;
-	local.detail   = cacheGet(local.cacheKey);
+	local.detail   = dlCacheGet(local.cacheKey);
 	if (isEmpty(local.detail)) {
 		try {
 			local.detail = LuceeVersionsDetail(ver);
-			cachePut(local.cacheKey, local.detail);
+			dlCachePut(local.cacheKey, local.detail);
 		} catch(e) { local.detail = {}; }
 	}
 	local.isRelease = (getType(ver) == "release");

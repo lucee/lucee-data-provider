@@ -1,20 +1,31 @@
 component {
 
-	private void function cachePut(string key, any value) {
-		application[arguments.key] = arguments.value;
+	private string function getCacheDirectory() {
 		local.dir = application["__cacheDir"] ?: "";
-		if (!len(local.dir)) return;
+		if (len(local.dir)) return local.dir;
+		local.dir = server.system.environment.CACHE_DIRECTORY ?: "";
+		if (!len(local.dir)) {
+			local.dir = getDirectoryFromPath(getCurrentTemplatePath());
+			if (right(local.dir, 1) == server.separator.file)
+				local.dir = left(local.dir, len(local.dir) - 1);
+			local.dir = getDirectoryFromPath(local.dir);
+		}
+		if (!directoryExists(local.dir)) directoryCreate(local.dir, true, true);
+		application["__cacheDir"] = local.dir;
+		return local.dir;
+	}
+
+	private void function dlCachePut(string key, any value) {
+		application[arguments.key] = arguments.value;
 		try {
-			fileWrite(local.dir & server.separator.file & arguments.key & ".json", serializeJSON(arguments.value));
+			fileWrite(getCacheDirectory() & server.separator.file & arguments.key & ".json", serializeJSON(arguments.value));
 		} catch(e) {}
 	}
 
-	private any function cacheGet(string key) {
+	private any function dlCacheGet(string key) {
 		local.val = application[arguments.key] ?: {};
 		if (!isEmpty(local.val)) return local.val;
-		local.dir  = application["__cacheDir"] ?: "";
-		if (!len(local.dir)) return {};
-		local.file = local.dir & server.separator.file & arguments.key & ".json";
+		local.file = getCacheDirectory() & server.separator.file & arguments.key & ".json";
 		if (fileExists(local.file)) {
 			try {
 				local.val = deserializeJSON(fileRead(local.file));
@@ -28,23 +39,15 @@ component {
 	remote function onServerStart( boolean reload = false ) {
 		systemOutput("onServerStart: warming caches", true, true);
 
-		// resolve cache directory — must match what index.cfm computes
-		local.cacheDir = server.system.environment.CACHE_DIRECTORY ?: "";
-		if (!len(local.cacheDir)) {
-			// default: parent of www/ = apps/download8/
-			local.cacheDir = getDirectoryFromPath(getCurrentTemplatePath());
-		}
-		if (right(local.cacheDir, 1) == server.separator.file)
-			local.cacheDir = left(local.cacheDir, len(local.cacheDir) - 1);
-		application["__cacheDir"] = local.cacheDir;
-		if (!directoryExists(local.cacheDir)) directoryCreate(local.cacheDir, true, true);
+		// initialise the cache directory in application scope before threads read it
+		getCacheDirectory();
 
 		thread action="run" name="cache-warmup" {
 			try {
 				// ── Lucee versions list ──────────────────────────────────────
 				try {
 					local.versions = LuceeVersionsList();
-					cachePut("luceeVersionsList", { data: local.versions, cachedAt: now() });
+					dlCachePut("luceeVersionsList", { data: local.versions, cachedAt: now() });
 					systemOutput("cache warm: luceeVersionsList (#arrayLen(local.versions)# versions)", true);
 				} catch(e) {
 					systemOutput("cache warm fail: luceeVersionsList — #e.message#", true);
@@ -62,7 +65,7 @@ component {
 								aid  = local.artifactId {
 								try {
 									local.cacheKey = "extMeta_" & attributes.gid & "_" & attributes.aid;
-									if (!isEmpty(cacheGet(local.cacheKey))) return;
+									if (!isEmpty(dlCacheGet(local.cacheKey))) return;
 									local.vers = LuceeExtension(attributes.gid, attributes.aid);
 									local.vers = local.vers.filter(function(v) {
 										return !findNoCase("-alpha", lCase(v));
@@ -82,15 +85,15 @@ component {
 									});
 									local.pickVer = local.vers[1];
 									local.meta    = LuceeExtension(attributes.gid, attributes.aid, local.pickVer, true);
-									cachePut(local.cacheKey, {
+									dlCachePut(local.cacheKey, {
 										displayName:   local.meta.metadata.name  ?: "",
 										image:         local.meta.metadata.image ?: "",
 										latestVersion: local.pickVer,
 										cachedAt:      now()
 									});
 									local.verKey = "extVer_" & attributes.gid & "_" & attributes.aid & "_" & local.pickVer;
-									if (isEmpty(cacheGet(local.verKey))) {
-										cachePut(local.verKey, {
+									if (isEmpty(dlCacheGet(local.verKey))) {
+										dlCachePut(local.verKey, {
 											version:      local.meta.version      ?: local.pickVer,
 											lastModified: local.meta.lastModified ?: "",
 											type:         !findNoCase("-", local.pickVer) ? "release" : listLast(lCase(local.pickVer), "-"),
