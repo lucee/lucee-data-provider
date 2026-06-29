@@ -10,7 +10,7 @@ dump(dateDiff("s",started,now())&" sec")
 dump(dateDiff("n",started,now())&" min")
 dump(dateDiff("h",started,now())&" h")
 
-flush;
+if(isNull(url.test))abort;
 // LuceeExtension()
 res["fastest"]=1000000000;
 res["slowest"]=0;
