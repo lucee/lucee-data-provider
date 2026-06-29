@@ -10,20 +10,27 @@ GROUP_ID    = "org.lucee";
 DOCKER_DOCS = "https://docs.lucee.org/recipes/docker.html";
 FORUM_URL   = "https://dev.lucee.org/c/news/release/8";
 
+cacheDirectory= getDirectoryFromPath(getCurrentTemplatePath());
+if(right(cacheDirectory,1)==server.separator.file) cacheDirectory=mid(cacheDirectory,1,len(cacheDirectory)-1);
+cacheDirectory= getDirectoryFromPath(cacheDirectory);
+
+cacheDirectory = server.system.environment.CACHE_DIRECTORY ?: cacheDirectory;
+cacheSetDirectory(cacheDirectory);
+
 // ── Load Lucee versions (stale-while-revalidate) ─────────────────────
-versCache    = application["luceeVersionsList"] ?: {};
+versCache    = cacheGet("luceeVersionsList");
 allVersions  = versCache.data ?: [];
 versCacheAge = structKeyExists(versCache, "cachedAt") ? dateDiff("n", versCache.cachedAt, now()) : 999;
 
 if (!arrayLen(allVersions)) {
 	// cold cache — must wait
 	try { allVersions = LuceeVersionsList(); } catch(e) { allVersions = []; }
-	application["luceeVersionsList"] = { data: allVersions, cachedAt: now() };
+	cachePut("luceeVersionsList", { data: allVersions, cachedAt: now() });
 } else if (versCacheAge >= 5) {
 	// stale — serve cached, refresh in background
 	thread action="run" name="refresh-versions-list-#getTickCount()#" {
 		try {
-			application["luceeVersionsList"] = { data: LuceeVersionsList(), cachedAt: now() };
+			cachePut("luceeVersionsList", { data: LuceeVersionsList(), cachedAt: now() });
 		} catch(e) {}
 	}
 }
@@ -82,10 +89,10 @@ edgeMinor = arrayLen(edgeMinors) ? edgeMinors[1] : "";
 
 function getLuceeVersionsDetail(v) {
 	local.cacheKey = "luceeVerDetail_" & v;
-	local.cached   = application[local.cacheKey] ?: {};
+	local.cached   = cacheGet(local.cacheKey);
 	if (!isEmpty(local.cached)) return local.cached;
 	local.detail = LuceeVersionsDetail(v);
-	application[local.cacheKey] = local.detail;
+	cachePut(local.cacheKey, local.detail);
 	return local.detail;
 }
 
@@ -129,7 +136,7 @@ function loadGroupExtensions(groupId) {
 		local.artifacts = LuceeExtension(groupId);
 		arrayEach(local.artifacts, function(artifactId) {
 			local.cacheKey = "extMeta_" & groupId & "_" & artifactId;
-			local.cached   = application[local.cacheKey] ?: {};
+			local.cached   = cacheGet(local.cacheKey);
 			local.name      = local.cached.displayName   ?: "";
 			local.image     = local.cached.image         ?: "";
 			local.latestVer = local.cached.latestVersion ?: "";
@@ -159,12 +166,12 @@ function loadGroupExtensions(groupId) {
 							});
 							local.pickVer = local.versions[1];
 							local.meta    = LuceeExtension(attributes.gid, attributes.aid, local.pickVer, true);
-							application[attributes.ckey] = {
+							cachePut(attributes.ckey, {
 								displayName:   local.meta.metadata.name  ?: "",
 								image:         local.meta.metadata.image ?: "",
 								latestVersion: local.pickVer,
 								cachedAt:      now()
-							};
+							});
 						}
 					} catch(e) {}
 				}

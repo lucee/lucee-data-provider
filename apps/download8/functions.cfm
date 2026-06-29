@@ -66,6 +66,43 @@ function versionCompare(v1, v2) {
 	return 0;
 }
 
+// ── Three-tier cache: memory → file → fetch ───────────────────────────
+// Call cacheSetDirectory(path) once at startup / request start to configure.
+// cacheGet(key)        → returns the cached value or {} if not found
+// cachePut(key, value) → writes to memory and file
+
+function cacheSetDirectory(dir) {
+	application["__cacheDir"] = dir;
+	if (!directoryExists(dir)) directoryCreate(dir, true, true);
+}
+
+function cacheGet(key) {
+	// 1. memory
+	local.val = application[key] ?: {};
+	if (!isEmpty(local.val)) return local.val;
+	// 2. file
+	local.dir  = application["__cacheDir"] ?: "";
+	if (!len(local.dir)) return {};
+	local.file = local.dir & server.separator.file & key & ".json";
+	if (fileExists(local.file)) {
+		try {
+			local.val = deserializeJSON(fileRead(local.file));
+			application[key] = local.val; // warm memory from file
+			return local.val;
+		} catch(e) {}
+	}
+	return {};
+}
+
+function cachePut(key, value) {
+	application[key] = value;
+	local.dir = application["__cacheDir"] ?: "";
+	if (!len(local.dir)) return;
+	try {
+		fileWrite(local.dir & server.separator.file & key & ".json", serializeJSON(value));
+	} catch(e) {}
+}
+
 function cdnLinks(ver) {
 	return {
 		win64:           CDN & "lucee-" & ver & "-windows-x64-installer.exe",

@@ -1,13 +1,50 @@
 component {
 
+	private void function cachePut(string key, any value) {
+		application[arguments.key] = arguments.value;
+		local.dir = application["__cacheDir"] ?: "";
+		if (!len(local.dir)) return;
+		try {
+			fileWrite(local.dir & server.separator.file & arguments.key & ".json", serializeJSON(arguments.value));
+		} catch(e) {}
+	}
+
+	private any function cacheGet(string key) {
+		local.val = application[arguments.key] ?: {};
+		if (!isEmpty(local.val)) return local.val;
+		local.dir  = application["__cacheDir"] ?: "";
+		if (!len(local.dir)) return {};
+		local.file = local.dir & server.separator.file & arguments.key & ".json";
+		if (fileExists(local.file)) {
+			try {
+				local.val = deserializeJSON(fileRead(local.file));
+				application[arguments.key] = local.val;
+				return local.val;
+			} catch(e) {}
+		}
+		return {};
+	}
+
 	remote function onServerStart( boolean reload = false ) {
 		systemOutput("onServerStart: warming caches", true, true);
+
+		// resolve cache directory — must match what index.cfm computes
+		local.cacheDir = server.system.environment.CACHE_DIRECTORY ?: "";
+		if (!len(local.cacheDir)) {
+			// default: parent of www/ = apps/download8/
+			local.cacheDir = getDirectoryFromPath(getCurrentTemplatePath());
+		}
+		if (right(local.cacheDir, 1) == server.separator.file)
+			local.cacheDir = left(local.cacheDir, len(local.cacheDir) - 1);
+		application["__cacheDir"] = local.cacheDir;
+		if (!directoryExists(local.cacheDir)) directoryCreate(local.cacheDir, true, true);
+
 		thread action="run" name="cache-warmup" {
 			try {
 				// ── Lucee versions list ──────────────────────────────────────
 				try {
 					local.versions = LuceeVersionsList();
-					application["luceeVersionsList"] = { data: local.versions, cachedAt: now() };
+					cachePut("luceeVersionsList", { data: local.versions, cachedAt: now() });
 					systemOutput("cache warm: luceeVersionsList (#arrayLen(local.versions)# versions)", true);
 				} catch(e) {
 					systemOutput("cache warm fail: luceeVersionsList — #e.message#", true);
@@ -15,7 +52,6 @@ component {
 				}
 
 				// ── Extension metadata (name, image, latest version) ─────────
-				// One thread per extension, fetch only the latest version with download=true
 				for (local.groupId in ["org.lucee", "io.forgebox"]) {
 					try {
 						local.artifacts = LuceeExtension(local.groupId);
@@ -26,10 +62,7 @@ component {
 								aid  = local.artifactId {
 								try {
 									local.cacheKey = "extMeta_" & attributes.gid & "_" & attributes.aid;
-									// skip if already cached from a previous warm or request
-									if (!isEmpty(application[local.cacheKey] ?: {})) {
-										return;
-									}
+									if (!isEmpty(cacheGet(local.cacheKey))) return;
 									local.vers = LuceeExtension(attributes.gid, attributes.aid);
 									local.vers = local.vers.filter(function(v) {
 										return !findNoCase("-alpha", lCase(v));
@@ -49,22 +82,20 @@ component {
 									});
 									local.pickVer = local.vers[1];
 									local.meta    = LuceeExtension(attributes.gid, attributes.aid, local.pickVer, true);
-									application[local.cacheKey] = {
+									cachePut(local.cacheKey, {
 										displayName:   local.meta.metadata.name  ?: "",
 										image:         local.meta.metadata.image ?: "",
 										latestVersion: local.pickVer,
 										cachedAt:      now()
-									};
-									// also warm the per-version detail cache for the latest
+									});
 									local.verKey = "extVer_" & attributes.gid & "_" & attributes.aid & "_" & local.pickVer;
-									if (isEmpty(application[local.verKey] ?: {})) {
-										local.verMinCore = local.meta.metadata.MinCoreVersion ?: "";
-										application[local.verKey] = {
+									if (isEmpty(cacheGet(local.verKey))) {
+										cachePut(local.verKey, {
 											version:      local.meta.version      ?: local.pickVer,
 											lastModified: local.meta.lastModified ?: "",
 											type:         !findNoCase("-", local.pickVer) ? "release" : listLast(lCase(local.pickVer), "-"),
-											minCore:      local.verMinCore
-										};
+											minCore:      local.meta.metadata.MinCoreVersion ?: ""
+										});
 									}
 									systemOutput("cache warm: #attributes.gid#:#attributes.aid# (#local.pickVer#)", true);
 								} catch(e) {

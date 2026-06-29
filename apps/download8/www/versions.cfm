@@ -1,16 +1,18 @@
 <cfinclude template="../functions.cfm">
 <cfscript>
+cacheSetDirectory(server.system.environment.CACHE_DIRECTORY ?: getDirectoryFromPath(getDirectoryFromPath(getCurrentTemplatePath())));
+
 LTS_MINOR   = "6.2";
 GROUP_ID    = "org.lucee";
 FORUM_URL   = "https://dev.lucee.org/c/news/release/8";
 
 function buildLinks(ver) {
 	local.cacheKey = "luceeVerDetail_" & ver;
-	local.detail   = application[local.cacheKey] ?: {};
+	local.detail   = cacheGet(local.cacheKey);
 	if (isEmpty(local.detail)) {
 		try {
 			local.detail = LuceeVersionsDetail(ver);
-			application[local.cacheKey] = local.detail;
+			cachePut(local.cacheKey, local.detail);
 		} catch(e) { local.detail = {}; }
 	}
 	// start with CDN defaults for releases, then overlay API data
@@ -30,17 +32,17 @@ typeFilter  = lCase(url.type ?: "");
 minorFilter = url.minor ?: "";
 
 // versions list — stale-while-revalidate (shared cache with index.cfm)
-versCache    = application["luceeVersionsList"] ?: {};
+versCache    = cacheGet("luceeVersionsList");
 allVersions  = versCache.data ?: [];
 versCacheAge = structKeyExists(versCache, "cachedAt") ? dateDiff("n", versCache.cachedAt, now()) : 999;
 
 if (!arrayLen(allVersions)) {
 	try { allVersions = LuceeVersionsList(); } catch(e) { allVersions = []; }
-	application["luceeVersionsList"] = { data: allVersions, cachedAt: now() };
+	cachePut("luceeVersionsList", { data: allVersions, cachedAt: now() });
 } else if (versCacheAge >= 5) {
 	thread action="run" name="refresh-versions-list-v-#getTickCount()#" {
 		try {
-			application["luceeVersionsList"] = { data: LuceeVersionsList(), cachedAt: now() };
+			cachePut("luceeVersionsList", { data: LuceeVersionsList(), cachedAt: now() });
 		} catch(e) {}
 	}
 }
