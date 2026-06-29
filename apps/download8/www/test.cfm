@@ -22,7 +22,7 @@ dump(dateDiff("n",info.dateLastModified,now())&" min")
 dump(dateDiff("h",info.dateLastModified,now())&" h")
 
 
-try{
+try {
 file="/downloads/test.txt";
 if(!fileExists(file)) {
 	fileWrite(file,"")
