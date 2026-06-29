@@ -3,9 +3,10 @@ services:
     build: .
     image: lucee-download8:latest
     environment:
-      LUCEE_ADMIN_PASSWORD: "change-me"
+      LUCEE_ADMIN_PASSWORD: "lamiinne"
     volumes:
       - "./www:/var/www"
+      - "./functions.cfm:/var/functions.cfm"
     ports:
       - "8056:8080" # PORT (Cloud Run compatible)
 
