@@ -9,14 +9,7 @@ if (!len(ver)) {
 }
 
 function buildLinks(ver) {
-	local.cacheKey = "luceeVerDetail_" & ver;
-	local.detail   = util.dlCacheGet(local.cacheKey);
-	if (isEmpty(local.detail)) {
-		try {
-			local.detail = LuceeVersionsDetail(ver);
-			util.dlCachePut(local.cacheKey, local.detail);
-		} catch(e) { local.detail = {}; }
-	}
+	local.detail    = util.getLuceeVersionsDetail(ver);
 	local.isRelease = (util.getType(ver) == "release");
 	local.links = local.isRelease ? util.cdnLinks(util.formatVersion(ver)) : {};
 	for (local.k in local.detail) {

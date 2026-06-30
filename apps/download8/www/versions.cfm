@@ -6,15 +6,7 @@ GROUP_ID    = "org.lucee";
 FORUM_URL   = "https://dev.lucee.org/c/news/release/8";
 
 function buildLinks(ver) {
-	local.cacheKey = "luceeVerDetail_" & ver;
-	local.detail   = util.dlCacheGet(local.cacheKey);
-	if (isEmpty(local.detail)) {
-		try {
-			local.detail = LuceeVersionsDetail(ver);
-			util.dlCachePut(local.cacheKey, local.detail);
-		} catch(e) { local.detail = {}; }
-	}
-	// start with util.CDN defaults for releases, then overlay API data
+	local.detail    = util.getLuceeVersionsDetail(ver);
 	local.isRelease = (util.getType(ver) == "release");
 	local.links = local.isRelease ? util.cdnLinks(util.formatVersion(ver)) : {};
 	for (local.k in local.detail) {
@@ -30,21 +22,8 @@ track       = lCase(url.track ?: "all");
 typeFilter  = lCase(url.type ?: "");
 minorFilter = url.minor ?: "";
 
-// versions list — stale-while-revalidate (shared cache with index.cfm)
-versCache    = util.dlCacheGet("luceeVersionsList");
-allVersions  = versCache.data ?: [];
-versCacheAge = structKeyExists(versCache, "cachedAt") ? dateDiff("n", versCache.cachedAt, now()) : 999;
-
-if (!arrayLen(allVersions)) {
-	try { allVersions = LuceeVersionsList(); } catch(e) { allVersions = []; }
-	util.dlCachePut("luceeVersionsList", { data: allVersions, cachedAt: now() });
-} else if (versCacheAge >= 5) {
-	thread action="run" name="refresh-versions-list-v-#getTickCount()#" {
-		try {
-			util.dlCachePut("luceeVersionsList", { data: LuceeVersionsList(), cachedAt: now() });
-		} catch(e) {}
-	}
-}
+// versions list
+allVersions = util.getLuceeVersionsDetail();
 
 // Map minor → edge/stable/lts
 minorTypes = {};

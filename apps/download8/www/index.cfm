@@ -9,24 +9,8 @@ GROUP_ID    = "org.lucee";
 DOCKER_DOCS = "https://docs.lucee.org/recipes/docker.html";
 FORUM_URL   = "https://dev.lucee.org/c/news/release/8";
 
-// ── Load Lucee versions (stale-while-revalidate) ─────────────────────
-versCache    = util.dlCacheGet("luceeVersionsList");
-allVersions  = versCache.data ?: [];
-versCacheAge = structKeyExists(versCache, "cachedAt") ? dateDiff("n", versCache.cachedAt, now()) : 999;
-
-if (!arrayLen(allVersions)) {
-	
-	// cold cache — must wait
-	try { allVersions = LuceeVersionsList(); } catch(e) { allVersions = []; }
-	util.dlCachePut("luceeVersionsList", { data: allVersions, cachedAt: now() });
-} else if (versCacheAge >= 5) {
-	// stale — serve cached, refresh in background
-	thread action="run" name="refresh-versions-list-#getTickCount()#" {
-		try {
-			util.dlCachePut("luceeVersionsList", { data: LuceeVersionsList(), cachedAt: now() });
-		} catch(e) {}
-	}
-}
+// ── Load Lucee versions ──────────────────────────────────────────────
+allVersions = util.getLuceeVersionsDetail();
 
 // Group by minor → { hasRelease, hasBeta, latestRelease, latestBeta, versions[] }
 minorMap = {};
@@ -80,15 +64,6 @@ for (minor in allMinors) {
 // keep backwards-compat alias for versions.cfm track filter (uses first edge minor)
 edgeMinor = arrayLen(edgeMinors) ? edgeMinors[1] : "";
 
-function getLuceeVersionsDetail(v) {
-	local.cacheKey = "luceeVerDetail_" & v;
-	local.cached   = util.dlCacheGet(local.cacheKey);
-	if (!isEmpty(local.cached)) return local.cached;
-	local.detail = LuceeVersionsDetail(v);
-	util.dlCachePut(local.cacheKey, local.detail);
-	return local.detail;
-}
-
 // Build track structs: { minor, version, isRelease, links }
 function buildTrack(minor, useLatest="release") {
 	if (!structKeyExists(minorMap, minor)) return {};
@@ -96,11 +71,7 @@ function buildTrack(minor, useLatest="release") {
 	local.ver = (useLatest == "beta") ? d.latestBeta : d.latestRelease;
 	if (!len(local.ver)) return {};
 	local.isRelease = (util.getType(local.ver) == "release");
-	try {
-		local.detail = getLuceeVersionsDetail(local.ver);
-	} catch(e) {
-		local.detail = {};
-	}
+	local.detail = util.getLuceeVersionsDetail(local.ver);
 	// Start from util.CDN defaults for releases, then let the API override any key it provides
 	local.links = local.isRelease ? util.cdnLinks(local.ver) : {};
 	for (local.k in local.detail) {
@@ -150,53 +121,23 @@ if (!isEmpty(tracksCache) && structKeyExists(tracksCache, "tracks")) {
 function loadGroupExtensions(groupId) {
 	local.result = [];
 	try {
-		local.artCacheKey = "extArtifacts_" & groupId;
-		local.artCache    = util.dlCacheGet(local.artCacheKey);
-		local.artCacheAge = structKeyExists(local.artCache, "cachedAt") ? dateDiff("n", local.artCache.cachedAt, now()) : 999;
-		if (!isEmpty(local.artCache) && structKeyExists(local.artCache, "data")) {
-			local.artifacts = local.artCache.data;
-			if (local.artCacheAge >= 10) {
-				thread action="run" name="refresh-artifacts-#groupId#-#getTickCount()#" gid=groupId ckey=local.artCacheKey {
-					try { util.dlCachePut(attributes.ckey, { data: LuceeExtension(attributes.gid), cachedAt: now() }); } catch(e) {}
-				}
-			}
-		} else {
-			local.artifacts = LuceeExtension(groupId);
-			util.dlCachePut(local.artCacheKey, { data: local.artifacts, cachedAt: now() });
-		}
+		local.artifacts = util.getLuceeExtension(groupId);
 		arrayEach(local.artifacts, function(artifactId) {
-			local.cacheKey = "extMeta_" & groupId & "_" & artifactId;
-			local.cached   = util.dlCacheGet(local.cacheKey);
+			local.cacheKey  = "extMeta_" & groupId & "_" & artifactId;
+			local.cached    = util.dlCacheGet(local.cacheKey);
 			local.name      = local.cached.displayName   ?: "";
 			local.image     = local.cached.image         ?: "";
 			local.latestVer = local.cached.latestVersion ?: "";
-			// always fall back to slug name for display — even if cached with an empty name
 			if (!len(local.name)) local.name = util.artifactDisplayName(artifactId);
-			
+
 			if (isEmpty(local.cached)) {
-				// no cache entry at all — fire background thread to populate it
 				thread action="run" name="cache-ext-#groupId#-#artifactId#" gid=groupId aid=artifactId ckey=local.cacheKey {
-					// always write something so we don't re-fire on every request
 					local.entry = { displayName: util.artifactDisplayName(attributes.aid), image: "", latestVersion: "", cachedAt: now() };
 					try {
-						local.versions = LuceeExtension(attributes.gid, attributes.aid);
-						local.nonAlpha = local.versions.filter(function(v) { return !findNoCase("-alpha", lCase(v)); });
-						if (!arrayIsEmpty(local.nonAlpha)) local.versions = local.nonAlpha;
+						local.versions = util.getLuceeExtension(attributes.gid, attributes.aid);
 						if (!arrayIsEmpty(local.versions)) {
-							arraySort(local.versions, function(a,b) {
-								local.a = listToArray(listFirst(a,"-"), ".");
-								local.b = listToArray(listFirst(b,"-"), ".");
-								local.len = max(arrayLen(local.a), arrayLen(local.b));
-								for (local.i=1; local.i<=local.len; local.i++) {
-									local.n1 = val(local.a[local.i] ?: "0");
-									local.n2 = val(local.b[local.i] ?: "0");
-									if (local.n1 > local.n2) return -1;
-									if (local.n1 < local.n2) return 1;
-								}
-								return 0;
-							});
 							local.pickVer = local.versions[1];
-							local.meta    = LuceeExtension(attributes.gid, attributes.aid, local.pickVer, true);
+							local.meta    = util.getLuceeExtension(attributes.gid, attributes.aid, local.pickVer, true);
 							local.entry = {
 								displayName:   len(local.meta.metadata.name ?: "") ? local.meta.metadata.name : util.artifactDisplayName(attributes.aid),
 								image:         local.meta.metadata.image ?: "",
@@ -210,10 +151,10 @@ function loadGroupExtensions(groupId) {
 			}
 
 			arrayAppend(result, {
-				groupId:      groupId,
-				artifactId:   artifactId,
-				displayName:  local.name,
-				image:        local.image,
+				groupId:       groupId,
+				artifactId:    artifactId,
+				displayName:   local.name,
+				image:         local.image,
 				latestVersion: local.latestVer
 			});
 		}, true, 20);

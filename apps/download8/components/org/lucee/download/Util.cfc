@@ -98,14 +98,19 @@ component accessors="false" {
 	}
 
 	function dlCacheGet(key) {
+		local.t = getTickCount();
 		// 1. component variables
-		if (structKeyExists(variables.cache, key)) return variables.cache[key];
+		if (structKeyExists(variables.cache, key)) {
+			info("reading data from memory [#key#] took #getTickCount()-local.t#ms");
+			return variables.cache[key];
+		}
 		// 2. file
 		local.file = getCacheDirectory() & server.separator.file & key & ".json";
 		if (fileExists(local.file)) {
 			try {
 				local.val = deserializeJSON(fileRead(local.file));
 				variables.cache[key] = local.val;
+				info("reading data from file [#local.file#] took #getTickCount()-local.t#ms");
 				return local.val;
 			} catch(e) {}
 		}
@@ -123,4 +128,184 @@ component accessors="false" {
 		}
 	}
 
+	// ── Lucee versions API (cached) ──────────────────────────────────────
+
+	function getLuceeVersionsDetail(version) {
+		if (isNull(arguments.version)) {
+			// versions list with stale-while-revalidate (5 min)
+			local.cached = dlCacheGet("luceeVersionsList");
+			local.data   = local.cached.data ?: [];
+			local.age    = structKeyExists(local.cached, "cachedAt") ? dateDiff("n", local.cached.cachedAt, now()) : 999;
+			if (!arrayIsEmpty(local.data)) {
+				if (local.age >= 5) {
+					thread action="run" name="refresh-versions-list-#getTickCount()#" {
+						local.t = getTickCount();
+						try {
+							local.list = LuceeVersionsList();
+							info("reading data from function LuceeVersionsList() took #getTickCount()-local.t#ms");
+							dlCachePut("luceeVersionsList", { data: local.list, cachedAt: now() });
+						} catch(e) {}
+					}
+				}
+				return local.data;
+			}
+			local.t = getTickCount();
+			try { local.data = LuceeVersionsList(); } catch(e) { local.data = []; }
+			info("reading data from function LuceeVersionsList() took #getTickCount()-local.t#ms");
+			dlCachePut("luceeVersionsList", { data: local.data, cachedAt: now() });
+			return local.data;
+		} else {
+			// single version detail — version data is immutable, cache indefinitely
+			local.key    = "luceeVerDetail_" & arguments.version;
+			local.cached = dlCacheGet(local.key);
+			if (!isEmpty(local.cached)) return local.cached;
+			local.t = getTickCount();
+			try {
+				local.detail = LuceeVersionsDetail(arguments.version);
+				info("reading data from function LuceeVersionsDetail(#arguments.version#) took #getTickCount()-local.t#ms");
+				dlCachePut(local.key, local.detail);
+				return local.detail;
+			} catch(e) { return {}; }
+		}
+	}
+
+	// ── LuceeExtension API (cached) ─────────────────────────────────────
+
+	function getLuceeExtension(groupId, artifactId, version, download=false) {
+		if (isNull(arguments.artifactId)) {
+			// artifact list for group — 10-min stale-while-revalidate
+			local.key    = "extArtifacts_" & arguments.groupId;
+			local.cached = dlCacheGet(local.key);
+			local.data   = local.cached.data ?: [];
+			local.age    = structKeyExists(local.cached, "cachedAt") ? dateDiff("n", local.cached.cachedAt, now()) : 999;
+			if (!arrayIsEmpty(local.data)) {
+				if (local.age >= 10) {
+					thread action="run" name="refresh-extartifacts-#arguments.groupId#-#getTickCount()#"
+						gid=arguments.groupId ckey=local.key {
+						local.t = getTickCount();
+						try {
+							local.list = LuceeExtension(attributes.gid);
+							info("reading data from function LuceeExtension(#attributes.gid#) took #getTickCount()-local.t#ms");
+							dlCachePut(attributes.ckey, { data: local.list, cachedAt: now() });
+						} catch(e) {}
+					}
+				}
+				return local.data;
+			}
+			local.t = getTickCount();
+			try { local.data = LuceeExtension(arguments.groupId); } catch(e) { local.data = []; }
+			info("reading data from function LuceeExtension(#arguments.groupId#) took #getTickCount()-local.t#ms");
+			dlCachePut(local.key, { data: local.data, cachedAt: now() });
+			return local.data;
+
+		} else if (isNull(arguments.version)) {
+			// version list for artifact — 10-min stale-while-revalidate, alpha-filtered and sorted desc
+			local.key    = "extVersions_" & arguments.groupId & "_" & arguments.artifactId;
+			local.cached = dlCacheGet(local.key);
+			local.data   = local.cached.data ?: [];
+			local.age    = structKeyExists(local.cached, "cachedAt") ? dateDiff("n", local.cached.cachedAt, now()) : 999;
+			if (!arrayIsEmpty(local.data)) {
+				if (local.age >= 10) {
+					thread action="run" name="refresh-extver-#arguments.groupId#-#arguments.artifactId#-#getTickCount()#"
+						gid=arguments.groupId aid=arguments.artifactId ckey=local.key {
+						local.t = getTickCount();
+						try {
+							local.list = LuceeExtension(attributes.gid, attributes.aid);
+							info("reading data from function LuceeExtension(#attributes.gid#,#attributes.aid#) took #getTickCount()-local.t#ms");
+							local.na = local.list.filter(function(v) { return !findNoCase("-alpha", lCase(v)); });
+							if (!arrayIsEmpty(local.na)) local.list = local.na;
+							arraySort(local.list, function(a,b) { return versionCompare(b,a); });
+							dlCachePut(attributes.ckey, { data: local.list, cachedAt: now() });
+						} catch(e) {}
+					}
+				}
+				return local.data;
+			}
+			local.t = getTickCount();
+			try { local.data = LuceeExtension(arguments.groupId, arguments.artifactId); } catch(e) { local.data = []; }
+			info("reading data from function LuceeExtension(#arguments.groupId#,#arguments.artifactId#) took #getTickCount()-local.t#ms");
+			local.na = local.data.filter(function(v) { return !findNoCase("-alpha", lCase(v)); });
+			if (!arrayIsEmpty(local.na)) local.data = local.na;
+			arraySort(local.data, function(a,b) { return versionCompare(b,a); });
+			dlCachePut(local.key, { data: local.data, cachedAt: now() });
+			return local.data;
+
+		} else {
+			// version detail — immutable, cache indefinitely
+			local.key    = "extRaw_" & arguments.groupId & "_" & arguments.artifactId & "_" & arguments.version;
+			local.cached = dlCacheGet(local.key);
+			if (!isEmpty(local.cached)) return local.cached;
+			local.t = getTickCount();
+			try {
+				local.meta = LuceeExtension(arguments.groupId, arguments.artifactId, arguments.version, arguments.download);
+				info("reading data from function LuceeExtension(#arguments.groupId#,#arguments.artifactId#,#arguments.version#,#arguments.download#) took #getTickCount()-local.t#ms");
+				dlCachePut(local.key, local.meta);
+				return local.meta;
+			} catch(e) { return {}; }
+		}
+	}
+
+	// ── Cache warmup ─────────────────────────────────────────────────────
+
+	function warmup() {
+		thread action="run" name="cache-warmup" {
+			try {
+				// Lucee versions list
+				try {
+					local.versions = getLuceeVersionsDetail();
+					info("cache warm: luceeVersionsList (#arrayLen(local.versions)# versions)");
+				} catch(e) {
+					info("cache warm fail: luceeVersionsList — #e.message#");
+				}
+
+				// Extension metadata (name, image, latest version)
+				for (local.groupId in ["org.lucee", "io.forgebox"]) {
+					try {
+						local.artifacts = getLuceeExtension(local.groupId);
+						for (local.artifactId in local.artifacts) {
+							thread action="run"
+								name = "warm-ext-#local.groupId#-#local.artifactId#"
+								gid  = local.groupId
+								aid  = local.artifactId {
+								try {
+									local.cacheKey = "extMeta_" & attributes.gid & "_" & attributes.aid;
+									if (!isEmpty(dlCacheGet(local.cacheKey))) return;
+									local.vers    = getLuceeExtension(attributes.gid, attributes.aid);
+									if (arrayIsEmpty(local.vers)) return;
+									local.pickVer = local.vers[1];
+									local.meta    = getLuceeExtension(attributes.gid, attributes.aid, local.pickVer, true);
+									dlCachePut(local.cacheKey, {
+										displayName:   local.meta.metadata.name  ?: "",
+										image:         local.meta.metadata.image ?: "",
+										latestVersion: local.pickVer,
+										cachedAt:      now()
+									});
+									local.verKey = "extVer_" & attributes.gid & "_" & attributes.aid & "_" & local.pickVer;
+									if (isEmpty(dlCacheGet(local.verKey))) {
+										dlCachePut(local.verKey, {
+											version:      local.meta.version      ?: local.pickVer,
+											lastModified: local.meta.lastModified ?: "",
+											type:         !findNoCase("-", local.pickVer) ? "release" : listLast(lCase(local.pickVer), "-"),
+											minCore:      local.meta.metadata.MinCoreVersion ?: ""
+										});
+									}
+									info("cache warm: #attributes.gid#:#attributes.aid# (#local.pickVer#)");
+								} catch(e) {
+									info("cache warm fail: #attributes.gid#:#attributes.aid# — #e.message#");
+								}
+							}
+						}
+					} catch(e) {
+						info("cache warm fail: group #local.groupId# — #e.message#");
+					}
+				}
+			} catch(e) {
+				info("cache warmup failed: #e.message#");
+			}
+		}
+	}
+
+	function info(msg) {
+		cflog(log:"application",type:"info",text:msg);
+	}
 }

@@ -10,15 +10,7 @@ dlType     = url.type       ?: ""; // for server downloads: win64, linux-x64, ja
 if (len(version) && len(dlType) && !len(artifactId)) {
 	dlUrl = "";
 
-	cacheKey = "luceeVerDetail_" & version;
-	detail   = util.dlCacheGet(cacheKey);
-
-	if (isEmpty(detail)) {
-		try {
-			detail = LuceeVersionsDetail(version);
-			util.dlCachePut(cacheKey, detail);
-		} catch(e) { detail = {}; }
-	}
+	detail = util.getLuceeVersionsDetail(version);
 
 	// get URL from detail, fall back to util.CDN pattern for releases
 	if (structKeyExists(detail, dlType) && len(detail[dlType])) {
@@ -47,9 +39,7 @@ if (!len(groupId) || !len(artifactId)) {
 // If no version given, find the latest release (or latest overall)
 if (!len(version)) {
 	try {
-		versions = LuceeExtension(groupId, artifactId);
-		versions = versions.filter(function(v) { return util.getType(v) != "alpha"; });
-		arraySort(versions, function(a, b) { return util.versionCompare(b, a); });
+		versions = util.getLuceeExtension(groupId, artifactId);
 		for (v in versions) {
 			if (util.getType(v) == "release") { version = v; break; }
 		}
@@ -64,7 +54,7 @@ if (!len(version)) {
 }
 
 try {
-	meta   = LuceeExtension(groupId, artifactId, version, true);
+	meta   = util.getLuceeExtension(groupId, artifactId, version, true);
 	lexUrl = meta.lex ?: "";
 } catch(e) {
 	lexUrl = "";

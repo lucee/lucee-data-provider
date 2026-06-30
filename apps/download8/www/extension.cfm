@@ -12,36 +12,8 @@ if (!len(artifactId)) {
 displayName  = util.artifactDisplayName(artifactId);
 mavenCoords  = groupId & ":" & artifactId;
 
-// Load all versions — cached, stale-while-revalidate 10 min
-verListKey   = "extVersions_" & groupId & "_" & artifactId;
-verListCache = util.dlCacheGet(verListKey);
-verListAge   = structKeyExists(verListCache, "cachedAt") ? dateDiff("n", verListCache.cachedAt, now()) : 999;
-
-if (!isEmpty(verListCache) && structKeyExists(verListCache, "data")) {
-	allVersions = verListCache.data;
-	if (verListAge >= 10) {
-		thread action="run" name="refresh-extver-#groupId#-#artifactId#-#getTickCount()#"
-			gid=groupId aid=artifactId ckey=verListKey {
-			try {
-				local.v = LuceeExtension(attributes.gid, attributes.aid);
-				local.na = local.v.filter(function(v) { return util.getType(v) != "alpha"; });
-				if (!arrayIsEmpty(local.na)) local.v = local.na;
-				arraySort(local.v, function(a,b) { return util.versionCompare(b,a); });
-				util.dlCachePut(attributes.ckey, { data: local.v, cachedAt: now() });
-			} catch(e) {}
-		}
-	}
-} else {
-	try {
-		allVersions = LuceeExtension(groupId, artifactId);
-		nonAlpha = allVersions.filter(function(v) { return util.getType(v) != "alpha"; });
-		if (!arrayIsEmpty(nonAlpha)) allVersions = nonAlpha;
-		arraySort(allVersions, function(a, b) { return util.versionCompare(b, a); });
-	} catch(e) {
-		allVersions = [];
-	}
-	util.dlCachePut(verListKey, { data: allVersions, cachedAt: now() });
-}
+// Load all versions
+allVersions = util.getLuceeExtension(groupId, artifactId);
 
 // Fetch full detail (name, description, image, id, minCoreVersion) — cached, stale-while-revalidate 60 min
 extName           = util.artifactDisplayName(artifactId);
@@ -65,7 +37,7 @@ if (!arrayIsEmpty(allVersions)) {
 			thread action="run" name="refresh-extdetail-#groupId#-#artifactId#-#getTickCount()#"
 				gid=groupId aid=artifactId ckey=detailKey ver=allVersions[1] slug=extName {
 				try {
-					local.meta = LuceeExtension(attributes.gid, attributes.aid, attributes.ver, true).metadata ?: {};
+					local.meta = util.getLuceeExtension(attributes.gid, attributes.aid, attributes.ver, true).metadata ?: {};
 					util.dlCachePut(attributes.ckey, {
 						extName:           len(local.meta.name           ?: "") ? local.meta.name           : attributes.slug,
 						extDescription:    local.meta.description    ?: "",
@@ -79,7 +51,7 @@ if (!arrayIsEmpty(allVersions)) {
 		}
 	} else {
 		try {
-			latestMeta = LuceeExtension(groupId, artifactId, allVersions[1], true);
+			latestMeta = util.getLuceeExtension(groupId, artifactId, allVersions[1], true);
 			meta = latestMeta.metadata ?: {};
 			extName           = len(meta.name           ?: "") ? meta.name           : extName;
 			extDescription    = meta.description    ?: "";
