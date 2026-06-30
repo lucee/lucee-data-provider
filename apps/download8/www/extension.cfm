@@ -90,18 +90,19 @@ groups = {
 	alpha:    []
 };
 
+// One cache read for all version metadata (avoids one file-read per version on cold start)
+verMapKey   = "extVerMap_" & groupId & "_" & artifactId;
+verMap      = util.dlCacheGet(verMapKey);
+verMapDirty = false;
+
 for (ver in allVersions) {
 	verType  = util.getType(ver);
 	groupKey = verType;
 	if (!structKeyExists(groups, groupKey)) groups[groupKey] = [];
 
-	verCacheKey = "extVer_" & groupId & "_" & artifactId & "_" & ver;
-	verCached   = util.dlCacheGet(verCacheKey);
-
-	if (!isEmpty(verCached)) {
-		arrayAppend(groups[groupKey], verCached);
+	if (structKeyExists(verMap, ver)) {
+		verEntry = verMap[ver];
 	} else {
-		// reuse latestMeta for the latest version (already fetched), no API call for others
 		isLatest = (ver == allVersions[1]);
 		if (isLatest && isDefined("latestMeta")) {
 			try { verMinCore = latestMeta.metadata.MinCoreVersion ?: ""; } catch(e) { verMinCore = ""; }
@@ -114,10 +115,13 @@ for (ver in allVersions) {
 		} else {
 			verEntry = { version: ver, lastModified: "", type: verType, minCore: "" };
 		}
-		util.dlCachePut(verCacheKey, verEntry);
-		arrayAppend(groups[groupKey], verEntry);
+		verMap[ver]  = verEntry;
+		verMapDirty  = true;
 	}
+	arrayAppend(groups[groupKey], verEntry);
 }
+
+if (verMapDirty) util.dlCachePut(verMapKey, verMap);
 
 // sort each group descending (allVersions already sorted, but groups built in loop order)
 for (gk in groups) {

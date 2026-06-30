@@ -280,14 +280,17 @@ component accessors="false" {
 										latestVersion: local.pickVer,
 										cachedAt:      now()
 									});
-									local.verKey = "extVer_" & attributes.gid & "_" & attributes.aid & "_" & local.pickVer;
-									if (isEmpty(dlCacheGet(local.verKey))) {
-										dlCachePut(local.verKey, {
+									local.verMapKey = "extVerMap_" & attributes.gid & "_" & attributes.aid;
+									local.verMap    = dlCacheGet(local.verMapKey);
+									if (isEmpty(local.verMap)) local.verMap = {};
+									if (!structKeyExists(local.verMap, local.pickVer)) {
+										local.verMap[local.pickVer] = {
 											version:      local.meta.version      ?: local.pickVer,
 											lastModified: local.meta.lastModified ?: "",
 											type:         !findNoCase("-", local.pickVer) ? "release" : listLast(lCase(local.pickVer), "-"),
 											minCore:      local.meta.metadata.MinCoreVersion ?: ""
-										});
+										};
+										dlCachePut(local.verMapKey, local.verMap);
 									}
 									info("cache warm: #attributes.gid#:#attributes.aid# (#local.pickVer#)");
 								} catch(e) {
