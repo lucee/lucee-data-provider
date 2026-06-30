@@ -258,6 +258,10 @@ VERSIONS_PREVIEW = 5;
 						</div>
 					</div>
 				</div>
+				<p class="text-muted text-small" style="margin-top:10px;">
+					More options including <code>resource</code> for local files or custom URLs:
+					<a href="https://docs.lucee.org/recipes/extension-installation.html##cfconfig-json" target="_blank">Extension Installation docs</a>
+				</p>
 			</div>
 
 			<div class="install-panel" id="panel-env">

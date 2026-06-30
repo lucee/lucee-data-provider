@@ -793,6 +793,21 @@ body { padding-top: 100px; }
 	display: grid;
 	grid-template-columns: 1fr 1fr;
 	gap: 20px;
+	align-items: stretch;
+}
+
+.install-col-grid > div {
+	display: flex;
+	flex-direction: column;
+}
+
+.install-col-grid > div .code-block {
+	flex: 1;
+}
+
+.install-col-grid > div .code-block pre {
+	height: 100%;
+	box-sizing: border-box;
 }
 @media (max-width: 1050px) {
 	.tracks-grid { grid-template-columns: repeat(3, 1fr); }
