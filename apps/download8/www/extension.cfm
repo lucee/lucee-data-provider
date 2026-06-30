@@ -211,6 +211,13 @@ VERSIONS_PREVIEW = 5;
 	<cfif len(snippetVer)>
 	<div class="install-section">
 		<h2 class="section-title">Installation</h2>
+		<p class="text-muted text-small" style="margin-bottom:16px;">
+			Declare the extension in your configuration and Lucee will download and install it automatically on startup.
+			Choose the method that fits your setup — <strong>.CFConfig.json</strong> is recommended for version-controlled deployments,
+			the <strong>environment variable</strong> works well for Docker and cloud environments.
+			You can also install manually by dropping the <code>.lex</code> file into <code>/lucee-server/deploy/</code>
+			or through the Lucee Administrator under <em>Extension &rsaquo; Applications</em>.
+		</p>
 
 		<div class="install-tabs">
 			<input type="radio" name="itab-#encodeForHTMLAttribute(artifactId)#" id="itab-cfg" checked>

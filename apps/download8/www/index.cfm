@@ -366,7 +366,9 @@ arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCas
 		</div>
 	</div>
 	<p class="text-muted text-small" style="margin-bottom:24px;">
-		Drop a <code>.lex</code> file into <code>/lucee-server/deploy/</code> or install via the Lucee Administrator under <em>Extension › Applications</em>.
+		Extensions add functionality to Lucee — datasource drivers, cache providers, document processing, scripting languages, and more.
+		Each extension is a self-contained <code>.lex</code> package that Lucee installs and manages automatically.
+		Click an extension to see versions and installation instructions.
 	</p>
 
 	<cfif arrayIsEmpty(extensions)>
