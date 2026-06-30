@@ -1,4 +1,4 @@
-
+<cfcache timeSpan="#createTimespan(0,0,1,0)#">
 <cfscript>
 util = application.util;
 start=getTickCount();
@@ -442,3 +442,4 @@ arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCas
 </script>
 </body>
 </html>
+</cfcache>

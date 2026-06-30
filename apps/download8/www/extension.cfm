@@ -1,3 +1,4 @@
+<cfcache timeSpan="#createTimespan(0,0,1,0)#" useQueryString=true>
 <cfscript>
 util = application.util;
 
@@ -366,3 +367,4 @@ document.querySelectorAll('.copy-btn').forEach(function(btn) {
 </script>
 </body>
 </html>
+</cfcache>

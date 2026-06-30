@@ -1,3 +1,4 @@
+<cfcache timeSpan="#createTimespan(0,0,1,0)#" useQueryString=true>
 <cfscript>
 util = application.util;
 
@@ -305,3 +306,4 @@ document.querySelectorAll('.show-more-versions').forEach(function(btn) {
 </cfoutput>
 </body>
 </html>
+</cfcache>
