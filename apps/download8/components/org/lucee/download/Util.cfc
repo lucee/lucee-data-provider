@@ -97,6 +97,14 @@ component accessors="false" {
 		return local.dir;
 	}
 
+	public string function getCacheFile(sourceTemplate) {
+		var dir = getCacheDirectory();
+		if(right(dir,1) != server.separator.file) dir &= server.separator.file;
+		var filename=sourceTemplate&"_"&cgi.QUERY_STRING;
+		var filename=dir&"site"&replace(replace(replace(replace(filename,"=","_","all"),"&","_","all"),".","_","all"),"/","_","all")&".html";
+		return filename;
+	}
+
 	function dlCacheGet(key) {
 		local.t = getTickCount();
 		// 1. component variables
