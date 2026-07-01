@@ -1,5 +1,7 @@
 {
-	"applicationTimeout": "1,0,0,0",
+	"missingErrorTemplate": "/lucee/templates/error/error-public.cfm",
+  	"generalErrorTemplate": "/lucee/templates/error/error-public.cfm",
+  	"applicationTimeout": "1,0,0,0",
 	"cacheDirectory": "{lucee-config}/cache/",
 	"cacheDirectoryMaxSize": "100mb",
 	"cascadeToResultset": true,
@@ -95,18 +97,6 @@
 		"deployDirectory": "{lucee-config}/cfclasses/"
 	},
 	"loggers": {
-		"datasource": {
-			"appender": "resource",
-			"appenderArguments": "path:{lucee-config}/logs/datasource.log",
-			"level": "error",
-			"layout": "classic"
-		},
-		"memory": {
-			"appender": "resource",
-			"appenderArguments": "path:{lucee-config}/logs/memory.log",
-			"level": "error",
-			"layout": "classic"
-		},
 		"requesttimeout": {
 			"appender": "resource",
 			"appenderArguments": "path:{lucee-config}/logs/requesttimeout.log",
@@ -143,48 +133,6 @@
 			"level": "error",
 			"layout": "classic"
 		},
-		"scheduler": {
-			"appender": "resource",
-			"appenderArguments": "path:{lucee-config}/logs/scheduler.log",
-			"level": "error",
-			"layout": "classic"
-		},
-		"search": {
-			"appender": "resource",
-			"appenderArguments": "path:{lucee-config}/logs/search.log",
-			"level": "error",
-			"layout": "classic"
-		},
-		"mail": {
-			"appender": "resource",
-			"appenderArguments": "path:{lucee-config}/logs/mail.log",
-			"level": "error",
-			"layout": "classic"
-		},
-		"orm": {
-			"appender": "resource",
-			"appenderArguments": "path:{lucee-config}/logs/orm.log",
-			"level": "error",
-			"layout": "classic"
-		},
-		"remoteclient": {
-			"appender": "resource",
-			"appenderArguments": "path:{lucee-config}/logs/remoteclient.log",
-			"level": "error",
-			"layout": "classic"
-		},
-		"gateway": {
-			"appender": "resource",
-			"appenderArguments": "path:{lucee-config}/logs/gateway.log",
-			"level": "error",
-			"layout": "classic"
-		},
-		"rest": {
-			"appender": "resource",
-			"appenderArguments": "path:{lucee-config}/logs/rest.log",
-			"level": "error",
-			"layout": "classic"
-		},
 		"mapping": {
 			"appender": "resource",
 			"appenderArguments": "path:{lucee-config}/logs/mapping.log",
@@ -213,42 +161,12 @@
 			"listenerMode": "modern",
 			"listenerType": "curr2root",
 			"inspectTemplate": "once"
-		},
-		"/lucee-server/": {
-			"readonly": "yes",
-			"physical": "{lucee-server}/context/",
-			"archive": "",
-			"primary": "physical",
-			"listenerMode": "modern",
-			"listenerType": "curr2root",
-			"inspectTemplate": "once"
 		}
-	},
-	"orm": {
-		"engineClass": "lucee.runtime.orm.DummyORMEngine"
-	},
-	"remoteClients": {
-		"directory": "{lucee-config}remote-client/"
 	},
 	"resourceProviders": [
 		{
-			"scheme": "ftp",
-			"class": "lucee.commons.io.res.type.ftp.FTPResourceProvider",
-			"arguments": "lock-timeout:20000;socket-timeout:-1;client-timeout:60000"
-		},
-		{
 			"scheme": "zip",
 			"class": "lucee.commons.io.res.type.zip.ZipResourceProvider",
-			"arguments": "lock-timeout:1000;case-sensitive:true;"
-		},
-		{
-			"scheme": "tar",
-			"class": "lucee.commons.io.res.type.tar.TarResourceProvider",
-			"arguments": "lock-timeout:1000;case-sensitive:true;"
-		},
-		{
-			"scheme": "tgz",
-			"class": "lucee.commons.io.res.type.tgz.TGZResourceProvider",
 			"arguments": "lock-timeout:1000;case-sensitive:true;"
 		},
 		{
@@ -267,5 +185,9 @@
 			"arguments": "case-sensitive:true;lock-timeout:1000;"
 		}
 	],
-	"extensions": []
+	"extensions": [
+		{
+	      "maven": "org.lucee:esapi-extension:3.0.0.14"
+	    }
+	]
 }

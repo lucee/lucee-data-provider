@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 lucee/lucee:8.0.0.156-SNAPSHOT-nginx-amd64
+FROM --platform=linux/amd64 lucee/lucee:8.0.0.163-SNAPSHOT-light
 
 ENV LUCEE_ADMIN_ENABLED=false
 

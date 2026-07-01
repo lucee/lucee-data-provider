@@ -1,7 +1,7 @@
 component {
 	this.name = "lucee-downloads";
 	variables.maxAge=60*60; // 1 hour
-	variables.maxAge=10; // 10 seconds
+	// variables.maxAge=10; // 10 seconds
 	this.componentMappings = [
       {
          "physical": "/var/components/",
