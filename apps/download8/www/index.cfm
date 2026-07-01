@@ -119,34 +119,42 @@ if (!isEmpty(tracksCache) && structKeyExists(tracksCache, "tracks")) {
 }
 // ── Load Extensions ──────────────────────────────────────────────────
 function loadGroupExtensions(groupId) {
-	local.result = [];
+	local.result    = [];
+	local.metaMapKey = "extMetaMap_" & groupId;
 	try {
 		local.artifacts = util.getLuceeExtension(groupId);
+		local.metaMap   = util.dlCacheGet(local.metaMapKey);
+		if (isEmpty(local.metaMap)) local.metaMap = {};
+
 		arrayEach(local.artifacts, function(artifactId) {
-			local.cacheKey  = "extMeta_" & groupId & "_" & artifactId;
-			local.cached    = util.dlCacheGet(local.cacheKey);
-			local.name      = local.cached.displayName   ?: "";
-			local.image     = local.cached.image         ?: "";
-			local.latestVer = local.cached.latestVersion ?: "";
+			local.meta      = structKeyExists(metaMap, artifactId) ? metaMap[artifactId] : {};
+			local.name      = local.meta.displayName   ?: "";
+			local.image     = local.meta.image         ?: "";
+			local.latestVer = local.meta.latestVersion ?: "";
 			if (!len(local.name)) local.name = util.artifactDisplayName(artifactId);
 
-			if (isEmpty(local.cached)) {
-				thread action="run" name="cache-ext-#groupId#-#artifactId#" gid=groupId aid=artifactId ckey=local.cacheKey {
+			if (isEmpty(local.meta)) {
+				thread action="run" name="cache-ext-#groupId#-#artifactId#" gid=groupId aid=artifactId mmkey=metaMapKey {
 					local.entry = { displayName: util.artifactDisplayName(attributes.aid), image: "", latestVersion: "", cachedAt: now() };
 					try {
 						local.versions = util.getLuceeExtension(attributes.gid, attributes.aid);
 						if (!arrayIsEmpty(local.versions)) {
 							local.pickVer = local.versions[1];
-							local.meta    = util.getLuceeExtension(attributes.gid, attributes.aid, local.pickVer, true);
+							local.rawMeta = util.getLuceeExtension(attributes.gid, attributes.aid, local.pickVer, true);
 							local.entry = {
-								displayName:   len(local.meta.metadata.name ?: "") ? local.meta.metadata.name : util.artifactDisplayName(attributes.aid),
-								image:         local.meta.metadata.image ?: "",
+								displayName:   len(local.rawMeta.metadata.name ?: "") ? local.rawMeta.metadata.name : util.artifactDisplayName(attributes.aid),
+								image:         local.rawMeta.metadata.image ?: "",
 								latestVersion: local.pickVer,
 								cachedAt:      now()
 							};
 						}
 					} catch(e) {}
-					util.dlCachePut(attributes.ckey, local.entry);
+					lock name="extMetaMap_#attributes.gid#" type="exclusive" timeout="10" {
+						local.map = util.dlCacheGet(attributes.mmkey);
+						if (isEmpty(local.map)) local.map = {};
+						local.map[attributes.aid] = local.entry;
+						util.dlCachePut(attributes.mmkey, local.map);
+					}
 				}
 			}
 
@@ -354,7 +362,6 @@ for (gid in ["org.lucee", "io.forgebox"]) {
 
 // sort all extensions alphabetically by display name
 arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCase(b.displayName)); });
-
 
 </cfscript>
 
