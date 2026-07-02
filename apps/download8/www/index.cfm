@@ -177,7 +177,7 @@ function loadGroupExtensions(groupId) {
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Downloads</title>
 	<link rel="icon" type="image/png" href="/res/favicon.png">
-	<link rel="stylesheet" href="/res/download.css">
+	<link rel="stylesheet" href="/res/download.css?v=4">
 </head>
 <body>
 <cfoutput>
@@ -193,6 +193,14 @@ function loadGroupExtensions(groupId) {
 		<a href="https://dev.lucee.org"      target="_blank">Forum</a>
 		<a href="https://github.com/lucee"   target="_blank">GitHub</a>
 		<a href="https://hub.docker.com/r/lucee/lucee" target="_blank">Docker Hub</a>
+		<a href="https://buymeacoffee.com/luceeorg" target="_blank" class="bmc-link">
+			<img src="/res/byme2.png" class="bmc-icon" alt="Buy me a coffee">
+			<img src="/res/byme.png"  class="bmc-full" alt="Buy me a coffee">
+		</a>
+		<a href="https://opencollective.com/lucee" target="_blank" class="nav-highlight">
+			<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+			Donate
+		</a>
 		<a href="https://mcp.lucee-services.com/" target="_blank" class="nav-highlight">
 			<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
 			MCP Server

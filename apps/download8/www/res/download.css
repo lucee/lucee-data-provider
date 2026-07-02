@@ -138,6 +138,13 @@ body { padding-top: 100px; }
 	flex-shrink: 0;
 }
 
+.bmc-link { display: inline-flex; align-items: center; opacity: 0.9; }
+.bmc-link:hover { opacity: 1; text-decoration: none; }
+.bmc-icon { display: block; height: 30px; width: auto; }
+.bmc-full { display: none; height: 38px; width: auto; }
+.bmc-link:hover .bmc-icon { display: none; }
+.bmc-link:hover .bmc-full { display: block; }
+
 /* ── Hero ── */
 .hero {
 	background: linear-gradient(135deg, var(--chrome-bg) 0%, #2a2d36 100%);
