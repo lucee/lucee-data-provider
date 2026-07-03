@@ -1,4 +1,4 @@
 <cfscript>
 setting showdebugoutput=false;
-application.bridgeProxy.render(application.bridgeProxy.invoke("/health"));
+server.bridgeProxy.render(server.bridgeProxy.invoke("/health"));
 </cfscript>

@@ -141,12 +141,12 @@ component {
 
 	public struct function getIndex() {
 		ensureIndex();
-		return application.mavenBridgeIndex[variables.groupId];
+		return server.mavenBridgeIndex[variables.groupId];
 	}
 
 	public struct function flushCache(required string webroot) {
-		if (structKeyExists(application, "mavenBridgeIndex")) {
-			structDelete(application.mavenBridgeIndex, variables.groupId);
+		if (structKeyExists(server, "mavenBridgeIndex")) {
+			structDelete(server.mavenBridgeIndex, variables.groupId);
 		}
 		syncRepository(arguments.webroot);
 		return getIndex();
@@ -492,18 +492,18 @@ component {
 	// --- index loading ---
 
 	private void function ensureIndex() {
-		if (!structKeyExists(application, "mavenBridgeIndex")) {
-			application.mavenBridgeIndex = {};
+		if (!structKeyExists(server, "mavenBridgeIndex")) {
+			server.mavenBridgeIndex = {};
 		}
-		if (structKeyExists(application.mavenBridgeIndex, variables.groupId)) {
-			var ageMinutes = dateDiff("n", application.mavenBridgeIndex[variables.groupId].cachedAt, now());
+		if (structKeyExists(server.mavenBridgeIndex, variables.groupId)) {
+			var ageMinutes = dateDiff("n", server.mavenBridgeIndex[variables.groupId].cachedAt, now());
 			if (ageMinutes < variables.cacheTtlMinutes) {
 				return;
 			}
 		}
-		application.mavenBridgeIndex[variables.groupId] = loadIndex();
-		if (structKeyExists(application, "bridgeWebroot")) {
-			syncRepository(application.bridgeWebroot);
+		server.mavenBridgeIndex[variables.groupId] = loadIndex();
+		if (structKeyExists(server, "bridgeWebroot")) {
+			syncRepository(server.bridgeWebroot);
 		}
 	}
 

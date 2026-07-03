@@ -95,6 +95,32 @@ component {
 		];
 	}
 
+	// Shared by Server.cfc (startup) and Application.cfc (per-request safety net) —
+	// both need the identical env-derived config to build an equivalent registry.
+	public static struct function readConfigFromEnvironment() {
+		var providers = [];
+		var raw = trim(server.system.environment.EXTENSION_PROVIDERS ?: "");
+		if (len(raw)) {
+			providers = parseProviders(raw);
+		} else {
+			var provider = trim(server.system.environment.EXTENSION_PROVIDER ?: "");
+			var groupId = trim(server.system.environment.GROUP_ID ?: "");
+			if (len(provider) || len(groupId)) {
+				providers = [{
+					provider: len(provider) ? provider : "https://extension.lucee.org",
+					groupId: len(groupId) ? groupId : "org.lucee"
+				}];
+			} else {
+				providers = defaultProviders();
+			}
+		}
+		return {
+			providers: providers,
+			cacheTtlMinutes: val(server.system.environment.CACHE_TTL_MINUTES ?: 60),
+			timeout: val(server.system.environment.TIMEOUT ?: 300)
+		};
+	}
+
 	private static array function normalizeProviderEntries(required array entries) {
 		var providers = [];
 		for (var entry in arguments.entries) {

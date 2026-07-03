@@ -108,9 +108,10 @@ environment:
 ## Architecture
 
 ```
+Server.cfc                                → builds the bridge registry once, in the global server scope, on server start
 www/
-  Application.cfc                         → config, sync repo files, route /org/* and /io/*
-  index.cfm                               → root info
+  Application.cfc                         → route /org/* and /io/*; per-request safety net if Server.cfc hasn't run yet
+  index.cfm                               → landing page: group IDs and their artifacts, linked to each Maven folder
   org/lucee/                              → generated Maven tree (gitignored)
   io/forgebox/                            → generated Maven tree (gitignored)
   components/org/lucee/mavenbridge/

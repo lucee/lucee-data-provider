@@ -4,6 +4,8 @@ component {
 	this.sessionManagement = false;
 	this.requestTimeout = createTimeSpan(0, 0, 0, val(server.system.environment.TIMEOUT ?: 300));
 
+	// Only needed for the ensureBridgeReady() fallback below — normal requests just
+	// call methods on the server-scoped singletons Server.cfc already created.
 	this.componentpaths = [
 		{
 			"physical": getDirectoryFromPath(getCurrentTemplatePath()) & "components/",
@@ -13,31 +15,17 @@ component {
 		}
 	];
 
-	public function onApplicationStart() {
-		ensureBridgeConfig();
-		application.bridgeWebroot = getWebroot();
-		application.bridgeRegistry = createBridgeRegistry(application.bridgeConfig);
-		application.bridgeProxy = new org.lucee.mavenbridge.proxy.BridgeProxy();
-		return true;
-	}
-
 	public boolean function onRequestStart() {
-		if (!structKeyExists(application, "bridgeWebroot")) {
-			onApplicationStart();
-		}
-		if (!structKeyExists(application, "bridgeSynced")) {
-			application.bridgeRegistry.syncAll(application.bridgeWebroot);
-			application.bridgeSynced = true;
-		}
+		ensureBridgeReady();
+
 		if (isFlushRequest()) {
 			request.cacheFlushed = true;
-			flushBridgeCache();
+			server.bridgeRegistry.flushAll(server.bridgeWebroot);
 		}
 
 		var path = currentRequestPath();
 		if (isMavenRepoPath(path)) {
-			ensureBridgeComponents();
-			application.bridgeProxy.render(application.bridgeProxy.invoke(path));
+			server.bridgeProxy.render(server.bridgeProxy.invoke(path));
 			return false;
 		}
 
@@ -45,58 +33,30 @@ component {
 	}
 
 	public boolean function onMissingTemplate(required string targetPage) {
-		ensureBridgeConfig();
-		ensureBridgeComponents();
-
-		var path = normalizeTargetPage(arguments.targetPage);
-		application.bridgeProxy.render(application.bridgeProxy.invoke(path));
+		ensureBridgeReady();
+		server.bridgeProxy.render(server.bridgeProxy.invoke(normalizeTargetPage(arguments.targetPage)));
 		return true;
 	}
 
-	private void function ensureBridgeConfig() {
-		if (!structKeyExists(application, "bridgeConfig")) {
-			application.bridgeConfig = {
-				providers: parseBridgeProviders(),
-				cacheTtlMinutes: val(server.system.environment.CACHE_TTL_MINUTES ?: 60),
-				timeout: val(server.system.environment.TIMEOUT ?: 300)
-			};
+	// Server.cfc builds server.bridgeRegistry on server start; this only covers the
+	// case where its startup sync (a live HTTP call per provider) failed or hasn't
+	// completed yet when the first request arrives.
+	private void function ensureBridgeReady() {
+		if (structKeyExists(server, "bridgeRegistry")) {
+			return;
 		}
-	}
-
-	private array function parseBridgeProviders() {
-		var raw = trim(server.system.environment.EXTENSION_PROVIDERS ?: "");
-		if (len(raw)) {
-			return org.lucee.mavenbridge.BridgeRegistry::parseProviders(raw);
-		}
-
-		var provider = trim(server.system.environment.EXTENSION_PROVIDER ?: "");
-		var groupId = trim(server.system.environment.GROUP_ID ?: "");
-		if (len(provider) || len(groupId)) {
-			return [{
-				provider: len(provider) ? provider : "https://extension.lucee.org",
-				groupId: len(groupId) ? groupId : "org.lucee"
-			}];
-		}
-
-		return org.lucee.mavenbridge.BridgeRegistry::defaultProviders();
-	}
-
-	private function createBridgeRegistry(required struct config) {
-		return new org.lucee.mavenbridge.BridgeRegistry(
-			providers=config.providers,
-			sharedConfig={
-				cacheTtlMinutes: config.cacheTtlMinutes,
-				timeout: config.timeout
+		lock name="mavenbridge-bootstrap" timeout="30" {
+			if (structKeyExists(server, "bridgeRegistry")) {
+				return;
 			}
-		);
-	}
-
-	private void function ensureBridgeComponents() {
-		if (!structKeyExists(application, "bridgeRegistry")) {
-			application.bridgeRegistry = createBridgeRegistry(application.bridgeConfig);
-		}
-		if (!structKeyExists(application, "bridgeProxy")) {
-			application.bridgeProxy = new org.lucee.mavenbridge.proxy.BridgeProxy();
+			server.bridgeWebroot = getWebroot();
+			var config = org.lucee.mavenbridge.BridgeRegistry::readConfigFromEnvironment();
+			server.bridgeRegistry = new org.lucee.mavenbridge.BridgeRegistry(
+				providers=config.providers,
+				sharedConfig={ cacheTtlMinutes: config.cacheTtlMinutes, timeout: config.timeout }
+			);
+			server.bridgeProxy = new org.lucee.mavenbridge.proxy.BridgeProxy();
+			server.bridgeRegistry.syncAll(server.bridgeWebroot);
 		}
 	}
 
@@ -108,13 +68,6 @@ component {
 			return url.flush;
 		}
 		return listFindNoCase("1,true,yes,force", trim(toString(url.flush))) > 0;
-	}
-
-	private void function flushBridgeCache() {
-		ensureBridgeConfig();
-		application.bridgeRegistry = createBridgeRegistry(application.bridgeConfig);
-		application.bridgeProxy = new org.lucee.mavenbridge.proxy.BridgeProxy();
-		application.bridgeRegistry.flushAll(application.bridgeWebroot);
 	}
 
 	private string function getWebroot() {

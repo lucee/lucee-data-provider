@@ -68,7 +68,7 @@ component {
 	}
 
 	private function getRegistry() {
-		return application.bridgeRegistry;
+		return server.bridgeRegistry;
 	}
 
 	private struct function artifactFileResponse(required any support, required string artifactId, required string version, required string extension) {
@@ -106,7 +106,7 @@ component {
 	private struct function upstreamContentResponse(required any support, required struct parsed) {
 		var relativePath = support.toUpstreamRelativePath(arguments.parsed);
 		try {
-			var content = support.getCachedUpstreamContent(application.bridgeWebroot, relativePath);
+			var content = support.getCachedUpstreamContent(server.bridgeWebroot, relativePath);
 			return textResponse(200, content.contentType, content.body);
 		} catch (any e) {
 			if (e.type != "bridge.upstream.notfound") {

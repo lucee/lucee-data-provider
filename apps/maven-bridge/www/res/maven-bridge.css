@@ -1,0 +1,281 @@
+/* =====================================================
+   Lucee Maven Bridge Page — design tokens shared with Lucee Downloads/Skills/MCP
+   ===================================================== */
+
+:root {
+	--primary:         #0070cc;
+	--chrome-bg:       #373b45;
+	--chrome-text:     rgba(199,204,212,1);
+	--text:            rgba(51,51,51,1);
+	--muted:           rgba(113,113,113,1);
+	--bg:              #ffffff;
+	--bright:          #f3f3f3;
+	--lines:           rgba(0,0,0,0.12);
+	--lines-bright:    rgba(0,0,0,0.18);
+	--radius:          8px;
+	--shadow:          0 1px 4px rgba(0,0,0,0.10);
+	--shadow-hover:    0 4px 16px rgba(0,0,0,0.14);
+	--okay:            #098658;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg:           #1e1e1e;
+		--bright:       #252525;
+		--text:         rgba(204,204,204,1);
+		--muted:        rgba(153,153,153,1);
+		--lines:        rgba(255,255,255,0.10);
+		--lines-bright: rgba(255,255,255,0.18);
+		--shadow:       0 1px 4px rgba(0,0,0,0.40);
+		--shadow-hover: 0 4px 16px rgba(0,0,0,0.50);
+	}
+}
+
+/* ── Reset / Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { height: 100%; }
+
+body {
+	min-height: 100%;
+	display: flex;
+	flex-direction: column;
+	background: var(--bg);
+	color: var(--text);
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	font-size: 16px;
+	line-height: 1.5;
+}
+
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Site Header ── */
+.site-header {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 200;
+	background: var(--chrome-bg);
+	color: var(--chrome-text);
+	padding: 6px 32px 0;
+	display: flex;
+	align-items: flex-end;
+	gap: 16px;
+	height: 100px;
+}
+
+body { padding-top: 100px; }
+
+.site-header .logo {
+	position: relative;
+	display: inline-block;
+	text-decoration: none;
+	flex-shrink: 0;
+	margin-bottom: 10px;
+}
+
+.site-header .logo img {
+	display: block;
+	width: 172px;
+	height: 81px;
+	filter: brightness(0) invert(1);
+}
+
+.site-header .logo .logo-subtitle {
+	position: absolute;
+	bottom: 2px;
+	left: 83px;
+	font-size: 15px;
+	font-weight: 500;
+	color: var(--chrome-text);
+	opacity: 0.75;
+	letter-spacing: 0.04em;
+	white-space: nowrap;
+}
+
+.site-header nav {
+	margin-left: auto;
+	display: flex;
+	gap: 24px;
+	padding-bottom: 14px;
+}
+
+.site-header nav a {
+	color: var(--chrome-text);
+	font-size: 14px;
+	opacity: 0.85;
+}
+
+.site-header nav a:hover { opacity: 1; text-decoration: none; }
+
+.site-header nav a.nav-highlight {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	background: rgba(255,255,255,0.10);
+	border: 1px solid rgba(255,255,255,0.18);
+	border-radius: 5px;
+	padding: 3px 10px;
+	font-size: 13px;
+	font-weight: 600;
+	opacity: 1;
+	color: #fff;
+	transition: background 0.15s, border-color 0.15s;
+}
+.site-header nav a.nav-highlight:hover {
+	background: rgba(255,255,255,0.18);
+	border-color: rgba(255,255,255,0.32);
+	text-decoration: none;
+}
+.site-header nav a.nav-highlight svg { flex-shrink: 0; }
+
+.bmc-link { display: inline-flex; align-items: center; opacity: 0.9; }
+.bmc-link:hover { opacity: 1; text-decoration: none; }
+.bmc-icon { display: block; height: 30px; width: auto; }
+.bmc-full { display: none; height: 38px; width: auto; }
+.bmc-link:hover .bmc-icon { display: none; }
+.bmc-link:hover .bmc-full { display: block; }
+
+/* ── Main Container ── */
+.container {
+	max-width: 1100px;
+	margin: 0 auto;
+	padding: 0 24px;
+	flex: 1;
+}
+
+/* ── Section Headers ── */
+.section-title {
+	font-size: 20px;
+	font-weight: 600;
+	color: var(--text);
+	margin-bottom: 14px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--lines);
+}
+
+.section-intro {
+	font-size: 14px;
+	color: var(--muted);
+	max-width: 760px;
+	margin-bottom: 16px;
+	line-height: 1.5;
+}
+
+section { padding: 24px 0 8px; }
+section:first-of-type { padding-top: 20px; }
+
+/* ── Group Cards ── */
+.group-grid {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.group-card {
+	border: 1px solid var(--lines);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+	background: var(--bg);
+	overflow: hidden;
+}
+
+.group-card-header {
+	padding: 14px 20px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	border-bottom: 1px solid var(--lines);
+	background: var(--bright);
+}
+
+.group-card-header h3 {
+	font-size: 16px;
+	font-weight: 600;
+}
+
+.group-card-header h3 a {
+	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+	color: var(--text);
+}
+.group-card-header h3 a:hover { color: var(--primary); }
+
+.group-meta-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	background: var(--bg);
+	border: 1px solid var(--lines);
+	border-radius: 6px;
+	padding: 3px 9px;
+	font-size: 12px;
+	color: var(--muted);
+}
+
+.group-meta-chip.upstream {
+	background: rgba(191,136,3,0.12);
+	color: #bf8803;
+	border-color: transparent;
+}
+
+.group-card-body { padding: 16px 20px; }
+
+.group-error {
+	font-size: 13.5px;
+	color: var(--muted);
+}
+
+.artifact-pill-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.artifact-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 12px;
+	border-radius: 999px;
+	border: 1px solid var(--lines);
+	background: var(--bright);
+	font-size: 13px;
+	color: var(--text);
+	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+	transition: border-color 0.12s, color 0.12s;
+}
+.artifact-pill:hover {
+	border-color: var(--primary);
+	color: var(--primary);
+	text-decoration: none;
+}
+
+.artifact-pill .version-count {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	font-size: 11px;
+	color: var(--muted);
+}
+
+/* ── Footer ── */
+.site-footer {
+	background: var(--chrome-bg);
+	color: rgba(199,204,212,0.7);
+	padding: 28px 32px;
+	font-size: 13px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: 32px;
+}
+
+.site-footer a { color: rgba(199,204,212,0.85); }
+.site-footer a:hover { color: #fff; text-decoration: none; }
+
+/* ── Utility ── */
+.text-muted { color: var(--muted); }
+.text-small { font-size: 13px; }

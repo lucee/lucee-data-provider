@@ -269,8 +269,7 @@
 	],
 	"extensions": [
 		{
-			"name": "Lucene",
-			"path": "https://ext.lucee.org/lucene-search-extension-3.0.0.147-ALPHA.lex"
+			"maven": "org.lucee:esapi-extension:3.0.0.14"
 		}
 	]
 }
