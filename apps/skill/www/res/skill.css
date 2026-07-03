@@ -1,0 +1,338 @@
+/* =====================================================
+   Lucee Skills Page — design tokens shared with Lucee Downloads
+   ===================================================== */
+
+:root {
+	--primary:         #0070cc;
+	--chrome-bg:       #373b45;
+	--chrome-text:     rgba(199,204,212,1);
+	--text:            rgba(51,51,51,1);
+	--muted:           rgba(113,113,113,1);
+	--bg:              #ffffff;
+	--bright:          #f3f3f3;
+	--lines:           rgba(0,0,0,0.12);
+	--lines-bright:    rgba(0,0,0,0.18);
+	--radius:          8px;
+	--shadow:          0 1px 4px rgba(0,0,0,0.10);
+	--shadow-hover:    0 4px 16px rgba(0,0,0,0.14);
+	--okay:            #098658;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg:           #1e1e1e;
+		--bright:       #252525;
+		--text:         rgba(204,204,204,1);
+		--muted:        rgba(153,153,153,1);
+		--lines:        rgba(255,255,255,0.10);
+		--lines-bright: rgba(255,255,255,0.18);
+		--shadow:       0 1px 4px rgba(0,0,0,0.40);
+		--shadow-hover: 0 4px 16px rgba(0,0,0,0.50);
+	}
+}
+
+/* ── Reset / Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { height: 100%; }
+
+body {
+	min-height: 100%;
+	display: flex;
+	flex-direction: column;
+	background: var(--bg);
+	color: var(--text);
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	font-size: 16px;
+	line-height: 1.5;
+}
+
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Site Header ── */
+.site-header {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 200;
+	background: var(--chrome-bg);
+	color: var(--chrome-text);
+	padding: 6px 32px 0;
+	display: flex;
+	align-items: flex-end;
+	gap: 16px;
+	height: 100px;
+}
+
+body { padding-top: 100px; }
+
+.site-header .logo {
+	position: relative;
+	display: inline-block;
+	text-decoration: none;
+	flex-shrink: 0;
+	margin-bottom: 10px;
+}
+
+.site-header .logo img {
+	display: block;
+	width: 172px;
+	height: 81px;
+	filter: brightness(0) invert(1);
+}
+
+.site-header .logo .logo-subtitle {
+	position: absolute;
+	bottom: 2px;
+	left: 83px;
+	font-size: 15px;
+	font-weight: 500;
+	color: var(--chrome-text);
+	opacity: 0.75;
+	letter-spacing: 0.04em;
+	white-space: nowrap;
+}
+
+.site-header nav {
+	margin-left: auto;
+	display: flex;
+	gap: 24px;
+	padding-bottom: 14px;
+}
+
+.site-header nav a {
+	color: var(--chrome-text);
+	font-size: 14px;
+	opacity: 0.85;
+}
+
+.site-header nav a:hover { opacity: 1; text-decoration: none; }
+
+.site-header nav a.nav-highlight {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	background: rgba(255,255,255,0.10);
+	border: 1px solid rgba(255,255,255,0.18);
+	border-radius: 5px;
+	padding: 3px 10px;
+	font-size: 13px;
+	font-weight: 600;
+	opacity: 1;
+	color: #fff;
+	transition: background 0.15s, border-color 0.15s;
+}
+.site-header nav a.nav-highlight:hover {
+	background: rgba(255,255,255,0.18);
+	border-color: rgba(255,255,255,0.32);
+	text-decoration: none;
+}
+.site-header nav a.nav-highlight svg { flex-shrink: 0; }
+
+.bmc-link { display: inline-flex; align-items: center; opacity: 0.9; }
+.bmc-link:hover { opacity: 1; text-decoration: none; }
+.bmc-icon { display: block; height: 30px; width: auto; }
+.bmc-full { display: none; height: 38px; width: auto; }
+.bmc-link:hover .bmc-icon { display: none; }
+.bmc-link:hover .bmc-full { display: block; }
+
+/* ── Main Container ── */
+.container {
+	max-width: 1100px;
+	margin: 0 auto;
+	padding: 0 24px;
+	flex: 1;
+}
+
+/* ── Section Headers ── */
+.section-title {
+	font-size: 22px;
+	font-weight: 600;
+	color: var(--text);
+	margin-bottom: 20px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--lines);
+}
+
+.section-intro {
+	font-size: 15px;
+	color: var(--muted);
+	max-width: 760px;
+	margin-bottom: 24px;
+	line-height: 1.6;
+}
+
+.section-intro + .section-intro { margin-top: -12px; }
+
+section { padding: 44px 0 8px; }
+section:first-of-type { padding-top: 40px; }
+
+/* ── Assistant Cards (ChatGPT / Claude / Gemini) ── */
+.assistant-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 24px;
+	margin-bottom: 32px;
+}
+
+.assistant-card {
+	border: 1px solid var(--lines);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+	background: var(--bg);
+	padding: 20px;
+	transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.assistant-card:hover {
+	box-shadow: var(--shadow-hover);
+	transform: translateY(-2px);
+}
+
+.assistant-card h3 {
+	font-size: 16px;
+	font-weight: 600;
+	margin-bottom: 8px;
+	color: var(--text);
+}
+
+.assistant-card p {
+	font-size: 13.5px;
+	color: var(--muted);
+	line-height: 1.6;
+}
+
+.assistant-card code {
+	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+	font-size: 12px;
+	background: var(--bright);
+	padding: 1px 5px;
+	border-radius: 3px;
+}
+
+/* ── Skill Grid ── */
+.skill-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 20px;
+}
+
+.skill-card {
+	border: 1px solid var(--lines);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+	background: var(--bg);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.skill-card:hover { box-shadow: var(--shadow-hover); }
+
+.skill-card-header {
+	padding: 18px 22px 14px;
+	display: flex;
+	align-items: flex-start;
+	gap: 14px;
+	border-bottom: 1px solid var(--lines);
+}
+
+.skill-card-icon {
+	width: 40px;
+	height: 40px;
+	border-radius: 8px;
+	background: rgba(0,112,204,0.12);
+	color: var(--primary);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.skill-card-header h3 {
+	font-size: 17px;
+	font-weight: 600;
+	color: var(--text);
+}
+
+.skill-card-name {
+	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+	font-size: 12px;
+	color: var(--muted);
+	margin-top: 2px;
+}
+
+.skill-card-body { padding: 16px 22px; }
+
+.skill-card-body p {
+	font-size: 14px;
+	color: var(--text);
+	line-height: 1.6;
+}
+
+.skill-card-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-top: 14px;
+}
+
+.skill-meta-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	background: var(--bright);
+	border: 1px solid var(--lines);
+	border-radius: 6px;
+	padding: 4px 10px;
+	font-size: 12px;
+	color: var(--muted);
+}
+
+.skill-card-footer {
+	padding: 14px 22px;
+	border-top: 1px solid var(--lines);
+	background: var(--bright);
+}
+
+.skill-url {
+	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+	font-size: 13px;
+	color: var(--primary);
+}
+
+/* ── Divider ── */
+.section-divider {
+	border: none;
+	border-top: 1px solid var(--lines);
+	margin: 8px 0 0;
+}
+
+/* ── Footer ── */
+.site-footer {
+	background: var(--chrome-bg);
+	color: rgba(199,204,212,0.7);
+	padding: 28px 32px;
+	font-size: 13px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: 56px;
+}
+
+.site-footer a { color: rgba(199,204,212,0.85); }
+.site-footer a:hover { color: #fff; text-decoration: none; }
+
+/* ── Utility ── */
+.text-muted { color: var(--muted); }
+.text-small { font-size: 13px; }
+.mt-4 { margin-top: 32px; }
+
+@media (max-width: 900px) {
+	.assistant-grid { grid-template-columns: 1fr; }
+}

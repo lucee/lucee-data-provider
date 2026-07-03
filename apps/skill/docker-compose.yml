@@ -6,6 +6,7 @@ services:
       LUCEE_ADMIN_PASSWORD: "change-me"
     volumes:
       - "./www:/var/www"
+      - "./downloads:/downloads"
     ports:
       - "8055:8080" # PORT (Cloud Run compatible)
 

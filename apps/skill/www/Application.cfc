@@ -7,6 +7,7 @@ component {
 	variables.skillSourceUrl = "https://docs.lucee.org/lucee.skill";
 	variables.skillFileName = "main.skill";
 	variables.refreshAfterMinutes = 60;
+	variables.downloadsDirectory = "";
 
 	public function onApplicationStart() {
 		syncSkillFile();
@@ -34,9 +35,20 @@ component {
 		return true;
 	}
 
+	private string function getDownloadsDirectory() {
+		if (len(variables.downloadsDirectory)) return variables.downloadsDirectory;
+		var dir = server.system.environment.DOWNLOADS_DIRECTORY ?: "";
+		if (!len(dir)) {
+			// default: /downloads (mounted volume, survives container restarts)
+			dir = "/downloads";
+		}
+		if (!directoryExists(dir)) directoryCreate(dir, true, true);
+		variables.downloadsDirectory = dir;
+		return dir;
+	}
+
 	private void function syncSkillFile() {
-		var webroot = getDirectoryFromPath(getCurrentTemplatePath());
-		var targetFile = webroot & variables.skillFileName;
+		var targetFile = getDownloadsDirectory() & server.separator.file & variables.skillFileName;
 
 		if (isSkillFileFresh(targetFile)) {
 			return;
@@ -101,7 +113,7 @@ component {
 			abort;
 		}
 
-		var targetFile = getDirectoryFromPath(getCurrentTemplatePath()) & filename;
+		var targetFile = getDownloadsDirectory() & server.separator.file & filename;
 		if (!fileExists(targetFile)) {
 			header statuscode="404" statustext="Not Found";
 			writeOutput("Not Found");

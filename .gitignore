@@ -29,3 +29,5 @@ update/missing-bundles.txt
 /tests/artifacts
 /apps/download8/cache/*
 !/apps/download8/cache/.gitkeep
+/apps/skill/downloads/*
+!/apps/skill/downloads/.gitkeep
