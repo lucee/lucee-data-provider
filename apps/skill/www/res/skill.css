@@ -148,33 +148,33 @@ body { padding-top: 100px; }
 
 /* ── Section Headers ── */
 .section-title {
-	font-size: 22px;
+	font-size: 20px;
 	font-weight: 600;
 	color: var(--text);
-	margin-bottom: 20px;
-	padding-bottom: 10px;
+	margin-bottom: 14px;
+	padding-bottom: 8px;
 	border-bottom: 1px solid var(--lines);
 }
 
 .section-intro {
-	font-size: 15px;
+	font-size: 14px;
 	color: var(--muted);
 	max-width: 760px;
-	margin-bottom: 24px;
-	line-height: 1.6;
+	margin-bottom: 16px;
+	line-height: 1.5;
 }
 
-.section-intro + .section-intro { margin-top: -12px; }
+.section-intro + .section-intro { margin-top: -8px; }
 
-section { padding: 44px 0 8px; }
-section:first-of-type { padding-top: 40px; }
+section { padding: 24px 0 8px; }
+section:first-of-type { padding-top: 20px; }
 
 /* ── Assistant Cards (ChatGPT / Claude / Gemini) ── */
 .assistant-grid {
 	display: grid;
 	grid-template-columns: repeat(3, 1fr);
-	gap: 24px;
-	margin-bottom: 32px;
+	gap: 16px;
+	margin-bottom: 16px;
 }
 
 .assistant-card {
@@ -182,7 +182,7 @@ section:first-of-type { padding-top: 40px; }
 	border-radius: var(--radius);
 	box-shadow: var(--shadow);
 	background: var(--bg);
-	padding: 20px;
+	padding: 14px 16px;
 	transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
@@ -233,16 +233,16 @@ section:first-of-type { padding-top: 40px; }
 .skill-card:hover { box-shadow: var(--shadow-hover); }
 
 .skill-card-header {
-	padding: 18px 22px 14px;
+	padding: 14px 20px 10px;
 	display: flex;
 	align-items: flex-start;
-	gap: 14px;
+	gap: 12px;
 	border-bottom: 1px solid var(--lines);
 }
 
 .skill-card-icon {
-	width: 40px;
-	height: 40px;
+	width: 34px;
+	height: 34px;
 	border-radius: 8px;
 	background: rgba(0,112,204,0.12);
 	color: var(--primary);
@@ -265,19 +265,19 @@ section:first-of-type { padding-top: 40px; }
 	margin-top: 2px;
 }
 
-.skill-card-body { padding: 16px 22px; }
+.skill-card-body { padding: 12px 20px; }
 
 .skill-card-body p {
 	font-size: 14px;
 	color: var(--text);
-	line-height: 1.6;
+	line-height: 1.5;
 }
 
 .skill-card-meta {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 10px;
-	margin-top: 14px;
+	gap: 8px;
+	margin-top: 10px;
 }
 
 .skill-meta-chip {
@@ -293,7 +293,7 @@ section:first-of-type { padding-top: 40px; }
 }
 
 .skill-card-footer {
-	padding: 14px 22px;
+	padding: 10px 20px;
 	border-top: 1px solid var(--lines);
 	background: var(--bright);
 }
@@ -322,7 +322,7 @@ section:first-of-type { padding-top: 40px; }
 	gap: 16px;
 	align-items: center;
 	justify-content: space-between;
-	margin-top: 56px;
+	margin-top: 32px;
 }
 
 .site-footer a { color: rgba(199,204,212,0.85); }

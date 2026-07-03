@@ -123,38 +123,6 @@ skills = [ loadSkill("main.skill") ];
 	</p>
 </section>
 
-<!--- ── Using Skills with AI Assistants ── --->
-<section>
-	<h2 class="section-title">Using Skills with Your AI Assistant</h2>
-	<p class="section-intro">Skill files are plain text, so any assistant that lets you attach reference material can use one. A few common setups:</p>
-	<div class="assistant-grid">
-		<article class="assistant-card">
-			<h3>Claude</h3>
-			<p>
-				Claude supports Agent Skills natively. Download the file into your project's
-				<code>.claude/skills/</code> directory, or add it under a Claude.ai Project's Skills settings —
-				Claude loads it automatically whenever a Lucee or CFML question comes up.
-			</p>
-		</article>
-		<article class="assistant-card">
-			<h3>ChatGPT</h3>
-			<p>
-				Attach the file to a Project or upload it to a Custom GPT's Knowledge files. ChatGPT will pull from
-				it as reference material whenever your prompt touches Lucee or CFML.
-			</p>
-		</article>
-		<article class="assistant-card">
-			<h3>Gemini</h3>
-			<p>
-				Add the file as a knowledge source on a Gemini Gem, or paste its contents into your system
-				instructions so Gemini has the same Lucee-specific context to work from.
-			</p>
-		</article>
-	</div>
-</section>
-
-<hr class="section-divider">
-
 <!--- ── Available Skills ── --->
 <section>
 	<h2 class="section-title">Available Skills</h2>
@@ -185,6 +153,38 @@ skills = [ loadSkill("main.skill") ];
 			</article>
 		</cfif>
 		</cfloop>
+	</div>
+</section>
+
+<hr class="section-divider">
+
+<!--- ── Using Skills with AI Assistants ── --->
+<section>
+	<h2 class="section-title">Using Skills with Your AI Assistant</h2>
+	<p class="section-intro">Skill files are plain text, so any assistant that lets you attach reference material can use one. A few common setups:</p>
+	<div class="assistant-grid">
+		<article class="assistant-card">
+			<h3>Claude</h3>
+			<p>
+				Claude supports Agent Skills natively. Download the file into your project's
+				<code>.claude/skills/</code> directory, or add it under a Claude.ai Project's Skills settings —
+				Claude loads it automatically whenever a Lucee or CFML question comes up.
+			</p>
+		</article>
+		<article class="assistant-card">
+			<h3>ChatGPT</h3>
+			<p>
+				Attach the file to a Project or upload it to a Custom GPT's Knowledge files. ChatGPT will pull from
+				it as reference material whenever your prompt touches Lucee or CFML.
+			</p>
+		</article>
+		<article class="assistant-card">
+			<h3>Gemini</h3>
+			<p>
+				Add the file as a knowledge source on a Gemini Gem, or paste its contents into your system
+				instructions so Gemini has the same Lucee-specific context to work from.
+			</p>
+		</article>
 	</div>
 </section>
 
