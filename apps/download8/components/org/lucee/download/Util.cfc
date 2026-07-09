@@ -327,61 +327,47 @@ component accessors="false" {
 				// Extension metadata (name, image, latest version)
 				for (local.groupId in ["org.lucee", "io.forgebox"]) {
 					try {
-						local.artifacts   = getLuceeExtension(local.groupId);
-						local.metaMapKey  = "extMetaMap_" & local.groupId;
-						local.metaMap     = dlCacheGet(local.metaMapKey);
+						local.artifacts  = getLuceeExtension(local.groupId);
+						local.metaMapKey = "extMetaMap_" & local.groupId;
+						local.metaMap    = dlCacheGet(local.metaMapKey);
 						if (isEmpty(local.metaMap)) local.metaMap = {};
-						local.threadNames = {};
 
-						for (local.artifactId in local.artifacts) {
-							if (structKeyExists(local.metaMap, local.artifactId)) continue;
-							local.tname = "warm-ext-#local.groupId#-#local.artifactId#";
-							local.threadNames[local.artifactId] = local.tname;
-							thread action="run"
-								name = local.tname
-								gid  = local.groupId
-								aid  = local.artifactId {
-								try {
-									local.vers = getLuceeExtension(attributes.gid, attributes.aid);
-									if (arrayIsEmpty(local.vers)) return;
-									local.pickVer = local.vers[1];
-									local.meta    = getLuceeExtension(attributes.gid, attributes.aid, local.pickVer, true);
-									thread.entry  = {
-										displayName:   local.meta.metadata.name  ?: "",
-										image:         local.meta.metadata.image ?: "",
-										latestVersion: local.pickVer,
-										cachedAt:      now()
-									};
-									local.verMapKey = "extVerMap_" & attributes.gid & "_" & attributes.aid;
-									local.verMap    = dlCacheGet(local.verMapKey);
-									if (isEmpty(local.verMap)) local.verMap = {};
-									if (!structKeyExists(local.verMap, local.pickVer)) {
-										local.verMap[local.pickVer] = {
-											version:      local.meta.version      ?: local.pickVer,
-											lastModified: local.meta.lastModified ?: "",
-											type:         !findNoCase("-", local.pickVer) ? "release" : listLast(lCase(local.pickVer), "-"),
-											minCore:      local.meta.metadata.MinCoreVersion ?: ""
-										};
-										dlCachePut(local.verMapKey, local.verMap);
-									}
-									info("cache warm: #attributes.gid#:#attributes.aid# (#local.pickVer#)");
-								} catch(e) {
-									info("cache warm fail: #attributes.gid#:#attributes.aid# — #e.message#");
-								}
-							}
-						}
-
-						// Join all artifact threads and write consolidated map once
-						for (local.artifactId in structKeyArray(local.threadNames)) {
-							local.tname = local.threadNames[local.artifactId];
-							cfthread(action="join", name=local.tname, timeout=120000);
+						arrayEach(local.artifacts, function(artifactId) {
+							if (structKeyExists(metaMap, artifactId)) return;
 							try {
-								if (!isNull(cfthread[local.tname].entry))
-									local.metaMap[local.artifactId] = cfthread[local.tname].entry;
-							} catch(e) {}
-						}
-						dlCachePut(local.metaMapKey, local.metaMap);
-						info("cache warm: extMetaMap_#local.groupId# (#structCount(local.metaMap)# extensions)");
+								local.vers = getLuceeExtension(groupId, artifactId);
+								if (arrayIsEmpty(local.vers)) return;
+								local.pickVer = local.vers[1];
+								local.meta    = getLuceeExtension(groupId, artifactId, local.pickVer, true);
+								local.entry   = {
+									displayName:   local.meta.metadata.name  ?: "",
+									image:         local.meta.metadata.image ?: "",
+									latestVersion: local.pickVer,
+									cachedAt:      now()
+								};
+								local.verMapKey = "extVerMap_" & groupId & "_" & artifactId;
+								local.verMap    = dlCacheGet(local.verMapKey);
+								if (isEmpty(local.verMap)) local.verMap = {};
+								if (!structKeyExists(local.verMap, local.pickVer)) {
+									local.verMap[local.pickVer] = {
+										version:      local.meta.version      ?: local.pickVer,
+										lastModified: local.meta.lastModified ?: "",
+										type:         !findNoCase("-", local.pickVer) ? "release" : listLast(lCase(local.pickVer), "-"),
+										minCore:      local.meta.metadata.MinCoreVersion ?: ""
+									};
+									dlCachePut(local.verMapKey, local.verMap);
+								}
+								lock name="extMetaMap_#groupId#" type="exclusive" timeout="10" {
+									metaMap[artifactId] = local.entry;
+								}
+								info("cache warm: #groupId#:#artifactId# (#local.pickVer#)");
+							} catch(e) {
+								info("cache warm fail: #groupId#:#artifactId# — #e.message#");
+							}
+						}, true, 5);
+
+						dlCachePut(metaMapKey, metaMap);
+						info("cache warm: extMetaMap_#groupId# (#structCount(metaMap)# extensions)");
 					} catch(e) {
 						info("cache warm fail: group #local.groupId# — #e.message#");
 					}
