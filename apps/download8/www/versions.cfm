@@ -85,11 +85,11 @@ edgeMinor = arrayLen(edgeMinors) ? edgeMinors[1] : "";
 // Filter to requested track
 if (track == "lts") {
 	showMinors = [LTS_MINOR];
-	pageTitle  = "LTS Releases — #LTS_MINOR#.x";
+	pageTitle  = "LTS Releases";
 	trackBadge = "lts";
 } else if (track == "stable") {
 	showMinors = [stableMinor];
-	pageTitle  = "Stable Releases — #stableMinor#.x";
+	pageTitle  = "Stable Releases";
 	trackBadge = "stable";
 } else if (track == "edge") {
 	showMinors = edgeMinors;
@@ -104,7 +104,6 @@ if (track == "lts") {
 // Optional minor filter (e.g. from Edge card footer link)
 if (len(minorFilter)) {
 	showMinors = showMinors.filter(function(m) { return m == minorFilter; });
-	pageTitle  = pageTitle & " — #minorFilter#.x";
 }
 
 // Apply type filter (e.g. snapshot-only)
@@ -176,6 +175,11 @@ typeLabels = {
 		<div class="breadcrumb"><a href="/">Downloads</a> › Lucee Server</div>
 		<h1>
 			#encodeForHTML(pageTitle)#
+			<cfif arrayLen(showMinors) == 1 && structKeyExists(minorData, showMinors[1]) && !arrayIsEmpty(minorData[showMinors[1]])>
+				<cfset vMinors = minorData[showMinors[1]]>
+				#encodeForHTML(showMinors[1])#
+				(#encodeForHTML(util.formatVersion(vMinors[arrayLen(vMinors)]))# &mdash; #encodeForHTML(util.formatVersion(vMinors[1]))#)
+			</cfif>
 			<cfif len(trackBadge)><span class="track-badge #trackBadge#" style="font-size:13px;vertical-align:middle;">#uCase(trackBadge)#</span></cfif>
 		</h1>
 	</div>

@@ -133,6 +133,7 @@ function loadGroupExtensions(groupId) {
 			if (!len(local.name)) local.name = util.artifactDisplayName(artifactId);
 
 			if (isEmpty(local.meta)) {
+				request.skipHtmlCache = true;
 				thread action="run" name="cache-ext-#groupId#-#artifactId#" gid=groupId aid=artifactId mmkey=metaMapKey {
 					local.entry = { displayName: util.artifactDisplayName(attributes.aid), image: "", latestVersion: "", cachedAt: now() };
 					try {
@@ -398,7 +399,7 @@ arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCas
 				<div class="ext-card-header">
 					<cfif len(ext.image)>
 					<img class="ext-card-logo"
-						src="<cfif left(ext.image,4) eq 'http'>#encodeForHTMLAttribute(ext.image)#<cfelse>data:image/png;base64,#encodeForHTMLAttribute(ext.image)#</cfif>"
+						src="<cfif left(ext.image,4) eq 'http' or  left(ext.image,1) eq '/'>#encodeForHTMLAttribute(ext.image)#<cfelse>data:image/png;base64,#encodeForHTMLAttribute(ext.image)#</cfif>"
 						alt="#encodeForHTMLAttribute(ext.displayName)# logo">
 					</cfif>
 					<div>

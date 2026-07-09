@@ -187,7 +187,7 @@ VERSIONS_PREVIEW = 5;
 		<div class="ext-detail-title-row">
 			<cfif len(extImage)>
 			<img class="ext-detail-logo" style="background:white"
-				src="<cfif left(extImage,4) eq 'http'>#encodeForHTMLAttribute(extImage)#<cfelse>data:image/png;base64,#encodeForHTMLAttribute(extImage)#</cfif>"
+				src="<cfif left(extImage,4) eq 'http' or left(extImage,1) eq '/'>#encodeForHTMLAttribute(extImage)#<cfelse>data:image/png;base64,#encodeForHTMLAttribute(extImage)#</cfif>"
 				alt="#encodeForHTMLAttribute(extName)# logo">
 			</cfif>
 			<div>

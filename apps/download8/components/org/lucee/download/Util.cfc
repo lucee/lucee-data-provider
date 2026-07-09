@@ -44,7 +44,10 @@ component accessors="false" {
 	function parseDate(dateStr) {
 		try {
 			if (len(trim(dateStr))) return dateFormat(parseDateTime(dateStr), "mmm d, yyyy");
-		} catch(e) {}
+		} 
+		catch(e) {
+			cflog(log:"application",exception:e,type:"error");
+		}
 		return "";
 	}
 
@@ -83,9 +86,34 @@ component accessors="false" {
 		};
 	}
 
+	// ── Extension images ─────────────────────────────────────────────────
+
+	// Converts a raw image value to a web-accessible URL.
+	// If already a URL, returns it unchanged.
+	// If base64, writes to /downloads/ (persistent) and copies to webroot, returns the path.
+	public string function toImageReference(groupId, artifactId, image) {
+		if (!len(arguments.image)) return "";
+		if (left(arguments.image, 1) == "/" || left(arguments.image, 4) == "http") return arguments.image;
+
+		var filename    = "logo-" & replace(arguments.groupId, ".", "-", "all") & "-" & replace(arguments.artifactId, ".", "-", "all") & ".png";
+		var storagePath = getCacheDirectory()& "/" & filename;
+		var webrootPath = "/var/www/" & filename;
+		if (!fileExists(storagePath)) {
+			var b64 = arguments.image;
+			if (find(",", b64)) b64 = listLast(b64, ",");
+			if (!directoryExists("/downloads/")) directoryCreate("/downloads/", true, true);
+			var img = ImageReadBase64(b64);
+			ImageWrite(img, storagePath, 1, true);
+		}
+
+		try { fileCopy(storagePath, webrootPath); } catch(e) {}
+
+		return "/" & filename;
+	}
+
 	// ── Three-tier cache: component variables → file → fetch ─────────────
 
-	private string function getCacheDirectory() {
+	public string function getCacheDirectory() {
 		if (len(variables.cacheDir)) return variables.cacheDir;
 		local.dir = server.system.environment.CACHE_DIRECTORY ?: "";
 		if (!len(local.dir)) {
@@ -97,10 +125,10 @@ component accessors="false" {
 		return local.dir;
 	}
 
-	public string function getCacheFile(sourceTemplate) {
+	public string function getCacheFile(sourceTemplate, queryString="") {
 		var dir = getCacheDirectory();
 		if(right(dir,1) != server.separator.file) dir &= server.separator.file;
-		var filename=sourceTemplate&"_"&cgi.QUERY_STRING;
+		var filename=sourceTemplate&"_"&arguments.queryString;
 		var filename=dir&"site"&replace(replace(replace(replace(filename,"=","_","all"),"&","_","all"),".","_","all"),"/","_","all")&".html";
 		return filename;
 	}
@@ -120,7 +148,9 @@ component accessors="false" {
 				variables.cache[key] = local.val;
 				info("reading data from file [#local.file#] took #getTickCount()-local.t#ms");
 				return local.val;
-			} catch(e) {}
+			} catch(e) {
+				cflog(log:"application",exception:e,type:"error");
+			}
 		}
 		return {};
 	}
@@ -132,7 +162,9 @@ component accessors="false" {
 		lock name="dlCachePut_#key#" type="exclusive" timeout="5" {
 			try {
 				fileWrite(local.file, local.json);
-			} catch(e) {}
+			} catch(e) {
+				cflog(log:"application",exception:e,type:"error");
+			}
 		}
 	}
 
@@ -152,15 +184,22 @@ component accessors="false" {
 							local.list = LuceeVersionsList();
 							info("reading data from function LuceeVersionsList() took #getTickCount()-local.t#ms");
 							dlCachePut("luceeVersionsList", { data: local.list, cachedAt: now() });
-						} catch(e) {}
+						} catch(e) {
+							cflog(log:"application",exception:e,type:"error");
+						}
 					}
 				}
 				return local.data;
 			}
 			local.t = getTickCount();
-			try { local.data = LuceeVersionsList(); } catch(e) { local.data = []; }
-			info("reading data from function LuceeVersionsList() took #getTickCount()-local.t#ms");
-			dlCachePut("luceeVersionsList", { data: local.data, cachedAt: now() });
+			try {
+				local.data = LuceeVersionsList();
+				info("reading data from function LuceeVersionsList() took #getTickCount()-local.t#ms");
+				dlCachePut("luceeVersionsList", { data: local.data, cachedAt: now() });
+			} catch(e) {
+				local.data = [];
+				cflog(log:"application",exception:e,type:"error");
+			}
 			return local.data;
 		} else {
 			// single version detail — version data is immutable, cache indefinitely
@@ -173,7 +212,10 @@ component accessors="false" {
 				info("reading data from function LuceeVersionsDetail(#arguments.version#) took #getTickCount()-local.t#ms");
 				dlCachePut(local.key, local.detail);
 				return local.detail;
-			} catch(e) { return {}; }
+			} catch(e) { 
+				cflog(log:"application",exception:e,type:"error");
+				return {}; 
+			}
 		}
 	}
 
@@ -195,15 +237,22 @@ component accessors="false" {
 							local.list = LuceeExtension(attributes.gid);
 							info("reading data from function LuceeExtension(#attributes.gid#) took #getTickCount()-local.t#ms");
 							dlCachePut(attributes.ckey, { data: local.list, cachedAt: now() });
-						} catch(e) {}
+						} catch(e) {
+							cflog(log:"application",exception:e,type:"error");
+						}
 					}
 				}
 				return local.data;
 			}
 			local.t = getTickCount();
-			try { local.data = LuceeExtension(arguments.groupId); } catch(e) { local.data = []; }
-			info("reading data from function LuceeExtension(#arguments.groupId#) took #getTickCount()-local.t#ms");
-			dlCachePut(local.key, { data: local.data, cachedAt: now() });
+			try {
+				local.data = LuceeExtension(arguments.groupId);
+				info("reading data from function LuceeExtension(#arguments.groupId#) took #getTickCount()-local.t#ms");
+				dlCachePut(local.key, { data: local.data, cachedAt: now() });
+			} catch(e) {
+				local.data = [];
+				cflog(log:"application",exception:e,type:"error");
+			}
 			return local.data;
 
 		} else if (isNull(arguments.version)) {
@@ -224,18 +273,25 @@ component accessors="false" {
 							if (!arrayIsEmpty(local.na)) local.list = local.na;
 							arraySort(local.list, function(a,b) { return versionCompare(b,a); });
 							dlCachePut(attributes.ckey, { data: local.list, cachedAt: now() });
-						} catch(e) {}
+						} catch(e) {
+							cflog(log:"application",exception:e,type:"error");
+						}
 					}
 				}
 				return local.data;
 			}
 			local.t = getTickCount();
-			try { local.data = LuceeExtension(arguments.groupId, arguments.artifactId); } catch(e) { local.data = []; }
-			info("reading data from function LuceeExtension(#arguments.groupId#,#arguments.artifactId#) took #getTickCount()-local.t#ms");
-			local.na = local.data.filter(function(v) { return !findNoCase("-alpha", lCase(v)); });
-			if (!arrayIsEmpty(local.na)) local.data = local.na;
-			arraySort(local.data, function(a,b) { return versionCompare(b,a); });
-			dlCachePut(local.key, { data: local.data, cachedAt: now() });
+			try {
+				local.data = LuceeExtension(arguments.groupId, arguments.artifactId);
+				info("reading data from function LuceeExtension(#arguments.groupId#,#arguments.artifactId#) took #getTickCount()-local.t#ms");
+				local.na = local.data.filter(function(v) { return !findNoCase("-alpha", lCase(v)); });
+				if (!arrayIsEmpty(local.na)) local.data = local.na;
+				arraySort(local.data, function(a,b) { return versionCompare(b,a); });
+				dlCachePut(local.key, { data: local.data, cachedAt: now() });
+			} catch(e) {
+				local.data = [];
+				cflog(log:"application",exception:e,type:"error");
+			}
 			return local.data;
 
 		} else {
@@ -247,9 +303,11 @@ component accessors="false" {
 			try {
 				local.meta = LuceeExtension(arguments.groupId, arguments.artifactId, arguments.version, arguments.download);
 				info("reading data from function LuceeExtension(#arguments.groupId#,#arguments.artifactId#,#arguments.version#,#arguments.download#) took #getTickCount()-local.t#ms");
+				if (structKeyExists(local.meta, "metadata") && len(local.meta.metadata.image ?: ""))
+					local.meta.metadata.image = toImageReference(arguments.groupId, arguments.artifactId, local.meta.metadata.image);
 				dlCachePut(local.key, local.meta);
 				return local.meta;
-			} catch(e) { return {}; }
+			} catch(e) {cflog(log:"application",exception:e,type:"error"); return {}; }
 		}
 	}
 
