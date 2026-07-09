@@ -98,15 +98,23 @@ component accessors="false" {
 		var filename    = "logo-" & replace(arguments.groupId, ".", "-", "all") & "-" & replace(arguments.artifactId, ".", "-", "all") & ".png";
 		var storagePath = getCacheDirectory()& "/" & filename;
 		var webrootPath = "/var/www/" & filename;
-		if (!fileExists(storagePath)) {
-			var b64 = arguments.image;
-			if (find(",", b64)) b64 = listLast(b64, ",");
-			if (!directoryExists("/downloads/")) directoryCreate("/downloads/", true, true);
-			var img = ImageReadBase64(b64);
-			ImageWrite(img, storagePath, 1, true);
+		lock name="imgwrite-#filename#" type="exclusive" timeout="30" {
+			if (!fileExists(storagePath)) {
+				var b64 = arguments.image;
+				if (find(",", b64)) b64 = listLast(b64, ",");
+				var img     = ImageReadBase64(b64);
+				var maxSize = 128;
+				var info    = ImageInfo(img);
+				if (info.width > maxSize || info.height > maxSize) {
+					if (info.width >= info.height)
+						ImageResize(img, maxSize, "");
+					else
+						ImageResize(img, "", maxSize);
+				}
+				ImageWrite(img, storagePath, 1, true);
+			}
+			if (!fileExists(webrootPath)) fileCopy(storagePath, webrootPath);
 		}
-
-		try { fileCopy(storagePath, webrootPath); } catch(e) {}
 
 		return "/" & filename;
 	}
@@ -257,7 +265,7 @@ component accessors="false" {
 
 		} else if (isNull(arguments.version)) {
 			// version list for artifact — 10-min stale-while-revalidate, alpha-filtered and sorted desc
-			local.key    = "extVersions_" & arguments.groupId & "_" & arguments.artifactId;
+			local.key    = "extver_" & arguments.groupId & "_" & arguments.artifactId;
 			local.cached = dlCacheGet(local.key);
 			local.data   = local.cached.data ?: [];
 			local.age    = structKeyExists(local.cached, "cachedAt") ? dateDiff("n", local.cached.cachedAt, now()) : 999;
@@ -296,7 +304,7 @@ component accessors="false" {
 
 		} else {
 			// version detail — immutable, cache indefinitely
-			local.key    = "extRaw_" & arguments.groupId & "_" & arguments.artifactId & "_" & arguments.version;
+			local.key    = "extdata_" & arguments.groupId & "_" & arguments.artifactId & "_" & arguments.version;
 			local.cached = dlCacheGet(local.key);
 			if (!isEmpty(local.cached)) return local.cached;
 			local.t = getTickCount();

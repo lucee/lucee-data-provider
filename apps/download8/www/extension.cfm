@@ -58,15 +58,15 @@ if (!arrayIsEmpty(allVersions)) {
 			extImage          = meta.image          ?: "";
 			extId             = meta.id             ?: "";
 			extMinCoreVersion = meta.MinCoreVersion ?: "";
+			util.dlCachePut(detailKey, {
+				extName:           extName,
+				extDescription:    extDescription,
+				extImage:          extImage,
+				extId:             extId,
+				extMinCoreVersion: extMinCoreVersion,
+				cachedAt:          now()
+			});
 		} catch(e) {}
-		util.dlCachePut(detailKey, {
-			extName:           extName,
-			extDescription:    extDescription,
-			extImage:          extImage,
-			extId:             extId,
-			extMinCoreVersion: extMinCoreVersion,
-			cachedAt:          now()
-		});
 	}
 }
 
@@ -90,7 +90,7 @@ groups = {
 };
 
 // One cache read for all version metadata (avoids one file-read per version on cold start)
-verMapKey   = "extVerMap_" & groupId & "_" & artifactId;
+verMapKey   = "extver_map_" & groupId & "_" & artifactId;
 verMap      = util.dlCacheGet(verMapKey);
 verMapDirty = false;
 
