@@ -187,6 +187,9 @@
 	],
 	"extensions": [
 		{
+	      "maven": "org.lucee:image-extension:3.1.0.10-SNAPSHOT"
+	    },
+		{
 	      "maven": "org.lucee:esapi-extension:3.0.0.14"
 	    }
 	]
