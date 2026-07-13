@@ -20,6 +20,7 @@ component {
 
 		if (isFlushRequest()) {
 			request.cacheFlushed = true;
+			rebuildBridge();
 			server.bridgeRegistry.flushAll(server.bridgeWebroot);
 		}
 
@@ -60,6 +61,20 @@ component {
 		}
 	}
 
+	// Recreate the server-scoped singletons from current source so code changes
+	// take effect via ?flush without a server restart.
+	private void function rebuildBridge() {
+		lock name="mavenbridge-bootstrap" timeout="30" {
+			server.bridgeWebroot = getWebroot();
+			var config = org.lucee.mavenbridge.BridgeRegistry::readConfigFromEnvironment();
+			server.bridgeRegistry = new org.lucee.mavenbridge.BridgeRegistry(
+				providers=config.providers,
+				sharedConfig={ cacheTtlMinutes: config.cacheTtlMinutes, timeout: config.timeout }
+			);
+			server.bridgeProxy = new org.lucee.mavenbridge.proxy.BridgeProxy();
+		}
+	}
+
 	private boolean function isFlushRequest() {
 		if (!structKeyExists(url, "flush")) {
 			return false;
@@ -75,15 +90,32 @@ component {
 	}
 
 	private string function currentRequestPath() {
-		var path = trim(cgi.path_info ?: "");
-		if (!len(path) || path == "/") {
-			path = trim(cgi.script_name ?: "");
+		// cgi.script_name/path_info depend on the servlet mapping that matched
+		// (under the /org/* prefix mapping path_info loses the /org segment);
+		// the request URI always carries the full original path
+		var path = "";
+		try {
+			var req = getPageContext().getHttpServletRequest();
+			path = trim(req.getRequestURI() ?: "");
+			var ctx = trim(req.getContextPath() ?: "");
+			if (len(ctx) && ctx != "/" && left(path, len(ctx)) == ctx) {
+				path = mid(path, len(ctx) + 1);
+			}
+		} catch (any e) {
+			path = "";
+		}
+		if (!len(path)) {
+			path = trim(cgi.path_info ?: "");
+			if (!len(path) || path == "/") {
+				path = trim(cgi.script_name ?: "");
+			}
 		}
 		return normalizeTargetPage(path);
 	}
 
 	private boolean function isMavenRepoPath(required string path) {
-		return reFindNoCase("^/(org|io)/", arguments.path) == 1;
+		// also match the bare segments (/org, /io) — normalizeTargetPage strips the trailing slash
+		return reFindNoCase("^/(org|io)(/|$)", arguments.path) == 1;
 	}
 
 	private string function normalizeTargetPage(required string targetPage) {
@@ -93,6 +125,9 @@ component {
 		}
 		if (left(p, 1) != "/") {
 			p = "/" & p;
+		}
+		if (left(p, 11) == "/index.cfm/") {
+			p = mid(p, 11);
 		}
 		if (len(p) > 1 && right(p, 1) == "/") {
 			p = left(p, len(p) - 1);

@@ -22,6 +22,10 @@ component {
 
 		var resolved = registry.resolve(cleanPath);
 		if (resolved.parsed.type == "unknown") {
+			var prefixHtml = buildGroupPrefixIndexHtml(registry, cleanPath);
+			if (len(prefixHtml)) {
+				return htmlResponse(200, prefixHtml);
+			}
 			return textResponse(404, "text/plain; charset=utf-8", "Not found");
 		}
 
@@ -47,7 +51,7 @@ component {
 				case "version-metadata":
 					return xmlResponse(200, support.buildVersionMetadata(parsed.artifactId, parsed.version));
 				case "artifact-file":
-					return artifactFileResponse(support, parsed.artifactId, parsed.version, parsed.extension);
+					return artifactFileResponse(support, parsed);
 				default:
 					return textResponse(404, "text/plain; charset=utf-8", "Not found");
 			}
@@ -71,26 +75,31 @@ component {
 		return server.bridgeRegistry;
 	}
 
-	private struct function artifactFileResponse(required any support, required string artifactId, required string version, required string extension) {
+	private struct function artifactFileResponse(required any support, required struct parsed) {
+		// upstream mirrors serve files from the upstream repo only, never from the REST provider
 		if (support.hasUpstream()) {
-			var upstreamPath = support.toUpstreamRelativePath({
-				"type": "artifact-file",
-				"artifactId": arguments.artifactId,
-				"version": arguments.version,
-				"extension": arguments.extension
-			});
+			// core "lucee" files are canonical at the upstream root (legacy layout)
+			var legacyPath = support.toUpstreamLegacyCorePath(arguments.parsed);
+			if (len(legacyPath)) {
+				if (support.upstreamResourceExists(legacyPath)) {
+					return redirectResponse(support.getUpstreamUrl() & legacyPath);
+				}
+				return textResponse(404, "text/plain; charset=utf-8", "Not found");
+			}
+			var upstreamPath = support.toUpstreamRelativePath(arguments.parsed);
 			if (support.upstreamResourceExists(upstreamPath)) {
 				return redirectResponse(support.getUpstreamUrl() & upstreamPath);
 			}
+			return textResponse(404, "text/plain; charset=utf-8", "Not found");
 		}
 
-		if (arguments.extension == "pom") {
-			return xmlResponse(200, support.buildMinimalPom(arguments.artifactId, arguments.version));
+		if (arguments.parsed.extension == "pom") {
+			return xmlResponse(200, support.buildMinimalPom(arguments.parsed.artifactId, arguments.parsed.version));
 		}
 
-		var downloadUrl = support.getDownloadUrl(arguments.artifactId, arguments.version);
+		var downloadUrl = support.getDownloadUrl(arguments.parsed.artifactId, arguments.parsed.version);
 		if (!len(downloadUrl)) {
-			return textResponse(404, "text/plain; charset=utf-8", "No [#arguments.extension#] artifact for [#support.getGroupId()#:#arguments.artifactId#:#arguments.version#]");
+			return textResponse(404, "text/plain; charset=utf-8", "No [#arguments.parsed.extension#] artifact for [#support.getGroupId()#:#arguments.parsed.artifactId#:#arguments.parsed.version#]");
 		}
 
 		return redirectResponse(downloadUrl);
@@ -104,6 +113,8 @@ component {
 	}
 
 	private struct function upstreamContentResponse(required any support, required struct parsed) {
+		// upstream mirrors are pass-through: what the upstream has is what we serve,
+		// a 404 upstream stays a 404 (no synthesis from the REST provider)
 		var relativePath = support.toUpstreamRelativePath(arguments.parsed);
 		try {
 			var content = support.getCachedUpstreamContent(server.bridgeWebroot, relativePath);
@@ -113,26 +124,63 @@ component {
 				rethrow;
 			}
 		}
-		return synthesizedContentResponse(arguments.support, arguments.parsed);
+		return upstreamSynthesizedResponse(arguments.support, arguments.parsed);
 	}
 
-	private struct function synthesizedContentResponse(required any support, required struct parsed) {
+	// the upstream repo only publishes browsable indexes at group level; artifact and
+	// version pages are built from the upstream maven-metadata.xml (never the REST provider)
+	private struct function upstreamSynthesizedResponse(required any support, required struct parsed) {
 		switch (arguments.parsed.type) {
-			case "group-index":
-				return htmlResponse(200, support.buildGroupIndexHtml());
-			case "group-metadata":
-				return xmlResponse(200, support.buildGroupMetadata());
 			case "artifact-index":
-				return htmlResponse(200, support.buildArtifactIndexHtml(parsed.artifactId));
-			case "artifact-metadata":
-				return xmlResponse(200, support.buildArtifactMetadata(parsed.artifactId));
+				return htmlResponse(200, support.buildArtifactIndexHtml(
+					parsed.artifactId,
+					support.listUpstreamVersions(server.bridgeWebroot, parsed.artifactId)
+				));
 			case "version-index":
-				return htmlResponse(200, support.buildVersionIndexHtml(parsed.artifactId, parsed.version));
+				if (!arrayFindNoCase(support.listUpstreamVersions(server.bridgeWebroot, parsed.artifactId), parsed.version)) {
+					return textResponse(404, "text/plain; charset=utf-8", "Not found");
+				}
+				return htmlResponse(200, support.buildUpstreamVersionIndexHtml(server.bridgeWebroot, parsed.artifactId, parsed.version));
 			case "version-metadata":
-				return xmlResponse(200, support.buildVersionMetadata(parsed.artifactId, parsed.version));
+				// only snapshots have version-level metadata; built from the version string alone
+				if (findNoCase("-SNAPSHOT", parsed.version)
+					&& arrayFindNoCase(support.listUpstreamVersions(server.bridgeWebroot, parsed.artifactId), parsed.version)) {
+					return xmlResponse(200, support.buildVersionMetadata(parsed.artifactId, parsed.version));
+				}
+				return textResponse(404, "text/plain; charset=utf-8", "Not found");
 			default:
 				return textResponse(404, "text/plain; charset=utf-8", "Not found");
 		}
+	}
+
+	// index for path segments above the group level (/org, /io): lists the next
+	// segment of every configured group under that prefix
+	private string function buildGroupPrefixIndexHtml(required any registry, required string path) {
+		var children = {};
+		for (var support in registry.getSupports()) {
+			var groupPath = "/" & replace(support.getGroupId(), ".", "/", "all");
+			if (left(groupPath, len(arguments.path) + 1) == arguments.path & "/") {
+				var remainder = mid(groupPath, len(arguments.path) + 2);
+				children[listFirst(remainder, "/")] = true;
+			}
+		}
+		if (!structCount(children)) {
+			return "";
+		}
+		var names = structKeyArray(children);
+		arraySort(names, "textnocase");
+		var title = mid(arguments.path, 2);
+		var html = [
+			"<!DOCTYPE html>",
+			"<html><head><title>#encodeForHtml(title)#</title></head><body>",
+			"<h1>#encodeForHtml(title)#</h1>",
+			"<pre>"
+		];
+		for (var name in names) {
+			arrayAppend(html, '<a href="#encodeForHtml(arguments.path)#/#encodeForHtml(name)#/">#encodeForHtml(name)#/</a>' & chr(10));
+		}
+		arrayAppend(html, "</pre></body></html>");
+		return arrayToList(html, chr(10));
 	}
 
 	private struct function redirectResponse(required string location) {

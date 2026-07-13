@@ -12,15 +12,34 @@ for (p in registry.getProviders()) {
 	errorMessage = "";
 
 	try {
-		idx = support.getIndex();
-		cachedAt = idx.cachedAt;
-		artifactIds = structKeyArray(idx.artifacts);
-		arraySort(artifactIds, "textnocase");
-		for (aid in artifactIds) {
+		if (support.hasUpstream()) {
+			// upstream mirror (e.g. org.lucee -> cdn.lucee.org): the group
+			// maven-metadata.xml is the source of truth, not the REST provider
+			content = support.getCachedUpstreamContent(server.bridgeWebroot, groupPath & "/maven-metadata.xml");
+			meta = xmlParse(content.body);
+			for (node in xmlSearch(meta, "/metadata/artifacts/artifact")) {
+				arrayAppend(artifacts, {
+					artifactId: node.artifactId.xmlText,
+					release: structKeyExists(node, "release") ? node.release.xmlText : (structKeyExists(node, "latest") ? node.latest.xmlText : "")
+				});
+			}
 			arrayAppend(artifacts, {
-				artifactId: aid,
-				versionCount: structCount(idx.artifacts[aid].versions)
+					artifactId: "lucee"
+				});
+			arraySort(artifacts, function(a, b) {
+				return compareNoCase(a.artifactId, b.artifactId);
 			});
+		} else {
+			idx = support.getIndex();
+			cachedAt = idx.cachedAt;
+			artifactIds = structKeyArray(idx.artifacts);
+			arraySort(artifactIds, "textnocase");
+			for (aid in artifactIds) {
+				arrayAppend(artifacts, {
+					artifactId: aid,
+					versionCount: structCount(idx.artifacts[aid].versions)
+				});
+			}
 		}
 	} catch (any e) {
 		errorMessage = e.message;
@@ -104,11 +123,11 @@ for (p in registry.getProviders()) {
 		<article class="group-card">
 			<div class="group-card-header">
 				<h3><a href="/#group.groupPath#/">#encodeForHTML(group.groupId)#</a></h3>
-				<span class="group-meta-chip">#encodeForHTML(group.provider)#</span>
+				
 				<cfif len(group.upstream)>
 					<span class="group-meta-chip upstream">upstream mirror</span>
 				</cfif>
-				<cfif len(group.cachedAt)>
+				<cfif arrayLen(group.artifacts)>
 					<span class="group-meta-chip">#arrayLen(group.artifacts)# artifacts</span>
 				</cfif>
 			</div>
@@ -120,9 +139,14 @@ for (p in registry.getProviders()) {
 				<cfelse>
 					<div class="artifact-pill-grid">
 						<cfloop array="#group.artifacts#" item="artifact">
-						<a class="artifact-pill" href="/#group.groupPath#/#encodeForURL(artifact.artifactId)#/">
+						
+							<a class="artifact-pill" href="/#group.groupPath#/#encodeForURL(artifact.artifactId)#/">
 							#encodeForHTML(artifact.artifactId)#
-							<span class="version-count">#artifact.versionCount#</span>
+							<cfif structKeyExists(artifact, "versionCount")>
+								<span class="version-count">#artifact.versionCount#</span>
+							<cfelseif len(artifact.release ?: "")>
+								<span class="version-count">#encodeForHTML(artifact.release)#</span>
+							</cfif>
 						</a>
 						</cfloop>
 					</div>

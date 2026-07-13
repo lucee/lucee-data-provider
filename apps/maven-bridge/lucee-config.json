@@ -1,5 +1,7 @@
 {
-	"applicationTimeout": "1,0,0,0",
+	"missingErrorTemplate": "/lucee/templates/error/error-public.cfm",
+  	"generalErrorTemplate": "/lucee/templates/error/error-public.cfm",
+  	"applicationTimeout": "1,0,0,0",
 	"cacheDirectory": "{lucee-config}/cache/",
 	"cacheDirectoryMaxSize": "100mb",
 	"cascadeToResultset": true,

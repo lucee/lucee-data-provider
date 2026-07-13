@@ -53,11 +53,37 @@ component {
 			case "version-metadata":
 				return groupPath & "/" & arguments.parsed.artifactId & "/" & arguments.parsed.version & "/maven-metadata.xml";
 			case "artifact-file":
-				var fileName = arguments.parsed.artifactId & "-" & arguments.parsed.version & "." & arguments.parsed.extension;
+				var fileName = arguments.parsed.artifactId & "-" & arguments.parsed.version;
+				if (len(arguments.parsed.classifier ?: "")) {
+					fileName &= "-" & arguments.parsed.classifier;
+				}
+				fileName &= "." & arguments.parsed.extension;
 				return groupPath & "/" & arguments.parsed.artifactId & "/" & arguments.parsed.version & "/" & fileName;
 			default:
 				return "";
 		}
+	}
+
+	// core "lucee" build files live flat at the upstream root with legacy names
+	// (lucee-light-<v>.jar, forgebox-<v>.zip, <v>.lco, ...), not in the maven tree;
+	// maps a maven-style artifact-file request onto that layout ("" = no mapping)
+	public string function toUpstreamLegacyCorePath(required struct parsed) {
+		if (arguments.parsed.type != "artifact-file" || arguments.parsed.artifactId != "lucee") {
+			return "";
+		}
+		var version = arguments.parsed.version;
+		var ext = arguments.parsed.extension;
+		var classifier = arguments.parsed.classifier ?: "";
+		if (ext == "lco" && !len(classifier)) {
+			return version & ".lco";
+		}
+		if (left(classifier, 8) == "forgebox") {
+			return classifier & "-" & version & "." & ext;
+		}
+		if (len(classifier)) {
+			return "lucee-" & classifier & "-" & version & "." & ext;
+		}
+		return "lucee-" & version & "." & ext;
 	}
 
 	public struct function fetchUpstreamResource(required string relativePath, string method="get") {
@@ -149,6 +175,10 @@ component {
 			structDelete(server.mavenBridgeIndex, variables.groupId);
 		}
 		syncRepository(arguments.webroot);
+		// upstream mirrors never load the REST provider index
+		if (hasUpstream()) {
+			return {};
+		}
 		return getIndex();
 	}
 
@@ -209,14 +239,24 @@ component {
 			var fileName = parts[3];
 			var version = parts[2];
 			var artifactId = parts[1];
-			var expectedPrefix = artifactId & "-" & version & ".";
-			if (left(fileName, len(expectedPrefix)) == expectedPrefix) {
-				rtn.type = "artifact-file";
-				rtn.groupId = variables.groupId;
-				rtn.artifactId = artifactId;
-				rtn.version = version;
-				rtn.extension = listLast(fileName, ".");
-				return rtn;
+			var base = artifactId & "-" & version;
+			// after "<artifactId>-<version>" comes ".<extension>" or "-<classifier>.<extension>"
+			if (left(fileName, len(base)) == base && len(fileName) > len(base)) {
+				var rest = mid(fileName, len(base) + 1);
+				var classifier = "";
+				if (left(rest, 1) == "-" && find(".", rest) > 2) {
+					classifier = mid(rest, 2, find(".", rest) - 2);
+					rest = mid(rest, find(".", rest));
+				}
+				if (left(rest, 1) == "." && len(rest) > 1) {
+					rtn.type = "artifact-file";
+					rtn.groupId = variables.groupId;
+					rtn.artifactId = artifactId;
+					rtn.version = version;
+					rtn.classifier = classifier;
+					rtn.extension = mid(rest, 2);
+					return rtn;
+				}
 			}
 		}
 
@@ -287,8 +327,19 @@ component {
 		return arrayToList(html, chr(10));
 	}
 
-	public string function buildArtifactIndexHtml(required string artifactId) {
-		var versions = listVersions(arguments.artifactId);
+	// versions listed in the upstream artifact maven-metadata.xml (cached like any upstream file)
+	public array function listUpstreamVersions(required string webroot, required string artifactId) {
+		var groupPath = replace(variables.groupId, ".", "/", "all");
+		var content = getCachedUpstreamContent(arguments.webroot, groupPath & "/" & arguments.artifactId & "/maven-metadata.xml");
+		var versions = [];
+		for (var node in xmlSearch(xmlParse(content.body), "/metadata/versioning/versions/version")) {
+			arrayAppend(versions, node.xmlText);
+		}
+		return versions;
+	}
+
+	public string function buildArtifactIndexHtml(required string artifactId, array versions) {
+		var versionList = arguments.versions ?: listVersions(arguments.artifactId);
 
 		var html = [
 			"<!DOCTYPE html>",
@@ -298,10 +349,56 @@ component {
 			'<a href="maven-metadata.xml">maven-metadata.xml</a>' & chr(10)
 		];
 
-		for (var version in versions) {
+		for (var version in versionList) {
 			arrayAppend(html, '<a href="#encodeForHtml(version)#/">#encodeForHtml(version)#/</a>' & chr(10));
 		}
 
+		arrayAppend(html, "</pre></body></html>");
+		return arrayToList(html, chr(10));
+	}
+
+	// version index for upstream mirrors: when the upstream has a version-level
+	// maven-metadata.xml (e.g. core "lucee" snapshots with classifier jars and .lco),
+	// the file list comes from its snapshotVersions; otherwise a single .lex is assumed
+	public string function buildUpstreamVersionIndexHtml(required string webroot, required string artifactId, required string version) {
+		var groupPath = replace(variables.groupId, ".", "/", "all");
+		var baseName = arguments.artifactId & "-" & arguments.version;
+		var files = [];
+		var hasVersionMetadata = false;
+
+		try {
+			var content = getCachedUpstreamContent(
+				arguments.webroot,
+				groupPath & "/" & arguments.artifactId & "/" & arguments.version & "/maven-metadata.xml"
+			);
+			hasVersionMetadata = true;
+			for (var node in xmlSearch(xmlParse(content.body), "/metadata/versioning/snapshotVersions/snapshotVersion")) {
+				var value = structKeyExists(node, "value") ? node.value.xmlText : arguments.version;
+				var classifier = structKeyExists(node, "classifier") ? node.classifier.xmlText : "";
+				arrayAppend(files, arguments.artifactId & "-" & value & (len(classifier) ? "-" & classifier : "") & "." & node.extension.xmlText);
+			}
+		} catch (any e) {
+			if (e.type != "bridge.upstream.notfound") {
+				rethrow;
+			}
+		}
+
+		if (!arrayLen(files)) {
+			files = [baseName & ".lex"];
+		}
+
+		var html = [
+			"<!DOCTYPE html>",
+			"<html><head><title>#encodeForHtml(baseName)#</title></head><body>",
+			"<h1>#encodeForHtml(baseName)#</h1>",
+			"<pre>"
+		];
+		if (hasVersionMetadata || findNoCase(variables.SNAPSHOT_SUFFIX, arguments.version)) {
+			arrayAppend(html, '<a href="maven-metadata.xml">maven-metadata.xml</a>' & chr(10));
+		}
+		for (var fileName in files) {
+			arrayAppend(html, '<a href="#encodeForHtml(fileName)#">#encodeForHtml(fileName)#</a>' & chr(10));
+		}
 		arrayAppend(html, "</pre></body></html>");
 		return arrayToList(html, chr(10));
 	}
