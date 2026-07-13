@@ -13,5 +13,4 @@ component {
 		application.util.info("onServerStart: warming caches");
 		application.util.warmup();
 	}
-
 }
