@@ -324,6 +324,22 @@ component accessors="false" {
 	function warmup() {
 		thread action="run" name="cache-warmup" {
 			try {
+				// Restore extension logos to the webroot; the webroot is wiped on redeploy,
+				// but cached metadata keeps referencing /logo-*.png (only the cache dir persists)
+				try {
+					local.restored = 0;
+					for (local.png in directoryList(getCacheDirectory(), false, "path", "logo-*.png")) {
+						local.target = "/var/www/" & getFileFromPath(local.png);
+						if (!fileExists(local.target)) {
+							fileCopy(local.png, local.target);
+							local.restored++;
+						}
+					}
+					if (local.restored) info("cache warm: restored #local.restored# extension logo(s) to webroot");
+				} catch(e) {
+					info("cache warm fail: logo restore — #e.message#");
+				}
+
 				// Lucee versions list
 				try {
 					local.versions = getLuceeVersionsDetail();
