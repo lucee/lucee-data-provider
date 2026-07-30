@@ -88,7 +88,6 @@ component {
 
 		jiraChangelogService.loadIssues();
 		jiraChangelogService.updateIssuesAsync();
-		new services.legacy.MavenRepo().list();
 
 		application.coreS3Root            = coreS3Root;
 		application.coreCdnUrl            = coreCdnUrl;
