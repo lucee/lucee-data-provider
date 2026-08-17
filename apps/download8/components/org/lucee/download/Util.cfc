@@ -93,6 +93,12 @@ component accessors="false" {
 	// If base64, writes to /downloads/ (persistent) and copies to webroot, returns the path.
 	public string function toImageReference(groupId, artifactId, image) {
 		if (!len(arguments.image)) return "";
+		// Rate-limited raw.githubusercontent.com logos: serve the same image from
+		// Lucee's own artifact CDN instead. It is keyed by groupId+artifactId (not
+		// the repo/branch) and populated for every extension, so no re-release is
+		// needed to fix versions whose published pom still points at GitHub raw.
+		if (findNoCase("raw.githubusercontent.com/", arguments.image))
+			return this.CDN & "artifacts/" & replace(arguments.groupId, ".", "-", "all") & "-" & replace(arguments.artifactId, ".", "-", "all") & ".png";
 		if (left(arguments.image, 1) == "/" || left(arguments.image, 4) == "http") return arguments.image;
 
 		var filename    = "logo-" & replace(arguments.groupId, ".", "-", "all") & "-" & replace(arguments.artifactId, ".", "-", "all") & ".png";
@@ -244,7 +250,8 @@ component accessors="false" {
 						try {
 							local.list = LuceeExtension(attributes.gid);
 							info("reading data from function LuceeExtension(#attributes.gid#) took #getTickCount()-local.t#ms");
-							dlCachePut(attributes.ckey, { data: local.list, cachedAt: now() });
+							// never cache an empty result: 0 artifacts means the scan failed, not that the group is empty
+							if (!arrayIsEmpty(local.list)) dlCachePut(attributes.ckey, { data: local.list, cachedAt: now() });
 						} catch(e) {
 							cflog(log:"application",exception:e,type:"error");
 						}
@@ -256,7 +263,8 @@ component accessors="false" {
 			try {
 				local.data = LuceeExtension(arguments.groupId);
 				info("reading data from function LuceeExtension(#arguments.groupId#) took #getTickCount()-local.t#ms");
-				dlCachePut(local.key, { data: local.data, cachedAt: now() });
+				// never cache an empty result: 0 artifacts means the scan failed, not that the group is empty
+				if (!arrayIsEmpty(local.data)) dlCachePut(local.key, { data: local.data, cachedAt: now() });
 			} catch(e) {
 				local.data = [];
 				cflog(log:"application",exception:e,type:"error");
@@ -280,7 +288,8 @@ component accessors="false" {
 							local.na = local.list.filter(function(v) { return !findNoCase("-alpha", lCase(v)); });
 							if (!arrayIsEmpty(local.na)) local.list = local.na;
 							arraySort(local.list, function(a,b) { return versionCompare(b,a); });
-							dlCachePut(attributes.ckey, { data: local.list, cachedAt: now() });
+							// never cache an empty result: 0 versions means the scan failed, not that the extension has none
+							if (!arrayIsEmpty(local.list)) dlCachePut(attributes.ckey, { data: local.list, cachedAt: now() });
 						} catch(e) {
 							cflog(log:"application",exception:e,type:"error");
 						}
@@ -295,7 +304,8 @@ component accessors="false" {
 				local.na = local.data.filter(function(v) { return !findNoCase("-alpha", lCase(v)); });
 				if (!arrayIsEmpty(local.na)) local.data = local.na;
 				arraySort(local.data, function(a,b) { return versionCompare(b,a); });
-				dlCachePut(local.key, { data: local.data, cachedAt: now() });
+				// never cache an empty result: 0 versions means the scan failed, not that the extension has none
+				if (!arrayIsEmpty(local.data)) dlCachePut(local.key, { data: local.data, cachedAt: now() });
 			} catch(e) {
 				local.data = [];
 				cflog(log:"application",exception:e,type:"error");
@@ -388,7 +398,12 @@ component accessors="false" {
 							} catch(e) {
 								info("cache warm fail: #groupId#:#artifactId# — #e.message#");
 							}
-						}, true, 5);
+						}, false); // serial on purpose: each LuceeExtension() call scans 4 mirrors
+						            // concurrently and downloads the version .pom/.lex. Fanning these out
+						            // in parallel saturates Lucee's in-JVM HTTP client (the mirrors
+						            // themselves don't rate-limit), so scans time out and the BIF returns —
+						            // and internally caches — an empty version list. Serial keeps
+						            // client-side concurrency bounded so a cold warmup resolves cleanly.
 
 						dlCachePut(metaMapKey, metaMap);
 						info("cache warm: extMetaMap_#groupId# (#structCount(metaMap)# extensions)");
