@@ -615,7 +615,10 @@ component {
 
 
 			var s3=new services.legacy.S3(variables.s3Root);
-		s3.addMissing(true);
+		// skipMaven=true: the Sonatype OSSRH index (oss.sonatype.org) was shut down and now
+		// returns an empty body, breaking the Maven step. This code is deprecated, to be
+		// replaced by the Maven Bridge, so we simply skip Maven here.
+		s3.addMissing(true, true);
 		return "done";
 	}
 
