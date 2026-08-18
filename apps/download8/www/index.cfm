@@ -162,7 +162,9 @@ function loadGroupExtensions(groupId) {
 				groupId:       groupId,
 				artifactId:    artifactId,
 				displayName:   local.name,
-				image:         local.image,
+				// defensive: a metaMap entry cached before the CDN migration may still hold a
+				// rate-limited raw.githubusercontent.com URL — resolve it to the CDN at render
+				image:         util.githubRawToCdn(groupId, artifactId, local.image),
 				latestVersion: local.latestVer
 			});
 		}, true, 20);

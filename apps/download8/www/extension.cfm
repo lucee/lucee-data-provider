@@ -70,6 +70,10 @@ if (!arrayIsEmpty(allVersions)) {
 	}
 }
 
+// defensive: a cached extImage may still be a rate-limited raw.githubusercontent.com URL
+// from before the CDN migration — resolve it to the artifact CDN at render time
+extImage = util.githubRawToCdn(groupId, artifactId, extImage);
+
 // Pick the best version for install snippets: latest release, else latest overall
 snippetVer = "";
 for (sv in allVersions) {

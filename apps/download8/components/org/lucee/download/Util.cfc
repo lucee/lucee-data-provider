@@ -88,17 +88,22 @@ component accessors="false" {
 
 	// ── Extension images ─────────────────────────────────────────────────
 
+	// Resolve a rate-limited raw.githubusercontent.com logo URL to Lucee's own artifact
+	// CDN. Keyed by maven coordinates (repo/branch-agnostic); anything else is returned
+	// unchanged. Called both when caching metadata and defensively at render time, so a
+	// stale github URL cached before the CDN migration never reaches the browser.
+	public string function githubRawToCdn(groupId, artifactId, image) {
+		if (findNoCase("raw.githubusercontent.com/", arguments.image ?: ""))
+			return this.CDN & "artifacts/" & replace(arguments.groupId, ".", "-", "all") & "-" & replace(arguments.artifactId, ".", "-", "all") & ".png";
+		return arguments.image ?: "";
+	}
+
 	// Converts a raw image value to a web-accessible URL.
 	// If already a URL, returns it unchanged.
 	// If base64, writes to /downloads/ (persistent) and copies to webroot, returns the path.
 	public string function toImageReference(groupId, artifactId, image) {
 		if (!len(arguments.image)) return "";
-		// Rate-limited raw.githubusercontent.com logos: serve the same image from
-		// Lucee's own artifact CDN instead. It is keyed by groupId+artifactId (not
-		// the repo/branch) and populated for every extension, so no re-release is
-		// needed to fix versions whose published pom still points at GitHub raw.
-		if (findNoCase("raw.githubusercontent.com/", arguments.image))
-			return this.CDN & "artifacts/" & replace(arguments.groupId, ".", "-", "all") & "-" & replace(arguments.artifactId, ".", "-", "all") & ".png";
+		arguments.image = githubRawToCdn(arguments.groupId, arguments.artifactId, arguments.image);
 		if (left(arguments.image, 1) == "/" || left(arguments.image, 4) == "http") return arguments.image;
 
 		var filename    = "logo-" & replace(arguments.groupId, ".", "-", "all") & "-" & replace(arguments.artifactId, ".", "-", "all") & ".png";

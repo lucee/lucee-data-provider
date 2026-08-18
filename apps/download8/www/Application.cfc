@@ -11,7 +11,9 @@ component {
    ];
 
 	function onRequestStart() {
-		if(isNull(application.util ) || !isNull(url.flush) ) {
+		// note: ?flush no longer re-inits util — a page flush must not wipe the shared
+		// in-memory data caches. Component code changes are picked up on redeploy/restart.
+		if(isNull(application.util)) {
 			application.util = new org.lucee.download.Util();
 		}
 	}
@@ -32,13 +34,12 @@ var allowedParams = variables.cacheParams[arguments.template] ?: [];
 			if (!isNull(url[p])) cacheQS &= (len(cacheQS) ? "&" : "") & p & "=" & url[p];
 		}
 		var filename=application.util.getCacheFile(arguments.template, cacheQS);
+		// ?flush=true flushes ONLY the current page's cached HTML — not the whole site,
+		// and not the shared data caches. The page then re-renders from the existing
+		// metadata caches (github logos are resolved to the CDN at render time).
 		var flush=url.flush ?: false;
-		if (flush) {
-			var cacheDir = application.util.getCacheDirectory();
-			for (var f in directoryList(cacheDir, false, "path", "site*.html")) {
-				fileDelete(f);
-			}
-			if (fileExists(filename)) fileDelete(filename);
+		if (flush && fileExists(filename)) {
+			fileDelete(filename);
 		}
 		if(fileExists(filename)) {
 			echo(fileRead(filename));
