@@ -259,7 +259,7 @@ function loadGroupExtensions(groupId) {
 				</details>
 			</div>
 			<div class="track-card-footer">
-				<a href="/versions.cfm?track=lts&minor=#encodeForURL(t.minor)#">All releases <span class="icon-arrow-right"></span></a>
+				<a href="/versions.cfm?track=lts&minor=#encodeForURL(listFirst(t.minor, '.'))#">All releases <span class="icon-arrow-right"></span></a>
 				<a href="/versions.cfm?track=all&minor=#encodeForURL(t.minor)#&type=snapshot" class="text-muted text-small">All snapshots</a>
 			</div>
 		</article>
@@ -301,7 +301,7 @@ function loadGroupExtensions(groupId) {
 				</details>
 			</div>
 			<div class="track-card-footer">
-				<a href="/versions.cfm?track=stable&minor=#encodeForURL(t.minor)#">All releases <span class="icon-arrow-right"></span></a>
+				<a href="/versions.cfm?track=stable&minor=#encodeForURL(listFirst(t.minor, '.'))#">All releases <span class="icon-arrow-right"></span></a>
 				<a href="/versions.cfm?track=all&minor=#encodeForURL(t.minor)#&type=snapshot" class="text-muted text-small">All snapshots</a>
 			</div>
 		</article>
@@ -342,7 +342,7 @@ function loadGroupExtensions(groupId) {
 				</ul>
 			</div>
 			<div class="track-card-footer">
-				<a href="/versions.cfm?track=edge&minor=#encodeForURL(t.minor)#">All releases <span class="icon-arrow-right"></span></a>
+				<a href="/versions.cfm?track=edge&minor=#encodeForURL(listFirst(t.minor, '.'))#">All releases <span class="icon-arrow-right"></span></a>
 				<a href="/versions.cfm?track=edge&minor=#encodeForURL(t.minor)#&type=snapshot" class="text-muted text-small">All snapshots</a>
 			</div>
 		</article>

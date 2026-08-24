@@ -101,9 +101,16 @@ if (track == "lts") {
 	trackBadge = "";
 }
 
-// Optional minor filter (e.g. from Edge card footer link)
+// Optional minor filter. A bare major ("7") shows every minor of that major line
+// (7.1, 7.0, …) so older releases stay reachable even after a newer minor ships; a
+// full minor ("7.1") stays an exact match.
 if (len(minorFilter)) {
-	showMinors = showMinors.filter(function(m) { return m == minorFilter; });
+	if (find(".", minorFilter)) {
+		showMinors = showMinors.filter(function(m) { return m == minorFilter; });
+	} else {
+		showMinors = allMinors.filter(function(m) { return listFirst(m, ".") == minorFilter; });
+		pageTitle  = "Lucee " & minorFilter & " Releases";
+	}
 }
 
 // Apply type filter (e.g. snapshot-only)
