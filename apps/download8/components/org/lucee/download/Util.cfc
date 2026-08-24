@@ -201,6 +201,24 @@ component accessors="false" {
 
 	// ── Lucee versions API (cached) ──────────────────────────────────────
 
+	// If any download URL in the detail is a Sonatype snapshot with a build timestamp
+	// (…-YYYYMMDD.HHMMSS-N.<ext>), return the epoch ms at which Sonatype purges it — the
+	// timestamp date + 89 days (90-day retention, minus a day of safety margin). Returns
+	// null when there is no such timestamp (e.g. a release from the permanent CDN), meaning
+	// "cache forever".
+	private function snapshotUrlExpiry(detail) {
+		for (var k in arguments.detail) {
+			if (!isSimpleValue(arguments.detail[k])) continue;
+			var m = reFind("-([0-9]{8})\.[0-9]{6}-[0-9]+\.", arguments.detail[k], 1, true);
+			if (arrayLen(m.pos) >= 2 && m.pos[2] > 0) {
+				var ymd = mid(arguments.detail[k], m.pos[2], m.len[2]);
+				var d   = createDate(val(mid(ymd, 1, 4)), val(mid(ymd, 5, 2)), val(mid(ymd, 7, 2)));
+				return dateAdd("d", 89, d).getTime();
+			}
+		}
+		// no timestamp found → permanent (returns null)
+	}
+
 	function getLuceeVersionsDetail(version) {
 		if (isNull(arguments.version)) {
 			// versions list with stale-while-revalidate (5 min)
@@ -233,19 +251,27 @@ component accessors="false" {
 			}
 			return local.data;
 		} else {
-			// single version detail — version data is immutable, cache indefinitely
+			// single version detail. Releases are immutable → cache forever. A snapshot resolves
+			// to a Sonatype timestamped URL (lucee-<ver>-YYYYMMDD.HHMMSS-N.<ext>) that Sonatype
+			// purges ~90 days after that timestamp, so cache only until (timestamp + 89 days) and
+			// re-resolve after that rather than serving a URL that is about to 404.
 			local.key    = "luceeVerDetail_" & arguments.version;
 			local.cached = dlCacheGet(local.key);
-			if (!isEmpty(local.cached)) return local.cached;
+			if (!isEmpty(local.cached) && structKeyExists(local.cached, "data")
+				&& (!structKeyExists(local.cached, "expiresAt") || now().getTime() < local.cached.expiresAt))
+				return local.cached.data;
 			local.t = getTickCount();
 			try {
 				local.detail = LuceeVersionsDetail(arguments.version);
 				info("reading data from function LuceeVersionsDetail(#arguments.version#) took #getTickCount()-local.t#ms");
-				dlCachePut(local.key, local.detail);
+				local.entry = { data: local.detail };
+				local.exp   = snapshotUrlExpiry(local.detail);
+				if (!isNull(local.exp)) local.entry.expiresAt = local.exp;
+				dlCachePut(local.key, local.entry);
 				return local.detail;
-			} catch(e) { 
+			} catch(e) {
 				cflog(log:"application",exception:e,type:"error");
-				return {}; 
+				return {};
 			}
 		}
 	}

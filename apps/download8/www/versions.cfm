@@ -276,6 +276,16 @@ typeLabels = {
 		</cfloop>
 	</cfif>
 
+	<cfif typeFilter eq "snapshot">
+	<div class="notice" style="margin-top:24px;">
+		<strong>Snapshots are temporary.</strong> Snapshot builds are only guaranteed to remain
+		available for <strong>90&nbsp;days</strong> after they are published. Any URL referencing a
+		snapshot may stop working once that build is purged from the repository. Use snapshots only
+		for testing and short-term evaluation — do not link to, or depend on, a snapshot download
+		over the long term. For anything lasting, use a <a href="/versions.cfm">stable release</a>.
+	</div>
+	</cfif>
+
 	<p class="text-muted text-small mt-4">
 		Release announcements and changelogs:
 		<a href="#FORUM_URL#" target="_blank">Lucee Forum — Releases</a>
