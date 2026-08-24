@@ -98,6 +98,18 @@ component accessors="false" {
 		return arguments.image ?: "";
 	}
 
+	// A pom <image> may be a relative "./<artifactId>-<version>-logo.png" pointing at a logo
+	// deployed as a maven artifact next to the .lex. Resolve it against the .lex's maven
+	// directory so it is host-agnostic (follows whatever mirror serves the extension). If
+	// there is no usable base URL, fall back to the artifact CDN. Non-relative values pass
+	// through unchanged.
+	public string function resolveRelativeImage(groupId, artifactId, image, base) {
+		if (left(arguments.image ?: "", 2) != "./") return arguments.image ?: "";
+		if (left(arguments.base ?: "", 4) == "http")
+			return mid(arguments.base, 1, len(arguments.base) - len(listLast(arguments.base, "/"))) & listLast(arguments.image, "/");
+		return this.CDN & "artifacts/" & replace(arguments.groupId, ".", "-", "all") & "-" & replace(arguments.artifactId, ".", "-", "all") & ".png";
+	}
+
 	// Converts a raw image value to a web-accessible URL.
 	// If already a URL, returns it unchanged.
 	// If base64, writes to /downloads/ (persistent) and copies to webroot, returns the path.
@@ -326,8 +338,11 @@ component accessors="false" {
 			try {
 				local.meta = LuceeExtension(arguments.groupId, arguments.artifactId, arguments.version, arguments.download);
 				info("reading data from function LuceeExtension(#arguments.groupId#,#arguments.artifactId#,#arguments.version#,#arguments.download#) took #getTickCount()-local.t#ms");
-				if (structKeyExists(local.meta, "metadata") && len(local.meta.metadata.image ?: ""))
+				if (structKeyExists(local.meta, "metadata") && len(local.meta.metadata.image ?: "")) {
+					// resolve a relative "./...-logo.png" (maven logo artifact) against the .lex dir first
+					local.meta.metadata.image = resolveRelativeImage(arguments.groupId, arguments.artifactId, local.meta.metadata.image, local.meta.lex ?: (local.meta.pom ?: ""));
 					local.meta.metadata.image = toImageReference(arguments.groupId, arguments.artifactId, local.meta.metadata.image);
+				}
 				dlCachePut(local.key, local.meta);
 				return local.meta;
 			} catch(e) {cflog(log:"application",exception:e,type:"error"); return {}; }
