@@ -105,9 +105,33 @@ component accessors="false" {
 	// unchanged. Called both when caching metadata and defensively at render time, so a
 	// stale github URL cached before the CDN migration never reaches the browser.
 	public string function githubRawToCdn(groupId, artifactId, image) {
-		if (findNoCase("raw.githubusercontent.com/", arguments.image ?: ""))
-			return this.CDN & "artifacts/" & replace(arguments.groupId, ".", "-", "all") & "-" & replace(arguments.artifactId, ".", "-", "all") & ".png";
+		if (findNoCase("raw.githubusercontent.com/", arguments.image ?: "")) {
+			var cdn = this.CDN & "artifacts/" & replace(arguments.groupId, ".", "-", "all") & "-" & replace(arguments.artifactId, ".", "-", "all") & ".png";
+			// Prefer the CDN mirror (GitHub raw is rate-limited), but only when it actually
+			// exists — not every extension has a mirror, and rewriting to a missing file turns
+			// a working GitHub logo into a broken 404 image. Existence is cached, so this is
+			// not an HTTP call on every render.
+			if (cdnArtifactExists(cdn)) return cdn;
+			return arguments.image; // no mirror yet → keep the working GitHub URL
+		}
 		return arguments.image ?: "";
+	}
+
+	// Does an artifact logo exist on the CDN? Cached: a definitive 2xx/3xx (exists) or
+	// 404/410 (missing) is remembered; a transient failure (timeout, 0, 5xx) is not cached
+	// and simply falls back to the GitHub URL for this render, to be retried later.
+	private boolean function cdnArtifactExists(url) {
+		var key = "cdnLogoExists_" & hash(arguments.url);
+		var c   = dlCacheGet(key);
+		if (structKeyExists(c, "exists")) return c.exists;
+		var code = 0;
+		try {
+			http url=arguments.url method="head" timeout="5" result="local.res";
+			code = val(local.res.status_code ?: 0);
+		} catch(e) {}
+		if (code >= 200 && code < 400) { dlCachePut(key, { exists: true,  cachedAt: now() }); return true;  }
+		if (code == 404 || code == 410) { dlCachePut(key, { exists: false, cachedAt: now() }); return false; }
+		return false; // transient — do not cache, fall back to GitHub this time
 	}
 
 	// A pom <image> may be a relative "./<artifactId>-<version>-logo.png" pointing at a logo
