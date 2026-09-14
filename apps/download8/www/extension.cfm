@@ -103,7 +103,9 @@ for (ver in allVersions) {
 	groupKey = verType;
 	if (!structKeyExists(groups, groupKey)) groups[groupKey] = [];
 
-	if (structKeyExists(verMap, ver)) {
+	// use the cached entry only once it actually carries a date; older cache entries were
+	// stored date-less (only the then-latest version was ever resolved) and must be backfilled
+	if (structKeyExists(verMap, ver) && len(verMap[ver].lastModified ?: "")) {
 		verEntry = verMap[ver];
 	} else {
 		isLatest = (ver == allVersions[1]);
@@ -116,7 +118,17 @@ for (ver in allVersions) {
 				minCore:      verMinCore
 			};
 		} else {
-			verEntry = { version: ver, lastModified: "", type: verType, minCore: "" };
+			// download=false is enough for the release date and is cheaper than a full
+			// metadata fetch; the per-version detail is immutable so it caches indefinitely.
+			// minCore lives only in the download=true metadata, so keep any value already cached.
+			verLastMod = "";
+			try { verLastMod = util.parseDate(util.getLuceeExtension(groupId, artifactId, ver, false).lastModified ?: ""); } catch(e) {}
+			verEntry = {
+				version:      ver,
+				lastModified: verLastMod,
+				type:         verType,
+				minCore:      structKeyExists(verMap, ver) ? (verMap[ver].minCore ?: "") : ""
+			};
 		}
 		verMap[ver]  = verEntry;
 		verMapDirty  = true;
@@ -149,7 +161,7 @@ VERSIONS_PREVIEW = 5;
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title><cfoutput>#encodeForHTML(displayName)# Extension — Lucee Downloads</cfoutput></title>
 	<link rel="icon" type="image/png" href="/res/favicon.png">
-	<link rel="stylesheet" href="/res/download.css?v=4">
+	<link rel="stylesheet" href="/res/download.css?v=9">
 </head>
 <body>
 

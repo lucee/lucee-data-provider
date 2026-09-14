@@ -140,6 +140,13 @@ function loadGroupExtensions(groupId) {
 			local.verList = util.getLuceeExtension(groupId, artifactId);
 			if (!arrayIsEmpty(local.verList)) local.latestVer = util.latestDisplayVersion(local.verList);
 
+			// release date of the version shown on the card (download=false is enough and is
+			// cached indefinitely — version metadata is immutable)
+			local.latestModified = "";
+			if (len(local.latestVer)) {
+				try { local.latestModified = util.parseDate(util.getLuceeExtension(groupId, artifactId, local.latestVer, false).lastModified ?: ""); } catch(e) {}
+			}
+
 			if (isEmpty(local.meta)) {
 				request.skipHtmlCache = true;
 				thread action="run" name="cache-ext-#groupId#-#artifactId#" gid=groupId aid=artifactId mmkey=metaMapKey {
@@ -173,7 +180,8 @@ function loadGroupExtensions(groupId) {
 				// defensive: a metaMap entry cached before the CDN migration may still hold a
 				// rate-limited raw.githubusercontent.com URL — resolve it to the CDN at render
 				image:         util.githubRawToCdn(groupId, artifactId, local.image),
-				latestVersion: local.latestVer
+				latestVersion: local.latestVer,
+				latestModified: local.latestModified
 			});
 		}, true, 20);
 	} catch(e) {}
@@ -416,7 +424,7 @@ arraySort(extensions, function(a, b) { return compare(lCase(a.displayName), lCas
 						<h3>#encodeForHTML(ext.displayName)#</h3>
 						<div class="ext-artifact">#encodeForHTML(ext.groupId)#:#encodeForHTML(ext.artifactId)#</div>
 						<cfif len(ext.latestVersion)>
-						<div class="ext-card-version">#encodeForHTML(ext.latestVersion)#</div>
+						<div class="ext-card-version">#encodeForHTML(ext.latestVersion)#<cfif len(ext.latestModified ?: "")> · #encodeForHTML(ext.latestModified)#</cfif></div>
 						</cfif>
 					</div>
 					<span class="ext-card-arrow">→</span>
