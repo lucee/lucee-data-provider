@@ -60,6 +60,18 @@ component accessors="false" {
 		return arrayToList(local.result, " ");
 	}
 
+	// The version to advertise as "latest" for an extension: the newest stable release,
+	// falling back to the newest version overall when there is no release yet. The version
+	// list is already sorted descending, so the first release wins. Used by the overview
+	// card so it matches the detail page (which installs the latest release) instead of
+	// showing a pre-release or a frozen, stale value.
+	public string function latestDisplayVersion(versions) {
+		for (var v in arguments.versions) {
+			if (getType(v) == "release") return v;
+		}
+		return arrayIsEmpty(arguments.versions) ? "" : arguments.versions[1];
+	}
+
 	function versionCompare(v1, v2) {
 		local.a   = listToArray(listFirst(v1,"-"), ".");
 		local.b   = listToArray(listFirst(v2,"-"), ".");

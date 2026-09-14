@@ -132,6 +132,14 @@ function loadGroupExtensions(groupId) {
 			local.latestVer = local.meta.latestVersion ?: "";
 			if (!len(local.name)) local.name = util.artifactDisplayName(artifactId);
 
+			// metaMap.latestVersion is written once and never refreshed, so it goes stale as
+			// new versions ship (overview stuck on an old version while the detail page moves
+			// on). Derive it live from the (10-min SWR) version list instead, picking the
+			// latest release so the card matches the detail page. Keep the metaMap value as a
+			// fallback if the list is momentarily unavailable.
+			local.verList = util.getLuceeExtension(groupId, artifactId);
+			if (!arrayIsEmpty(local.verList)) local.latestVer = util.latestDisplayVersion(local.verList);
+
 			if (isEmpty(local.meta)) {
 				request.skipHtmlCache = true;
 				thread action="run" name="cache-ext-#groupId#-#artifactId#" gid=groupId aid=artifactId mmkey=metaMapKey {
