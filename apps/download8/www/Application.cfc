@@ -22,6 +22,7 @@ component {
 	variables.cacheParams = {
 		"/index.cfm":        [],
 		"/extension.cfm":    ["groupId", "artifactId"],
+		"/changelog.cfm":    ["version"],
 		"/versions.cfm":     ["track", "type", "minor"],
 		"/versionlinks.cfm": ["version"],
 		"/download.cfm":     ["version", "type"]

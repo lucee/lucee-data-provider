@@ -142,7 +142,7 @@ typeLabels = {
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>#encodeForHTML(pageTitle)# — Lucee Downloads</title>
 	<link rel="icon" type="image/png" href="/res/favicon.png">
-	<link rel="stylesheet" href="/res/download.css?v=4">
+	<link rel="stylesheet" href="/res/download.css?v=9">
 </head>
 <body>
 
@@ -255,6 +255,7 @@ typeLabels = {
 										<a href="/download.cfm?version=#encodeForURL(ver)#&type=war" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['war'])#">WAR</a>
 										</cfif>
 										<a href="https://hub.docker.com/r/lucee/lucee/tags?name=#encodeForURL(listFirst(ver,'-'))#" target="_blank" class="has-tooltip" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['docker'])#">Docker</a>
+										<a href="/changelog.cfm?version=#encodeForURL(ver)#" class="dl-changelog has-tooltip" data-tooltip="Changelog — issues fixed in this version">Changelog</a>
 									</div>
 								</td>
 							</tr>

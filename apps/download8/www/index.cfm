@@ -196,7 +196,7 @@ function loadGroupExtensions(groupId) {
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Downloads</title>
 	<link rel="icon" type="image/png" href="/res/favicon.png">
-	<link rel="stylesheet" href="/res/download.css?v=4">
+	<link rel="stylesheet" href="/res/download.css?v=9">
 </head>
 <body>
 <cfoutput>
@@ -275,8 +275,10 @@ function loadGroupExtensions(groupId) {
 				</details>
 			</div>
 			<div class="track-card-footer">
-				<a href="/versions.cfm?track=lts&minor=#encodeForURL(listFirst(t.minor, '.'))#">All releases <span class="icon-arrow-right"></span></a>
-				<a href="/versions.cfm?track=all&minor=#encodeForURL(t.minor)#&type=snapshot" class="text-muted text-small">All snapshots</a>
+				<a href="/versions.cfm?track=lts&minor=#encodeForURL(listFirst(t.minor, '.'))#">All releases</a>
+				<span class="footer-sep">|</span>
+				<a href="/versions.cfm?track=all&minor=#encodeForURL(t.minor)#&type=snapshot">All snapshots</a>
+				<a href="/changelog.cfm?version=#encodeForURL(t.version)#" class="track-changelog-link">Changelog</a>
 			</div>
 		</article>
 		</cfif>
@@ -317,8 +319,10 @@ function loadGroupExtensions(groupId) {
 				</details>
 			</div>
 			<div class="track-card-footer">
-				<a href="/versions.cfm?track=stable&minor=#encodeForURL(listFirst(t.minor, '.'))#">All releases <span class="icon-arrow-right"></span></a>
-				<a href="/versions.cfm?track=all&minor=#encodeForURL(t.minor)#&type=snapshot" class="text-muted text-small">All snapshots</a>
+				<a href="/versions.cfm?track=stable&minor=#encodeForURL(listFirst(t.minor, '.'))#">All releases</a>
+				<span class="footer-sep">|</span>
+				<a href="/versions.cfm?track=all&minor=#encodeForURL(t.minor)#&type=snapshot">All snapshots</a>
+				<a href="/changelog.cfm?version=#encodeForURL(t.version)#" class="track-changelog-link">Changelog</a>
 			</div>
 		</article>
 		</cfif>
@@ -358,8 +362,10 @@ function loadGroupExtensions(groupId) {
 				</ul>
 			</div>
 			<div class="track-card-footer">
-				<a href="/versions.cfm?track=edge&minor=#encodeForURL(listFirst(t.minor, '.'))#">All releases <span class="icon-arrow-right"></span></a>
-				<a href="/versions.cfm?track=edge&minor=#encodeForURL(t.minor)#&type=snapshot" class="text-muted text-small">All snapshots</a>
+				<a href="/versions.cfm?track=edge&minor=#encodeForURL(listFirst(t.minor, '.'))#">All releases</a>
+				<span class="footer-sep">|</span>
+				<a href="/versions.cfm?track=edge&minor=#encodeForURL(t.minor)#&type=snapshot">All snapshots</a>
+				<a href="/changelog.cfm?version=#encodeForURL(t.version)#" class="track-changelog-link">Changelog</a>
 			</div>
 		</article>
 		</cfloop>

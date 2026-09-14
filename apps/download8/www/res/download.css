@@ -342,14 +342,27 @@ body { padding-top: 100px; }
 	padding: 12px 20px;
 	border-top: 1px solid var(--lines);
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
-	justify-content: space-between;
+	gap: 8px;
 	background: var(--bright);
+}
+.track-card-footer .footer-sep {
+	color: var(--lines);
+	font-weight: 400;
 }
 
 .track-card-footer a {
 	font-size: 13px;
 	font-weight: 500;
+}
+
+/* changelog sits on its own line below the All releases / All snapshots row */
+.track-card-footer .track-changelog-link {
+	flex-basis: 100%;
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px solid var(--lines);
 }
 
 .track-desc {
@@ -589,6 +602,14 @@ body { padding-top: 100px; }
 	position: relative;
 }
 .versions-table .dl-links a:hover { border-color: var(--primary); color: var(--primary); text-decoration: none; }
+/* changelog is an action, not a download file — set it apart from the download chips */
+.versions-table .dl-links a.dl-changelog {
+	background: transparent;
+	border-color: transparent;
+	color: var(--muted);
+	margin-left: 4px;
+}
+.versions-table .dl-links a.dl-changelog:hover { color: var(--primary); border-color: transparent; }
 
 /* CSS tooltip on download links in the versions table */
 .versions-table .dl-links a.has-tooltip::after {
@@ -723,6 +744,28 @@ body { padding-top: 100px; }
 /* ── Utility ── */
 .text-muted { color: var(--muted); }
 .text-small { font-size: 13px; }
+.nowrap { white-space: nowrap; }
+
+/* "Feed to AI" actions on the changelog page */
+.ai-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin: 4px 0 16px;
+}
+.btn-ai {
+	background: var(--bright);
+	border: 1px solid var(--lines);
+	border-radius: 4px;
+	color: var(--text);
+	cursor: pointer;
+	font-size: 12px;
+	font-weight: 600;
+	padding: 5px 12px;
+}
+.btn-ai:hover { border-color: var(--primary); color: var(--primary); }
+.btn-ai.copied { border-color: var(--primary); color: var(--primary); }
 .mt-4 { margin-top: 32px; }
 .notice {
 	background: var(--bright);
