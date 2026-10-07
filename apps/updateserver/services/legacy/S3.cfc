@@ -364,10 +364,16 @@ component {
 							systemOutput("light: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
 						}
 						else if(type=="express") {
-							lock name="build-lucee-express" timeout="10" {
-								var result=createExpress(lcl,s3.version);
+							// express zips are served from GitHub releases, we stop copying them to S3 on 2027-03-01 00:00 UTC (LDEV-6529)
+							if ( createDateTime( 2027, 3, 1, 0, 0, 0, 0, "UTC" ) GT now() ) {
+								lock name="build-lucee-express" timeout="10" {
+									var result=createExpress(lcl,s3.version);
+								}
+								systemOutput("express: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
 							}
-							systemOutput("express: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
+							else {
+								systemOutput("express: skipped, not copied to S3 anymore (since 2027-03-01 UTC)",1,1);
+							}
 						}
 						else {
 							systemOutput("unsupported: " & type &":"&s3.version,1,1);
