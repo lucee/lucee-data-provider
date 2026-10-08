@@ -17,6 +17,8 @@ function buildLinks(ver) {
 			local.links[local.k] = local.detail[local.k];
 		}
 	}
+	// express is a GitHub release asset for every non-snapshot version
+	if (util.getType(ver) != "snapshot") local.links.express = util.expressUrl(ver);
 	return local.links;
 }
 

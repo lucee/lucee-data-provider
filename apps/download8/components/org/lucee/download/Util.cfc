@@ -85,17 +85,59 @@ component accessors="false" {
 		return 0;
 	}
 
+	// express is published as a GitHub release asset (built by the main workflow) for every
+	// non-snapshot version, not on the CDN. The tag and asset name are the full version,
+	// including any -RC/-BETA suffix.
+	function expressUrl(ver) {
+		return "https://github.com/lucee/Lucee/releases/download/" & ver & "/lucee-express-" & ver & ".zip";
+	}
+
 	function cdnLinks(ver) {
+		local.gh = "https://github.com/lucee/Lucee/releases/download/" & ver & "/";
 		return {
-			win64:           this.CDN & "lucee-" & ver & "-windows-x64-installer.exe",
-			"linux-x64":     this.CDN & "lucee-" & ver & "-linux-x64-installer.run",
-			"linux-aarch64": this.CDN & "lucee-" & ver & "-linux-aarch64-installer.run",
-			express:         this.CDN & "lucee-express-" & ver & ".zip",
+			// installers are published as GitHub release assets (built by the main workflow); S3/CDN is retired
+			win64:           local.gh & "lucee-" & ver & "-windows-x64-installer.exe",
+			"linux-x64":     local.gh & "lucee-" & ver & "-linux-x64-installer.run",
+			"linux-aarch64": local.gh & "lucee-" & ver & "-linux-aarch64-installer.run",
 			jar:             this.CDN & "lucee-" & ver & ".jar",
 			light:           this.CDN & "lucee-light-" & ver & ".jar",
 			lco:             this.CDN & ver & ".lco",
-			war:             this.CDN & "lucee-" & ver & ".war"
+			war:             local.gh & "lucee-" & ver & ".war"
 		};
+	}
+
+	// Resolve the lucee-light download URL. light lives on Maven (the "-light" classifier
+	// next to the jar), on GitHub releases, and on the legacy CDN — but only the CDN has it
+	// for the oldest releases (pre-6.1). Prefer Maven (same mirror as the jar), then GitHub
+	// (non-snapshot), then CDN, taking the first that exists; cache the result per version so
+	// the probe runs once. When the CDN is retired, old versions with no Maven/GitHub copy
+	// will simply 404 there, which is acceptable.
+	function lightUrl(ver, jarUrl="") {
+		local.key    = "luceeLightUrl_" & arguments.ver;
+		local.cached = dlCacheGet(local.key);
+		if (!isEmpty(local.cached) && structKeyExists(local.cached, "url")
+			&& (!structKeyExists(local.cached, "expiresAt") || now().getTime() < local.cached.expiresAt))
+			return local.cached.url;
+
+		local.candidates = [];
+		if (len(arguments.jarUrl)) arrayAppend(local.candidates, reReplace(arguments.jarUrl, "\.jar$", "-light.jar"));
+		if (getType(arguments.ver) != "snapshot")
+			arrayAppend(local.candidates, "https://github.com/lucee/Lucee/releases/download/" & arguments.ver & "/lucee-light-" & arguments.ver & ".jar");
+		arrayAppend(local.candidates, this.CDN & "lucee-light-" & arguments.ver & ".jar");
+
+		local.chosen = local.candidates[arrayLen(local.candidates)]; // CDN as last-resort default
+		for (local.c in local.candidates) {
+			try {
+				cfhttp(method="head", url=local.c, timeout=8, redirect=true, result="local.r");
+				if (find("200", local.r.statuscode ?: "")) { local.chosen = local.c; break; }
+			} catch (any e) {}
+		}
+
+		local.entry = { url: local.chosen };
+		local.exp   = snapshotUrlExpiry({ jar: local.chosen });
+		if (!isNull(local.exp)) local.entry.expiresAt = local.exp;
+		dlCachePut(local.key, local.entry);
+		return local.chosen;
 	}
 
 	// ── Extension images ─────────────────────────────────────────────────

@@ -20,6 +20,12 @@ if (len(version) && len(dlType) && !len(artifactId)) {
 		dlUrl = cdn[dlType] ?: "";
 	}
 
+	// express is a GitHub release asset for every non-snapshot version
+	if (dlType == "express" && util.getType(version) != "snapshot") dlUrl = util.expressUrl(version);
+
+	// light: prefer Maven (same mirror as the jar), then GitHub, then CDN — see Util.lightUrl
+	if (dlType == "light") dlUrl = util.lightUrl(version, detail.jar ?: "");
+
 	if (!len(dlUrl)) {
 		cfheader(statusCode=404, statusText="Not Found");
 		writeOutput("Download URL not available.");

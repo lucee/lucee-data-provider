@@ -78,33 +78,32 @@ function buildTrack(minor, useLatest="release") {
 			local.links[local.k] = local.detail[local.k];
 		}
 	}
+	// express is a GitHub release asset for every non-snapshot version
+	if (util.getType(local.ver) != "snapshot") local.links.express = util.expressUrl(local.ver);
+	// light comes from Maven next to the jar for the versions shown on the overview (6.2+)
+	if (len(local.links.jar ?: "")) local.links.light = reReplace(local.links.jar, "\.jar$", "-light.jar");
 	return { minor: minor, version: local.ver, isRelease: local.isRelease, links: local.links, detail: local.detail };
 }
 
 arraySort(edgeMinors, function(a,b) { return util.versionCompare(a,b); });
-tracksCache    = util.dlCacheGet("luceeOverviewTracks");
-tracksCacheAge = structKeyExists(tracksCache, "cachedAt") ? dateDiff("n", tracksCache.cachedAt, now()) : 999;
 
-if (!isEmpty(tracksCache) && structKeyExists(tracksCache, "tracks")) {
+// Self-heal the overview cache. The signature captures the track classification, the latest
+// version per track, and a link-schema version (bump TRACK_LINKS_VERSION whenever the download
+// link logic changes — e.g. a source moves from CDN to GitHub). The cached tracks are reused
+// only while the signature matches; otherwise they are rebuilt synchronously. This lets a new
+// release OR a changed download source appear on the homepage on the next render, without a
+// manual cache flush and without the full-page HTML cache ever pinning a stale classification.
+TRACK_LINKS_VERSION = 2;
+tracksSig = "v" & TRACK_LINKS_VERSION
+	& "|lts="    & LTS_MINOR   & ":" & (structKeyExists(minorMap, LTS_MINOR)   ? (minorMap[LTS_MINOR].latestRelease   ?: "") : "")
+	& "|stable=" & stableMinor & ":" & (len(stableMinor) && structKeyExists(minorMap, stableMinor) ? (minorMap[stableMinor].latestRelease ?: "") : "");
+for (sigMinor in edgeMinors) tracksSig &= "|edge=" & sigMinor & ":" & (minorMap[sigMinor].latestBeta ?: "");
+
+tracksCache = util.dlCacheGet("luceeOverviewTracks");
+
+if (!isEmpty(tracksCache) && structKeyExists(tracksCache, "tracks") && (tracksCache.sig ?: "") == tracksSig) {
 	tracks = tracksCache.tracks;
-	if (tracksCacheAge >= 10) {
-		// stale — serve cached, rebuild in background
-		thread action="run" name="refresh-tracks-#getTickCount()#"
-			minorMap=minorMap edgeMinors=edgeMinors ltsMinor=LTS_MINOR stableMinor=stableMinor {
-			local.tracks = {};
-			if (structKeyExists(attributes.minorMap, attributes.ltsMinor) && attributes.minorMap[attributes.ltsMinor].hasRelease)
-				local.tracks.lts    = buildTrack(attributes.ltsMinor, "release");
-			if (len(attributes.stableMinor) && attributes.minorMap[attributes.stableMinor].hasRelease)
-				local.tracks.stable = buildTrack(attributes.stableMinor, "release");
-			local.tracks.edgeList = [];
-			for (local.em in attributes.edgeMinors) {
-				if (attributes.minorMap[local.em].hasBeta) arrayAppend(local.tracks.edgeList, buildTrack(local.em, "beta"));
-			}
-			util.dlCachePut("luceeOverviewTracks", { tracks: local.tracks, cachedAt: now() });
-		}
-	}
 } else {
-	// cold cache — build synchronously
 	tracks = {};
 	if (structKeyExists(minorMap, LTS_MINOR) && minorMap[LTS_MINOR].hasRelease)
 		tracks.lts    = buildTrack(LTS_MINOR, "release");
@@ -114,7 +113,7 @@ if (!isEmpty(tracksCache) && structKeyExists(tracksCache, "tracks")) {
 	for (em in edgeMinors) {
 		if (minorMap[em].hasBeta) arrayAppend(tracks.edgeList, buildTrack(em, "beta"));
 	}
-	util.dlCachePut("luceeOverviewTracks", { tracks: tracks, cachedAt: now() });
+	util.dlCachePut("luceeOverviewTracks", { tracks: tracks, sig: tracksSig, cachedAt: now() });
 }
 // ── Load Extensions ──────────────────────────────────────────────────
 function loadGroupExtensions(groupId) {
