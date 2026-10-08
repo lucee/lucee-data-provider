@@ -353,10 +353,16 @@ component {
 						}
 						// create war and copy to S3
 						else if(type=="war") {
-							lock name="build-lucee-war" timeout="10" {
-								var result=createWar(lcl,s3.version);
+							// war files are served from GitHub releases, we stop copying them to S3 on 2027-03-01 00:00 UTC (LDEV-6529)
+							if ( createDateTime( 2027, 3, 1, 0, 0, 0, 0, "UTC" ) GT now() ) {
+								lock name="build-lucee-war" timeout="10" {
+									var result=createWar(lcl,s3.version);
+								}
+								systemOutput("war: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
 							}
-							systemOutput("war: " & result & " took " & numberFormat(getTickCount()-s) & "ms",1,1);
+							else {
+								systemOutput("war: skipped, not copied to S3 anymore (since 2027-03-01 UTC)",1,1);
+							}
 						}
 						// create war and copy to S3
 						else if(type=="light") {
