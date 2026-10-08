@@ -269,8 +269,17 @@ component {
 		getVersions(true); //force reset();
 	}
 
+	// LDEV-6537 cdn.lucee.org is retired, from 2027-03-01 00:00 UTC we don't copy anything to the S3 bucket behind it anymore
+	private boolean function isCdnRetired() {
+		return now() GTE createDateTime( 2027, 3, 1, 0, 0, 0, 0, "UTC" );
+	}
+
 	private function maven2S3(mr,version,all) {
 		if(left(version,1)<5) return;
+		if ( isCdnRetired() ) {
+			systemOutput("maven2S3: skipped #version#, nothing is copied to S3 anymore (since 2027-03-01 UTC, LDEV-6537)",1,1);
+			return;
+		}
 		// ignore this versions
 		if(listFind("5.0.0.20-SNAPSHOT,5.0.0.255-SNAPSHOT,5.0.0.256-SNAPSHOT,5.0.0.258-SNAPSHOT,5.0.0.259-SNAPSHOT",version)) {
 			structDelete(all,version,false);
@@ -310,6 +319,10 @@ component {
 	*/
 	private function createArtifacts(mr,s3,specType="",includingForgeBox=true) {
 		if(left(s3.version,1)<5) return;
+		if ( isCdnRetired() ) {
+			systemOutput("createArtifacts: skipped #s3.version#, nothing is copied to S3 anymore (since 2027-03-01 UTC, LDEV-6537)",1,1);
+			return;
+		}
 
 		var jarRem=variables.s3Root&"lucee-"&s3.version&".jar";
 
