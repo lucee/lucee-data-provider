@@ -90,13 +90,20 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 						return;
 					}
 
-					// Find a ticket with a specific fix version to test with
+					// Find a ticket with a Lucee fix version to test with. Jira also has
+					// extension fix versions with a name prefix (e.g. "Quartz 1.1.0.0",
+					// "Redis 4.1.0.0"), which are not Lucee versions; getChangelog()
+					// skips them, so they can't be used as the upper boundary here.
 					var testVersion = "";
 					loop query=issues {
-						if ( isArray( issues.fixVersions ) && arrayLen( issues.fixVersions ) > 0 ) {
-							testVersion = issues.fixVersions[ 1 ];
-							break;
+						if ( !isArray( issues.fixVersions ) ) continue;
+						loop array=issues.fixVersions item="local.fv" {
+							if ( isSimpleValue( fv ) && reFind( "^\d+\.\d+\.\d+\.\d+(-[A-Za-z0-9]+)?$", fv ) ) {
+								testVersion = fv;
+								break;
+							}
 						}
+						if ( len( testVersion ) ) break;
 					}
 
 					if ( len( testVersion ) eq 0 ) {
