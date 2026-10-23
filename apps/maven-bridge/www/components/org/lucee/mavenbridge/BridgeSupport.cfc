@@ -1,6 +1,18 @@
 component {
 
 	variables.SNAPSHOT_SUFFIX = "-SNAPSHOT";
+	// core builds are published as GitHub Release assets; LDEV-6706
+	variables.DEFAULT_GITHUB_RELEASES_URL = "https://github.com/lucee/Lucee/releases/download/";
+	// first Lucee minor whose core files are served from GitHub Releases;
+	// older versions (6.2, 7.0) keep using the upstream CDN only
+	variables.GITHUB_RELEASES_MIN_VERSION = [7, 1];
+	// core files published as GitHub Release assets (classifier -> allowed extensions)
+	variables.GITHUB_RELEASE_FILES = {
+		"": ["jar", "lco", "war"],
+		"light": ["jar"],
+		"zero": ["jar"],
+		"express": ["zip"]
+	};
 
 	public function init(required struct config) {
 		variables.providerUrl = trim(config.provider);
@@ -8,6 +20,10 @@ component {
 		variables.upstreamUrl = normalizeUpstreamUrl(config.upstream ?: "");
 		variables.cacheTtlMinutes = val(config.cacheTtlMinutes ?: 60);
 		variables.timeout = val(config.timeout ?: 300);
+		// an explicitly empty value disables the GitHub Releases lookup
+		variables.githubReleasesUrl = structKeyExists(config, "githubReleasesUrl")
+			? normalizeUpstreamUrl(config.githubReleasesUrl ?: "")
+			: variables.DEFAULT_GITHUB_RELEASES_URL;
 		if (variables.cacheTtlMinutes < 1) {
 			variables.cacheTtlMinutes = 60;
 		}
@@ -84,6 +100,79 @@ component {
 			return "lucee-" & classifier & "-" & version & "." & ext;
 		}
 		return "lucee-" & version & "." & ext;
+	}
+
+	public string function getGithubReleasesUrl() {
+		return variables.githubReleasesUrl;
+	}
+
+	// true for non-snapshot core versions from 7.1 on; 6.2/7.0 stay on the upstream CDN
+	public boolean function isGithubReleaseVersion(required string version) {
+		if (!len(variables.githubReleasesUrl)) {
+			return false;
+		}
+		if (findNoCase(variables.SNAPSHOT_SUFFIX, arguments.version)) {
+			return false;
+		}
+		var parts = listToArray(listFirst(arguments.version, "-"), ".");
+		if (arrayLen(parts) < 2 || !isNumeric(parts[1]) || !isNumeric(parts[2])) {
+			return false;
+		}
+		var major = val(parts[1]);
+		var minor = val(parts[2]);
+		var min = variables.GITHUB_RELEASES_MIN_VERSION;
+		return major > min[1] || (major == min[1] && minor >= min[2]);
+	}
+
+	// candidate GitHub Release asset URLs for a core "lucee" file, in lookup order.
+	// The release tag is the numeric version without qualifier (7.1.2.184-RC -> 7.1.2.184);
+	// releases backfilled before that convention use the full version as tag, so that is
+	// tried second. Returns [] when the file is not published on GitHub (snapshots,
+	// checksums, poms, versions before 7.1, ...).
+	public array function toGithubReleaseUrls(required struct parsed) {
+		if (arguments.parsed.type != "artifact-file" || arguments.parsed.artifactId != "lucee") {
+			return [];
+		}
+		var version = arguments.parsed.version;
+		if (!isGithubReleaseVersion(version)) {
+			return [];
+		}
+		var classifier = arguments.parsed.classifier ?: "";
+		var ext = arguments.parsed.extension;
+		if (!structKeyExists(variables.GITHUB_RELEASE_FILES, classifier)
+			|| !arrayContainsNoCase(variables.GITHUB_RELEASE_FILES[classifier], ext)) {
+			return [];
+		}
+		// asset names match the legacy CDN names
+		var fileName = toUpstreamLegacyCorePath(arguments.parsed);
+		var tags = [listFirst(version, "-")];
+		if (tags[1] != version) {
+			arrayAppend(tags, version);
+		}
+		var urls = [];
+		for (var tag in tags) {
+			arrayAppend(urls, variables.githubReleasesUrl & tag & "/" & fileName);
+		}
+		return urls;
+	}
+
+	// first candidate GitHub Release asset that exists, or "" when none does
+	public string function findGithubReleaseUrl(required struct parsed) {
+		for (var candidate in toGithubReleaseUrls(arguments.parsed)) {
+			if (remoteResourceExists(candidate)) {
+				return candidate;
+			}
+		}
+		return "";
+	}
+
+	public boolean function remoteResourceExists(required string uri) {
+		try {
+			cfhttp(url=arguments.uri, method="head", redirect=true, timeout=variables.timeout, result="local.res") {};
+			return val(listFirst(toString(res.statusCode), " ")) == 200;
+		} catch (any e) {
+			return false;
+		}
 	}
 
 	public struct function fetchUpstreamResource(required string relativePath, string method="get") {

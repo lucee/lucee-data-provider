@@ -81,6 +81,12 @@ component {
 			// core "lucee" files are canonical at the upstream root (legacy layout)
 			var legacyPath = support.toUpstreamLegacyCorePath(arguments.parsed);
 			if (len(legacyPath)) {
+				// 7.1+ core builds are published as GitHub Release assets and may not be
+				// on the upstream CDN at all; prefer GitHub, keep the CDN as fallback
+				var githubUrl = support.findGithubReleaseUrl(arguments.parsed);
+				if (len(githubUrl)) {
+					return redirectResponse(githubUrl);
+				}
 				if (support.upstreamResourceExists(legacyPath)) {
 					return redirectResponse(support.getUpstreamUrl() & legacyPath);
 				}
