@@ -1,6 +1,10 @@
 component accessors="false" {
 
 	this.CDN = "https://cdn.lucee.org/";
+	// base for GitHub Release assets (installers, express, war and, for 7.1+, the core files)
+	this.GITHUB_RELEASES = "https://github.com/lucee/Lucee/releases/download/";
+	// core file types served from GitHub Releases for 7.1+ (6.2 / 7.0 keep their current sources)
+	this.GITHUB_CORE_TYPES = ["jar", "light", "zero", "lco", "express"];
 
 	this.DL_INFO = {
 		"win64":         "Windows x64 installer — guided setup wizard, installs Lucee as a Windows service with Tomcat included.",
@@ -89,11 +93,11 @@ component accessors="false" {
 	// non-snapshot version, not on the CDN. The tag and asset name are the full version,
 	// including any -RC/-BETA suffix.
 	function expressUrl(ver) {
-		return "https://github.com/lucee/Lucee/releases/download/" & ver & "/lucee-express-" & ver & ".zip";
+		return this.GITHUB_RELEASES & ver & "/lucee-express-" & ver & ".zip";
 	}
 
 	function cdnLinks(ver) {
-		local.gh = "https://github.com/lucee/Lucee/releases/download/" & ver & "/";
+		local.gh = this.GITHUB_RELEASES & ver & "/";
 		return {
 			// installers are published as GitHub release assets (built by the main workflow); S3/CDN is retired
 			win64:           local.gh & "lucee-" & ver & "-windows-x64-installer.exe",
@@ -122,7 +126,7 @@ component accessors="false" {
 		local.candidates = [];
 		if (len(arguments.jarUrl)) arrayAppend(local.candidates, reReplace(arguments.jarUrl, "\.jar$", "-light.jar"));
 		if (getType(arguments.ver) != "snapshot")
-			arrayAppend(local.candidates, "https://github.com/lucee/Lucee/releases/download/" & arguments.ver & "/lucee-light-" & arguments.ver & ".jar");
+			arrayAppend(local.candidates, this.GITHUB_RELEASES & arguments.ver & "/lucee-light-" & arguments.ver & ".jar");
 		arrayAppend(local.candidates, this.CDN & "lucee-light-" & arguments.ver & ".jar");
 
 		local.chosen = local.candidates[arrayLen(local.candidates)]; // CDN as last-resort default
@@ -138,6 +142,79 @@ component accessors="false" {
 		if (!isNull(local.exp)) local.entry.expiresAt = local.exp;
 		dlCachePut(local.key, local.entry);
 		return local.chosen;
+	}
+
+	// ── GitHub Release core files (7.1+) ─────────────────────────────────
+
+	// true for non-snapshot versions from 7.1 on, whose jar / light / zero / lco / express are
+	// taken from the GitHub Release; 6.2 and 7.0 keep their current (Maven / CDN) sources
+	function isGithubCoreVersion(ver) {
+		if (getType(arguments.ver) == "snapshot") return false;
+		local.parts = listToArray(listFirst(arguments.ver, "-"), ".");
+		if (arrayLen(local.parts) < 2 || !isNumeric(local.parts[1]) || !isNumeric(local.parts[2])) return false;
+		local.major = val(local.parts[1]);
+		local.minor = val(local.parts[2]);
+		return local.major > 7 || (local.major == 7 && local.minor >= 1);
+	}
+
+	// GitHub Release asset name of a core download type ("" when it is not a release asset)
+	function githubAssetName(ver, type) {
+		switch (arguments.type) {
+			case "jar":     return "lucee-" & arguments.ver & ".jar";
+			case "light":   return "lucee-light-" & arguments.ver & ".jar";
+			case "zero":    return "lucee-zero-" & arguments.ver & ".jar";
+			case "lco":     return arguments.ver & ".lco";
+			case "express": return "lucee-express-" & arguments.ver & ".zip";
+		}
+		return "";
+	}
+
+	// candidate URLs of a core file on GitHub Releases, in lookup order. The release tag is the
+	// numeric version without qualifier (7.1.2.184-RC -> 7.1.2.184); releases backfilled before
+	// that convention use the full version as tag, so that is tried second.
+	function githubAssetCandidates(ver, type) {
+		if (!isGithubCoreVersion(arguments.ver) || !arrayContains(this.GITHUB_CORE_TYPES, arguments.type)) return [];
+		local.name = githubAssetName(arguments.ver, arguments.type);
+		local.tags = [listFirst(arguments.ver, "-")];
+		if (local.tags[1] != arguments.ver) arrayAppend(local.tags, arguments.ver);
+		local.urls = [];
+		for (local.tag in local.tags) arrayAppend(local.urls, this.GITHUB_RELEASES & local.tag & "/" & local.name);
+		return local.urls;
+	}
+
+	// URL of a 7.1+ core file on GitHub Releases, or "" when it is not there (the caller then
+	// keeps its current source). Release assets are immutable, so a hit is cached forever; a
+	// miss is re-checked after an hour, in case the assets are uploaded after the version shows up.
+	function githubAssetUrl(ver, type) {
+		local.candidates = githubAssetCandidates(arguments.ver, arguments.type);
+		if (arrayIsEmpty(local.candidates)) return "";
+		local.key    = "luceeGithubAsset_" & arguments.type & "_" & arguments.ver;
+		local.cached = dlCacheGet(local.key);
+		if (!isEmpty(local.cached) && structKeyExists(local.cached, "url")
+			&& (!structKeyExists(local.cached, "expiresAt") || now().getTime() < local.cached.expiresAt))
+			return local.cached.url;
+
+		local.entry = { url: "" };
+		for (local.c in local.candidates) {
+			try {
+				cfhttp(method="head", url=local.c, timeout=8, redirect=true, result="local.r");
+				if (find("200", local.r.statuscode ?: "")) { local.entry.url = local.c; break; }
+			} catch (any e) {}
+		}
+		if (!len(local.entry.url)) local.entry.expiresAt = dateAdd("h", 1, now()).getTime();
+		dlCachePut(local.key, local.entry);
+		return local.entry.url;
+	}
+
+	// GitHub Release links for the core files of a 7.1+ version (only the ones that exist)
+	function githubCoreLinks(ver) {
+		local.links = {};
+		if (!isGithubCoreVersion(arguments.ver)) return local.links;
+		for (local.type in this.GITHUB_CORE_TYPES) {
+			local.u = githubAssetUrl(arguments.ver, local.type);
+			if (len(local.u)) local.links[local.type] = local.u;
+		}
+		return local.links;
 	}
 
 	// ── Extension images ─────────────────────────────────────────────────

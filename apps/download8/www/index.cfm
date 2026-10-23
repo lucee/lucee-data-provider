@@ -80,8 +80,17 @@ function buildTrack(minor, useLatest="release") {
 	}
 	// express is a GitHub release asset for every non-snapshot version
 	if (util.getType(local.ver) != "snapshot") local.links.express = util.expressUrl(local.ver);
-	// light comes from Maven next to the jar for the versions shown on the overview (6.2+)
-	if (len(local.links.jar ?: "")) local.links.light = reReplace(local.links.jar, "\.jar$", "-light.jar");
+	if (util.isGithubCoreVersion(local.ver)) {
+		// 7.1+: jar / light / zero / lco / express from the GitHub Release; anything not found
+		// there keeps the link built above, light is resolved by probing (see Util.lightUrl)
+		local.gh = util.githubCoreLinks(local.ver);
+		structAppend(local.links, local.gh, true);
+		if (!structKeyExists(local.gh, "light") && len(local.links.jar ?: ""))
+			local.links.light = util.lightUrl(local.ver, local.links.jar);
+	} else {
+		// light comes from Maven next to the jar for the versions shown on the overview (6.2 / 7.0)
+		if (len(local.links.jar ?: "")) local.links.light = reReplace(local.links.jar, "\.jar$", "-light.jar");
+	}
 	return { minor: minor, version: local.ver, isRelease: local.isRelease, links: local.links, detail: local.detail };
 }
 
@@ -93,7 +102,7 @@ arraySort(edgeMinors, function(a,b) { return util.versionCompare(a,b); });
 // only while the signature matches; otherwise they are rebuilt synchronously. This lets a new
 // release OR a changed download source appear on the homepage on the next render, without a
 // manual cache flush and without the full-page HTML cache ever pinning a stale classification.
-TRACK_LINKS_VERSION = 2;
+TRACK_LINKS_VERSION = 3;
 tracksSig = "v" & TRACK_LINKS_VERSION
 	& "|lts="    & LTS_MINOR   & ":" & (structKeyExists(minorMap, LTS_MINOR)   ? (minorMap[LTS_MINOR].latestRelease   ?: "") : "")
 	& "|stable=" & stableMinor & ":" & (len(stableMinor) && structKeyExists(minorMap, stableMinor) ? (minorMap[stableMinor].latestRelease ?: "") : "");
