@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 lucee/lucee:8.0.0.288-SNAPSHOT-light
+FROM --platform=linux/amd64 lucee/lucee:7.1.3.6-SNAPSHOT-light
 
 ENV LUCEE_ADMIN_ENABLED=false
 
