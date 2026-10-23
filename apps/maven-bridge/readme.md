@@ -74,6 +74,7 @@ LUCEE_EXTENSIONPROVIDERS=io.forgebox,org.lucee
 | `GROUP_ID` | — | Legacy single-provider Maven groupId |
 | `CACHE_TTL_MINUTES` | `60` | How long to cache each provider index before automatic refresh |
 | `TIMEOUT` | `300` | HTTP timeout (seconds) for provider requests and request timeout |
+| `GITHUB_RELEASES_URL` | `https://github.com/lucee/Lucee/releases/download/` | Base URL of the GitHub Release assets for Lucee core files (7.1 and newer, non-snapshot). Set to an empty value to disable the GitHub lookup |
 | `PORT` | `8080` | HTTP listen port (Tomcat); set by Google Cloud Run |
 | `LUCEE_ADMIN_PASSWORD` | — | Lucee administrator password |
 

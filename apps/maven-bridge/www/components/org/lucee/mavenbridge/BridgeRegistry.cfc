@@ -114,11 +114,16 @@ component {
 				providers = defaultProviders();
 			}
 		}
-		return {
+		var config = {
 			providers: providers,
 			cacheTtlMinutes: val(server.system.environment.CACHE_TTL_MINUTES ?: 60),
 			timeout: val(server.system.environment.TIMEOUT ?: 300)
 		};
+		// optional override of the GitHub Releases download base for core files (empty disables)
+		if (structKeyExists(server.system.environment, "GITHUB_RELEASES_URL")) {
+			config.githubReleasesUrl = trim(server.system.environment.GITHUB_RELEASES_URL);
+		}
+		return config;
 	}
 
 	private static array function normalizeProviderEntries(required array entries) {
