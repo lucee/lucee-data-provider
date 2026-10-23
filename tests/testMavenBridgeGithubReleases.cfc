@@ -90,5 +90,27 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect(urlsFor(s, "/org/lucee/lucee/7.1.1.17/lucee-7.1.1.17.jar")[1]).toBe("https://example.org/releases/7.1.1.17/lucee-7.1.1.17.jar");
 			});
 		});
+
+		describe("LDEV-6706 maven-bridge: core files only in the Maven layout", function() {
+
+			it(title="core files try the legacy layout, then the Maven layout", body=function() {
+				var s = newSupport();
+				expect(s.toUpstreamFileCandidates(s.parseMavenPath("/org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC.pom"))).toBe([
+					"lucee-8.0.0.294-RC.pom",
+					"org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC.pom"
+				]);
+				expect(s.toUpstreamFileCandidates(s.parseMavenPath("/org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC-config-schema.json"))[2])
+					.toBe("org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC-config-schema.json");
+				expect(s.toUpstreamFileCandidates(s.parseMavenPath("/org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC-env-vars.json"))[2])
+					.toBe("org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC-env-vars.json");
+			});
+
+			it(title="other artifacts use the Maven layout only", body=function() {
+				var s = newSupport();
+				expect(s.toUpstreamFileCandidates(s.parseMavenPath("/org/lucee/other/1.0.0.1/other-1.0.0.1.pom"))).toBe([
+					"org/lucee/other/1.0.0.1/other-1.0.0.1.pom"
+				]);
+			});
+		});
 	}
 }

@@ -102,6 +102,31 @@ component {
 		return "lucee-" & version & "." & ext;
 	}
 
+	// upstream paths of an artifact file, in lookup order. Core "lucee" files are tried in the
+	// legacy flat layout first, then in the Maven layout org/lucee/lucee/<v>/ (newer builds put
+	// the pom, config-schema/env-vars json, ... only there); other artifacts use the Maven layout
+	public array function toUpstreamFileCandidates(required struct parsed) {
+		var paths = [];
+		var legacyPath = toUpstreamLegacyCorePath(arguments.parsed);
+		if (len(legacyPath)) arrayAppend(paths, legacyPath);
+		var mavenPath = toUpstreamRelativePath(arguments.parsed);
+		if (len(mavenPath) && !arrayContains(paths, mavenPath)) arrayAppend(paths, mavenPath);
+		return paths;
+	}
+
+	// URL of an artifact file on the upstream mirror: for 7.1+ core files the GitHub Release
+	// first, then the upstream paths above; "" when none of them exists
+	public string function findUpstreamFileUrl(required struct parsed) {
+		if (len(toUpstreamLegacyCorePath(arguments.parsed))) {
+			var githubUrl = findGithubReleaseUrl(arguments.parsed);
+			if (len(githubUrl)) return githubUrl;
+		}
+		for (var path in toUpstreamFileCandidates(arguments.parsed)) {
+			if (upstreamResourceExists(path)) return getUpstreamUrl() & path;
+		}
+		return "";
+	}
+
 	public string function getGithubReleasesUrl() {
 		return variables.githubReleasesUrl;
 	}

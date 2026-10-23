@@ -37,5 +37,18 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 				expect(resolve("/org/lucee/lucee/7.1.0.0/lucee-7.1.0.0.jar")).toBe("");
 			});
 		});
+
+		describe("LDEV-6706 maven-bridge: core pom from the Maven layout", function() {
+
+			it(title="core pom of a published build resolves to the upstream Maven layout", body=function() {
+				var parsed = variables.support.parseMavenPath("/org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC.pom");
+				expect(variables.support.findUpstreamFileUrl(parsed)).toBe("https://cdn.lucee.org/org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC.pom");
+			});
+
+			it(title="missing core file resolves to nothing", body=function() {
+				var parsed = variables.support.parseMavenPath("/org/lucee/lucee/7.1.0.0/lucee-7.1.0.0.pom");
+				expect(variables.support.findUpstreamFileUrl(parsed)).toBe("");
+			});
+		});
 	}
 }
