@@ -81,7 +81,7 @@ function buildTrack(minor, useLatest="release") {
 	// express is a GitHub release asset for every non-snapshot version
 	if (util.getType(local.ver) != "snapshot") local.links.express = util.expressUrl(local.ver);
 	if (util.isGithubCoreVersion(local.ver)) {
-		// 7.1+: jar / light / zero / lco / express from the GitHub Release; anything not found
+		// 7.1+: core files, war and installers from the GitHub Release; anything not found
 		// there keeps the link built above, light is resolved by probing (see Util.lightUrl)
 		local.gh = util.githubCoreLinks(local.ver);
 		structAppend(local.links, local.gh, true);
@@ -102,7 +102,7 @@ arraySort(edgeMinors, function(a,b) { return util.versionCompare(a,b); });
 // only while the signature matches; otherwise they are rebuilt synchronously. This lets a new
 // release OR a changed download source appear on the homepage on the next render, without a
 // manual cache flush and without the full-page HTML cache ever pinning a stale classification.
-TRACK_LINKS_VERSION = 3;
+TRACK_LINKS_VERSION = 4;
 tracksSig = "v" & TRACK_LINKS_VERSION
 	& "|lts="    & LTS_MINOR   & ":" & (structKeyExists(minorMap, LTS_MINOR)   ? (minorMap[LTS_MINOR].latestRelease   ?: "") : "")
 	& "|stable=" & stableMinor & ":" & (len(stableMinor) && structKeyExists(minorMap, stableMinor) ? (minorMap[stableMinor].latestRelease ?: "") : "");

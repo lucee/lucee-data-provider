@@ -26,7 +26,7 @@ if (len(version) && len(dlType) && !len(artifactId)) {
 	// light: prefer Maven (same mirror as the jar), then GitHub, then CDN — see Util.lightUrl
 	if (dlType == "light") dlUrl = util.lightUrl(version, detail.jar ?: "");
 
-	// 7.1+ (non-snapshot): jar / light / zero / lco / express come from the GitHub Release;
+	// 7.1+ (non-snapshot): core files, war and installers come from the GitHub Release;
 	// the sources above stay the fallback, and 6.2 / 7.0 are not affected
 	if (util.isGithubCoreVersion(version)) {
 		ghUrl = util.githubAssetUrl(version, dlType);

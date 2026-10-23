@@ -4,7 +4,7 @@ component accessors="false" {
 	// base for GitHub Release assets (installers, express, war and, for 7.1+, the core files)
 	this.GITHUB_RELEASES = "https://github.com/lucee/Lucee/releases/download/";
 	// core file types served from GitHub Releases for 7.1+ (6.2 / 7.0 keep their current sources)
-	this.GITHUB_CORE_TYPES = ["jar", "light", "zero", "lco", "express"];
+	this.GITHUB_CORE_TYPES = ["jar", "light", "zero", "lco", "express", "war", "win64", "linux-x64", "linux-aarch64"];
 
 	this.DL_INFO = {
 		"win64":         "Windows x64 installer — guided setup wizard, installs Lucee as a Windows service with Tomcat included.",
@@ -165,6 +165,10 @@ component accessors="false" {
 			case "zero":    return "lucee-zero-" & arguments.ver & ".jar";
 			case "lco":     return arguments.ver & ".lco";
 			case "express": return "lucee-express-" & arguments.ver & ".zip";
+			case "war":           return "lucee-" & arguments.ver & ".war";
+			case "win64":         return "lucee-" & arguments.ver & "-windows-x64-installer.exe";
+			case "linux-x64":     return "lucee-" & arguments.ver & "-linux-x64-installer.run";
+			case "linux-aarch64": return "lucee-" & arguments.ver & "-linux-aarch64-installer.run";
 		}
 		return "";
 	}
