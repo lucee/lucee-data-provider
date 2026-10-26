@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { CHECKSUM_TYPES, checksumOfStream, checksumOfText, checksumsOfStream, splitChecksum } from "../src/checksum";
 import { encodeForHtml, urlEncodedFormat, xmlFormat } from "../src/cfml";
 import { parseProviders, readConfig } from "../src/config";
 import type { Env } from "../src/env";
 import { isImmutableArtifact } from "../src/r2";
 import { buildIndex, sortVersions } from "../src/rest-index";
-import { normalizeRequestPath } from "../src/proxy";
+import { normalizeRequestPath, r2KeyFor, r2KeysFor } from "../src/proxy";
 import { BridgeSupport, type SupportIo } from "../src/support";
 import forgebox from "./fixtures/forgebox-info.json";
 import mongoPom from "./fixtures/ortus-mongodb-cache-extension-1.2.0.5291.pom?raw";
@@ -78,6 +79,26 @@ describe("legacy core mapping", () => {
 
 	it("only maps the lucee artifact", () => {
 		expect(s.toUpstreamLegacyCorePath({ type: "artifact-file", artifactId: "redis", version: "1", classifier: "", extension: "jar" })).toBe("");
+	});
+});
+
+describe("R2 keys", () => {
+	const s = lucee();
+	const config = { r2Prefix: "" } as Parameters<typeof r2KeyFor>[0];
+	const core = (version: string, classifier: string, extension: string) =>
+		({ type: "artifact-file", groupId: "org.lucee", artifactId: "lucee", version, classifier, extension }) as const;
+	it("uses the Maven layout first, then the legacy core name", () => {
+		expect(r2KeyFor(config, s, core("8.0.1.12-SNAPSHOT", "", "pom"))).toBe("org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.pom");
+		expect(r2KeysFor(config, s, core("6.2.0.321", "light", "jar"))).toEqual([
+			"org/lucee/lucee/6.2.0.321/lucee-6.2.0.321-light.jar",
+			"lucee-light-6.2.0.321.jar"
+		]);
+	});
+	it("has a single key for non-core files and applies the prefix", () => {
+		const prefixed = { r2Prefix: "maven/" } as Parameters<typeof r2KeyFor>[0];
+		const lex = { type: "artifact-file", groupId: "org.lucee", artifactId: "redis-extension", version: "2.0.0.1", classifier: "", extension: "lex" } as const;
+		expect(r2KeysFor(prefixed, s, lex)).toEqual(["maven/org/lucee/redis-extension/2.0.0.1/redis-extension-2.0.0.1.lex"]);
+		expect(r2KeysFor(prefixed, s, core("7.1.0.10", "", "lco"))).toEqual(["maven/org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.lco", "maven/7.1.0.10.lco"]);
 	});
 });
 
@@ -193,5 +214,60 @@ describe("helpers", () => {
 		expect(isImmutableArtifact("7.1.0.10-SNAPSHOT", "lucee-7.1.0.10-SNAPSHOT.jar")).toBe(false);
 		expect(isImmutableArtifact("7.1.0.10", "maven-metadata.xml")).toBe(false);
 		expect(isImmutableArtifact("7.1.0.10", "maven-metadata.xml.sha1")).toBe(false);
+	});
+});
+
+describe("checksums", () => {
+	const s = lucee();
+	const core = (version: string, classifier: string, extension: string) =>
+		({ type: "artifact-file", groupId: "org.lucee", artifactId: "lucee", version, classifier, extension }) as const;
+
+	it("splits a checksum path into its artifact and type", () => {
+		expect(splitChecksum(core("8.0.0.294-RC", "", "jar.sha1"))).toEqual({ artifact: core("8.0.0.294-RC", "", "jar"), type: "sha1" });
+		expect(splitChecksum(core("1", "", "lex.MD5"))?.type).toBe("md5");
+		expect(splitChecksum(core("1", "", "pom.sha512"))?.type).toBe("sha512");
+		expect(splitChecksum(core("1", "", "jar"))).toBeNull();
+		expect(splitChecksum(core("1", "", "sha1"))).toBeNull();
+		expect(splitChecksum(core("1", "", "jar.asc"))).toBeNull();
+		expect(splitChecksum({ type: "version-index", artifactId: "lucee", version: "1" })).toBeNull();
+	});
+
+	it("keeps the legacy core name for checksum files", () => {
+		expect(s.toUpstreamLegacyCorePath(core("6.2.0.321", "", "jar.sha1"))).toBe("lucee-6.2.0.321.jar.sha1");
+		expect(s.toUpstreamLegacyCorePath(core("6.2.0.321", "light", "jar.md5"))).toBe("lucee-light-6.2.0.321.jar.md5");
+		expect(s.toUpstreamLegacyCorePath(core("6.2.0.321", "", "lco.sha1"))).toBe("6.2.0.321.lco.sha1");
+		expect(s.toUpstreamRelativePath(core("8.0.0.294-RC", "", "pom.sha1"))).toBe("org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC.pom.sha1");
+	});
+
+	it("never looks for checksum files on GitHub Releases", () => {
+		expect(s.toGithubReleaseUrls(core("7.1.0.10", "", "jar.sha1"))).toEqual([]);
+	});
+
+	it("computes hex digests of text and streams", async () => {
+		expect(await checksumOfText("abc", "sha1")).toBe("a9993e364706816aba3e25717850c26c9cd0d89d");
+		expect(await checksumOfText("abc", "md5")).toBe("900150983cd24fb0d6963f7d28e17f72");
+		expect(await checksumOfText("abc", "sha256")).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+		expect(await checksumOfStream(new Blob(["a", "bc"]).stream(), "sha1", 3)).toBe("a9993e364706816aba3e25717850c26c9cd0d89d");
+		await expect(checksumOfStream(new Blob(["abcd"]).stream(), "sha1", 3)).rejects.toThrow();
+	});
+
+	it("computes every checksum type in one pass over a chunked stream", async () => {
+		const chunks = () =>
+			new ReadableStream<Uint8Array>({
+				start(controller) {
+					for (const part of ["a", "b", "c"]) controller.enqueue(new TextEncoder().encode(part));
+					controller.close();
+				}
+			});
+		const all = await checksumsOfStream(chunks(), CHECKSUM_TYPES, 3);
+		expect(Object.keys(all).sort()).toEqual(["md5", "sha1", "sha256", "sha512"]);
+		for (const type of CHECKSUM_TYPES) expect(all[type]).toBe(await checksumOfText("abc", type));
+		await expect(checksumsOfStream(chunks(), CHECKSUM_TYPES, 2)).rejects.toThrow("more than 2 bytes");
+	});
+
+	it("reads CHECKSUM_MAX_MB", () => {
+		expect(readConfig({} as unknown as Env).checksumMaxBytes).toBe(128 * 1024 * 1024);
+		expect(readConfig({ CHECKSUM_MAX_MB: "0" } as unknown as Env).checksumMaxBytes).toBe(0);
+		expect(() => readConfig({ CHECKSUM_MAX_MB: "-1" } as unknown as Env)).toThrow("Invalid CHECKSUM_MAX_MB");
 	});
 });

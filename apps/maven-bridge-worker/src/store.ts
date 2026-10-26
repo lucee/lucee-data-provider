@@ -60,9 +60,9 @@ export class RuntimeIo implements SupportIo {
 		if (this.waitUntil) this.waitUntil(guarded);
 	}
 
-	// --- cache generation (bumped by flush, part of every Cache API key) ---
+	// --- cache generation (bumped by flush, part of every Cache API key and computed checksum key) ---
 
-	private getGeneration(): Promise<string> {
+	getGeneration(): Promise<string> {
 		this.generation ??= this.env.BRIDGE_CACHE.get(GENERATION_KEY).then((g) => g ?? "0");
 		return this.generation;
 	}

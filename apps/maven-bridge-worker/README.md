@@ -24,8 +24,24 @@ Two kinds of groups, configured in `EXTENSION_PROVIDERS`:
   generated.
 - **Upstream mirror groups** (`org.lucee` → `https://cdn.lucee.org/`): metadata and indexes are passed
   through from the upstream; files redirect (302) to the upstream. Lucee core files (`org.lucee:lucee`)
-  are mapped to the legacy CDN names (`lucee-light-6.2.0.321.jar`, `6.2.0.321.lco`, …); 7.1+ core
-  builds redirect to GitHub Releases first, with the CDN as fallback.
+  are looked up in this order: GitHub Releases (7.1+ final/RC jar, lco, war, light, zero, express),
+  the Maven layout on the CDN (`org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.pom`, also
+  every pom and snapshot), then the legacy flat CDN names (`lucee-light-6.2.0.321.jar`,
+  `6.2.0.321.lco`, …) for older builds. Existence checks are HEAD requests; hits are cached.
+
+#### Checksums
+
+`.sha1`, `.md5`, `.sha256` and `.sha512` files (plain hex digest, as Maven expects):
+
+- Upstream mirror groups redirect to the upstream checksum file when there is one (core files: Maven
+  layout first, then the legacy name, e.g. `lucee-6.2.0.321.jar.sha1`, `6.2.0.321.lco.sha1`).
+- Otherwise (core poms, RCs and snapshots have none on the CDN) the checksum is computed from the
+  artifact the bridge serves (R2 object, GitHub Release asset or CDN file): streamed, never buffered,
+  only for artifacts up to `CHECKSUM_MAX_MB`. One download yields all four checksum types. Results
+  are cached in KV, for 30 days for immutable artifacts and for `CACHE_TTL_MINUTES` for snapshots;
+  with fill-on-miss, checksums of immutable artifacts are also stored in R2 next to the artifact.
+- REST provider groups have no checksum files: pom checksums are computed from the generated pom,
+  `.lex` checksums from the provider download. Anything else answers 404, never the artifact.
 
 ### R2
 
@@ -34,17 +50,19 @@ streamed by the worker (content type, ETag, Last-Modified, Content-Length, `Rang
 `If-None-Match`/`If-Modified-Since` → 304, `HEAD`). A miss falls back to the redirect logic above.
 Group-level files (`maven-metadata.xml`, `index.html`) of upstream groups are read from R2 first too.
 
-Object keys use the upstream layout, so a copy of `cdn.lucee.org` can be used as is:
+Object keys use the Maven layout of the upstream, so a copy of `cdn.lucee.org` can be used as is:
 
-- core: `lucee-7.1.0.10.jar`, `lucee-light-6.2.0.321.jar`, `6.2.0.321.lco` (bucket root)
-- everything else: `org/lucee/redis-extension/3.0.0.1/redis-extension-3.0.0.1.lex`
+- `org/lucee/redis-extension/3.0.0.1/redis-extension-3.0.0.1.lex`, `org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.jar`
+- core files are also looked up under their legacy flat CDN name at the bucket root
+  (`lucee-light-6.2.0.321.jar`, `6.2.0.321.lco`) when the Maven-layout key is missing; fill on miss
+  always writes the Maven-layout key.
 
 `R2_PREFIX` is prepended to every key.
 
 #### Fill on miss (lazy migration)
 
 With `R2_MODE = "serve"` and `R2_FILL_ON_MISS = "true"`, a miss for an upstream-mirror file is fetched
-from its source (GitHub Releases or the CDN) and stored in R2 under the same key. The next request is
+from its source (GitHub Releases or the CDN) and stored in R2 under its Maven-layout key. The next request is
 served from R2.
 
 - Files up to `R2_FILL_STREAM_MAX_MB` (default 32) are streamed to the client and stored at the same
@@ -66,12 +84,14 @@ The CFML bridge kept everything in the server scope. Here:
 - **KV (`BRIDGE_CACHE`)**: REST provider indexes (`index:<groupId>`) and upstream group files
   (`upstream:<url>`), refreshed by the **hourly cron**. Entries older than `CACHE_TTL_MINUTES` are
   served while a refresh runs in the background; if the provider is down the last good copy is used.
+  Computed checksums (`checksum:<generation>:<type>:<source>`) are kept in KV too, with an expiration.
 - **Cache API**: upstream metadata/index pages and positive `HEAD` checks on the upstream, keyed by a
   cache generation that a flush bumps.
 
 ### Flush
 
-`?flush=true` (also `1`, `yes`, `force`) on any path empties KV, bumps the cache generation and resyncs,
+`?flush=true` (also `1`, `yes`, `force`) on any path empties KV, bumps the cache generation (which also drops
+computed checksums cached in KV; checksums stored in R2 stay) and resyncs,
 like `health.cfm?flush=true`. It needs the `FLUSH_TOKEN` secret, sent as `X-Flush-Token: <token>` or
 `Authorization: Bearer <token>`. Without the secret flushing is disabled (403).
 
@@ -91,6 +111,7 @@ curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/health?flu
 | `GITHUB_RELEASES_URL` | `https://github.com/lucee/Lucee/releases/download/` | 7.1+ core builds; empty disables |
 | `R2_MODE` | `off` | `off` or `serve` |
 | `R2_FILL_ON_MISS` | `false` | store immutable upstream files in R2 on first request (serve mode only) |
+| `CHECKSUM_MAX_MB` | `128` | checksums the upstream does not have are computed for artifacts up to this size; larger ones answer 404 (`0` = never compute) |
 | `R2_FILL_STREAM_MAX_MB` | `32` | fill-on-miss files up to this size are streamed while stored; larger ones are stored first (`0` = always store first) |
 | `R2_PREFIX` | empty | key prefix in the bucket |
 
@@ -173,3 +194,5 @@ It exits with 1 when anything differs.
 - Content types always come from the path's extension.
 - Flushing requires `FLUSH_TOKEN`.
 - Optional R2 serving and fill-on-miss (not in the CFML bridge).
+- Checksums missing upstream are computed; the CFML bridge answered 404 (upstream groups) or
+  redirected them to the `.lex` download (REST provider groups).

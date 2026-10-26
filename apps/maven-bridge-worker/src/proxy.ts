@@ -1,5 +1,6 @@
 // Port of BridgeProxy.cfc: maps a request path onto a Maven repository response.
 import { cfJsonDate, compareNoCase, containsNoCase, encodeForHtml, startsWithNoCase } from "./cfml";
+import { checksumOfText, splitChecksum, type ChecksumStore, type ChecksumType } from "./checksum";
 import type { BridgeConfig } from "./config";
 import { isUpstreamNotFound } from "./errors";
 import { fetchAndFill, isImmutableArtifact, serveFromR2 } from "./r2";
@@ -45,6 +46,8 @@ export interface ProxyContext {
 	request: Request;
 	waitUntil: (p: Promise<unknown>) => void;
 	bucket?: R2Bucket;
+	/** computes checksums the upstream does not have; undefined = never compute */
+	checksums?: ChecksumStore;
 }
 
 export async function invokePath(ctx: ProxyContext, cleanPath: string): Promise<Response> {
@@ -85,34 +88,47 @@ export async function invokePath(ctx: ProxyContext, cleanPath: string): Promise<
 	}
 }
 
-/** R2 object key of an artifact file (legacy core layout for "lucee", Maven layout otherwise). */
+/** R2 object key of an artifact file: the Maven layout, as used by the upstream and for fill-on-miss. */
 export function r2KeyFor(config: BridgeConfig, support: BridgeSupport, parsed: ParsedPath): string {
+	return config.r2Prefix + support.toUpstreamRelativePath(parsed);
+}
+
+/**
+ * R2 keys looked up for an artifact file, in order: the Maven-layout key, then for
+ * core files of upstream mirrors the legacy flat CDN name (bucket copies of cdn.lucee.org).
+ */
+export function r2KeysFor(config: BridgeConfig, support: BridgeSupport, parsed: ParsedPath): string[] {
+	const keys = [r2KeyFor(config, support, parsed)];
 	const legacy = support.hasUpstream() ? support.toUpstreamLegacyCorePath(parsed) : "";
-	return config.r2Prefix + (legacy.length ? legacy : support.toUpstreamRelativePath(parsed));
+	if (legacy.length) keys.push(config.r2Prefix + legacy);
+	return keys;
 }
 
 async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, parsed: ParsedPath): Promise<Response> {
 	const key = r2KeyFor(ctx.config, support, parsed);
 	if (ctx.bucket) {
-		const fromR2 = await serveFromR2(ctx.bucket, key, ctx.request);
-		if (fromR2) return fromR2;
+		for (const candidate of r2KeysFor(ctx.config, support, parsed)) {
+			const fromR2 = await serveFromR2(ctx.bucket, candidate, ctx.request);
+			if (fromR2) return fromR2;
+		}
 	}
 
 	// upstream mirrors serve files from the upstream repo only, never from the REST provider
 	if (support.hasUpstream()) {
 		let target = "";
-		const legacyPath = support.toUpstreamLegacyCorePath(parsed);
-		if (legacyPath.length) {
-			// 7.1+ core builds are GitHub Release assets; the CDN stays the fallback
-			target = await support.findGithubReleaseUrl(parsed);
-			if (!target.length && (await support.io.upstreamResourceExists(support, legacyPath))) {
-				target = support.upstreamUrl + legacyPath;
-			}
+		if (support.isCoreFile(parsed)) {
+			// GitHub Releases (7.1+), then the Maven layout on the CDN, then the legacy flat CDN name
+			target = await support.findCoreFileUrl(parsed);
 		} else {
 			const upstreamPath = support.toUpstreamRelativePath(parsed);
 			if (await support.io.upstreamResourceExists(support, upstreamPath)) target = support.upstreamUrl + upstreamPath;
 		}
-		if (!target.length) return textResponse(404, TEXT, "Not found");
+		if (!target.length) {
+			// no checksum file upstream (e.g. core poms, RCs, snapshots): compute it from the artifact
+			const checksum = splitChecksum(parsed);
+			if (checksum) return computedChecksumResponse(ctx, support, checksum.artifact, checksum.type, key);
+			return textResponse(404, TEXT, "Not found");
+		}
 
 		if (shouldFill(ctx, parsed, key)) {
 			const filled = await fetchAndFill(ctx.bucket!, key, target, ctx.waitUntil, {
@@ -126,6 +142,10 @@ async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, p
 		return redirectResponse(target);
 	}
 
+	// the REST provider has no checksum files: compute them, never redirect them to the artifact
+	const checksum = splitChecksum(parsed);
+	if (checksum) return computedChecksumResponse(ctx, support, checksum.artifact, checksum.type, key);
+
 	if (equalsExt(parsed, "pom")) {
 		return textResponse(200, XML, await support.buildMinimalPom(parsed.artifactId!, parsed.version!));
 	}
@@ -138,6 +158,66 @@ async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, p
 		);
 	}
 	return redirectResponse(downloadUrl);
+}
+
+/**
+ * Checksum of an artifact computed by the bridge (hex digest, as in a Maven checksum file):
+ * upstream mirrors hash the artifact from R2 or its upstream URL, REST providers hash the
+ * generated pom or the extension download. 404 when the artifact is missing or too large.
+ */
+async function computedChecksumResponse(
+	ctx: ProxyContext,
+	support: BridgeSupport,
+	artifact: ParsedPath,
+	type: ChecksumType,
+	checksumKey: string
+): Promise<Response> {
+	const store = ctx.checksums;
+	if (!store || ctx.config.checksumMaxBytes <= 0) return textResponse(404, TEXT, "Not found");
+	const fileName = support.toUpstreamRelativePath(artifact).split("/").pop() ?? "";
+	const immutable = isImmutableArtifact(artifact.version ?? "", fileName);
+
+	let value = "";
+	if (support.hasUpstream()) {
+		let inR2 = false;
+		if (ctx.bucket) {
+			for (const candidate of r2KeysFor(ctx.config, support, artifact)) {
+				const fromR2 = await store.ofR2(ctx.bucket, candidate, type);
+				if (fromR2 !== null) {
+					value = fromR2;
+					inR2 = true;
+					break;
+				}
+			}
+		}
+		if (!inR2) {
+			let url = "";
+			if (support.isCoreFile(artifact)) {
+				url = await support.findCoreFileUrl(artifact);
+			} else {
+				const upstreamPath = support.toUpstreamRelativePath(artifact);
+				if (await support.io.upstreamResourceExists(support, upstreamPath)) url = support.upstreamUrl + upstreamPath;
+			}
+			if (url.length) value = await store.ofUrl(url, type, immutable);
+		}
+	} else if (equalsExt(artifact, "pom")) {
+		// same bytes as the generated pom served for this version
+		value = await checksumOfText(await support.buildMinimalPom(artifact.artifactId!, artifact.version!), type);
+	} else if (equalsExt(artifact, "lex")) {
+		const downloadUrl = await support.getDownloadUrl(artifact.artifactId!, artifact.version!);
+		if (downloadUrl.length) value = await store.ofUrl(downloadUrl, type, immutable);
+	}
+	if (!value.length) return textResponse(404, TEXT, "Not found");
+
+	if (support.hasUpstream() && shouldFill(ctx, artifact, checksumKey)) {
+		ctx.waitUntil(
+			ctx.bucket!.put(checksumKey, value, {
+				httpMetadata: { contentType: "text/plain" },
+				customMetadata: { source: "computed", filledAt: new Date().toISOString() }
+			})
+		);
+	}
+	return textResponse(200, TEXT, value);
 }
 
 function equalsExt(parsed: ParsedPath, ext: string): boolean {

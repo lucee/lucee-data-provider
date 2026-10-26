@@ -68,6 +68,73 @@ describe("upstream mirror (org.lucee)", () => {
 		expect(res.status).toBe(302);
 		expect(res.headers.get("location")).toBe(`${CDN}lucee-light-6.2.0.321.jar`);
 		expect(calls.some((c) => c.includes("github.com"))).toBe(false);
+		// the Maven layout is checked first
+		const maven = calls.indexOf(`HEAD ${CDN}org/lucee/lucee/6.2.0.321/lucee-6.2.0.321-light.jar`);
+		const legacy = calls.indexOf(`HEAD ${CDN}lucee-light-6.2.0.321.jar`);
+		expect(maven).toBeGreaterThanOrEqual(0);
+		expect(legacy).toBeGreaterThan(maven);
+	});
+
+	it.each([
+		["snapshot", "8.0.1.12-SNAPSHOT"],
+		["RC", "8.0.0.294-RC"],
+		["7.1+ final", "7.1.0.10"]
+	])("redirects a %s core pom to the Maven layout on the CDN", async (_label, version) => {
+		const path = `org/lucee/lucee/${version}/lucee-${version}.pom`;
+		mockFetch({ ...baseRoutes(), [CDN + path]: "<project/>" });
+		const res = await call("/" + path);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe(CDN + path);
+		// poms are never GitHub Release assets, and the legacy flat name is not needed
+		expect(calls.some((c) => c.includes("github.com"))).toBe(false);
+		expect(calls).not.toContain(`HEAD ${CDN}lucee-${version}.pom`);
+	});
+
+	it("redirects snapshot core jars and lco files to the Maven layout", async () => {
+		const jar = "org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.jar";
+		const lco = "org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.lco";
+		mockFetch({ ...baseRoutes(), [CDN + jar]: "jar", [CDN + lco]: "lco", [`${CDN}lucee-8.0.1.12-SNAPSHOT.jar`]: "jar" });
+		const res = await call("/" + jar);
+		expect(res.headers.get("location")).toBe(CDN + jar);
+		const resLco = await call("/" + lco);
+		expect(resLco.headers.get("location")).toBe(CDN + lco);
+	});
+
+	it("prefers GitHub Releases over the Maven layout for 7.1+ jars", async () => {
+		const gh = `${GITHUB}8.0.0.294/lucee-8.0.0.294-RC.jar`;
+		const maven = "org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC.jar";
+		mockFetch({ ...baseRoutes(), [gh]: "jar", [CDN + maven]: "jar" });
+		const res = await call("/" + maven);
+		expect(res.headers.get("location")).toBe(gh);
+		expect(calls).not.toContain(`HEAD ${CDN}${maven}`);
+	});
+
+	it("uses the Maven layout when a 7.1+ jar has no GitHub Release asset", async () => {
+		const maven = "org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC.jar";
+		mockFetch({ ...baseRoutes(), [CDN + maven]: "jar", [`${CDN}lucee-8.0.0.294-RC.jar`]: "jar" });
+		const res = await call("/" + maven);
+		expect(res.headers.get("location")).toBe(CDN + maven);
+	});
+
+	it("still falls back to the legacy name when the Maven-layout check fails", async () => {
+		const maven = `${CDN}org/lucee/lucee/6.2.0.321/lucee-6.2.0.321.jar`;
+		mockFetch({
+			...baseRoutes(),
+			[maven]: () => {
+				throw new TypeError("network down");
+			},
+			[`${CDN}lucee-6.2.0.321.jar`]: "jar"
+		});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const res = await call("/org/lucee/lucee/6.2.0.321/lucee-6.2.0.321.jar");
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe(`${CDN}lucee-6.2.0.321.jar`);
+	});
+
+	it("answers 404 for a core file missing in every layout", async () => {
+		mockFetch(baseRoutes());
+		const res = await call("/org/lucee/lucee/8.0.1.99-SNAPSHOT/lucee-8.0.1.99-SNAPSHOT.pom");
+		expect(res.status).toBe(404);
 	});
 
 	it("serves HEAD without a body", async () => {
@@ -150,7 +217,19 @@ describe("R2", () => {
 		expect(res.status).toBe(304);
 	});
 
-	it("uses the legacy key layout for core files", async () => {
+	it("uses the Maven-layout key for core files", async () => {
+		mockFetch(baseRoutes());
+		await bindings.ARTIFACTS!.put("org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.pom", "<project/>");
+		await bindings.ARTIFACTS!.put("org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.jar", "maven");
+		await bindings.ARTIFACTS!.put("lucee-7.1.0.10.jar", "legacy");
+		const pom = await call("/org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.pom", {}, R2);
+		expect(pom.status).toBe(200);
+		expect(await pom.text()).toBe("<project/>");
+		const res = await call("/org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.jar", {}, R2);
+		expect(await res.text()).toBe("maven");
+	});
+
+	it("falls back to the legacy key for core files copied from the CDN root", async () => {
 		mockFetch(baseRoutes());
 		await bindings.ARTIFACTS!.put("lucee-7.1.0.10.jar", "core");
 		const res = await call("/org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.jar", {}, R2);
@@ -203,14 +282,35 @@ describe("R2 fill-on-miss", () => {
 		expect(calls.some((c) => c.includes(path))).toBe(false);
 	});
 
-	it("fills core jars from GitHub Releases under the legacy key", async () => {
+	it("fills core jars from GitHub Releases under the Maven-layout key", async () => {
 		const gh = `${GITHUB}7.1.0.10/lucee-7.1.0.10.jar`;
 		mockFetch({ ...baseRoutes(), [gh]: "jar-bytes" });
 		const res = await call("/org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.jar", {}, FILL);
 		expect(res.status).toBe(200);
-		const stored = await bindings.ARTIFACTS!.get("lucee-7.1.0.10.jar");
+		const stored = await bindings.ARTIFACTS!.get("org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.jar");
 		expect(await stored!.text()).toBe("jar-bytes");
 		expect(stored!.httpMetadata?.contentType).toBe("application/java-archive");
+		expect(await bindings.ARTIFACTS!.head("lucee-7.1.0.10.jar")).toBeNull();
+	});
+
+	it("fills an RC core pom from the Maven layout on the CDN", async () => {
+		const path = "org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC.pom";
+		mockFetch({ ...baseRoutes(), [CDN + path]: "<project/>" });
+		const res = await call("/" + path, {}, FILL);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe("<project/>");
+		const stored = await bindings.ARTIFACTS!.get(path);
+		expect(await stored!.text()).toBe("<project/>");
+		expect(stored!.customMetadata?.source).toBe(CDN + path);
+	});
+
+	it("fills older core builds from the legacy CDN name under the Maven-layout key", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}lucee-light-6.2.0.321.jar`]: "light-bytes" });
+		const res = await call("/org/lucee/lucee/6.2.0.321/lucee-6.2.0.321-light.jar", {}, FILL);
+		expect(res.status).toBe(200);
+		const stored = await bindings.ARTIFACTS!.get("org/lucee/lucee/6.2.0.321/lucee-6.2.0.321-light.jar");
+		expect(await stored!.text()).toBe("light-bytes");
+		expect(stored!.customMetadata?.source).toBe(`${CDN}lucee-light-6.2.0.321.jar`);
 	});
 
 	it("never stores SNAPSHOT files", async () => {
@@ -330,6 +430,174 @@ describe("R2 fill-on-miss", () => {
 	});
 });
 
+const sha1 = async (text: string, algo = "SHA-1") =>
+	[...new Uint8Array(await crypto.subtle.digest(algo, new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+describe("checksums (org.lucee)", () => {
+	const rc = "org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC";
+	const pom = "<project><version>8.0.0.294-RC</version></project>";
+
+	it("computes a core pom checksum the CDN does not have, and caches it in KV", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}${rc}.pom`]: pom });
+		const res = await call(`/${rc}.pom.sha1`);
+		expect(res.status).toBe(200);
+		expect(res.headers.get("content-type")).toContain("text/plain");
+		expect(await res.text()).toBe(await sha1(pom));
+		// the upstream checksum file is tried first, Maven layout before the legacy name
+		const maven = calls.indexOf(`HEAD ${CDN}${rc}.pom.sha1`);
+		expect(maven).toBeGreaterThanOrEqual(0);
+		expect(calls.indexOf(`HEAD ${CDN}lucee-8.0.0.294-RC.pom.sha1`)).toBeGreaterThan(maven);
+		const gen = await bindings.BRIDGE_CACHE.get("cache-generation");
+		expect(await bindings.BRIDGE_CACHE.get(`checksum:${gen}:sha1:${CDN}${rc}.pom`)).toBe(await sha1(pom));
+
+		mockFetch(baseRoutes());
+		const again = await call(`/${rc}.pom.sha1`);
+		expect(await again.text()).toBe(await sha1(pom));
+		expect(calls).not.toContain(`GET ${CDN}${rc}.pom`);
+	});
+
+	it("computes md5, sha256 and sha512 too, from a single download", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}${rc}.pom`]: pom });
+		expect(await (await call(`/${rc}.pom.md5`)).text()).toBe(await sha1(pom, "MD5"));
+		expect(await (await call(`/${rc}.pom.sha256`)).text()).toBe(await sha1(pom, "SHA-256"));
+		expect(await (await call(`/${rc}.pom.sha512`)).text()).toBe(await sha1(pom, "SHA-512"));
+		expect(await (await call(`/${rc}.pom.sha1`)).text()).toBe(await sha1(pom));
+		expect(calls.filter((c) => c === `GET ${CDN}${rc}.pom`)).toHaveLength(1);
+	});
+
+	it("caches checksums of immutable artifacts for 30 days", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}${rc}.pom`]: pom });
+		expect((await call(`/${rc}.pom.sha1`)).status).toBe(200);
+		const keys = (await bindings.BRIDGE_CACHE.list({ prefix: "checksum:" })).keys;
+		expect(keys).toHaveLength(4);
+		const now = Date.now() / 1000;
+		for (const key of keys) {
+			expect(key.expiration).toBeGreaterThan(now + 29 * 24 * 3600);
+			expect(key.expiration).toBeLessThanOrEqual(now + 30 * 24 * 3600 + 60);
+		}
+	});
+
+	it("hashes a 7.1+ core jar from GitHub Releases", async () => {
+		const gh = `${GITHUB}7.1.0.10/lucee-7.1.0.10.jar`;
+		mockFetch({ ...baseRoutes(), [gh]: "jar-bytes" });
+		const res = await call("/org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.jar.sha1");
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe(await sha1("jar-bytes"));
+		expect(calls).not.toContain(`HEAD ${GITHUB}7.1.0.10/lucee-7.1.0.10.jar.sha1`);
+	});
+
+	it("redirects to an upstream checksum file when there is one", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}${rc}.jar.sha1`]: "abc", [`${CDN}lucee-6.2.0.321.jar.sha1`]: "def", [`${CDN}6.2.0.321.lco.sha1`]: "ghi" });
+		const maven = await call(`/${rc}.jar.sha1`);
+		expect(maven.status).toBe(302);
+		expect(maven.headers.get("location")).toBe(`${CDN}${rc}.jar.sha1`);
+		const legacy = await call("/org/lucee/lucee/6.2.0.321/lucee-6.2.0.321.jar.sha1");
+		expect(legacy.headers.get("location")).toBe(`${CDN}lucee-6.2.0.321.jar.sha1`);
+		const lco = await call("/org/lucee/lucee/6.2.0.321/lucee-6.2.0.321.lco.sha1");
+		expect(lco.headers.get("location")).toBe(`${CDN}6.2.0.321.lco.sha1`);
+	});
+
+	it("computes an extension md5 when the CDN only has the sha1", async () => {
+		const lex = "org/lucee/redis-extension/2.0.0.1/redis-extension-2.0.0.1.lex";
+		mockFetch({ ...baseRoutes(), [CDN + lex]: "lex-bytes", [`${CDN}${lex}.sha1`]: "x" });
+		expect((await call(`/${lex}.sha1`)).status).toBe(302);
+		const md5 = await call(`/${lex}.md5`);
+		expect(md5.status).toBe(200);
+		expect(await md5.text()).toBe(await sha1("lex-bytes", "MD5"));
+	});
+
+	it("caches snapshot checksums only for the cache TTL", async () => {
+		const snap = "org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.pom";
+		mockFetch({ ...baseRoutes(), [CDN + snap]: pom });
+		expect(await (await call(`/${snap}.sha1`)).text()).toBe(await sha1(pom));
+		const keys = (await bindings.BRIDGE_CACHE.list({ prefix: "checksum:" })).keys;
+		expect(keys).toHaveLength(4);
+		const now = Date.now() / 1000;
+		for (const key of keys) {
+			expect(key.expiration).toBeGreaterThan(now);
+			// CACHE_TTL_MINUTES = 60
+			expect(key.expiration).toBeLessThanOrEqual(now + 3600 + 60);
+		}
+	});
+
+	it("answers 404 when the artifact does not exist", async () => {
+		mockFetch(baseRoutes());
+		expect((await call(`/${rc}.jar.sha1`)).status).toBe(404);
+		expect((await bindings.BRIDGE_CACHE.list({ prefix: "checksum:" })).keys).toHaveLength(0);
+	});
+
+	it("answers 404 for artifacts over CHECKSUM_MAX_MB", async () => {
+		const big = "x".repeat(2048);
+		mockFetch({
+			...baseRoutes(),
+			[`${CDN}${rc}.jar`]: big,
+			[`${CDN}${rc}.war`]: (req) =>
+				new Response(req.method === "HEAD" ? null : new Blob([big]).stream(), { status: 200 })
+		});
+		const limit = { CHECKSUM_MAX_MB: String(1024 / (1024 * 1024)) };
+		const declared = await call(`/${rc}.jar.sha1`, {}, limit);
+		expect(declared.status).toBe(404);
+		expect(calls).toContain(`GET ${CDN}${rc}.jar`);
+		// no content-length: the stream is cut off at the limit
+		expect((await call(`/${rc}.war.sha1`, {}, limit)).status).toBe(404);
+		expect((await call(`/${rc}.jar.sha1`, {}, { CHECKSUM_MAX_MB: "0" })).status).toBe(404);
+		expect((await bindings.BRIDGE_CACHE.list({ prefix: "checksum:" })).keys).toHaveLength(0);
+	});
+
+	it("hashes the artifact from R2 without asking the upstream", async () => {
+		mockFetch(baseRoutes());
+		await bindings.ARTIFACTS!.put(`${rc}.jar`, "r2-bytes");
+		const res = await call(`/${rc}.jar.sha1`, {}, R2);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe(await sha1("r2-bytes"));
+		expect(calls.some((c) => c.includes(`${rc}.jar`) && !c.includes(".sha1"))).toBe(false);
+		expect(await (await call(`/${rc}.jar.md5`, {}, R2)).text()).toBe(await sha1("r2-bytes", "MD5"));
+	});
+
+	it("stores computed checksums of immutable artifacts in R2 on fill-on-miss", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}${rc}.pom`]: pom });
+		expect((await call(`/${rc}.pom.sha1`, {}, FILL)).status).toBe(200);
+		const stored = await bindings.ARTIFACTS!.get(`${rc}.pom.sha1`);
+		expect(await stored!.text()).toBe(await sha1(pom));
+		expect(stored!.customMetadata?.source).toBe("computed");
+		// served from R2 from now on
+		mockFetch(baseRoutes());
+		expect(await (await call(`/${rc}.pom.sha1`, {}, FILL)).text()).toBe(await sha1(pom));
+		expect(calls.some((c) => c.includes(rc))).toBe(false);
+	});
+});
+
+describe("checksums (io.forgebox)", () => {
+	const mongo = "io/forgebox/ortus-mongodb-cache-extension/1.2.0.5291/ortus-mongodb-cache-extension-1.2.0.5291";
+	const download = "https://www.forgebox.io/rest/extension/provider/full/6A03159F-C6DC-4FCC-95A068B1E1A903FA?version=1%2E2%2E0%2E5291";
+
+	it("hashes the lex download instead of redirecting to it", async () => {
+		mockFetch({ ...baseRoutes(), [download]: "lex-bytes" });
+		const res = await call(`/${mongo}.lex.sha1`);
+		expect(res.status).toBe(200);
+		expect(res.headers.get("location")).toBeNull();
+		expect(await res.text()).toBe(await sha1("lex-bytes"));
+		expect(await (await call(`/${mongo}.lex.md5`)).text()).toBe(await sha1("lex-bytes", "MD5"));
+	});
+
+	it("hashes the generated pom", async () => {
+		mockFetch(baseRoutes());
+		const pom = await (await call(`/${mongo}.pom`)).text();
+		const res = await call(`/${mongo}.pom.sha1`);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe(await sha1(pom));
+	});
+
+	it("answers 404, never the artifact, when there is nothing to hash", async () => {
+		mockFetch(baseRoutes());
+		const missing = await call(`/${mongo}.lex.sha1`);
+		expect(missing.status).toBe(404);
+		expect(missing.headers.get("location")).toBeNull();
+		expect((await call("/io/forgebox/nope-extension/1/nope-extension-1.lex.sha1")).status).toBe(404);
+		expect((await call(`/${mongo}.jar.sha1`)).status).toBe(404);
+	});
+});
+
 describe("flush", () => {
 	it("is forbidden without a token", async () => {
 		mockFetch(baseRoutes());
@@ -354,6 +622,12 @@ describe("flush", () => {
 	it("flushes and resyncs with the right token", async () => {
 		mockFetch(baseRoutes());
 		await bindings.BRIDGE_CACHE.put("index:io.forgebox", JSON.stringify({ stale: true }));
+		const rc = "org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC.pom";
+		mockFetch({ ...baseRoutes(), [CDN + rc]: "old" });
+		expect(await (await call(`/${rc}.sha1`)).text()).toBe(await sha1("old"));
+		mockFetch({ ...baseRoutes(), [CDN + rc]: "new" });
+		// still cached
+		expect(await (await call(`/${rc}.sha1`)).text()).toBe(await sha1("old"));
 		const before = await bindings.BRIDGE_CACHE.get("cache-generation");
 		const res = await call("/health?flush=1", { headers: { authorization: "Bearer test-flush-token" } });
 		expect(res.status).toBe(200);
@@ -362,6 +636,9 @@ describe("flush", () => {
 		expect(await bindings.BRIDGE_CACHE.get("cache-generation")).not.toBe(before);
 		const index = await bindings.BRIDGE_CACHE.get("index:io.forgebox", "json");
 		expect(index).not.toMatchObject({ stale: true });
+		// computed checksums belong to the old generation and are computed again
+		expect(await (await call(`/${rc}.sha1`)).text()).toBe(await sha1("new"));
+		expect(calls).toContain(`GET ${CDN}${rc}`);
 	});
 
 	it("is not triggered by flush=false", async () => {

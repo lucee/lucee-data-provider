@@ -26,6 +26,11 @@ export interface Env {
 	 * stored; larger files are stored first, then served from R2. Default 32, 0 = always store first.
 	 */
 	R2_FILL_STREAM_MAX_MB?: string;
+	/**
+	 * Checksums (.sha1, .md5, ...) the upstream does not have are computed from the artifact,
+	 * for artifacts up to this size (MB); larger ones answer 404. Default 128, 0 = never compute.
+	 */
+	CHECKSUM_MAX_MB?: string;
 	/** Optional key prefix inside the R2 bucket. */
 	R2_PREFIX?: string;
 	/** Secret: required for ?flush=true. When unset, flushing is disabled. */

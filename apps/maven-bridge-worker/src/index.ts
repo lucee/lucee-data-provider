@@ -4,7 +4,8 @@ import type { Env } from "./env";
 import { landingPage } from "./landing";
 import { healthResponse, invokePath, normalizeRequestPath, textResponse } from "./proxy";
 import { BridgeRegistry } from "./registry";
-import { RuntimeIo } from "./store";
+import { ChecksumStore } from "./checksum";
+import { RuntimeIo, USER_AGENT } from "./store";
 
 const TEXT = "text/plain; charset=utf-8";
 const HEALTH_PATHS = ["/health", "/healthcheck", "/health.cfm"];
@@ -67,7 +68,19 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
 		return healthResponse(registry, flushed);
 	}
 	return invokePath(
-		{ registry, config, request, waitUntil: (p) => ctx.waitUntil(p), bucket: io.r2 },
+		{
+			registry,
+			config,
+			request,
+			waitUntil: (p) => ctx.waitUntil(p),
+			bucket: io.r2,
+			checksums: new ChecksumStore(env.BRIDGE_CACHE, {
+				maxBytes: config.checksumMaxBytes,
+				timeoutSeconds: config.timeout,
+				mutableTtlSeconds: config.cacheTtlMinutes * 60,
+				userAgent: USER_AGENT
+			}, () => io.getGeneration())
+		},
 		path
 	);
 }

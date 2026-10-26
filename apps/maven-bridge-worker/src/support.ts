@@ -1,5 +1,6 @@
 // Port of BridgeSupport.cfc: one configured provider / groupId.
 import { compareNoCase, containsNoCase, encodeForHtml, equalsNoCase, isNumeric, mavenTimestamp, startsWithNoCase, xmlFormat } from "./cfml";
+import { splitChecksum } from "./checksum";
 import { DEFAULT_GITHUB_RELEASES_URL, normalizeUpstreamUrl, val } from "./config";
 import { BridgeError, isUpstreamNotFound } from "./errors";
 import type { RestIndex } from "./rest-index";
@@ -165,6 +166,12 @@ export class BridgeSupport {
 	 */
 	toUpstreamLegacyCorePath(parsed: ParsedPath): string {
 		if (parsed.type !== "artifact-file" || !equalsNoCase(parsed.artifactId ?? "", "lucee")) return "";
+		// checksum files keep the legacy name of their artifact: 6.2.0.321.lco.sha1
+		const checksum = splitChecksum(parsed);
+		if (checksum) {
+			const base = this.toUpstreamLegacyCorePath(checksum.artifact);
+			return base.length ? `${base}.${parsed.extension!.slice(checksum.artifact.extension!.length + 1)}` : "";
+		}
 		const version = parsed.version!;
 		const ext = parsed.extension!;
 		const classifier = parsed.classifier ?? "";
@@ -172,6 +179,40 @@ export class BridgeSupport {
 		if (startsWithNoCase(classifier, "forgebox")) return `${classifier}-${version}.${ext}`;
 		if (classifier.length) return `lucee-${classifier}-${version}.${ext}`;
 		return `lucee-${version}.${ext}`;
+	}
+
+	/** true for an org.lucee:lucee core build file */
+	isCoreFile(parsed: ParsedPath): boolean {
+		return parsed.type === "artifact-file" && equalsNoCase(parsed.artifactId ?? "", "lucee");
+	}
+
+	/**
+	 * Upstream URL of a core file, in lookup order (LDEV-6726):
+	 * 1. GitHub Release asset (7.1+ final/RC jar, lco, war, light, zero, express)
+	 * 2. Maven layout on the upstream (org/lucee/lucee/<v>/lucee-<v>[-<classifier>].<ext>), e.g. poms and snapshots
+	 * 3. legacy flat CDN name (lucee-light-<v>.jar, <v>.lco, ...) for older builds
+	 * "" when none exists.
+	 */
+	async findCoreFileUrl(parsed: ParsedPath): Promise<string> {
+		if (!this.isCoreFile(parsed) || !this.hasUpstream()) return "";
+		const github = await this.findGithubReleaseUrl(parsed);
+		if (github.length) return github;
+
+		const mavenPath = this.toUpstreamRelativePath(parsed);
+		let mavenExists = false;
+		try {
+			mavenExists = await this.io.upstreamResourceExists(this, mavenPath);
+		} catch (e) {
+			// a failing check must not hide the legacy fallback
+			console.warn(`maven-bridge HEAD ${this.upstreamUrl + mavenPath} failed`, e);
+		}
+		if (mavenExists) return this.upstreamUrl + mavenPath;
+
+		const legacyPath = this.toUpstreamLegacyCorePath(parsed);
+		if (legacyPath.length && (await this.io.upstreamResourceExists(this, legacyPath))) {
+			return this.upstreamUrl + legacyPath;
+		}
+		return "";
 	}
 
 	/** true for non-snapshot core versions from 7.1 on; 6.2/7.0 stay on the upstream CDN */
