@@ -1,0 +1,35 @@
+# Lucee skill site on Cloudflare Workers (port of apps/skill).
+# Test hostname: skl.lucee-services.com (skill.lucee-services.com stays on Cloud Run).
+name = "lucee-skill"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = false
+preview_urls = false
+routes = [{ pattern = "skl.lucee-services.com", custom_domain = true }]
+
+# landing page assets (/res/*)
+[assets]
+directory = "./public"
+
+# hourly refresh of the skill files (conditional GET against the source)
+[triggers]
+crons = ["0 * * * *"]
+
+[observability]
+enabled = true
+
+# Cached skill files (body, ETag, Last-Modified, fetch time).
+# The id is filled in by scripts/provision.mjs in CI (namespace "lucee-skill-cache").
+[[kv_namespaces]]
+binding = "SKILL_CACHE"
+
+[vars]
+# source of the first skill file in SKILLS
+SKILL_SOURCE_URL = "https://docs.lucee.org/lucee.skill"
+# comma separated skill files served as /<file>; "file|url" sets the source explicitly,
+# other files without a url are resolved relative to SKILL_SOURCE_URL
+SKILLS = "main.skill"
+# a cached copy older than this is refreshed in the background on request (the cron refreshes hourly)
+REFRESH_MINUTES = "60"
+# timeout in seconds for requests to the source
+TIMEOUT = "60"
