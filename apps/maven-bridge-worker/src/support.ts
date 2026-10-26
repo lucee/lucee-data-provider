@@ -1,6 +1,6 @@
 // Port of BridgeSupport.cfc: one configured provider / groupId.
 import { compareNoCase, containsNoCase, encodeForHtml, equalsNoCase, isNumeric, mavenTimestamp, startsWithNoCase, xmlFormat } from "./cfml";
-import { normalizeUpstreamUrl, val } from "./config";
+import { DEFAULT_GITHUB_RELEASES_URL, normalizeUpstreamUrl, val } from "./config";
 import { BridgeError, isUpstreamNotFound } from "./errors";
 import type { RestIndex } from "./rest-index";
 import { sortVersions } from "./rest-index";
@@ -85,7 +85,7 @@ export class BridgeSupport {
 		this.githubReleasesUrl =
 			config.githubReleasesUrl !== undefined
 				? normalizeUpstreamUrl(config.githubReleasesUrl)
-				: "https://github.com/lucee/Lucee/releases/download/";
+				: DEFAULT_GITHUB_RELEASES_URL;
 	}
 
 	get groupPath(): string {
