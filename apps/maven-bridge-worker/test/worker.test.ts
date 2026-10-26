@@ -447,7 +447,8 @@ describe("checksums (org.lucee)", () => {
 		const maven = calls.indexOf(`HEAD ${CDN}${rc}.pom.sha1`);
 		expect(maven).toBeGreaterThanOrEqual(0);
 		expect(calls.indexOf(`HEAD ${CDN}lucee-8.0.0.294-RC.pom.sha1`)).toBeGreaterThan(maven);
-		expect(await bindings.BRIDGE_CACHE.get(`checksum:sha1:${CDN}${rc}.pom`)).toBe(await sha1(pom));
+		const gen = await bindings.BRIDGE_CACHE.get("cache-generation");
+		expect(await bindings.BRIDGE_CACHE.get(`checksum:${gen}:sha1:${CDN}${rc}.pom`)).toBe(await sha1(pom));
 
 		mockFetch(baseRoutes());
 		const again = await call(`/${rc}.pom.sha1`);
@@ -455,10 +456,25 @@ describe("checksums (org.lucee)", () => {
 		expect(calls).not.toContain(`GET ${CDN}${rc}.pom`);
 	});
 
-	it("computes md5 and sha256 too", async () => {
+	it("computes md5, sha256 and sha512 too, from a single download", async () => {
 		mockFetch({ ...baseRoutes(), [`${CDN}${rc}.pom`]: pom });
 		expect(await (await call(`/${rc}.pom.md5`)).text()).toBe(await sha1(pom, "MD5"));
 		expect(await (await call(`/${rc}.pom.sha256`)).text()).toBe(await sha1(pom, "SHA-256"));
+		expect(await (await call(`/${rc}.pom.sha512`)).text()).toBe(await sha1(pom, "SHA-512"));
+		expect(await (await call(`/${rc}.pom.sha1`)).text()).toBe(await sha1(pom));
+		expect(calls.filter((c) => c === `GET ${CDN}${rc}.pom`)).toHaveLength(1);
+	});
+
+	it("caches checksums of immutable artifacts for 30 days", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}${rc}.pom`]: pom });
+		expect((await call(`/${rc}.pom.sha1`)).status).toBe(200);
+		const keys = (await bindings.BRIDGE_CACHE.list({ prefix: "checksum:" })).keys;
+		expect(keys).toHaveLength(4);
+		const now = Date.now() / 1000;
+		for (const key of keys) {
+			expect(key.expiration).toBeGreaterThan(now + 29 * 24 * 3600);
+			expect(key.expiration).toBeLessThanOrEqual(now + 30 * 24 * 3600 + 60);
+		}
 	});
 
 	it("hashes a 7.1+ core jar from GitHub Releases", async () => {
@@ -495,8 +511,13 @@ describe("checksums (org.lucee)", () => {
 		mockFetch({ ...baseRoutes(), [CDN + snap]: pom });
 		expect(await (await call(`/${snap}.sha1`)).text()).toBe(await sha1(pom));
 		const keys = (await bindings.BRIDGE_CACHE.list({ prefix: "checksum:" })).keys;
-		expect(keys).toHaveLength(1);
-		expect(keys[0].expiration).toBeGreaterThan(Date.now() / 1000);
+		expect(keys).toHaveLength(4);
+		const now = Date.now() / 1000;
+		for (const key of keys) {
+			expect(key.expiration).toBeGreaterThan(now);
+			// CACHE_TTL_MINUTES = 60
+			expect(key.expiration).toBeLessThanOrEqual(now + 3600 + 60);
+		}
 	});
 
 	it("answers 404 when the artifact does not exist", async () => {
@@ -601,7 +622,12 @@ describe("flush", () => {
 	it("flushes and resyncs with the right token", async () => {
 		mockFetch(baseRoutes());
 		await bindings.BRIDGE_CACHE.put("index:io.forgebox", JSON.stringify({ stale: true }));
-		await bindings.BRIDGE_CACHE.put("checksum:sha1:https://cdn.lucee.org/x.jar", "abc");
+		const rc = "org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC.pom";
+		mockFetch({ ...baseRoutes(), [CDN + rc]: "old" });
+		expect(await (await call(`/${rc}.sha1`)).text()).toBe(await sha1("old"));
+		mockFetch({ ...baseRoutes(), [CDN + rc]: "new" });
+		// still cached
+		expect(await (await call(`/${rc}.sha1`)).text()).toBe(await sha1("old"));
 		const before = await bindings.BRIDGE_CACHE.get("cache-generation");
 		const res = await call("/health?flush=1", { headers: { authorization: "Bearer test-flush-token" } });
 		expect(res.status).toBe(200);
@@ -610,7 +636,9 @@ describe("flush", () => {
 		expect(await bindings.BRIDGE_CACHE.get("cache-generation")).not.toBe(before);
 		const index = await bindings.BRIDGE_CACHE.get("index:io.forgebox", "json");
 		expect(index).not.toMatchObject({ stale: true });
-		expect(await bindings.BRIDGE_CACHE.get("checksum:sha1:https://cdn.lucee.org/x.jar")).toBeNull();
+		// computed checksums belong to the old generation and are computed again
+		expect(await (await call(`/${rc}.sha1`)).text()).toBe(await sha1("new"));
+		expect(calls).toContain(`GET ${CDN}${rc}`);
 	});
 
 	it("is not triggered by flush=false", async () => {

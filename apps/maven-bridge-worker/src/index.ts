@@ -79,7 +79,7 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
 				timeoutSeconds: config.timeout,
 				mutableTtlSeconds: config.cacheTtlMinutes * 60,
 				userAgent: USER_AGENT
-			})
+			}, () => io.getGeneration())
 		},
 		path
 	);

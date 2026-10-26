@@ -37,9 +37,9 @@ Two kinds of groups, configured in `EXTENSION_PROVIDERS`:
   layout first, then the legacy name, e.g. `lucee-6.2.0.321.jar.sha1`, `6.2.0.321.lco.sha1`).
 - Otherwise (core poms, RCs and snapshots have none on the CDN) the checksum is computed from the
   artifact the bridge serves (R2 object, GitHub Release asset or CDN file): streamed, never buffered,
-  only for artifacts up to `CHECKSUM_MAX_MB`. Results are cached in KV, for good for immutable
-  artifacts and for `CACHE_TTL_MINUTES` for snapshots; with fill-on-miss, checksums of immutable
-  artifacts are also stored in R2 next to the artifact.
+  only for artifacts up to `CHECKSUM_MAX_MB`. One download yields all four checksum types. Results
+  are cached in KV, for 30 days for immutable artifacts and for `CACHE_TTL_MINUTES` for snapshots;
+  with fill-on-miss, checksums of immutable artifacts are also stored in R2 next to the artifact.
 - REST provider groups have no checksum files: pom checksums are computed from the generated pom,
   `.lex` checksums from the provider download. Anything else answers 404, never the artifact.
 
@@ -84,12 +84,14 @@ The CFML bridge kept everything in the server scope. Here:
 - **KV (`BRIDGE_CACHE`)**: REST provider indexes (`index:<groupId>`) and upstream group files
   (`upstream:<url>`), refreshed by the **hourly cron**. Entries older than `CACHE_TTL_MINUTES` are
   served while a refresh runs in the background; if the provider is down the last good copy is used.
+  Computed checksums (`checksum:<generation>:<type>:<source>`) are kept in KV too, with an expiration.
 - **Cache API**: upstream metadata/index pages and positive `HEAD` checks on the upstream, keyed by a
   cache generation that a flush bumps.
 
 ### Flush
 
-`?flush=true` (also `1`, `yes`, `force`) on any path empties KV (including computed checksums), bumps the cache generation and resyncs,
+`?flush=true` (also `1`, `yes`, `force`) on any path empties KV, bumps the cache generation (which also drops
+computed checksums cached in KV; checksums stored in R2 stay) and resyncs,
 like `health.cfm?flush=true`. It needs the `FLUSH_TOKEN` secret, sent as `X-Flush-Token: <token>` or
 `Authorization: Bearer <token>`. Without the secret flushing is disabled (403).
 

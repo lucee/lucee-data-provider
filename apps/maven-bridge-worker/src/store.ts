@@ -60,9 +60,9 @@ export class RuntimeIo implements SupportIo {
 		if (this.waitUntil) this.waitUntil(guarded);
 	}
 
-	// --- cache generation (bumped by flush, part of every Cache API key) ---
+	// --- cache generation (bumped by flush, part of every Cache API key and computed checksum key) ---
 
-	private getGeneration(): Promise<string> {
+	getGeneration(): Promise<string> {
 		this.generation ??= this.env.BRIDGE_CACHE.get(GENERATION_KEY).then((g) => g ?? "0");
 		return this.generation;
 	}
@@ -258,13 +258,6 @@ export class RuntimeIo implements SupportIo {
 			deletes.push(this.env.BRIDGE_CACHE.delete(indexKey(support)));
 			for (const rel of groupLevelFiles(support)) deletes.push(this.env.BRIDGE_CACHE.delete(upstreamKey(support, rel)));
 		}
-		// computed checksums (see checksum.ts)
-		let cursor: string | undefined;
-		do {
-			const page: KVNamespaceListResult<unknown, string> = await this.env.BRIDGE_CACHE.list({ prefix: "checksum:", cursor });
-			for (const key of page.keys) deletes.push(this.env.BRIDGE_CACHE.delete(key.name));
-			cursor = page.list_complete ? undefined : page.cursor;
-		} while (cursor);
 		await Promise.all(deletes);
 		await this.bumpGeneration();
 		await this.syncAll(supports);

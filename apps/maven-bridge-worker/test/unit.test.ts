@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checksumOfStream, checksumOfText, splitChecksum } from "../src/checksum";
+import { CHECKSUM_TYPES, checksumOfStream, checksumOfText, checksumsOfStream, splitChecksum } from "../src/checksum";
 import { encodeForHtml, urlEncodedFormat, xmlFormat } from "../src/cfml";
 import { parseProviders, readConfig } from "../src/config";
 import type { Env } from "../src/env";
@@ -249,6 +249,20 @@ describe("checksums", () => {
 		expect(await checksumOfText("abc", "sha256")).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 		expect(await checksumOfStream(new Blob(["a", "bc"]).stream(), "sha1", 3)).toBe("a9993e364706816aba3e25717850c26c9cd0d89d");
 		await expect(checksumOfStream(new Blob(["abcd"]).stream(), "sha1", 3)).rejects.toThrow();
+	});
+
+	it("computes every checksum type in one pass over a chunked stream", async () => {
+		const chunks = () =>
+			new ReadableStream<Uint8Array>({
+				start(controller) {
+					for (const part of ["a", "b", "c"]) controller.enqueue(new TextEncoder().encode(part));
+					controller.close();
+				}
+			});
+		const all = await checksumsOfStream(chunks(), CHECKSUM_TYPES, 3);
+		expect(Object.keys(all).sort()).toEqual(["md5", "sha1", "sha256", "sha512"]);
+		for (const type of CHECKSUM_TYPES) expect(all[type]).toBe(await checksumOfText("abc", type));
+		await expect(checksumsOfStream(chunks(), CHECKSUM_TYPES, 2)).rejects.toThrow("more than 2 bytes");
 	});
 
 	it("reads CHECKSUM_MAX_MB", () => {

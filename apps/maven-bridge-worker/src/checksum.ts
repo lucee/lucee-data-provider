@@ -37,22 +37,46 @@ export async function checksumOfText(text: string, type: ChecksumType): Promise<
 
 class TooLargeError extends Error {}
 
+/** every checksum type, in the order Maven clients usually ask for them */
+export const CHECKSUM_TYPES = Object.keys(ALGORITHMS) as ChecksumType[];
+
+/**
+ * Hashes a stream without buffering it, with one pass for all requested types;
+ * fails once more than maxBytes have been read.
+ */
+export async function checksumsOfStream(
+	body: ReadableStream<Uint8Array>,
+	types: readonly ChecksumType[],
+	maxBytes: number
+): Promise<Record<ChecksumType, string>> {
+	const digests = types.map((type) => new crypto.DigestStream(ALGORITHMS[type]));
+	// an aborted digest rejects; the read error is the one reported
+	for (const d of digests) d.digest.catch(() => undefined);
+	const writers = digests.map((d) => d.getWriter());
+	const reader = body.getReader();
+	let read = 0;
+	try {
+		for (;;) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			read += value.byteLength;
+			if (read > maxBytes) throw new TooLargeError(`more than ${maxBytes} bytes`);
+			await Promise.all(writers.map((w) => w.write(value)));
+		}
+		await Promise.all(writers.map((w) => w.close()));
+	} catch (e) {
+		await reader.cancel(e).catch(() => undefined);
+		await Promise.all(writers.map((w) => w.abort(e).catch(() => undefined)));
+		throw e;
+	}
+	const result = {} as Record<ChecksumType, string>;
+	for (let i = 0; i < types.length; i++) result[types[i]] = toHex(await digests[i].digest);
+	return result;
+}
+
 /** Hashes a stream without buffering it; fails once more than maxBytes have been read. */
 export async function checksumOfStream(body: ReadableStream<Uint8Array>, type: ChecksumType, maxBytes: number): Promise<string> {
-	let read = 0;
-	const limit = new TransformStream<Uint8Array, Uint8Array>({
-		transform(chunk, controller) {
-			read += chunk.byteLength;
-			if (read > maxBytes) throw new TooLargeError(`more than ${maxBytes} bytes`);
-			controller.enqueue(chunk);
-		}
-	});
-	const digest = new crypto.DigestStream(ALGORITHMS[type]);
-	const result = digest.digest;
-	// an aborted pipe also rejects the digest; the pipe error is the one reported
-	result.catch(() => undefined);
-	await body.pipeThrough(limit).pipeTo(digest);
-	return toHex(await result);
+	return (await checksumsOfStream(body, [type], maxBytes))[type];
 }
 
 export interface ChecksumOptions {
@@ -65,23 +89,45 @@ export interface ChecksumOptions {
 	userAgent: string;
 }
 
-/** Computed checksums, cached in KV: forever for immutable artifacts, for the cache TTL otherwise. */
+/** seconds a checksum of an immutable artifact stays cached in KV */
+export const IMMUTABLE_KV_TTL_SECONDS = 30 * 24 * 60 * 60;
+
+type Computed = Record<ChecksumType, string> | null;
+
+/**
+ * Computed checksums, cached in KV: 30 days for immutable artifacts, the cache TTL otherwise.
+ * One download of the artifact yields every checksum type. Keys carry the cache generation,
+ * so a flush invalidates them without deleting key by key.
+ */
 export class ChecksumStore {
 	constructor(
 		readonly kv: KVNamespace,
-		readonly options: ChecksumOptions
+		readonly options: ChecksumOptions,
+		/** current cache generation (bumped by flush) */
+		readonly generation: () => Promise<string>
 	) {}
 
-	private async cached(id: string, type: ChecksumType, immutable: boolean, compute: () => Promise<string>): Promise<string> {
-		const key = `checksum:${type}:${id}`;
-		const hit = await this.kv.get(key);
+	private async kvKey(id: string, type: ChecksumType): Promise<string> {
+		return `checksum:${await this.generation()}:${type}:${id}`;
+	}
+
+	private async cached(id: string, type: ChecksumType, immutable: boolean, compute: () => Promise<Computed>): Promise<string> {
+		const hit = await this.kv.get(await this.kvKey(id, type));
 		if (hit) return hit;
-		const value = await compute();
-		if (value.length) {
-			const ttl = Math.max(MIN_KV_TTL_SECONDS, this.options.mutableTtlSeconds);
-			await this.kv.put(key, value, immutable ? undefined : { expirationTtl: ttl });
-		}
-		return value;
+		const values = await compute();
+		if (!values) return "";
+		const ttl = immutable ? IMMUTABLE_KV_TTL_SECONDS : Math.max(MIN_KV_TTL_SECONDS, this.options.mutableTtlSeconds);
+		await Promise.all(
+			CHECKSUM_TYPES.map(async (t) => {
+				try {
+					await this.kv.put(await this.kvKey(id, t), values[t], { expirationTtl: ttl });
+				} catch (e) {
+					// the computed value is still correct; it is just not cached
+					console.warn(`caching checksum ${t} of [${id}] failed`, e);
+				}
+			})
+		);
+		return values[type];
 	}
 
 	/** Checksum of the file at `url`; "" when it is missing, too large or could not be read. */
@@ -95,18 +141,18 @@ export class ChecksumStore {
 				});
 				if (res.status !== 200 || !res.body) {
 					await res.body?.cancel();
-					return "";
+					return null;
 				}
 				const length = Number(res.headers.get("content-length") ?? "");
 				if (Number.isFinite(length) && length > this.options.maxBytes) {
 					await res.body.cancel();
 					console.warn(`checksum of [${url}] skipped: ${length} bytes is over the limit`);
-					return "";
+					return null;
 				}
-				return await checksumOfStream(res.body, type, this.options.maxBytes);
+				return await checksumsOfStream(res.body, CHECKSUM_TYPES, this.options.maxBytes);
 			} catch (e) {
 				console.warn(`checksum of [${url}] failed`, e);
-				return "";
+				return null;
 			}
 		});
 	}
@@ -121,12 +167,12 @@ export class ChecksumStore {
 		// keyed by etag: a replaced object gets a new checksum
 		return this.cached(`r2:${key}:${head.etag}`, type, true, async () => {
 			const obj = await bucket.get(key);
-			if (!obj) return "";
+			if (!obj) return null;
 			try {
-				return await checksumOfStream(obj.body, type, this.options.maxBytes);
+				return await checksumsOfStream(obj.body, CHECKSUM_TYPES, this.options.maxBytes);
 			} catch (e) {
 				console.warn(`checksum of R2 object [${key}] failed`, e);
-				return "";
+				return null;
 			}
 		});
 	}
