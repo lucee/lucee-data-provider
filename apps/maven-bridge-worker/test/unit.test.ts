@@ -1,0 +1,193 @@
+import { describe, expect, it } from "vitest";
+import { encodeForHtml, urlEncodedFormat, xmlFormat } from "../src/cfml";
+import { parseProviders, readConfig } from "../src/config";
+import type { Env } from "../src/env";
+import { isImmutableArtifact } from "../src/r2";
+import { buildIndex, sortVersions } from "../src/rest-index";
+import { normalizeRequestPath } from "../src/proxy";
+import { BridgeSupport, type SupportIo } from "../src/support";
+import forgebox from "./fixtures/forgebox-info.json";
+import mongoPom from "./fixtures/ortus-mongodb-cache-extension-1.2.0.5291.pom?raw";
+
+const lucee = () => new BridgeSupport({ provider: "https://extension.lucee.org", groupId: "org.lucee", upstream: "https://cdn.lucee.org" });
+
+function restSupport(): BridgeSupport {
+	const support = new BridgeSupport({ provider: "https://www.forgebox.io/", groupId: "io.forgebox" });
+	const index = buildIndex(forgebox, support.providerUrl, support.groupId, new Date(Date.UTC(2026, 9, 26, 13, 41, 6)));
+	const io: SupportIo = {
+		getIndex: async () => index,
+		getUpstreamContent: async () => {
+			throw new Error("not used");
+		},
+		remoteResourceExists: async () => false,
+		upstreamResourceExists: async () => false
+	};
+	support.io = io;
+	return support;
+}
+
+describe("parseMavenPath", () => {
+	const s = lucee();
+	it.each([
+		["/org/lucee", { type: "group-index" }],
+		["/org/lucee/", { type: "group-index" }],
+		["/org/lucee/maven-metadata.xml", { type: "group-metadata" }],
+		["/org/lucee/redis-extension", { type: "artifact-index", artifactId: "redis-extension" }],
+		["/org/lucee/redis-extension/maven-metadata.xml", { type: "artifact-metadata", artifactId: "redis-extension" }],
+		["/org/lucee/redis-extension/3.0.0.1", { type: "version-index", version: "3.0.0.1" }],
+		["/org/lucee/redis-extension/3.0.0.1-SNAPSHOT/maven-metadata.xml", { type: "version-metadata", version: "3.0.0.1-SNAPSHOT" }],
+		[
+			"/org/lucee/redis-extension/3.0.0.1/redis-extension-3.0.0.1.lex",
+			{ type: "artifact-file", artifactId: "redis-extension", version: "3.0.0.1", classifier: "", extension: "lex" }
+		],
+		[
+			"/org/lucee/lucee/7.1.0.10/lucee-7.1.0.10-light.jar",
+			{ type: "artifact-file", artifactId: "lucee", version: "7.1.0.10", classifier: "light", extension: "jar" }
+		],
+		[
+			"/org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.jar.sha1",
+			{ type: "artifact-file", classifier: "", extension: "jar.sha1" }
+		],
+		["/org/lucee/a/b/c/d", { type: "unknown" }],
+		["/org/lucee/lucee/7.1.0.10/other-7.1.0.10.jar", { type: "unknown" }],
+		["/io/forgebox", { type: "unknown" }],
+		["/org/luceex", { type: "unknown" }]
+	])("%s", (path, expected) => {
+		expect(s.parseMavenPath(path)).toMatchObject(expected);
+	});
+
+	it("is case-insensitive like CFML", () => {
+		expect(s.parseMavenPath("/ORG/Lucee/redis-extension/MAVEN-METADATA.XML").type).toBe("artifact-metadata");
+	});
+});
+
+describe("legacy core mapping", () => {
+	const s = lucee();
+	const file = (version: string, classifier: string, extension: string) =>
+		s.toUpstreamLegacyCorePath({ type: "artifact-file", artifactId: "lucee", version, classifier, extension });
+	it.each([
+		["6.2.0.321", "", "jar", "lucee-6.2.0.321.jar"],
+		["6.2.0.321", "light", "jar", "lucee-light-6.2.0.321.jar"],
+		["6.2.0.321", "zero", "jar", "lucee-zero-6.2.0.321.jar"],
+		["6.2.0.321", "", "lco", "6.2.0.321.lco"],
+		["6.2.0.321", "forgebox-light", "zip", "forgebox-light-6.2.0.321.zip"],
+		["7.0.0.1-SNAPSHOT", "", "war", "lucee-7.0.0.1-SNAPSHOT.war"]
+	])("%s %s %s", (version, classifier, ext, expected) => {
+		expect(file(version, classifier, ext)).toBe(expected);
+	});
+
+	it("only maps the lucee artifact", () => {
+		expect(s.toUpstreamLegacyCorePath({ type: "artifact-file", artifactId: "redis", version: "1", classifier: "", extension: "jar" })).toBe("");
+	});
+});
+
+describe("GitHub release urls", () => {
+	const s = lucee();
+	const urls = (version: string, classifier = "", extension = "jar") =>
+		s.toGithubReleaseUrls({ type: "artifact-file", artifactId: "lucee", version, classifier, extension });
+	it("uses the numeric tag first, then the full version", () => {
+		expect(urls("7.1.2.184-RC")).toEqual([
+			"https://github.com/lucee/Lucee/releases/download/7.1.2.184/lucee-7.1.2.184-RC.jar",
+			"https://github.com/lucee/Lucee/releases/download/7.1.2.184-RC/lucee-7.1.2.184-RC.jar"
+		]);
+		expect(urls("7.1.0.10", "light")).toEqual(["https://github.com/lucee/Lucee/releases/download/7.1.0.10/lucee-light-7.1.0.10.jar"]);
+		expect(urls("7.1.0.10", "express", "zip")).toHaveLength(1);
+		expect(urls("8.0.0.1", "", "lco")).toEqual(["https://github.com/lucee/Lucee/releases/download/8.0.0.1/8.0.0.1.lco"]);
+	});
+	it("skips snapshots, old versions and unpublished files", () => {
+		expect(urls("7.1.0.10-SNAPSHOT")).toEqual([]);
+		expect(urls("7.0.1.100")).toEqual([]);
+		expect(urls("6.2.0.321")).toEqual([]);
+		expect(urls("7.1.0.10", "", "pom")).toEqual([]);
+		expect(urls("7.1.0.10", "", "jar.sha1")).toEqual([]);
+		expect(urls("7.1.0.10", "light", "zip")).toEqual([]);
+	});
+	it("is disabled with an empty GITHUB_RELEASES_URL", () => {
+		const off = new BridgeSupport({ provider: "p", groupId: "org.lucee", upstream: "https://cdn.lucee.org/", githubReleasesUrl: "" });
+		expect(off.toGithubReleaseUrls({ type: "artifact-file", artifactId: "lucee", version: "7.1.0.10", classifier: "", extension: "jar" })).toEqual([]);
+	});
+});
+
+describe("ForgeBox ids and metadata", () => {
+	it("derives artifact ids like the CFML bridge", async () => {
+		const s = restSupport();
+		const ids = (await s.getIndex()).artifacts.keys().sort();
+		expect(ids).toContain("ortus-mongodb-cache-extension");
+		expect(ids).toContain("lucee-mariadb-extension-extension");
+		expect(ids).toContain("cfspreadsheet-extension");
+		expect(ids).toContain("ortus-orm-extension-extension");
+	});
+
+	it("includes older versions with REST download urls", async () => {
+		const s = restSupport();
+		const versions = await s.listVersions("ortus-mongodb-cache-extension");
+		expect(versions).toContain("1.1.2.3893");
+		// same key-based order as the CFML bridge: "-snapshot" sorts after the build number
+		expect(versions.slice(-2)).toEqual(["1.2.0.5291", "1.2.0-snapshot"]);
+		expect(await s.getDownloadUrl("ortus-mongodb-cache-extension", "1.1.2.3893")).toBe(
+			"https://www.forgebox.io/rest/extension/provider/full/6A03159F-C6DC-4FCC-95A068B1E1A903FA?version=1%2E1%2E2%2E3893"
+		);
+		expect(await s.getDownloadUrl("nope-extension", "1")).toBe("");
+	});
+
+	it("builds artifact metadata with latest and release", async () => {
+		const s = restSupport();
+		const xml = await s.buildArtifactMetadata("ortus-couchbase-cache-extension", new Date(Date.UTC(2026, 0, 2, 3, 4, 5)));
+		expect(xml).toContain("<groupId>io.forgebox</groupId>");
+		expect(xml).toContain("<latest>4.1.0-snapshot</latest>");
+		expect(xml).toContain("<release>4.0.0.6</release>");
+		expect(xml).toContain("<lastUpdated>20260102030405</lastUpdated>");
+		await expect(s.buildArtifactMetadata("nope-extension")).rejects.toThrow("No versions found for [nope-extension]");
+	});
+
+	it("builds the minimal pom identical to production", async () => {
+		const s = restSupport();
+		expect(await s.buildMinimalPom("ortus-mongodb-cache-extension", "1.2.0.5291")).toBe(mongoPom.trimEnd());
+	});
+
+	it("builds snapshot version metadata", async () => {
+		const s = restSupport();
+		const xml = await s.buildVersionMetadata("ortus-redis-cache-extension", "3.5.0-SNAPSHOT", new Date(Date.UTC(2026, 0, 2, 3, 4, 5)));
+		expect(xml).toContain("<version>3.5.0-SNAPSHOT</version>");
+		expect(xml).toContain("<timestamp>20260102030405</timestamp>");
+	});
+
+	it("builds the group metadata sorted by artifact id", async () => {
+		const xml = await restSupport().buildGroupMetadata();
+		expect(xml.indexOf("cfspreadsheet-extension")).toBeLessThan(xml.indexOf("ortus-redis-cache-extension"));
+	});
+});
+
+describe("helpers", () => {
+	it("formats like CFML", () => {
+		expect(xmlFormat(`a&b<c>"d'`)).toBe("a&amp;b&lt;c&gt;&quot;d&apos;");
+		expect(encodeForHtml(`<a href='x'>`)).toBe("&lt;a href=&#39;x&#39;&gt;");
+		expect(urlEncodedFormat("1.0.0-SNAPSHOT")).toBe("1%2E0%2E0%2DSNAPSHOT");
+	});
+	it("sorts versions numerically", () => {
+		expect(sortVersions(["1.10.0", "1.2.0", "1.2.0-SNAPSHOT", "1.9.1"])).toEqual(["1.2.0", "1.2.0-SNAPSHOT", "1.9.1", "1.10.0"]);
+	});
+	it("normalizes request paths", () => {
+		expect(normalizeRequestPath("//org//lucee/")).toBe("/org/lucee");
+		expect(normalizeRequestPath("/index.cfm/org/lucee")).toBe("/org/lucee");
+		expect(normalizeRequestPath("/org/lucee/index.cfm")).toBe("/org/lucee");
+		expect(normalizeRequestPath("/")).toBe("/");
+	});
+	it("parses provider configs", () => {
+		expect(parseProviders("https://a|g.a,https://b|g.b|https://cdn/")).toEqual([
+			{ provider: "https://a", groupId: "g.a" },
+			{ provider: "https://b", groupId: "g.b", upstream: "https://cdn/" }
+		]);
+		expect(parseProviders('[{"provider":"https://a","groupId":"g.a"}]')).toEqual([{ provider: "https://a", groupId: "g.a" }]);
+		expect(() => readConfig({ R2_MODE: "bogus" } as unknown as Env)).toThrow("Invalid R2_MODE");
+		expect(readConfig({ R2_FILL_ON_MISS: "true" } as unknown as Env).r2FillOnMiss).toBe(true);
+		expect(readConfig({} as unknown as Env).r2FillOnMiss).toBe(false);
+	});
+	it("only treats final/RC files as immutable", () => {
+		expect(isImmutableArtifact("7.1.0.10", "lucee-7.1.0.10.jar")).toBe(true);
+		expect(isImmutableArtifact("7.1.2.184-RC", "lucee-7.1.2.184-RC.jar")).toBe(true);
+		expect(isImmutableArtifact("7.1.0.10-SNAPSHOT", "lucee-7.1.0.10-SNAPSHOT.jar")).toBe(false);
+		expect(isImmutableArtifact("7.1.0.10", "maven-metadata.xml")).toBe(false);
+		expect(isImmutableArtifact("7.1.0.10", "maven-metadata.xml.sha1")).toBe(false);
+	});
+});
