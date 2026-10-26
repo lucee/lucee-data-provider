@@ -4,7 +4,7 @@ import { parseProviders, readConfig } from "../src/config";
 import type { Env } from "../src/env";
 import { isImmutableArtifact } from "../src/r2";
 import { buildIndex, sortVersions } from "../src/rest-index";
-import { normalizeRequestPath } from "../src/proxy";
+import { normalizeRequestPath, r2KeyFor, r2KeysFor } from "../src/proxy";
 import { BridgeSupport, type SupportIo } from "../src/support";
 import forgebox from "./fixtures/forgebox-info.json";
 import mongoPom from "./fixtures/ortus-mongodb-cache-extension-1.2.0.5291.pom?raw";
@@ -78,6 +78,26 @@ describe("legacy core mapping", () => {
 
 	it("only maps the lucee artifact", () => {
 		expect(s.toUpstreamLegacyCorePath({ type: "artifact-file", artifactId: "redis", version: "1", classifier: "", extension: "jar" })).toBe("");
+	});
+});
+
+describe("R2 keys", () => {
+	const s = lucee();
+	const config = { r2Prefix: "" } as Parameters<typeof r2KeyFor>[0];
+	const core = (version: string, classifier: string, extension: string) =>
+		({ type: "artifact-file", groupId: "org.lucee", artifactId: "lucee", version, classifier, extension }) as const;
+	it("uses the Maven layout first, then the legacy core name", () => {
+		expect(r2KeyFor(config, s, core("8.0.1.12-SNAPSHOT", "", "pom"))).toBe("org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.pom");
+		expect(r2KeysFor(config, s, core("6.2.0.321", "light", "jar"))).toEqual([
+			"org/lucee/lucee/6.2.0.321/lucee-6.2.0.321-light.jar",
+			"lucee-light-6.2.0.321.jar"
+		]);
+	});
+	it("has a single key for non-core files and applies the prefix", () => {
+		const prefixed = { r2Prefix: "maven/" } as Parameters<typeof r2KeyFor>[0];
+		const lex = { type: "artifact-file", groupId: "org.lucee", artifactId: "redis-extension", version: "2.0.0.1", classifier: "", extension: "lex" } as const;
+		expect(r2KeysFor(prefixed, s, lex)).toEqual(["maven/org/lucee/redis-extension/2.0.0.1/redis-extension-2.0.0.1.lex"]);
+		expect(r2KeysFor(prefixed, s, core("7.1.0.10", "", "lco"))).toEqual(["maven/org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.lco", "maven/7.1.0.10.lco"]);
 	});
 });
 

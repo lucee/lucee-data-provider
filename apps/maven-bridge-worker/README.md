@@ -24,8 +24,10 @@ Two kinds of groups, configured in `EXTENSION_PROVIDERS`:
   generated.
 - **Upstream mirror groups** (`org.lucee` → `https://cdn.lucee.org/`): metadata and indexes are passed
   through from the upstream; files redirect (302) to the upstream. Lucee core files (`org.lucee:lucee`)
-  are mapped to the legacy CDN names (`lucee-light-6.2.0.321.jar`, `6.2.0.321.lco`, …); 7.1+ core
-  builds redirect to GitHub Releases first, with the CDN as fallback.
+  are looked up in this order: GitHub Releases (7.1+ final/RC jar, lco, war, light, zero, express),
+  the Maven layout on the CDN (`org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.pom`, also
+  every pom and snapshot), then the legacy flat CDN names (`lucee-light-6.2.0.321.jar`,
+  `6.2.0.321.lco`, …) for older builds. Existence checks are HEAD requests; hits are cached.
 
 ### R2
 
@@ -34,17 +36,19 @@ streamed by the worker (content type, ETag, Last-Modified, Content-Length, `Rang
 `If-None-Match`/`If-Modified-Since` → 304, `HEAD`). A miss falls back to the redirect logic above.
 Group-level files (`maven-metadata.xml`, `index.html`) of upstream groups are read from R2 first too.
 
-Object keys use the upstream layout, so a copy of `cdn.lucee.org` can be used as is:
+Object keys use the Maven layout of the upstream, so a copy of `cdn.lucee.org` can be used as is:
 
-- core: `lucee-7.1.0.10.jar`, `lucee-light-6.2.0.321.jar`, `6.2.0.321.lco` (bucket root)
-- everything else: `org/lucee/redis-extension/3.0.0.1/redis-extension-3.0.0.1.lex`
+- `org/lucee/redis-extension/3.0.0.1/redis-extension-3.0.0.1.lex`, `org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.jar`
+- core files are also looked up under their legacy flat CDN name at the bucket root
+  (`lucee-light-6.2.0.321.jar`, `6.2.0.321.lco`) when the Maven-layout key is missing; fill on miss
+  always writes the Maven-layout key.
 
 `R2_PREFIX` is prepended to every key.
 
 #### Fill on miss (lazy migration)
 
 With `R2_MODE = "serve"` and `R2_FILL_ON_MISS = "true"`, a miss for an upstream-mirror file is fetched
-from its source (GitHub Releases or the CDN) and stored in R2 under the same key. The next request is
+from its source (GitHub Releases or the CDN) and stored in R2 under its Maven-layout key. The next request is
 served from R2.
 
 - Files up to `R2_FILL_STREAM_MAX_MB` (default 32) are streamed to the client and stored at the same

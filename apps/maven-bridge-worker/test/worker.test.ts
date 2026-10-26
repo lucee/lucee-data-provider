@@ -68,6 +68,73 @@ describe("upstream mirror (org.lucee)", () => {
 		expect(res.status).toBe(302);
 		expect(res.headers.get("location")).toBe(`${CDN}lucee-light-6.2.0.321.jar`);
 		expect(calls.some((c) => c.includes("github.com"))).toBe(false);
+		// the Maven layout is checked first
+		const maven = calls.indexOf(`HEAD ${CDN}org/lucee/lucee/6.2.0.321/lucee-6.2.0.321-light.jar`);
+		const legacy = calls.indexOf(`HEAD ${CDN}lucee-light-6.2.0.321.jar`);
+		expect(maven).toBeGreaterThanOrEqual(0);
+		expect(legacy).toBeGreaterThan(maven);
+	});
+
+	it.each([
+		["snapshot", "8.0.1.12-SNAPSHOT"],
+		["RC", "8.0.0.294-RC"],
+		["7.1+ final", "7.1.0.10"]
+	])("redirects a %s core pom to the Maven layout on the CDN", async (_label, version) => {
+		const path = `org/lucee/lucee/${version}/lucee-${version}.pom`;
+		mockFetch({ ...baseRoutes(), [CDN + path]: "<project/>" });
+		const res = await call("/" + path);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe(CDN + path);
+		// poms are never GitHub Release assets, and the legacy flat name is not needed
+		expect(calls.some((c) => c.includes("github.com"))).toBe(false);
+		expect(calls).not.toContain(`HEAD ${CDN}lucee-${version}.pom`);
+	});
+
+	it("redirects snapshot core jars and lco files to the Maven layout", async () => {
+		const jar = "org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.jar";
+		const lco = "org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.lco";
+		mockFetch({ ...baseRoutes(), [CDN + jar]: "jar", [CDN + lco]: "lco", [`${CDN}lucee-8.0.1.12-SNAPSHOT.jar`]: "jar" });
+		const res = await call("/" + jar);
+		expect(res.headers.get("location")).toBe(CDN + jar);
+		const resLco = await call("/" + lco);
+		expect(resLco.headers.get("location")).toBe(CDN + lco);
+	});
+
+	it("prefers GitHub Releases over the Maven layout for 7.1+ jars", async () => {
+		const gh = `${GITHUB}8.0.0.294/lucee-8.0.0.294-RC.jar`;
+		const maven = "org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC.jar";
+		mockFetch({ ...baseRoutes(), [gh]: "jar", [CDN + maven]: "jar" });
+		const res = await call("/" + maven);
+		expect(res.headers.get("location")).toBe(gh);
+		expect(calls).not.toContain(`HEAD ${CDN}${maven}`);
+	});
+
+	it("uses the Maven layout when a 7.1+ jar has no GitHub Release asset", async () => {
+		const maven = "org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC.jar";
+		mockFetch({ ...baseRoutes(), [CDN + maven]: "jar", [`${CDN}lucee-8.0.0.294-RC.jar`]: "jar" });
+		const res = await call("/" + maven);
+		expect(res.headers.get("location")).toBe(CDN + maven);
+	});
+
+	it("still falls back to the legacy name when the Maven-layout check fails", async () => {
+		const maven = `${CDN}org/lucee/lucee/6.2.0.321/lucee-6.2.0.321.jar`;
+		mockFetch({
+			...baseRoutes(),
+			[maven]: () => {
+				throw new TypeError("network down");
+			},
+			[`${CDN}lucee-6.2.0.321.jar`]: "jar"
+		});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const res = await call("/org/lucee/lucee/6.2.0.321/lucee-6.2.0.321.jar");
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe(`${CDN}lucee-6.2.0.321.jar`);
+	});
+
+	it("answers 404 for a core file missing in every layout", async () => {
+		mockFetch(baseRoutes());
+		const res = await call("/org/lucee/lucee/8.0.1.99-SNAPSHOT/lucee-8.0.1.99-SNAPSHOT.pom");
+		expect(res.status).toBe(404);
 	});
 
 	it("serves HEAD without a body", async () => {
@@ -150,7 +217,19 @@ describe("R2", () => {
 		expect(res.status).toBe(304);
 	});
 
-	it("uses the legacy key layout for core files", async () => {
+	it("uses the Maven-layout key for core files", async () => {
+		mockFetch(baseRoutes());
+		await bindings.ARTIFACTS!.put("org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.pom", "<project/>");
+		await bindings.ARTIFACTS!.put("org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.jar", "maven");
+		await bindings.ARTIFACTS!.put("lucee-7.1.0.10.jar", "legacy");
+		const pom = await call("/org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.pom", {}, R2);
+		expect(pom.status).toBe(200);
+		expect(await pom.text()).toBe("<project/>");
+		const res = await call("/org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.jar", {}, R2);
+		expect(await res.text()).toBe("maven");
+	});
+
+	it("falls back to the legacy key for core files copied from the CDN root", async () => {
 		mockFetch(baseRoutes());
 		await bindings.ARTIFACTS!.put("lucee-7.1.0.10.jar", "core");
 		const res = await call("/org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.jar", {}, R2);
@@ -203,14 +282,35 @@ describe("R2 fill-on-miss", () => {
 		expect(calls.some((c) => c.includes(path))).toBe(false);
 	});
 
-	it("fills core jars from GitHub Releases under the legacy key", async () => {
+	it("fills core jars from GitHub Releases under the Maven-layout key", async () => {
 		const gh = `${GITHUB}7.1.0.10/lucee-7.1.0.10.jar`;
 		mockFetch({ ...baseRoutes(), [gh]: "jar-bytes" });
 		const res = await call("/org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.jar", {}, FILL);
 		expect(res.status).toBe(200);
-		const stored = await bindings.ARTIFACTS!.get("lucee-7.1.0.10.jar");
+		const stored = await bindings.ARTIFACTS!.get("org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.jar");
 		expect(await stored!.text()).toBe("jar-bytes");
 		expect(stored!.httpMetadata?.contentType).toBe("application/java-archive");
+		expect(await bindings.ARTIFACTS!.head("lucee-7.1.0.10.jar")).toBeNull();
+	});
+
+	it("fills an RC core pom from the Maven layout on the CDN", async () => {
+		const path = "org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC.pom";
+		mockFetch({ ...baseRoutes(), [CDN + path]: "<project/>" });
+		const res = await call("/" + path, {}, FILL);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe("<project/>");
+		const stored = await bindings.ARTIFACTS!.get(path);
+		expect(await stored!.text()).toBe("<project/>");
+		expect(stored!.customMetadata?.source).toBe(CDN + path);
+	});
+
+	it("fills older core builds from the legacy CDN name under the Maven-layout key", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}lucee-light-6.2.0.321.jar`]: "light-bytes" });
+		const res = await call("/org/lucee/lucee/6.2.0.321/lucee-6.2.0.321-light.jar", {}, FILL);
+		expect(res.status).toBe(200);
+		const stored = await bindings.ARTIFACTS!.get("org/lucee/lucee/6.2.0.321/lucee-6.2.0.321-light.jar");
+		expect(await stored!.text()).toBe("light-bytes");
+		expect(stored!.customMetadata?.source).toBe(`${CDN}lucee-light-6.2.0.321.jar`);
 	});
 
 	it("never stores SNAPSHOT files", async () => {

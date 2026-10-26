@@ -174,6 +174,40 @@ export class BridgeSupport {
 		return `lucee-${version}.${ext}`;
 	}
 
+	/** true for an org.lucee:lucee core build file */
+	isCoreFile(parsed: ParsedPath): boolean {
+		return parsed.type === "artifact-file" && equalsNoCase(parsed.artifactId ?? "", "lucee");
+	}
+
+	/**
+	 * Upstream URL of a core file, in lookup order (LDEV-6726):
+	 * 1. GitHub Release asset (7.1+ final/RC jar, lco, war, light, zero, express)
+	 * 2. Maven layout on the upstream (org/lucee/lucee/<v>/lucee-<v>[-<classifier>].<ext>), e.g. poms and snapshots
+	 * 3. legacy flat CDN name (lucee-light-<v>.jar, <v>.lco, ...) for older builds
+	 * "" when none exists.
+	 */
+	async findCoreFileUrl(parsed: ParsedPath): Promise<string> {
+		if (!this.isCoreFile(parsed) || !this.hasUpstream()) return "";
+		const github = await this.findGithubReleaseUrl(parsed);
+		if (github.length) return github;
+
+		const mavenPath = this.toUpstreamRelativePath(parsed);
+		let mavenExists = false;
+		try {
+			mavenExists = await this.io.upstreamResourceExists(this, mavenPath);
+		} catch (e) {
+			// a failing check must not hide the legacy fallback
+			console.warn(`maven-bridge HEAD ${this.upstreamUrl + mavenPath} failed`, e);
+		}
+		if (mavenExists) return this.upstreamUrl + mavenPath;
+
+		const legacyPath = this.toUpstreamLegacyCorePath(parsed);
+		if (legacyPath.length && (await this.io.upstreamResourceExists(this, legacyPath))) {
+			return this.upstreamUrl + legacyPath;
+		}
+		return "";
+	}
+
 	/** true for non-snapshot core versions from 7.1 on; 6.2/7.0 stay on the upstream CDN */
 	isGithubReleaseVersion(version: string): boolean {
 		if (!this.githubReleasesUrl.length) return false;
