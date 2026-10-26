@@ -1,11 +1,14 @@
 # Lucee skill site on Cloudflare Workers (port of apps/skill).
-# Test hostname: skl.lucee-services.com (skill.lucee-services.com stays on Cloud Run).
+# Hostnames: skill.lucee-services.com (production) and skl.lucee-services.com (test).
 name = "lucee-skill"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
 workers_dev = false
 preview_urls = false
-routes = [{ pattern = "skl.lucee-services.com", custom_domain = true }]
+routes = [
+  { pattern = "skill.lucee-services.com", custom_domain = true },
+  { pattern = "skl.lucee-services.com", custom_domain = true },
+]
 
 # landing page assets (/res/*)
 [assets]

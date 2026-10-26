@@ -4,8 +4,8 @@ Cloudflare Worker port of [`apps/skill`](../skill), the site behind `skill.lucee
 serves the Lucee skill file for AI assistants. It serves the same paths with the same answers,
 without a container and without Cloud Run.
 
-It is deployed to the **test hostname `skl.lucee-services.com`**. `skill.lucee-services.com` keeps
-running on Cloud Run until the cutover below. `skill.lucee.io` is not touched by this worker.
+It serves **`skill.lucee-services.com`** and the test hostname **`skl.lucee-services.com`**. The Cloud
+Run service stays deployed as a rollback until it is retired. `skill.lucee.io` is not touched by this worker.
 
 ## What it does
 
@@ -74,7 +74,8 @@ and push that touches the worker. Pushes to `main` (and manual runs on `main`) a
 
 1. `scripts/provision.mjs` creates the KV namespace `lucee-skill-cache` if it does not exist yet and
    writes its id into `wrangler.toml` (in CI only, nothing is committed).
-2. `wrangler deploy` deploys the worker `lucee-skill` with the custom domain `skl.lucee-services.com`.
+2. `wrangler deploy` deploys the worker `lucee-skill` with the custom domains `skill.lucee-services.com`
+   and `skl.lucee-services.com`.
 
 It uses the organization secrets `CLOUDFLARE_API_TOKEN` (Workers Scripts, Workers KV Storage and
 Workers Routes edit, DNS edit for the zone) and `CLOUDFLARE_ACCOUNT_ID`; they are only passed to the
@@ -113,5 +114,9 @@ npm run compare -- --paths my-paths.txt --strict
 2. Compare both hosts (above) and watch the cron runs in the worker logs for a few hours.
 3. Add `skill.lucee-services.com` as a second custom domain in `wrangler.toml`
    (`routes = [{ pattern = "skl.lucee-services.com", custom_domain = true }, { pattern = "skill.lucee-services.com", custom_domain = true }]`).
-   The DNS record of `skill.lucee-services.com` that points to Cloud Run has to be removed first.
+   Cloudflare creates the DNS record of each custom domain. A deploy from CI (non-interactive) replaces an
+   existing DNS record on that hostname; an interactive `wrangler deploy` asks first.
 4. Once traffic has moved, retire the Cloud Run service and `apps/skill`.
+
+Rollback for `skill.lucee-services.com`: remove it from `routes` and deploy (this removes the custom domain
+and its record), then restore the DNS-only CNAME `skill` → `ghs.googlehosted.com` (Cloud Run).
