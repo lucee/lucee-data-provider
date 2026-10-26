@@ -1,6 +1,7 @@
 // Maven checksum files (.md5, .sha1, .sha256, .sha512): served from the upstream when it has
 // them, otherwise computed from the artifact itself (streamed, size bounded, cached in KV).
-// Large artifacts are hashed in the background (ctx.waitUntil), never inside the request.
+// Large artifacts are hashed in the background (ctx.waitUntil) so the request answers right away;
+// that work still counts toward the invocation's CPU and memory limits.
 import type { ParsedPath } from "./support";
 
 const ALGORITHMS = { md5: "MD5", sha1: "SHA-1", sha256: "SHA-256", sha512: "SHA-512" } as const;
@@ -13,6 +14,10 @@ export const DEFAULT_CHECKSUM_INLINE_MAX_MB = 16;
 export const READ_CHUNK_BYTES = 1024 * 1024;
 /** seconds a background computation blocks further attempts for the same artifact */
 export const PENDING_TTL_SECONDS = 300;
+/** background attempts per artifact before giving up until ATTEMPTS_TTL_SECONDS have passed */
+export const MAX_BACKGROUND_ATTEMPTS = 3;
+/** seconds the attempt count of an artifact is kept */
+export const ATTEMPTS_TTL_SECONDS = 24 * 60 * 60;
 /** KV minimum expiration */
 const MIN_KV_TTL_SECONDS = 60;
 
@@ -183,6 +188,10 @@ export class ChecksumStore {
 		return `checksum-pending:${await this.generation()}:${id}`;
 	}
 
+	private async attemptsKey(id: string): Promise<string> {
+		return `checksum-attempts:${await this.generation()}:${id}`;
+	}
+
 	/** size up to which an artifact is hashed inside the request */
 	private get inlineLimit(): number {
 		if (!this.waitUntil) return this.options.maxBytes;
@@ -212,21 +221,52 @@ export class ChecksumStore {
 		return null;
 	}
 
-	/** starts hashing in the background, at most once per artifact while the marker lives */
-	private async background(id: string, immutable: boolean, compute: () => Promise<Computed>): Promise<void> {
+	/**
+	 * Starts hashing in the background, at most once per artifact while the marker lives.
+	 * A run the runtime ends early (CPU or memory limit, waitUntil time limit) cannot report
+	 * itself, so every attempt is counted: an unfinished previous attempt is logged, and after
+	 * MAX_BACKGROUND_ATTEMPTS the artifact is left alone for ATTEMPTS_TTL_SECONDS.
+	 * `discard` releases what `compute` would have read (e.g. an open download) when it does not run.
+	 */
+	private async background(
+		id: string,
+		immutable: boolean,
+		compute: () => Promise<Computed>,
+		discard: () => Promise<void> = async () => undefined
+	): Promise<void> {
 		const pendingKey = await this.pendingKey(id);
-		if (running.has(pendingKey)) return;
+		if (running.has(pendingKey)) {
+			await discard();
+			return;
+		}
 		running.add(pendingKey);
 		const task = (async () => {
+			let started = false;
 			try {
+				const attemptsKey = await this.attemptsKey(id);
+				const attempts = Number((await this.kv.get(attemptsKey)) ?? "0") || 0;
+				if (attempts >= MAX_BACKGROUND_ATTEMPTS) {
+					console.error(
+						`background checksum of [${id}] not started: ${attempts} attempts did not finish, ` +
+							`likely the Worker's CPU or memory limit; retried after the attempt count expires`
+					);
+					return;
+				}
+				if (attempts > 0) console.warn(`background checksum of [${id}]: attempt ${attempts + 1}, the previous one did not finish`);
+				await this.kv.put(attemptsKey, String(attempts + 1), { expirationTtl: ATTEMPTS_TTL_SECONDS });
 				await this.kv.put(pendingKey, new Date().toISOString(), { expirationTtl: PENDING_TTL_SECONDS });
+				started = true;
 				const values = await compute();
-				if (values) await this.store(id, immutable, values);
+				if (values) {
+					await this.store(id, immutable, values);
+					await this.kv.delete(attemptsKey);
+				}
 			} catch (e) {
 				// nothing is cached: the checksum keeps answering 404 and is retried after the marker expires
 				console.error(`background checksum of [${id}] failed`, e);
 			} finally {
 				running.delete(pendingKey);
+				if (!started) await discard().catch((e) => console.warn(`releasing the download of [${id}] failed`, e));
 			}
 		})();
 		this.waitUntil!(task);
@@ -288,8 +328,11 @@ export class ChecksumStore {
 				return "";
 			}
 			if (length !== null && length > limit) {
-				await res.body!.cancel();
-				await this.background(url, immutable, () => this.hashUrl(url));
+				// the open download is hashed in the background, no second request
+				const download = res;
+				await this.background(url, immutable, () => this.hashUrl(url, download), async () => {
+					await download.body!.cancel();
+				});
 				return "";
 			}
 			if (length !== null) {

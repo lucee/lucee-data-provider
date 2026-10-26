@@ -16,7 +16,8 @@ directory = "./public"
 crons = ["0 * * * *"]
 
 # CPU limit per invocation (Workers Paid only; a deploy on the Free plan fails with it).
-# Not needed for checksums: large artifacts are hashed in the background.
+# Background checksum work (waitUntil) counts toward the same limit. Hashing a ~66 MB core jar
+# takes a few hundred ms of CPU: well within the Paid default (30 s), over the Free limit (10 ms).
 # [limits]
 # cpu_ms = 60000
 

@@ -39,11 +39,13 @@ Two kinds of groups, configured in `EXTENSION_PROVIDERS`:
   artifact the bridge serves (R2 object, GitHub Release asset or CDN file): streamed, never buffered,
   only for artifacts up to `CHECKSUM_MAX_MB`. One download yields all four checksum types (native
   `crypto.DigestStream`, read in 1 MiB blocks into one reused buffer). Artifacts over
-  `CHECKSUM_INLINE_MAX_MB` (core jars) are hashed in the background (`waitUntil`): the request answers
-  404 right away, which Maven only warns about, and the next request after the hash is cached gets
-  it; a KV marker (`checksum-pending:…`, 5 minutes) keeps parallel and repeated requests from
-  downloading the artifact again meanwhile. A download that ends short of its `content-length` is
-  never cached. Results
+  `CHECKSUM_INLINE_MAX_MB` (core jars) are hashed in the background (`waitUntil`, same download):
+  the request answers 404 right away (`cache-control: no-store`), which Maven only warns about, and
+  the next request after the hash is cached gets it; a KV marker (`checksum-pending:…`, 5 minutes)
+  keeps parallel and repeated requests from downloading the artifact again meanwhile. Background work
+  shares the invocation's CPU and memory limits and must finish within 30 s of the response; runs
+  ended early are counted (`checksum-attempts:…`) and logged, and after 3 the artifact is left alone
+  for a day. A download that ends short of its `content-length` is never cached. Results
   are cached in KV, for 30 days for immutable artifacts and for `CACHE_TTL_MINUTES` for snapshots;
   with fill-on-miss, checksums of immutable artifacts are also stored in R2 next to the artifact.
 - REST provider groups have no checksum files: pom checksums are computed from the generated pom,
@@ -91,7 +93,8 @@ The CFML bridge kept everything in the server scope. Here:
   (`upstream:<url>`), refreshed by the **hourly cron**. Entries older than `CACHE_TTL_MINUTES` are
   served while a refresh runs in the background; if the provider is down the last good copy is used.
   Computed checksums (`checksum:<generation>:<type>:<source>`) are kept in KV too, with an expiration,
-  next to the short-lived markers of background computations (`checksum-pending:<generation>:<source>`).
+  next to the short-lived markers of background computations (`checksum-pending:<generation>:<source>`)
+  and their attempt counts (`checksum-attempts:<generation>:<source>`, 1 day).
 - **Cache API**: upstream metadata/index pages and positive `HEAD` checks on the upstream, keyed by a
   cache generation that a flush bumps.
 

@@ -589,10 +589,14 @@ describe("checksums of large artifacts (background)", () => {
 		mockFetch({ ...baseRoutes(), [gh]: (req) => jarResponse(req) });
 		const first = await call(`${path}.sha1`, {}, INLINE);
 		expect(first.status).toBe(404);
-		// the request only read the headers; the background download hashed the jar
-		expect(gets()).toBe(2);
+		// a 404 that turns into a 200 once the checksum is cached must not be kept by any cache
+		expect(first.headers.get("cache-control")).toBe("no-store");
+		// the request only read the headers; the same download was hashed in the background
+		expect(gets()).toBe(1);
 		const gen = await bindings.BRIDGE_CACHE.get("cache-generation");
 		expect(await bindings.BRIDGE_CACHE.get(`checksum:${gen}:sha1:${gh}`)).toBe(await digest("SHA-1"));
+		// a finished attempt leaves no attempt count behind
+		expect((await bindings.BRIDGE_CACHE.list({ prefix: "checksum-attempts:" })).keys).toHaveLength(0);
 
 		mockFetch({ ...baseRoutes(), [gh]: (req) => jarResponse(req) });
 		const sha1 = await call(`${path}.sha1`, {}, INLINE);
@@ -622,42 +626,79 @@ describe("checksums of large artifacts (background)", () => {
 		expect(await res.text()).toBe(await digest("SHA-1"));
 	});
 
+	/** a response that declares the full jar length but ends early */
+	const truncatedResponse = () => {
+		const short = jar.slice(0, jar.length - 1000);
+		return new Response(new Blob([short]).stream(), { status: 200, headers: { "content-length": String(jar.byteLength) } });
+	};
+
 	it("does not download again while a computation is pending, and retries once the marker expires", async () => {
 		let n = 0;
-		// the request's probe succeeds, the background download fails
-		mockFetch({ ...baseRoutes(), [gh]: (req) => (req.method === "GET" && ++n === 2 ? new Response("unavailable", { status: 503 }) : jarResponse(req)) });
+		// the first download ends short, the next one is complete
+		mockFetch({ ...baseRoutes(), [gh]: (req) => (req.method === "GET" && ++n === 1 ? truncatedResponse() : jarResponse(req)) });
 		expect((await call(`${path}.sha1`, {}, INLINE)).status).toBe(404);
-		expect(gets()).toBe(2);
+		expect(gets()).toBe(1);
 		const gen = await bindings.BRIDGE_CACHE.get("cache-generation");
 		expect(await bindings.BRIDGE_CACHE.get(`checksum:${gen}:sha1:${gh}`)).toBeNull();
 		const pending = await pendingKeys();
 		expect(pending.map((k) => k.name)).toEqual([`checksum-pending:${gen}:${gh}`]);
 		// PENDING_TTL_SECONDS = 300
 		expect(pending[0].expiration).toBeLessThanOrEqual(Date.now() / 1000 + 300 + 60);
+		expect(await bindings.BRIDGE_CACHE.get(`checksum-attempts:${gen}:${gh}`)).toBe("1");
 
 		const blocked = await call(`${path}.md5`, {}, INLINE);
 		expect(blocked.status).toBe(404);
-		expect(gets()).toBe(2);
+		expect(blocked.headers.get("cache-control")).toBe("no-store");
+		expect(gets()).toBe(1);
 
 		// marker expired
 		await bindings.BRIDGE_CACHE.delete(pending[0].name);
 		expect((await call(`${path}.sha1`, {}, INLINE)).status).toBe(404);
-		expect(gets()).toBe(4);
+		expect(gets()).toBe(2);
 		const res = await call(`${path}.sha1`, {}, INLINE);
 		expect(await res.text()).toBe(await digest("SHA-1"));
+		expect(await bindings.BRIDGE_CACHE.get(`checksum-attempts:${gen}:${gh}`)).toBeNull();
+	});
+
+	it("stops starting background runs for an artifact whose attempts never finish", async () => {
+		mockFetch({ ...baseRoutes(), [gh]: (req) => jarResponse(req) });
+		const gen = await bindings.BRIDGE_CACHE.get("cache-generation");
+		// MAX_BACKGROUND_ATTEMPTS = 3 runs that were ended by the runtime before they could finish
+		await bindings.BRIDGE_CACHE.put(`checksum-attempts:${gen}:${gh}`, "3");
+		const res = await call(`${path}.sha1`, {}, INLINE);
+		expect(res.status).toBe(404);
+		expect(res.headers.get("cache-control")).toBe("no-store");
+		// only the request's own download, which is released unread
+		expect(gets()).toBe(1);
+		expect(await pendingKeys()).toHaveLength(0);
+		expect((await bindings.BRIDGE_CACHE.list({ prefix: "checksum:" })).keys).toHaveLength(0);
+		expect(await bindings.BRIDGE_CACHE.get(`checksum-attempts:${gen}:${gh}`)).toBe("3");
 	});
 
 	it("never caches a checksum of a download that ends short of its content-length", async () => {
-		const short = jar.slice(0, jar.length - 1000);
+		mockFetch({ ...baseRoutes(), [gh]: (req) => (req.method === "HEAD" ? new Response(null, { status: 200 }) : truncatedResponse()) });
+		// in the background and inside the request
+		expect((await call(`${path}.sha1`, {}, INLINE)).status).toBe(404);
+		expect(await call(`${path}.sha1`).then((r) => r.status)).toBe(404);
+		expect((await bindings.BRIDGE_CACHE.list({ prefix: "checksum:" })).keys).toHaveLength(0);
+	});
+
+	it("never caches a checksum of a download whose connection drops", async () => {
 		mockFetch({
 			...baseRoutes(),
 			[gh]: (req) => {
 				if (req.method === "HEAD") return new Response(null, { status: 200 });
-				// declares the full length but ends early (connection dropped)
-				const { readable, writable } = new FixedLengthStream(jar.byteLength);
-				const writer = writable.getWriter();
-				writer.write(short).then(() => writer.abort(new Error("connection lost"))).catch(() => undefined);
-				return new Response(readable, { status: 200 });
+				const bytes = jar.slice(0, 64 * 1024);
+				const body = new ReadableStream({
+					type: "bytes",
+					pull(controller) {
+						if (controller.desiredSize !== null && bytes.length) {
+							controller.enqueue(bytes.slice());
+							controller.error(new Error("connection lost"));
+						}
+					}
+				});
+				return new Response(body, { status: 200, headers: { "content-length": String(jar.byteLength) } });
 			}
 		});
 		expect((await call(`${path}.sha1`, {}, INLINE)).status).toBe(404);
