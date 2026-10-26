@@ -11,6 +11,8 @@ export interface CachedSkill {
 	sourceEtag: string;
 	/** when the source was last checked successfully (epoch ms) */
 	fetchedAt: number;
+	/** when the body last changed (epoch ms); Last-Modified when the source sends none */
+	modifiedAt?: number;
 	/** where the copy came from */
 	source: string;
 }
@@ -20,6 +22,11 @@ export type RefreshResult =
 	| { file: string; ok: false; error: string };
 
 export const USER_AGENT = "lucee-skill-worker";
+
+/** Last-Modified of the source, else when the body last changed */
+export function lastModifiedOf(skill: CachedSkill): string {
+	return skill.lastModified || new Date(skill.modifiedAt ?? skill.fetchedAt).toUTCString();
+}
 
 export function cacheKey(file: string): string {
 	return `skill:${file}`;
@@ -31,9 +38,6 @@ async function sha256Hex(text: string): Promise<string> {
 }
 
 export class SkillStore {
-	/** refreshes running in this isolate, so concurrent requests share one fetch */
-	private static running = new Map<string, Promise<CachedSkill>>();
-
 	constructor(
 		private readonly kv: KVNamespace,
 		private readonly timeoutSeconds: number
@@ -54,17 +58,7 @@ export class SkillStore {
 	 * Checks the source (conditional GET when a copy exists) and stores the result.
 	 * Throws when the source fails; the cached copy is left untouched in that case.
 	 */
-	refresh(skill: SkillDef): Promise<CachedSkill> {
-		const key = cacheKey(skill.file);
-		let p = SkillStore.running.get(key);
-		if (!p) {
-			p = this.doRefresh(skill).finally(() => SkillStore.running.delete(key));
-			SkillStore.running.set(key, p);
-		}
-		return p;
-	}
-
-	private async doRefresh(skill: SkillDef): Promise<CachedSkill> {
+	async refresh(skill: SkillDef): Promise<CachedSkill> {
 		const cached = await this.get(skill.file);
 		const headers: Record<string, string> = { "user-agent": USER_AGENT };
 		// only revalidate a copy of the same source (SKILLS may have changed)
@@ -91,12 +85,16 @@ export class SkillStore {
 		const body = await res.text();
 		if (!body.trim()) throw new Error(`${skill.source} answered with an empty body`);
 
+		const now = Date.now();
+		const etag = `"${(await sha256Hex(body)).slice(0, 32)}"`;
 		const next: CachedSkill = {
 			body,
-			etag: `"${(await sha256Hex(body)).slice(0, 32)}"`,
+			etag,
 			lastModified: res.headers.get("last-modified") ?? "",
 			sourceEtag: res.headers.get("etag") ?? "",
-			fetchedAt: Date.now(),
+			fetchedAt: now,
+			// an unchanged body keeps its modification time
+			modifiedAt: cached && cached.etag === etag ? (cached.modifiedAt ?? cached.fetchedAt) : now,
 			source: skill.source
 		};
 		await this.kv.put(cacheKey(skill.file), JSON.stringify(next));

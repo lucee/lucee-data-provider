@@ -3,18 +3,14 @@
 import { readConfig, type Config, type SkillDef } from "./config";
 import type { Env } from "./env";
 import { renderLanding, skillInfo, type SkillInfo } from "./landing";
-import { SkillStore, type CachedSkill } from "./store";
+import { LANDING_CACHE_CONTROL, SKILL_CACHE_CONTROL, TEXT } from "./http";
+import { lastModifiedOf, SkillStore, type CachedSkill } from "./store";
 
-const TEXT = "text/plain; charset=utf-8";
-export const SKILL_CACHE_CONTROL = "public, max-age=600";
-export const LANDING_CACHE_CONTROL = "public, max-age=300";
+// Only the default handler may be exported from this module: the Workers runtime rejects
+// named exports that are not functions or classes (constants live in ./http).
 
 function text(status: number, body: string, headers: Record<string, string> = {}): Response {
 	return new Response(body, { status, headers: { "content-type": TEXT, "cache-control": "no-store", ...headers } });
-}
-
-function lastModifiedOf(skill: CachedSkill): string {
-	return skill.lastModified || new Date(skill.fetchedAt).toUTCString();
 }
 
 /** If-None-Match (weak comparison, list or "*"), else If-Modified-Since */
@@ -33,13 +29,21 @@ function notModified(request: Request, skill: CachedSkill): boolean {
 	return false;
 }
 
+/** background refreshes running in this isolate, by file (each request does its own I/O) */
+const refreshing = new Set<string>();
+
 function refreshIfStale(store: SkillStore, def: SkillDef, skill: CachedSkill, config: Config, ctx: ExecutionContext) {
 	if (Date.now() - skill.fetchedAt < config.refreshMinutes * 60_000) return;
+	if (refreshing.has(def.file)) return;
+	refreshing.add(def.file);
 	ctx.waitUntil(
-		store.refresh(def).then(
-			() => undefined,
-			(e) => console.error(`background refresh of ${def.file} failed, keeping the cached copy`, e)
-		)
+		store
+			.refresh(def)
+			.then(
+				() => undefined,
+				(e) => console.error(`background refresh of ${def.file} failed, keeping the cached copy`, e)
+			)
+			.finally(() => refreshing.delete(def.file))
 	);
 }
 
@@ -103,7 +107,9 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
 	if (path === "/" || path === "/index.cfm") return landing(request, store, config, ctx);
 	if (path === "/health" || path === "/health.cfm") return health(store, config);
 
-	const def = config.skills.find((s) => "/" + s.file === path);
+	// like the Cloud Run site, the file name is matched case-insensitively
+	const lower = path.toLowerCase();
+	const def = config.skills.find((s) => "/" + s.file.toLowerCase() === lower);
 	if (def) return serveSkill(request, def, store, config, ctx);
 
 	return text(404, "Not Found");

@@ -1,5 +1,5 @@
 // Port of apps/skill/www/index.cfm (landing page).
-import type { CachedSkill } from "./store";
+import { lastModifiedOf, type CachedSkill } from "./store";
 
 export interface SkillInfo {
 	file: string;
@@ -7,7 +7,7 @@ export interface SkillInfo {
 	displayName: string;
 	description: string;
 	size: number;
-	/** Last-Modified of the source, or the fetch time when the source sent none */
+	/** Last-Modified of the source, or when the body last changed when the source sends none */
 	updated: Date;
 	sourceHost: string;
 }
@@ -77,14 +77,14 @@ export function parseFrontmatter(content: string, fallbackName: string): { name:
 
 export function skillInfo(file: string, cached: CachedSkill): SkillInfo {
 	const { name, description } = parseFrontmatter(cached.body, file.split(".")[0]);
-	const lastModified = cached.lastModified ? new Date(cached.lastModified) : null;
+	const lastModified = new Date(lastModifiedOf(cached));
 	return {
 		file,
 		name,
 		displayName: humanizeSlug(name),
 		description,
 		size: new TextEncoder().encode(cached.body).byteLength,
-		updated: lastModified && !Number.isNaN(lastModified.getTime()) ? lastModified : new Date(cached.fetchedAt),
+		updated: Number.isNaN(lastModified.getTime()) ? new Date(cached.modifiedAt ?? cached.fetchedAt) : lastModified,
 		sourceHost: new URL(cached.source).host
 	};
 }

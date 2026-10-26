@@ -1,6 +1,8 @@
 import { createExecutionContext, createScheduledController, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import worker, { SKILL_CACHE_CONTROL } from "../src/index";
+import { SKILL_CACHE_CONTROL } from "../src/http";
+import * as indexModule from "../src/index";
+import worker from "../src/index";
 import { cacheKey, type CachedSkill } from "../src/store";
 import {
 	SKILL,
@@ -115,6 +117,13 @@ describe("skill file", () => {
 		);
 	});
 
+	it("matches the file name case-insensitively like the Cloud Run site", async () => {
+		mockFetch({ [SOURCE]: sourceRoute() });
+		const res = await call("/MAIN.skill");
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe(SKILL);
+	});
+
 	it("only serves files listed in SKILLS", async () => {
 		mockFetch({
 			[SOURCE]: sourceRoute(),
@@ -126,6 +135,16 @@ describe("skill file", () => {
 		expect(await res.text()).toBe("---\nname: ext\n---\n");
 		expect((await call("/lucee.skill")).status).toBe(404);
 		expect(calls.map((r) => r.url)).toEqual(["https://docs.lucee.org/extensions.skill"]);
+	});
+});
+
+describe("module", () => {
+	it("exports nothing but functions besides the default handler", () => {
+		// the Workers runtime refuses to start when the main module exports e.g. a string constant
+		for (const [name, value] of Object.entries(indexModule)) {
+			if (name === "default") continue;
+			expect(typeof value, `export ${name}`).toBe("function");
+		}
 	});
 });
 
@@ -143,6 +162,31 @@ describe("cron refresh", () => {
 		const second = (await stored())!;
 		expect(second.etag).toBe(first.etag);
 		expect(second.fetchedAt).toBeGreaterThanOrEqual(first.fetchedAt);
+	});
+
+	it("keeps Last-Modified stable when the source sends none and the body is unchanged", async () => {
+		const plain = (body: string) => () => new Response(body, { status: 200 });
+		mockFetch({ [SOURCE]: plain(SKILL) });
+		await runCron();
+		const first = (await stored())!;
+		expect(first.lastModified).toBe("");
+		const firstHeader = (await call("/main.skill")).headers.get("last-modified")!;
+		expect(firstHeader).toBe(new Date(first.modifiedAt!).toUTCString());
+
+		await kv().put(
+			cacheKey("main.skill"),
+			JSON.stringify({ ...first, fetchedAt: first.fetchedAt - 3600_000, modifiedAt: first.modifiedAt! - 3600_000 })
+		);
+		await runCron();
+		const unchanged = (await stored())!;
+		expect(unchanged.modifiedAt).toBe(first.modifiedAt! - 3600_000);
+		expect(unchanged.fetchedAt).toBeGreaterThanOrEqual(first.fetchedAt);
+
+		mockFetch({ [SOURCE]: plain(SKILL + "more\n") });
+		await runCron();
+		const changed = (await stored())!;
+		expect(changed.body).toBe(SKILL + "more\n");
+		expect(changed.modifiedAt).toBeGreaterThanOrEqual(first.modifiedAt!);
 	});
 
 	it("picks up a changed file", async () => {
