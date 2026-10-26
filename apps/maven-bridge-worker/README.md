@@ -4,8 +4,8 @@ Cloudflare Worker port of [`apps/maven-bridge`](../maven-bridge) — the Maven r
 `maven.lucee-services.com`. It serves the same paths with the same answers, without a JVM and
 without Cloud Run, and it can serve artifacts straight from Cloudflare R2.
 
-It is deployed to the **test hostname `mvn.lucee-services.com`**. `maven.lucee-services.com`
-keeps running on Cloud Run until the cutover below.
+It serves **`maven.lucee-services.com`** and the test hostname **`mvn.lucee-services.com`**.
+The Cloud Run service stays deployed as a rollback until it is retired.
 
 ## What it does
 
@@ -130,7 +130,7 @@ Secrets: `FLUSH_TOKEN` (`wrangler secret put FLUSH_TOKEN`; CI sets it from the
 `MAVEN_BRIDGE_FLUSH_TOKEN` secret when that exists).
 
 Bindings: KV `BRIDGE_CACHE` (namespace `lucee-maven-bridge-cache`), R2 `ARTIFACTS`
-(bucket `lucee-artifacts`, only read in serve mode). Custom domain: `mvn.lucee-services.com`.
+(bucket `lucee-artifacts`, only read in serve mode). Custom domains: `maven.lucee-services.com`, `mvn.lucee-services.com`.
 
 ## Develop and test
 
@@ -163,7 +163,11 @@ provision, deploy and secret steps. Token permissions:
 - Account: Workers Scripts Edit, Workers KV Storage Edit, Workers R2 Storage Edit
 - Zone `lucee-services.com`: Workers Routes Edit (custom domain), DNS Edit
 
-The custom domain needs `mvn.lucee-services.com` to have no existing DNS record; Cloudflare creates it.
+Cloudflare creates the DNS record of each custom domain. A deploy from CI (non-interactive) replaces an
+existing DNS record on that hostname; an interactive `wrangler deploy` asks first.
+
+Rollback for `maven.lucee-services.com`: remove it from `routes` and deploy (this removes the custom domain
+and its record), then restore the DNS-only CNAME `maven` → `ghs.googlehosted.com` (Cloud Run).
 
 ## Compare with production
 

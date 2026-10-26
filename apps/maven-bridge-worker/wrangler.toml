@@ -1,11 +1,14 @@
 # Lucee Maven bridge on Cloudflare Workers (port of apps/maven-bridge).
-# Test hostname: mvn.lucee-services.com (maven.lucee-services.com stays on Cloud Run).
+# Hostnames: maven.lucee-services.com (production) and mvn.lucee-services.com (test).
 name = "lucee-maven-bridge"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
 workers_dev = false
 preview_urls = false
-routes = [{ pattern = "mvn.lucee-services.com", custom_domain = true }]
+routes = [
+  { pattern = "maven.lucee-services.com", custom_domain = true },
+  { pattern = "mvn.lucee-services.com", custom_domain = true },
+]
 
 # landing page assets (/res/*)
 [assets]
