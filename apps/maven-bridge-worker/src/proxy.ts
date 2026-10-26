@@ -163,7 +163,7 @@ async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, p
 /**
  * Checksum of an artifact computed by the bridge (hex digest, as in a Maven checksum file):
  * upstream mirrors hash the artifact from R2 or its upstream URL, REST providers hash the
- * generated pom or the extension download. 404 when the artifact is missing or too large.
+ * generated pom or the extension download. 404 (not cacheable) when the artifact is missing, too large or its checksum is still being computed.
  */
 async function computedChecksumResponse(
 	ctx: ProxyContext,
@@ -207,7 +207,12 @@ async function computedChecksumResponse(
 		const downloadUrl = await support.getDownloadUrl(artifact.artifactId!, artifact.version!);
 		if (downloadUrl.length) value = await store.ofUrl(downloadUrl, type, immutable);
 	}
-	if (!value.length) return textResponse(404, TEXT, "Not found");
+	if (!value.length) {
+		// may be a checksum still being computed in the background: never let a cache keep this 404
+		const res = textResponse(404, TEXT, "Not found");
+		res.headers.set("cache-control", "no-store");
+		return res;
+	}
 
 	if (support.hasUpstream() && shouldFill(ctx, artifact, checksumKey)) {
 		ctx.waitUntil(

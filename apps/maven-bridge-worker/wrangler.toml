@@ -15,6 +15,12 @@ directory = "./public"
 [triggers]
 crons = ["0 * * * *"]
 
+# CPU limit per invocation (Workers Paid only; a deploy on the Free plan fails with it).
+# Background checksum work (waitUntil) counts toward the same limit. Hashing a ~66 MB core jar
+# takes a few hundred ms of CPU: well within the Paid default (30 s), over the Free limit (10 ms).
+# [limits]
+# cpu_ms = 60000
+
 [observability]
 enabled = true
 
@@ -41,4 +47,6 @@ R2_FILL_STREAM_MAX_MB = "32"
 R2_PREFIX = ""
 # checksums missing upstream are computed from artifacts up to this size (MB), 0 = never
 CHECKSUM_MAX_MB = "128"
+# larger artifacts are hashed in the background (the checksum answers 404 until it is cached), 0 = always
+CHECKSUM_INLINE_MAX_MB = "16"
 # FLUSH_TOKEN is a secret: wrangler secret put FLUSH_TOKEN (flush is disabled without it)

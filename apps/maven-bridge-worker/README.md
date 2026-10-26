@@ -37,7 +37,15 @@ Two kinds of groups, configured in `EXTENSION_PROVIDERS`:
   layout first, then the legacy name, e.g. `lucee-6.2.0.321.jar.sha1`, `6.2.0.321.lco.sha1`).
 - Otherwise (core poms, RCs and snapshots have none on the CDN) the checksum is computed from the
   artifact the bridge serves (R2 object, GitHub Release asset or CDN file): streamed, never buffered,
-  only for artifacts up to `CHECKSUM_MAX_MB`. One download yields all four checksum types. Results
+  only for artifacts up to `CHECKSUM_MAX_MB`. One download yields all four checksum types (native
+  `crypto.DigestStream`, read in 1 MiB blocks into one reused buffer). Artifacts over
+  `CHECKSUM_INLINE_MAX_MB` (core jars) are hashed in the background (`waitUntil`, same download):
+  the request answers 404 right away (`cache-control: no-store`), which Maven only warns about, and
+  the next request after the hash is cached gets it; a KV marker (`checksum-pending:…`, 5 minutes)
+  keeps parallel and repeated requests from downloading the artifact again meanwhile. Background work
+  shares the invocation's CPU and memory limits and must finish within 30 s of the response; runs
+  ended early are counted (`checksum-attempts:…`) and logged, and after 3 the artifact is left alone
+  for a day. A download that ends short of its `content-length` is never cached. Results
   are cached in KV, for 30 days for immutable artifacts and for `CACHE_TTL_MINUTES` for snapshots;
   with fill-on-miss, checksums of immutable artifacts are also stored in R2 next to the artifact.
 - REST provider groups have no checksum files: pom checksums are computed from the generated pom,
@@ -84,7 +92,9 @@ The CFML bridge kept everything in the server scope. Here:
 - **KV (`BRIDGE_CACHE`)**: REST provider indexes (`index:<groupId>`) and upstream group files
   (`upstream:<url>`), refreshed by the **hourly cron**. Entries older than `CACHE_TTL_MINUTES` are
   served while a refresh runs in the background; if the provider is down the last good copy is used.
-  Computed checksums (`checksum:<generation>:<type>:<source>`) are kept in KV too, with an expiration.
+  Computed checksums (`checksum:<generation>:<type>:<source>`) are kept in KV too, with an expiration,
+  next to the short-lived markers of background computations (`checksum-pending:<generation>:<source>`)
+  and their attempt counts (`checksum-attempts:<generation>:<source>`, 1 day).
 - **Cache API**: upstream metadata/index pages and positive `HEAD` checks on the upstream, keyed by a
   cache generation that a flush bumps.
 
@@ -112,6 +122,7 @@ curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/health?flu
 | `R2_MODE` | `off` | `off` or `serve` |
 | `R2_FILL_ON_MISS` | `false` | store immutable upstream files in R2 on first request (serve mode only) |
 | `CHECKSUM_MAX_MB` | `128` | checksums the upstream does not have are computed for artifacts up to this size; larger ones answer 404 (`0` = never compute) |
+| `CHECKSUM_INLINE_MAX_MB` | `16` | computed checksums of larger artifacts are hashed in the background and answer 404 until cached (`0` = always in the background) |
 | `R2_FILL_STREAM_MAX_MB` | `32` | fill-on-miss files up to this size are streamed while stored; larger ones are stored first (`0` = always store first) |
 | `R2_PREFIX` | empty | key prefix in the bucket |
 

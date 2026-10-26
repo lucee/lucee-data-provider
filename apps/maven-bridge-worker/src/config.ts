@@ -1,4 +1,4 @@
-import { DEFAULT_CHECKSUM_MAX_MB } from "./checksum";
+import { DEFAULT_CHECKSUM_INLINE_MAX_MB, DEFAULT_CHECKSUM_MAX_MB } from "./checksum";
 import type { Env } from "./env";
 
 export interface ProviderEntry {
@@ -20,6 +20,8 @@ export interface BridgeConfig {
 	r2FillStreamMaxBytes: number;
 	/** bytes; checksums are only computed for artifacts up to this size */
 	checksumMaxBytes: number;
+	/** bytes; larger checksums are computed in the background (404 until cached) */
+	checksumInlineMaxBytes: number;
 	flushToken: string;
 }
 
@@ -132,6 +134,11 @@ export function readConfig(env: Env): BridgeConfig {
 		: val(env.CHECKSUM_MAX_MB);
 	if (checksumMaxMb < 0) throw new Error(`Invalid CHECKSUM_MAX_MB [${env.CHECKSUM_MAX_MB}]`);
 
+	const checksumInlineMaxMb = env.CHECKSUM_INLINE_MAX_MB === undefined || String(env.CHECKSUM_INLINE_MAX_MB).trim() === ""
+		? DEFAULT_CHECKSUM_INLINE_MAX_MB
+		: val(env.CHECKSUM_INLINE_MAX_MB);
+	if (checksumInlineMaxMb < 0) throw new Error(`Invalid CHECKSUM_INLINE_MAX_MB [${env.CHECKSUM_INLINE_MAX_MB}]`);
+
 	return {
 		providers,
 		cacheTtlMinutes,
@@ -142,6 +149,7 @@ export function readConfig(env: Env): BridgeConfig {
 		r2Prefix: String(env.R2_PREFIX ?? ""),
 		r2FillStreamMaxBytes: Math.floor(streamMaxMb * 1024 * 1024),
 		checksumMaxBytes: Math.floor(checksumMaxMb * 1024 * 1024),
+		checksumInlineMaxBytes: Math.floor(checksumInlineMaxMb * 1024 * 1024),
 		flushToken: String(env.FLUSH_TOKEN ?? "")
 	};
 }
