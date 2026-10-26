@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>io.forgebox</groupId>
+  <artifactId>ortus-mongodb-cache-extension</artifactId>
+  <version>1.2.0.5291</version>
+  <packaging>lex</packaging>
+  <name>Ortus MongoDB Cache</name>
+  <description># Ortus MongoDB Extension
+
+&lt;p class=&quot;lead&quot;&gt;
+The Ortus MongoDB Extension is a native Lucee Extension that allows your CFML server to connect to a Mongo server/cluster and leverage it for built-in caching, session storage, and NoSQL document storage.
+&lt;/p&gt;
+
+&gt; MongoDB is a general purpose, document-based, distributed database built for modern application developers and for the cloud era. MongoDB stores data in flexible, JSON-like documents, meaning fields can vary from document to document and data structure can be changed over time. MongoDB is free to use. Versions released prior to October 16, 2018 are published under the AGPL. All versions released after October 16, 2018, including patch fixes for prior versions, are published under the &lt;a href=&quot;https://www.mongodb.com/licensing/server-side-public-license&quot;&gt;Server Side Public License (SSPL) v1&lt;/a&gt;.
+[Learn More](https://www.mongodb.com/what-is-mongodb)
+
+## Requirements
+
+* Lucee 5.1.0 and above
+* Mongo 4.0.X and above
+
+## Features In A Nutshell
+
+* Add Mongo native functionality to any Lucee server
+* Install at server level (Available to all contexts)
+* Create Cache connections in the Lucee web administrator or via `Application.cfc` to connect to any network-accessable Mongo cluster
+* Set and get objects from Mongo via standard CFML functions and tags (`cachePut(), cacheGet(), cfcache action=&quot;get|put&quot;`)
+* Fully supports all built-in Lucee cache functions including wildcard filters
+* Seamlessly distribute storage of the following to any Mongo Cluster
+** Lucee session storage
+** Lucee client storage
+** Lucee Ram resouces (ram://...)
+* Seamlessly cache the following to any timeout-sensitive Mongo key
+** Results of database queries
+** Results of deterministic functions
+** Complex or simple objects in your application&apos;s code
+** Cached templates (`cfcache action=&quot;content|cache|serverCache&quot;`)
+* Extremely lightweight and fast
+* Native Mongo functions: `MongoGetConnection( cacheName ), MongoGetProvider( cacheName )`
+
+## Development Environment Setup
+
+Initialize the cluster:
+
+A Docker compose file has been set up to allow for testing the extension within a cluster of MongoDB servers. To intialize the environment for the first time, run `docker-compose up -d --build`
+
+Once the containers have been built and initialized, you will need to run the following command to initialize the MongoDB cluster:
+
+```
+docker exec -it ortus-mongodb-lucee-extension_mongodb_1 mongo --eval &apos;rs.initiate({ _id: &quot;extension_test&quot;, members: [{ _id: 1, host: &quot;mongodb:27017&quot; }, { _id: 2, host: &quot;mongo-repl1:27017&quot; }, { _id: 3, host: &quot;mongo-repl2:27017&quot; }], settings: { getLastErrorDefaults: { w: &quot;majority&quot;, wtimeout: 30000 }}})&apos;
+```
+
+_Note: if you have cloned the repo in to a custom named directory ( e.g. named `mongodb` instead of `ortus-mongodb-lucee-extension` ), you will need to change that to your local directory name in the command above_
+
+Once the cluster is intialized you may build and deploy the extension and test by accessing `http://127.0.0.1:61656/tests/runner.cfm`</description>
+</project>

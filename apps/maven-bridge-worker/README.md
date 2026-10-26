@@ -1,0 +1,175 @@
+# Maven bridge worker
+
+Cloudflare Worker port of [`apps/maven-bridge`](../maven-bridge) — the Maven repository layout behind
+`maven.lucee-services.com`. It serves the same paths with the same answers, without a JVM and
+without Cloud Run, and it can serve artifacts straight from Cloudflare R2.
+
+It is deployed to the **test hostname `mvn.lucee-services.com`**. `maven.lucee-services.com`
+keeps running on Cloud Run until the cutover below.
+
+## What it does
+
+| Path | Answer |
+|------|--------|
+| `/` | landing page (groups, artifacts, latest versions) |
+| `/health`, `/healthcheck`, `/health.cfm` | JSON status, artifact count and providers |
+| `/{group}/`, `/{group}/maven-metadata.xml` | group index / group metadata |
+| `/{group}/{artifact}/maven-metadata.xml` | versions of an artifact |
+| `/{group}/{artifact}/{version}/…` | version index, version metadata, pom, artifact files |
+
+Two kinds of groups, configured in `EXTENSION_PROVIDERS`:
+
+- **REST provider groups** (`io.forgebox`): the provider's `/rest/extension/provider/info` index is
+  translated into Maven metadata; `.lex` files redirect (302) to the provider download URL; poms are
+  generated.
+- **Upstream mirror groups** (`org.lucee` → `https://cdn.lucee.org/`): metadata and indexes are passed
+  through from the upstream; files redirect (302) to the upstream. Lucee core files (`org.lucee:lucee`)
+  are mapped to the legacy CDN names (`lucee-light-6.2.0.321.jar`, `6.2.0.321.lco`, …); 7.1+ core
+  builds redirect to GitHub Releases first, with the CDN as fallback.
+
+### R2
+
+With `R2_MODE = "serve"` every artifact file request first looks in the `ARTIFACTS` bucket. A hit is
+streamed by the worker (content type, ETag, Last-Modified, Content-Length, `Range` → 206,
+`If-None-Match`/`If-Modified-Since` → 304, `HEAD`). A miss falls back to the redirect logic above.
+Group-level files (`maven-metadata.xml`, `index.html`) of upstream groups are read from R2 first too.
+
+Object keys use the upstream layout, so a copy of `cdn.lucee.org` can be used as is:
+
+- core: `lucee-7.1.0.10.jar`, `lucee-light-6.2.0.321.jar`, `6.2.0.321.lco` (bucket root)
+- everything else: `org/lucee/redis-extension/3.0.0.1/redis-extension-3.0.0.1.lex`
+
+`R2_PREFIX` is prepended to every key.
+
+#### Fill on miss (lazy migration)
+
+With `R2_MODE = "serve"` and `R2_FILL_ON_MISS = "true"`, a miss for an upstream-mirror file is fetched
+from its source (GitHub Releases or the CDN) and stored in R2 under the same key. The next request is
+served from R2.
+
+- Files up to `R2_FILL_STREAM_MAX_MB` (default 32) are streamed to the client and stored at the same
+  time (`waitUntil`).
+- Larger files (core jars, express zips) are stored first and then served from R2, so a slow client
+  never makes the worker hold a large file in memory.
+- If the source cannot be reached, or the store fails, the request falls back to the redirect.
+
+Only immutable files are stored: a `200` answer with a known `Content-Length` and no `Content-Encoding`, for a plain `GET`
+(no `Range`), and never `SNAPSHOT` versions, `maven-metadata.xml*` or `index.html`. Anything else
+keeps the redirect behaviour. Stored objects carry `customMetadata.source` and `filledAt`.
+
+ForgeBox downloads are not filled (they are served by ForgeBox, not mirrored).
+
+### Caching
+
+The CFML bridge kept everything in the server scope. Here:
+
+- **KV (`BRIDGE_CACHE`)**: REST provider indexes (`index:<groupId>`) and upstream group files
+  (`upstream:<url>`), refreshed by the **hourly cron**. Entries older than `CACHE_TTL_MINUTES` are
+  served while a refresh runs in the background; if the provider is down the last good copy is used.
+- **Cache API**: upstream metadata/index pages and positive `HEAD` checks on the upstream, keyed by a
+  cache generation that a flush bumps.
+
+### Flush
+
+`?flush=true` (also `1`, `yes`, `force`) on any path empties KV, bumps the cache generation and resyncs,
+like `health.cfm?flush=true`. It needs the `FLUSH_TOKEN` secret, sent as `X-Flush-Token: <token>` or
+`Authorization: Bearer <token>`. Without the secret flushing is disabled (403).
+
+```sh
+curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/health?flush=true"
+```
+
+## Configuration
+
+`wrangler.toml` `[vars]` (no secrets in the file):
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `EXTENSION_PROVIDERS` | ForgeBox + extension.lucee.org/cdn | `provider\|groupId[\|upstream]`, comma separated, or a JSON array of `{provider, groupId, upstream}` |
+| `CACHE_TTL_MINUTES` | `60` | age after which KV entries are refreshed |
+| `TIMEOUT` | `300` | upstream/provider timeout in seconds |
+| `GITHUB_RELEASES_URL` | `https://github.com/lucee/Lucee/releases/download/` | 7.1+ core builds; empty disables |
+| `R2_MODE` | `off` | `off` or `serve` |
+| `R2_FILL_ON_MISS` | `false` | store immutable upstream files in R2 on first request (serve mode only) |
+| `R2_FILL_STREAM_MAX_MB` | `32` | fill-on-miss files up to this size are streamed while stored; larger ones are stored first (`0` = always store first) |
+| `R2_PREFIX` | empty | key prefix in the bucket |
+
+Secrets: `FLUSH_TOKEN` (`wrangler secret put FLUSH_TOKEN`; CI sets it from the
+`MAVEN_BRIDGE_FLUSH_TOKEN` secret when that exists).
+
+Bindings: KV `BRIDGE_CACHE` (namespace `lucee-maven-bridge-cache`), R2 `ARTIFACTS`
+(bucket `lucee-artifacts`, only read in serve mode). Custom domain: `mvn.lucee-services.com`.
+
+## Develop and test
+
+Node 22+.
+
+```sh
+cd apps/maven-bridge-worker
+npm ci
+npm test            # vitest in the Workers runtime (@cloudflare/vitest-plugin), no network
+npm run typecheck
+npm run dry-run     # wrangler deploy --dry-run --outdir dist
+npm run dev         # local worker on http://localhost:8787 with local KV/R2
+```
+
+The tests mock `fetch`, so they never reach ForgeBox, the CDN or GitHub. `test/fixtures` holds a real
+ForgeBox provider answer and the pom production generates for it.
+
+## Deploy
+
+`.github/workflows/maven-bridge-worker.yml`:
+
+- pull requests touching `apps/maven-bridge-worker/**`: typecheck, tests, dry run — no deploy
+- push to `main` touching the folder, or a manual run on `main`: tests, then
+  `scripts/provision.mjs` creates the KV namespace and the R2 bucket if missing (idempotent) and writes
+  the KV id into `wrangler.toml`, then `cloudflare/wrangler-action` deploys
+
+It uses the org secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; they are passed only to the
+provision, deploy and secret steps. Token permissions:
+
+- Account: Workers Scripts Edit, Workers KV Storage Edit, Workers R2 Storage Edit
+- Zone `lucee-services.com`: Workers Routes Edit (custom domain), DNS Edit
+
+The custom domain needs `mvn.lucee-services.com` to have no existing DNS record; Cloudflare creates it.
+
+## Compare with production
+
+```sh
+npm run compare -- --prod https://maven.lucee-services.com --target https://mvn.lucee-services.com
+npm run compare -- --paths my-paths.txt --method HEAD
+```
+
+`scripts/compare.mjs` requests each path on both hosts without following redirects and compares status,
+`Location` and a SHA-256 of the body (generated timestamps normalized; `--strict` disables that).
+It exits with 1 when anything differs.
+
+## Cutover plan
+
+1. **Test host**: deploy to `mvn.lucee-services.com` with `R2_MODE = "off"` (pure port, same redirects).
+2. **Compare**: run `scripts/compare.mjs` against `maven.lucee-services.com` with a path list taken
+   from real traffic; point a Lucee 7 test instance at `https://mvn.lucee-services.com/` and install
+   extensions/core updates.
+3. **Flip `maven.lucee-services.com`**: move the hostname from Cloud Run to this worker (add it as a
+   second custom domain), keep Cloud Run running for a quick rollback, then retire it.
+4. **Move artifacts to R2**, then set `R2_MODE = "serve"`:
+   - **Bulk copy**: [Super Slurper](https://developers.cloudflare.com/r2/data-migration/super-slurper/)
+     for a one-off copy of the bucket behind `cdn.lucee.org`, or
+     [Sippy](https://developers.cloudflare.com/r2/data-migration/sippy/) on the `lucee-artifacts`
+     bucket, which copies objects from the source bucket into R2 on first access. Both need the
+     source to be an S3-compatible or GCS bucket and keep its key layout, which is the layout
+     the worker expects.
+   - **Lazy alternative**: `R2_FILL_ON_MISS = "true"` fills R2 from whatever the worker would
+     redirect to (CDN or GitHub Releases), without access to the source bucket; files nobody asks
+     for are never copied.
+   - Once R2 has everything, the upstream redirects remain only as a fallback.
+
+## Differences from `apps/maven-bridge`
+
+- Health is also served on `/health` and `/healthcheck`; the CFML `describe` output is not served.
+- Unknown (non-Maven) paths answer a plain text 404 instead of the Tomcat error page.
+- When a provider or the upstream fails, the last good copy from KV is served instead of an error.
+- Positive upstream `HEAD` checks are cached (Cache API); the CFML bridge checked on each request.
+- Content types always come from the path's extension.
+- Flushing requires `FLUSH_TOKEN`.
+- Optional R2 serving and fill-on-miss (not in the CFML bridge).

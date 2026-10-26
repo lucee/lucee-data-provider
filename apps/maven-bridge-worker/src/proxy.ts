@@ -1,0 +1,247 @@
+// Port of BridgeProxy.cfc: maps a request path onto a Maven repository response.
+import { cfJsonDate, compareNoCase, containsNoCase, encodeForHtml, startsWithNoCase } from "./cfml";
+import type { BridgeConfig } from "./config";
+import { isUpstreamNotFound } from "./errors";
+import { fetchAndFill, isImmutableArtifact, serveFromR2 } from "./r2";
+import type { BridgeRegistry } from "./registry";
+import { USER_AGENT } from "./store";
+import type { BridgeSupport, ParsedPath, ParsedType } from "./support";
+
+const TEXT = "text/plain; charset=utf-8";
+const HTML = "text/html; charset=utf-8";
+const XML = "application/xml; charset=utf-8";
+
+const UPSTREAM_CONTENT_TYPES: ParsedType[] = [
+	"group-index",
+	"group-metadata",
+	"artifact-index",
+	"artifact-metadata",
+	"version-index",
+	"version-metadata"
+];
+
+export function textResponse(status: number, contentType: string, body: string): Response {
+	return new Response(body, { status, headers: { "content-type": contentType } });
+}
+
+export function redirectResponse(location: string): Response {
+	return new Response("", { status: 302, headers: { "content-type": TEXT, location } });
+}
+
+/** normalizeTargetPage() (Application.cfc) followed by normalizePath() (BridgeProxy.cfc) */
+export function normalizeRequestPath(rawPath: string): string {
+	let p = rawPath.replace(/\\/g, "/");
+	while (p.includes("//")) p = p.replace(/\/\//g, "/");
+	if (!p.startsWith("/")) p = "/" + p;
+	if (p.startsWith("/index.cfm/")) p = p.slice(10);
+	if (p.toLowerCase().endsWith("/index.cfm")) p = p.slice(0, -9);
+	if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
+	return p.length ? p : "/";
+}
+
+export interface ProxyContext {
+	registry: BridgeRegistry;
+	config: BridgeConfig;
+	request: Request;
+	waitUntil: (p: Promise<unknown>) => void;
+	bucket?: R2Bucket;
+}
+
+export async function invokePath(ctx: ProxyContext, cleanPath: string): Promise<Response> {
+	const resolved = ctx.registry.resolve(cleanPath);
+	if (resolved.parsed.type === "unknown" || !resolved.support) {
+		const prefixHtml = buildGroupPrefixIndexHtml(ctx.registry, cleanPath);
+		if (prefixHtml.length) return textResponse(200, HTML, prefixHtml);
+		return textResponse(404, TEXT, "Not found");
+	}
+
+	const support = resolved.support;
+	const parsed = resolved.parsed;
+	try {
+		if (support.hasUpstream() && UPSTREAM_CONTENT_TYPES.includes(parsed.type)) {
+			return await upstreamContentResponse(support, parsed);
+		}
+		switch (parsed.type) {
+			case "group-index":
+				return textResponse(200, HTML, await support.buildGroupIndexHtml());
+			case "group-metadata":
+				return textResponse(200, XML, await support.buildGroupMetadata());
+			case "artifact-index":
+				return textResponse(200, HTML, await support.buildArtifactIndexHtml(parsed.artifactId!));
+			case "artifact-metadata":
+				return textResponse(200, XML, await support.buildArtifactMetadata(parsed.artifactId!));
+			case "version-index":
+				return textResponse(200, HTML, support.buildVersionIndexHtml(parsed.artifactId!, parsed.version!));
+			case "version-metadata":
+				return textResponse(200, XML, await support.buildVersionMetadata(parsed.artifactId!, parsed.version!));
+			case "artifact-file":
+				return await artifactFileResponse(ctx, support, parsed);
+			default:
+				return textResponse(404, TEXT, "Not found");
+		}
+	} catch (e) {
+		console.warn(`maven-bridge [${cleanPath}] failed`, e);
+		return textResponse(404, TEXT, (e instanceof Error && e.message) || "Not found");
+	}
+}
+
+/** R2 object key of an artifact file (legacy core layout for "lucee", Maven layout otherwise). */
+export function r2KeyFor(config: BridgeConfig, support: BridgeSupport, parsed: ParsedPath): string {
+	const legacy = support.hasUpstream() ? support.toUpstreamLegacyCorePath(parsed) : "";
+	return config.r2Prefix + (legacy.length ? legacy : support.toUpstreamRelativePath(parsed));
+}
+
+async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, parsed: ParsedPath): Promise<Response> {
+	const key = r2KeyFor(ctx.config, support, parsed);
+	if (ctx.bucket) {
+		const fromR2 = await serveFromR2(ctx.bucket, key, ctx.request);
+		if (fromR2) return fromR2;
+	}
+
+	// upstream mirrors serve files from the upstream repo only, never from the REST provider
+	if (support.hasUpstream()) {
+		let target = "";
+		const legacyPath = support.toUpstreamLegacyCorePath(parsed);
+		if (legacyPath.length) {
+			// 7.1+ core builds are GitHub Release assets; the CDN stays the fallback
+			target = await support.findGithubReleaseUrl(parsed);
+			if (!target.length && (await support.io.upstreamResourceExists(support, legacyPath))) {
+				target = support.upstreamUrl + legacyPath;
+			}
+		} else {
+			const upstreamPath = support.toUpstreamRelativePath(parsed);
+			if (await support.io.upstreamResourceExists(support, upstreamPath)) target = support.upstreamUrl + upstreamPath;
+		}
+		if (!target.length) return textResponse(404, TEXT, "Not found");
+
+		if (shouldFill(ctx, parsed, key)) {
+			const filled = await fetchAndFill(ctx.bucket!, key, target, ctx.waitUntil, {
+				timeoutSeconds: support.timeout,
+				userAgent: USER_AGENT,
+				streamMaxBytes: ctx.config.r2FillStreamMaxBytes,
+				request: ctx.request
+			});
+			if (filled) return filled;
+		}
+		return redirectResponse(target);
+	}
+
+	if (equalsExt(parsed, "pom")) {
+		return textResponse(200, XML, await support.buildMinimalPom(parsed.artifactId!, parsed.version!));
+	}
+	const downloadUrl = await support.getDownloadUrl(parsed.artifactId!, parsed.version!);
+	if (!downloadUrl.length) {
+		return textResponse(
+			404,
+			TEXT,
+			`No [${parsed.extension}] artifact for [${support.groupId}:${parsed.artifactId}:${parsed.version}]`
+		);
+	}
+	return redirectResponse(downloadUrl);
+}
+
+function equalsExt(parsed: ParsedPath, ext: string): boolean {
+	return (parsed.extension ?? "").toLowerCase() === ext;
+}
+
+/** fill-on-miss only for plain GETs of immutable files, and only with a bucket in serve mode */
+function shouldFill(ctx: ProxyContext, parsed: ParsedPath, key: string): boolean {
+	if (!ctx.bucket || !ctx.config.r2FillOnMiss) return false;
+	if (ctx.request.method !== "GET" || ctx.request.headers.has("range")) return false;
+	const fileName = key.split("/").pop() ?? "";
+	return isImmutableArtifact(parsed.version ?? "", fileName);
+}
+
+async function upstreamContentResponse(support: BridgeSupport, parsed: ParsedPath): Promise<Response> {
+	// pass-through: what the upstream has is what we serve
+	const relativePath = support.toUpstreamRelativePath(parsed);
+	try {
+		const content = await support.io.getUpstreamContent(support, relativePath);
+		return textResponse(200, content.contentType, content.body);
+	} catch (e) {
+		if (!isUpstreamNotFound(e)) throw e;
+	}
+	return upstreamSynthesizedResponse(support, parsed);
+}
+
+async function upstreamSynthesizedResponse(support: BridgeSupport, parsed: ParsedPath): Promise<Response> {
+	const has = (list: string[], v: string) => list.some((x) => x.toLowerCase() === v.toLowerCase());
+	switch (parsed.type) {
+		case "artifact-index":
+			return textResponse(
+				200,
+				HTML,
+				await support.buildArtifactIndexHtml(parsed.artifactId!, await support.listUpstreamVersions(parsed.artifactId!))
+			);
+		case "version-index":
+			if (!has(await support.listUpstreamVersions(parsed.artifactId!), parsed.version!)) {
+				return textResponse(404, TEXT, "Not found");
+			}
+			return textResponse(200, HTML, await support.buildUpstreamVersionIndexHtml(parsed.artifactId!, parsed.version!));
+		case "version-metadata":
+			if (
+				containsNoCase(parsed.version!, "-SNAPSHOT") &&
+				has(await support.listUpstreamVersions(parsed.artifactId!), parsed.version!)
+			) {
+				return textResponse(200, XML, await support.buildVersionMetadata(parsed.artifactId!, parsed.version!));
+			}
+			return textResponse(404, TEXT, "Not found");
+		default:
+			return textResponse(404, TEXT, "Not found");
+	}
+}
+
+/** index for path segments above the group level (/org, /io) */
+export function buildGroupPrefixIndexHtml(registry: BridgeRegistry, path: string): string {
+	const children = new Map<string, string>();
+	for (const support of registry.getSupports()) {
+		const groupPath = "/" + support.groupPath;
+		if (startsWithNoCase(groupPath, path + "/")) {
+			const remainder = groupPath.slice(path.length + 1);
+			const name = remainder.split("/").filter((s) => s.length)[0];
+			if (name && !children.has(name.toLowerCase())) children.set(name.toLowerCase(), name);
+		}
+	}
+	if (!children.size) return "";
+	const names = [...children.values()].sort(compareNoCase);
+	const title = path.slice(1);
+	const html = [
+		"<!DOCTYPE html>",
+		`<html><head><title>${encodeForHtml(title)}</title></head><body>`,
+		`<h1>${encodeForHtml(title)}</h1>`,
+		"<pre>"
+	];
+	for (const name of names) {
+		html.push(`<a href="${encodeForHtml(path)}/${encodeForHtml(name)}/">${encodeForHtml(name)}/</a>\n`);
+	}
+	html.push("</pre></body></html>");
+	return html.join("\n");
+}
+
+export async function healthResponse(registry: BridgeRegistry, flushed: boolean): Promise<Response> {
+	const providers: Record<string, unknown>[] = [];
+	let artifactCount = 0;
+	for (const support of registry.getSupports()) {
+		if (support.hasUpstream()) {
+			providers.push({
+				upstream: support.upstreamUrl,
+				mode: "upstream-mirror",
+				groupId: support.groupId,
+				provider: support.providerUrl
+			});
+		} else {
+			const index = await support.getIndex();
+			artifactCount += index.artifacts.size;
+			providers.push({
+				mode: "rest-provider",
+				cachedAt: cfJsonDate(index.cachedAt),
+				artifactCount: index.artifacts.size,
+				groupId: support.groupId,
+				provider: support.providerUrl
+			});
+		}
+	}
+	const body: Record<string, unknown> = { status: "ok", artifactCount, providers };
+	if (flushed) body.flushed = true;
+	return textResponse(200, "application/json; charset=utf-8", JSON.stringify(body));
+}

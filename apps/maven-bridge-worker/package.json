@@ -1,0 +1,26 @@
+{
+  "name": "lucee-maven-bridge-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lucee Maven bridge (maven.lucee-services.com) as a Cloudflare Worker",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "dry-run": "wrangler deploy --dry-run --outdir dist",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "compare": "node scripts/compare.mjs",
+    "provision": "node scripts/provision.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.7",
+    "@cloudflare/workers-types": "^5.20261026.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.152.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
