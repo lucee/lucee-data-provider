@@ -29,6 +29,20 @@ Two kinds of groups, configured in `EXTENSION_PROVIDERS`:
   every pom and snapshot), then the legacy flat CDN names (`lucee-light-6.2.0.321.jar`,
   `6.2.0.321.lco`, …) for older builds. Existence checks are HEAD requests; hits are cached.
 
+#### Checksums
+
+`.sha1`, `.md5`, `.sha256` and `.sha512` files (plain hex digest, as Maven expects):
+
+- Upstream mirror groups redirect to the upstream checksum file when there is one (core files: Maven
+  layout first, then the legacy name, e.g. `lucee-6.2.0.321.jar.sha1`, `6.2.0.321.lco.sha1`).
+- Otherwise (core poms, RCs and snapshots have none on the CDN) the checksum is computed from the
+  artifact the bridge serves (R2 object, GitHub Release asset or CDN file): streamed, never buffered,
+  only for artifacts up to `CHECKSUM_MAX_MB`. Results are cached in KV, for good for immutable
+  artifacts and for `CACHE_TTL_MINUTES` for snapshots; with fill-on-miss, checksums of immutable
+  artifacts are also stored in R2 next to the artifact.
+- REST provider groups have no checksum files: pom checksums are computed from the generated pom,
+  `.lex` checksums from the provider download. Anything else answers 404, never the artifact.
+
 ### R2
 
 With `R2_MODE = "serve"` every artifact file request first looks in the `ARTIFACTS` bucket. A hit is
@@ -75,7 +89,7 @@ The CFML bridge kept everything in the server scope. Here:
 
 ### Flush
 
-`?flush=true` (also `1`, `yes`, `force`) on any path empties KV, bumps the cache generation and resyncs,
+`?flush=true` (also `1`, `yes`, `force`) on any path empties KV (including computed checksums), bumps the cache generation and resyncs,
 like `health.cfm?flush=true`. It needs the `FLUSH_TOKEN` secret, sent as `X-Flush-Token: <token>` or
 `Authorization: Bearer <token>`. Without the secret flushing is disabled (403).
 
@@ -95,6 +109,7 @@ curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/health?flu
 | `GITHUB_RELEASES_URL` | `https://github.com/lucee/Lucee/releases/download/` | 7.1+ core builds; empty disables |
 | `R2_MODE` | `off` | `off` or `serve` |
 | `R2_FILL_ON_MISS` | `false` | store immutable upstream files in R2 on first request (serve mode only) |
+| `CHECKSUM_MAX_MB` | `128` | checksums the upstream does not have are computed for artifacts up to this size; larger ones answer 404 (`0` = never compute) |
 | `R2_FILL_STREAM_MAX_MB` | `32` | fill-on-miss files up to this size are streamed while stored; larger ones are stored first (`0` = always store first) |
 | `R2_PREFIX` | empty | key prefix in the bucket |
 
@@ -177,3 +192,5 @@ It exits with 1 when anything differs.
 - Content types always come from the path's extension.
 - Flushing requires `FLUSH_TOKEN`.
 - Optional R2 serving and fill-on-miss (not in the CFML bridge).
+- Checksums missing upstream are computed; the CFML bridge answered 404 (upstream groups) or
+  redirected them to the `.lex` download (REST provider groups).

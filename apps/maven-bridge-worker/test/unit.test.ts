@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { checksumOfStream, checksumOfText, splitChecksum } from "../src/checksum";
 import { encodeForHtml, urlEncodedFormat, xmlFormat } from "../src/cfml";
 import { parseProviders, readConfig } from "../src/config";
 import type { Env } from "../src/env";
@@ -213,5 +214,46 @@ describe("helpers", () => {
 		expect(isImmutableArtifact("7.1.0.10-SNAPSHOT", "lucee-7.1.0.10-SNAPSHOT.jar")).toBe(false);
 		expect(isImmutableArtifact("7.1.0.10", "maven-metadata.xml")).toBe(false);
 		expect(isImmutableArtifact("7.1.0.10", "maven-metadata.xml.sha1")).toBe(false);
+	});
+});
+
+describe("checksums", () => {
+	const s = lucee();
+	const core = (version: string, classifier: string, extension: string) =>
+		({ type: "artifact-file", groupId: "org.lucee", artifactId: "lucee", version, classifier, extension }) as const;
+
+	it("splits a checksum path into its artifact and type", () => {
+		expect(splitChecksum(core("8.0.0.294-RC", "", "jar.sha1"))).toEqual({ artifact: core("8.0.0.294-RC", "", "jar"), type: "sha1" });
+		expect(splitChecksum(core("1", "", "lex.MD5"))?.type).toBe("md5");
+		expect(splitChecksum(core("1", "", "pom.sha512"))?.type).toBe("sha512");
+		expect(splitChecksum(core("1", "", "jar"))).toBeNull();
+		expect(splitChecksum(core("1", "", "sha1"))).toBeNull();
+		expect(splitChecksum(core("1", "", "jar.asc"))).toBeNull();
+		expect(splitChecksum({ type: "version-index", artifactId: "lucee", version: "1" })).toBeNull();
+	});
+
+	it("keeps the legacy core name for checksum files", () => {
+		expect(s.toUpstreamLegacyCorePath(core("6.2.0.321", "", "jar.sha1"))).toBe("lucee-6.2.0.321.jar.sha1");
+		expect(s.toUpstreamLegacyCorePath(core("6.2.0.321", "light", "jar.md5"))).toBe("lucee-light-6.2.0.321.jar.md5");
+		expect(s.toUpstreamLegacyCorePath(core("6.2.0.321", "", "lco.sha1"))).toBe("6.2.0.321.lco.sha1");
+		expect(s.toUpstreamRelativePath(core("8.0.0.294-RC", "", "pom.sha1"))).toBe("org/lucee/lucee/8.0.0.294-RC/lucee-8.0.0.294-RC.pom.sha1");
+	});
+
+	it("never looks for checksum files on GitHub Releases", () => {
+		expect(s.toGithubReleaseUrls(core("7.1.0.10", "", "jar.sha1"))).toEqual([]);
+	});
+
+	it("computes hex digests of text and streams", async () => {
+		expect(await checksumOfText("abc", "sha1")).toBe("a9993e364706816aba3e25717850c26c9cd0d89d");
+		expect(await checksumOfText("abc", "md5")).toBe("900150983cd24fb0d6963f7d28e17f72");
+		expect(await checksumOfText("abc", "sha256")).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+		expect(await checksumOfStream(new Blob(["a", "bc"]).stream(), "sha1", 3)).toBe("a9993e364706816aba3e25717850c26c9cd0d89d");
+		await expect(checksumOfStream(new Blob(["abcd"]).stream(), "sha1", 3)).rejects.toThrow();
+	});
+
+	it("reads CHECKSUM_MAX_MB", () => {
+		expect(readConfig({} as unknown as Env).checksumMaxBytes).toBe(128 * 1024 * 1024);
+		expect(readConfig({ CHECKSUM_MAX_MB: "0" } as unknown as Env).checksumMaxBytes).toBe(0);
+		expect(() => readConfig({ CHECKSUM_MAX_MB: "-1" } as unknown as Env)).toThrow("Invalid CHECKSUM_MAX_MB");
 	});
 });

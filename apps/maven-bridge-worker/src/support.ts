@@ -1,5 +1,6 @@
 // Port of BridgeSupport.cfc: one configured provider / groupId.
 import { compareNoCase, containsNoCase, encodeForHtml, equalsNoCase, isNumeric, mavenTimestamp, startsWithNoCase, xmlFormat } from "./cfml";
+import { splitChecksum } from "./checksum";
 import { DEFAULT_GITHUB_RELEASES_URL, normalizeUpstreamUrl, val } from "./config";
 import { BridgeError, isUpstreamNotFound } from "./errors";
 import type { RestIndex } from "./rest-index";
@@ -165,6 +166,12 @@ export class BridgeSupport {
 	 */
 	toUpstreamLegacyCorePath(parsed: ParsedPath): string {
 		if (parsed.type !== "artifact-file" || !equalsNoCase(parsed.artifactId ?? "", "lucee")) return "";
+		// checksum files keep the legacy name of their artifact: 6.2.0.321.lco.sha1
+		const checksum = splitChecksum(parsed);
+		if (checksum) {
+			const base = this.toUpstreamLegacyCorePath(checksum.artifact);
+			return base.length ? `${base}.${parsed.extension!.slice(checksum.artifact.extension!.length + 1)}` : "";
+		}
 		const version = parsed.version!;
 		const ext = parsed.extension!;
 		const classifier = parsed.classifier ?? "";

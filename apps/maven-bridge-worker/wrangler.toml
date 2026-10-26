@@ -39,4 +39,6 @@ R2_MODE = "off"
 R2_FILL_ON_MISS = "false"
 R2_FILL_STREAM_MAX_MB = "32"
 R2_PREFIX = ""
+# checksums missing upstream are computed from artifacts up to this size (MB), 0 = never
+CHECKSUM_MAX_MB = "128"
 # FLUSH_TOKEN is a secret: wrangler secret put FLUSH_TOKEN (flush is disabled without it)

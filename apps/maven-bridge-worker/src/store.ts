@@ -258,6 +258,13 @@ export class RuntimeIo implements SupportIo {
 			deletes.push(this.env.BRIDGE_CACHE.delete(indexKey(support)));
 			for (const rel of groupLevelFiles(support)) deletes.push(this.env.BRIDGE_CACHE.delete(upstreamKey(support, rel)));
 		}
+		// computed checksums (see checksum.ts)
+		let cursor: string | undefined;
+		do {
+			const page: KVNamespaceListResult<unknown, string> = await this.env.BRIDGE_CACHE.list({ prefix: "checksum:", cursor });
+			for (const key of page.keys) deletes.push(this.env.BRIDGE_CACHE.delete(key.name));
+			cursor = page.list_complete ? undefined : page.cursor;
+		} while (cursor);
 		await Promise.all(deletes);
 		await this.bumpGeneration();
 		await this.syncAll(supports);

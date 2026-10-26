@@ -1,3 +1,4 @@
+import { DEFAULT_CHECKSUM_MAX_MB } from "./checksum";
 import type { Env } from "./env";
 
 export interface ProviderEntry {
@@ -17,6 +18,8 @@ export interface BridgeConfig {
 	r2Prefix: string;
 	/** bytes; larger fill-on-miss files are stored in R2 before they are served */
 	r2FillStreamMaxBytes: number;
+	/** bytes; checksums are only computed for artifacts up to this size */
+	checksumMaxBytes: number;
 	flushToken: string;
 }
 
@@ -124,6 +127,11 @@ export function readConfig(env: Env): BridgeConfig {
 		: val(env.R2_FILL_STREAM_MAX_MB);
 	if (streamMaxMb < 0) throw new Error(`Invalid R2_FILL_STREAM_MAX_MB [${env.R2_FILL_STREAM_MAX_MB}]`);
 
+	const checksumMaxMb = env.CHECKSUM_MAX_MB === undefined || String(env.CHECKSUM_MAX_MB).trim() === ""
+		? DEFAULT_CHECKSUM_MAX_MB
+		: val(env.CHECKSUM_MAX_MB);
+	if (checksumMaxMb < 0) throw new Error(`Invalid CHECKSUM_MAX_MB [${env.CHECKSUM_MAX_MB}]`);
+
 	return {
 		providers,
 		cacheTtlMinutes,
@@ -133,6 +141,7 @@ export function readConfig(env: Env): BridgeConfig {
 		r2FillOnMiss: ["1", "true", "yes", "on"].includes(String(env.R2_FILL_ON_MISS ?? "").trim().toLowerCase()),
 		r2Prefix: String(env.R2_PREFIX ?? ""),
 		r2FillStreamMaxBytes: Math.floor(streamMaxMb * 1024 * 1024),
+		checksumMaxBytes: Math.floor(checksumMaxMb * 1024 * 1024),
 		flushToken: String(env.FLUSH_TOKEN ?? "")
 	};
 }
