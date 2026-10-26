@@ -31,6 +31,11 @@ export interface Env {
 	 * for artifacts up to this size (MB); larger ones answer 404. Default 128, 0 = never compute.
 	 */
 	CHECKSUM_MAX_MB?: string;
+	/**
+	 * Computed checksums of artifacts up to this size (MB) are hashed inside the request; larger
+	 * ones are hashed in the background and answer 404 until they are cached. Default 16, 0 = always background.
+	 */
+	CHECKSUM_INLINE_MAX_MB?: string;
 	/** Optional key prefix inside the R2 bucket. */
 	R2_PREFIX?: string;
 	/** Secret: required for ?flush=true. When unset, flushing is disabled. */

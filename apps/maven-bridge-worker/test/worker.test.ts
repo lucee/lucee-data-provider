@@ -567,6 +567,118 @@ describe("checksums (org.lucee)", () => {
 	});
 });
 
+describe("checksums of large artifacts (background)", () => {
+	const version = "7.1.0.204";
+	const path = `/org/lucee/lucee/${version}/lucee-${version}.jar`;
+	const gh = `${GITHUB}${version}/lucee-${version}.jar`;
+	// 4 KiB inline limit; the "jar" is 2.5 MiB, so it is read in several blocks
+	const INLINE = { CHECKSUM_INLINE_MAX_MB: String(4096 / (1024 * 1024)) };
+	const jar = new Uint8Array(2.5 * 1024 * 1024);
+	for (let i = 0; i < jar.length; i++) jar[i] = (i * 7 + (i >> 10)) & 0xff;
+	const digest = async (algo: string) =>
+		[...new Uint8Array(await crypto.subtle.digest(algo, jar))].map((b) => b.toString(16).padStart(2, "0")).join("");
+	const jarResponse = (req: Request, withLength = true) =>
+		new Response(req.method === "HEAD" ? null : new Blob([jar]).stream(), {
+			status: 200,
+			headers: withLength ? { "content-length": String(jar.byteLength) } : {}
+		});
+	const gets = () => calls.filter((c) => c === `GET ${gh}`).length;
+	const pendingKeys = async () => (await bindings.BRIDGE_CACHE.list({ prefix: "checksum-pending:" })).keys;
+
+	it("answers 404 right away and caches every checksum computed in the background", async () => {
+		mockFetch({ ...baseRoutes(), [gh]: (req) => jarResponse(req) });
+		const first = await call(`${path}.sha1`, {}, INLINE);
+		expect(first.status).toBe(404);
+		// the request only read the headers; the background download hashed the jar
+		expect(gets()).toBe(2);
+		const gen = await bindings.BRIDGE_CACHE.get("cache-generation");
+		expect(await bindings.BRIDGE_CACHE.get(`checksum:${gen}:sha1:${gh}`)).toBe(await digest("SHA-1"));
+
+		mockFetch({ ...baseRoutes(), [gh]: (req) => jarResponse(req) });
+		const sha1 = await call(`${path}.sha1`, {}, INLINE);
+		expect(sha1.status).toBe(200);
+		expect(await sha1.text()).toBe(await digest("SHA-1"));
+		expect(await (await call(`${path}.md5`, {}, INLINE)).text()).toBe(await digest("MD5"));
+		expect(await (await call(`${path}.sha256`, {}, INLINE)).text()).toBe(await digest("SHA-256"));
+		expect(await (await call(`${path}.sha512`, {}, INLINE)).text()).toBe(await digest("SHA-512"));
+		expect(gets()).toBe(0);
+	});
+
+	it("hashes artifacts below CHECKSUM_INLINE_MAX_MB inside the request", async () => {
+		mockFetch({ ...baseRoutes(), [gh]: (req) => jarResponse(req) });
+		const res = await call(`${path}.sha1`);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe(await digest("SHA-1"));
+		expect(gets()).toBe(1);
+		expect(await pendingKeys()).toHaveLength(0);
+	});
+
+	it("moves a download without content-length to the background once it passes the inline limit", async () => {
+		mockFetch({ ...baseRoutes(), [gh]: (req) => jarResponse(req, false) });
+		expect((await call(`${path}.sha1`, {}, INLINE)).status).toBe(404);
+		expect(gets()).toBe(2);
+		const res = await call(`${path}.sha1`, {}, INLINE);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe(await digest("SHA-1"));
+	});
+
+	it("does not download again while a computation is pending, and retries once the marker expires", async () => {
+		let n = 0;
+		// the request's probe succeeds, the background download fails
+		mockFetch({ ...baseRoutes(), [gh]: (req) => (req.method === "GET" && ++n === 2 ? new Response("unavailable", { status: 503 }) : jarResponse(req)) });
+		expect((await call(`${path}.sha1`, {}, INLINE)).status).toBe(404);
+		expect(gets()).toBe(2);
+		const gen = await bindings.BRIDGE_CACHE.get("cache-generation");
+		expect(await bindings.BRIDGE_CACHE.get(`checksum:${gen}:sha1:${gh}`)).toBeNull();
+		const pending = await pendingKeys();
+		expect(pending.map((k) => k.name)).toEqual([`checksum-pending:${gen}:${gh}`]);
+		// PENDING_TTL_SECONDS = 300
+		expect(pending[0].expiration).toBeLessThanOrEqual(Date.now() / 1000 + 300 + 60);
+
+		const blocked = await call(`${path}.md5`, {}, INLINE);
+		expect(blocked.status).toBe(404);
+		expect(gets()).toBe(2);
+
+		// marker expired
+		await bindings.BRIDGE_CACHE.delete(pending[0].name);
+		expect((await call(`${path}.sha1`, {}, INLINE)).status).toBe(404);
+		expect(gets()).toBe(4);
+		const res = await call(`${path}.sha1`, {}, INLINE);
+		expect(await res.text()).toBe(await digest("SHA-1"));
+	});
+
+	it("never caches a checksum of a download that ends short of its content-length", async () => {
+		const short = jar.slice(0, jar.length - 1000);
+		mockFetch({
+			...baseRoutes(),
+			[gh]: (req) => {
+				if (req.method === "HEAD") return new Response(null, { status: 200 });
+				// declares the full length but ends early (connection dropped)
+				const { readable, writable } = new FixedLengthStream(jar.byteLength);
+				const writer = writable.getWriter();
+				writer.write(short).then(() => writer.abort(new Error("connection lost"))).catch(() => undefined);
+				return new Response(readable, { status: 200 });
+			}
+		});
+		expect((await call(`${path}.sha1`, {}, INLINE)).status).toBe(404);
+		expect(await call(`${path}.sha1`).then((r) => r.status)).toBe(404);
+		expect((await bindings.BRIDGE_CACHE.list({ prefix: "checksum:" })).keys).toHaveLength(0);
+	});
+
+	it("hashes a large R2 object in the background", async () => {
+		mockFetch(baseRoutes());
+		const key = path.slice(1);
+		await bindings.ARTIFACTS!.put(key, jar);
+		const env = { ...R2, ...INLINE };
+		expect((await call(`${path}.sha1`, {}, env)).status).toBe(404);
+		const res = await call(`${path}.sha1`, {}, env);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe(await digest("SHA-1"));
+		expect(await (await call(`${path}.sha512`, {}, env)).text()).toBe(await digest("SHA-512"));
+		expect(calls.some((c) => c.includes(gh))).toBe(false);
+	});
+});
+
 describe("checksums (io.forgebox)", () => {
 	const mongo = "io/forgebox/ortus-mongodb-cache-extension/1.2.0.5291/ortus-mongodb-cache-extension-1.2.0.5291";
 	const download = "https://www.forgebox.io/rest/extension/provider/full/6A03159F-C6DC-4FCC-95A068B1E1A903FA?version=1%2E2%2E0%2E5291";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHECKSUM_TYPES, checksumOfStream, checksumOfText, checksumsOfStream, splitChecksum } from "../src/checksum";
+import { CHECKSUM_TYPES, READ_CHUNK_BYTES, checksumOfStream, checksumOfText, checksumsOfStream, splitChecksum } from "../src/checksum";
 import { encodeForHtml, urlEncodedFormat, xmlFormat } from "../src/cfml";
 import { parseProviders, readConfig } from "../src/config";
 import type { Env } from "../src/env";
@@ -263,6 +263,53 @@ describe("checksums", () => {
 		expect(Object.keys(all).sort()).toEqual(["md5", "sha1", "sha256", "sha512"]);
 		for (const type of CHECKSUM_TYPES) expect(all[type]).toBe(await checksumOfText("abc", type));
 		await expect(checksumsOfStream(chunks(), CHECKSUM_TYPES, 2)).rejects.toThrow("more than 2 bytes");
+	});
+
+	const hex = (buffer: ArrayBuffer) => [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, "0")).join("");
+	const ALGOS = { md5: "MD5", sha1: "SHA-1", sha256: "SHA-256", sha512: "SHA-512" } as const;
+	/** deterministic bytes, a few blocks plus a partial one */
+	const largeBytes = () => {
+		const bytes = new Uint8Array(3 * READ_CHUNK_BYTES + 12345);
+		for (let i = 0; i < bytes.length; i++) bytes[i] = (i * 31 + (i >> 8)) & 0xff;
+		return bytes;
+	};
+
+	it("hashes a large byte stream in blocks, with the same digests as hashing it whole", async () => {
+		const bytes = largeBytes();
+		const all = await checksumsOfStream(new Blob([bytes]).stream(), CHECKSUM_TYPES, bytes.length, bytes.length);
+		for (const type of CHECKSUM_TYPES) expect(all[type]).toBe(hex(await crypto.subtle.digest(ALGOS[type], bytes)));
+	});
+
+	it("hashes a JS byte stream with odd chunk sizes", async () => {
+		const bytes = largeBytes();
+		const stream = new ReadableStream({
+			type: "bytes",
+			start(controller) {
+				for (let i = 0; i < bytes.length; i += 70001) controller.enqueue(bytes.slice(i, i + 70001));
+				controller.close();
+			}
+		});
+		const all = await checksumsOfStream(stream, ["sha1", "md5"], bytes.length);
+		expect(all.sha1).toBe(hex(await crypto.subtle.digest("SHA-1", bytes)));
+		expect(all.md5).toBe(hex(await crypto.subtle.digest("MD5", bytes)));
+	});
+
+	it("rejects a stream over the limit or shorter than its expected length", async () => {
+		const bytes = largeBytes();
+		await expect(checksumsOfStream(new Blob([bytes]).stream(), CHECKSUM_TYPES, bytes.length - 1)).rejects.toThrow(
+			`more than ${bytes.length - 1} bytes`
+		);
+		// a truncated download never yields a checksum
+		await expect(checksumsOfStream(new Blob([bytes]).stream(), CHECKSUM_TYPES, bytes.length + 10, bytes.length + 1)).rejects.toThrow(
+			`read ${bytes.length} bytes, expected ${bytes.length + 1}`
+		);
+	});
+
+	it("reads CHECKSUM_INLINE_MAX_MB", () => {
+		expect(readConfig({} as unknown as Env).checksumInlineMaxBytes).toBe(16 * 1024 * 1024);
+		expect(readConfig({ CHECKSUM_INLINE_MAX_MB: "0" } as unknown as Env).checksumInlineMaxBytes).toBe(0);
+		expect(readConfig({ CHECKSUM_INLINE_MAX_MB: "64" } as unknown as Env).checksumInlineMaxBytes).toBe(64 * 1024 * 1024);
+		expect(() => readConfig({ CHECKSUM_INLINE_MAX_MB: "-1" } as unknown as Env)).toThrow("Invalid CHECKSUM_INLINE_MAX_MB");
 	});
 
 	it("reads CHECKSUM_MAX_MB", () => {
