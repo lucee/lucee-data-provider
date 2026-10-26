@@ -259,6 +259,69 @@ describe("R2 fill-on-miss", () => {
 		expect(await bindings.ARTIFACTS!.head(path)).toBeNull();
 	});
 
+	it("asks the source for an unencoded body", async () => {
+		let acceptEncoding: string | null = null;
+		mockFetch({
+			...baseRoutes(),
+			[CDN + path]: (req) => {
+				if (req.method === "GET") acceptEncoding = req.headers.get("accept-encoding");
+				return new Response(req.method === "HEAD" ? null : body, { status: 200, headers: { "content-length": String(body.length) } });
+			}
+		});
+		expect((await call("/" + path, {}, FILL)).status).toBe(200);
+		expect(acceptEncoding).toBe("identity");
+	});
+
+	it("stores larger files first and serves them from R2", async () => {
+		mockFetch({ ...baseRoutes(), [CDN + path]: body });
+		const res = await call("/" + path, {}, { ...FILL, R2_FILL_STREAM_MAX_MB: "0" });
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe(body);
+		const stored = await bindings.ARTIFACTS!.head(path);
+		expect(stored).not.toBeNull();
+		expect(res.headers.get("etag")).toBe(stored!.httpEtag);
+		expect(res.headers.get("content-length")).toBe(String(body.length));
+	});
+
+	it("does not store a file that ends before its content-length", async () => {
+		mockFetch({
+			...baseRoutes(),
+			[CDN + path]: (req) =>
+				req.method === "HEAD"
+					? new Response(null, { status: 200 })
+					: new Response(new Blob([body]).stream(), { status: 200, headers: { "content-length": "100" } })
+		});
+		const res = await call("/" + path, {}, { ...FILL, R2_FILL_STREAM_MAX_MB: "0" });
+		expect(res.status).toBe(302);
+		expect(await bindings.ARTIFACTS!.head(path)).toBeNull();
+	});
+
+	it("streams without storing when the source sends an encoded body", async () => {
+		mockFetch({
+			...baseRoutes(),
+			[CDN + path]: (req) =>
+				new Response(req.method === "HEAD" ? null : body, {
+					status: 200,
+					headers: { "content-length": "7", "content-encoding": "gzip" }
+				})
+		});
+		const res = await call("/" + path, {}, FILL);
+		expect(res.status).toBe(200);
+		expect(res.headers.get("content-length")).not.toBe("7");
+		expect(await bindings.ARTIFACTS!.head(path)).toBeNull();
+	});
+
+	it("falls back to the redirect when the source cannot be reached", async () => {
+		mockFetch({
+			...baseRoutes(),
+			[CDN + path]: (req) => (req.method === "HEAD" ? new Response(null, { status: 200 }) : Promise.reject(new TypeError("Network connection lost")))
+		});
+		const res = await call("/" + path, {}, FILL);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe(CDN + path);
+		expect(await bindings.ARTIFACTS!.head(path)).toBeNull();
+	});
+
 	it("does not fill when the flag is off", async () => {
 		mockFetch({ ...baseRoutes(), [CDN + path]: body });
 		const res = await call("/" + path, {}, R2);

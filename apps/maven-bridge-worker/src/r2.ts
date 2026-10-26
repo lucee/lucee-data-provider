@@ -96,55 +96,93 @@ export function isImmutableArtifact(version: string, fileName: string): boolean 
 	return !(lower.startsWith("maven-metadata") || lower.endsWith(".html"));
 }
 
+export interface FillOptions {
+	/** seconds until the source has to answer with headers */
+	timeoutSeconds: number;
+	userAgent: string;
+	/** files up to this size are streamed to the client while they are stored; larger ones are stored first */
+	streamMaxBytes: number;
+	request: Request;
+}
+
 /**
- * Lazy migration: fetch `sourceUrl`, stream it to the client and store a copy in
- * R2 under `key` in the background. Returns null when the source did not answer
- * 200 (the caller falls back to the redirect logic).
+ * Lazy migration: fetch `sourceUrl` and store a copy in R2 under `key`.
+ *
+ * Files up to `streamMaxBytes` are streamed to the client and stored at the same
+ * time (tee). A tee buffers what the slower branch has not read yet, so for larger
+ * files a slow client could hold most of the file in memory; those are stored
+ * first and then served from R2.
+ *
+ * Returns null when the source did not answer 200 or could not be reached (the
+ * caller falls back to the redirect logic).
  */
 export async function fetchAndFill(
 	bucket: R2Bucket,
 	key: string,
 	sourceUrl: string,
 	waitUntil: (p: Promise<unknown>) => void,
-	timeoutSeconds: number,
-	userAgent: string
+	options: FillOptions
 ): Promise<Response | null> {
-	const upstream = await fetch(sourceUrl, {
-		redirect: "follow",
-		headers: { "user-agent": userAgent },
-		signal: AbortSignal.timeout(timeoutSeconds * 1000)
-	});
+	// the timeout covers the answer, not the body: a large file to a slow client may take longer
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(new Error(`Timeout fetching [${sourceUrl}]`)), options.timeoutSeconds * 1000);
+	let upstream: Response;
+	try {
+		upstream = await fetch(sourceUrl, {
+			redirect: "follow",
+			headers: { "user-agent": options.userAgent, "accept-encoding": "identity" },
+			signal: controller.signal
+		});
+	} catch (e) {
+		console.warn(`R2 fill of [${key}]: fetching [${sourceUrl}] failed`, e);
+		return null;
+	} finally {
+		clearTimeout(timer);
+	}
 	if (upstream.status !== 200 || !upstream.body) {
 		await upstream.body?.cancel();
 		return null;
 	}
 
 	const contentType = contentTypeForArtifact(key);
-	const headers = new Headers({ "content-type": contentType, "accept-ranges": "bytes" });
-	const length = Number(upstream.headers.get("content-length") ?? "");
+	const headers = new Headers({ "content-type": contentType });
 	const etag = upstream.headers.get("etag");
 	const lastModified = upstream.headers.get("last-modified");
 	if (etag) headers.set("etag", etag);
 	if (lastModified) headers.set("last-modified", lastModified);
 
-	if (!Number.isFinite(length) || length <= 0) {
-		// R2 needs a known length for a streamed put; serve without storing
+	// a decoded body no longer matches content-length, and R2 needs the exact length
+	const encoding = (upstream.headers.get("content-encoding") ?? "").trim().toLowerCase();
+	const length = encoding === "" || encoding === "identity" ? Number(upstream.headers.get("content-length") ?? "") : NaN;
+	if (!Number.isSafeInteger(length) || length <= 0) {
 		return new Response(upstream.body, { status: 200, headers });
 	}
-	headers.set("content-length", String(length));
 
-	// a tee branch of a fetch body keeps its known length, which R2 needs for a streamed put
+	const putOptions: R2PutOptions = {
+		httpMetadata: { contentType },
+		customMetadata: { source: sourceUrl, filledAt: new Date().toISOString() }
+	};
+
+	if (length > options.streamMaxBytes) {
+		try {
+			// FixedLengthStream fails the put when the source ends early or sends more
+			await bucket.put(key, upstream.body.pipeThrough(new FixedLengthStream(length)), putOptions);
+		} catch (e) {
+			console.error(`R2 fill of [${key}] from [${sourceUrl}] failed`, e);
+			return null;
+		}
+		return serveFromR2(bucket, key, options.request);
+	}
+
+	headers.set("content-length", String(length));
+	headers.set("accept-ranges", "bytes");
+	// both tee branches of a fetch body keep its known length, which R2 needs for a streamed put
 	const [toClient, toBucket] = upstream.body.tee();
 	waitUntil(
-		bucket
-			.put(key, toBucket, {
-				httpMetadata: { contentType },
-				customMetadata: { source: sourceUrl, filledAt: new Date().toISOString() }
-			})
-			.catch(async (e) => {
-				console.error(`R2 fill of [${key}] from [${sourceUrl}] failed`, e);
-				await toBucket.cancel().catch(() => undefined);
-			})
+		bucket.put(key, toBucket, putOptions).catch((e) => {
+			console.error(`R2 fill of [${key}] from [${sourceUrl}] failed`, e);
+		})
 	);
 	return new Response(toClient, { status: 200, headers });
 }
+

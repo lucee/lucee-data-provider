@@ -115,7 +115,12 @@ async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, p
 		if (!target.length) return textResponse(404, TEXT, "Not found");
 
 		if (shouldFill(ctx, parsed, key)) {
-			const filled = await fetchAndFill(ctx.bucket!, key, target, ctx.waitUntil, support.timeout, USER_AGENT);
+			const filled = await fetchAndFill(ctx.bucket!, key, target, ctx.waitUntil, {
+				timeoutSeconds: support.timeout,
+				userAgent: USER_AGENT,
+				streamMaxBytes: ctx.config.r2FillStreamMaxBytes,
+				request: ctx.request
+			});
 			if (filled) return filled;
 		}
 		return redirectResponse(target);

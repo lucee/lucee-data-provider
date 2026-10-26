@@ -44,10 +44,16 @@ Object keys use the upstream layout, so a copy of `cdn.lucee.org` can be used as
 #### Fill on miss (lazy migration)
 
 With `R2_MODE = "serve"` and `R2_FILL_ON_MISS = "true"`, a miss for an upstream-mirror file is fetched
-from its source (GitHub Releases or the CDN), streamed to the client and stored in R2 under the same key
-in the background (`waitUntil`). The next request is served from R2.
+from its source (GitHub Releases or the CDN) and stored in R2 under the same key. The next request is
+served from R2.
 
-Only immutable files are stored: a `200` answer with a known `Content-Length`, for a plain `GET`
+- Files up to `R2_FILL_STREAM_MAX_MB` (default 32) are streamed to the client and stored at the same
+  time (`waitUntil`).
+- Larger files (core jars, express zips) are stored first and then served from R2, so a slow client
+  never makes the worker hold a large file in memory.
+- If the source cannot be reached, or the store fails, the request falls back to the redirect.
+
+Only immutable files are stored: a `200` answer with a known `Content-Length` and no `Content-Encoding`, for a plain `GET`
 (no `Range`), and never `SNAPSHOT` versions, `maven-metadata.xml*` or `index.html`. Anything else
 keeps the redirect behaviour. Stored objects carry `customMetadata.source` and `filledAt`.
 
@@ -85,6 +91,7 @@ curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/health?flu
 | `GITHUB_RELEASES_URL` | `https://github.com/lucee/Lucee/releases/download/` | 7.1+ core builds; empty disables |
 | `R2_MODE` | `off` | `off` or `serve` |
 | `R2_FILL_ON_MISS` | `false` | store immutable upstream files in R2 on first request (serve mode only) |
+| `R2_FILL_STREAM_MAX_MB` | `32` | fill-on-miss files up to this size are streamed while stored; larger ones are stored first (`0` = always store first) |
 | `R2_PREFIX` | empty | key prefix in the bucket |
 
 Secrets: `FLUSH_TOKEN` (`wrangler secret put FLUSH_TOKEN`; CI sets it from the
@@ -118,8 +125,11 @@ ForgeBox provider answer and the pom production generates for it.
   `scripts/provision.mjs` creates the KV namespace and the R2 bucket if missing (idempotent) and writes
   the KV id into `wrangler.toml`, then `cloudflare/wrangler-action` deploys
 
-It uses the org secrets `CLOUDFLARE_API_TOKEN` (Workers, KV, R2 and the zone's Workers routes/DNS) and
-`CLOUDFLARE_ACCOUNT_ID`.
+It uses the org secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; they are passed only to the
+provision, deploy and secret steps. Token permissions:
+
+- Account: Workers Scripts Edit, Workers KV Storage Edit, Workers R2 Storage Edit
+- Zone `lucee-services.com`: Workers Routes Edit (custom domain), DNS Edit
 
 The custom domain needs `mvn.lucee-services.com` to have no existing DNS record; Cloudflare creates it.
 

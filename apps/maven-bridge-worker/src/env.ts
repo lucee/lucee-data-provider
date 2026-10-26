@@ -21,6 +21,11 @@ export interface Env {
 	 * from its source, streamed to the client and stored in R2 (lazy migration).
 	 */
 	R2_FILL_ON_MISS?: string;
+	/**
+	 * Fill-on-miss files up to this size (MB) are streamed to the client while they are
+	 * stored; larger files are stored first, then served from R2. Default 32, 0 = always store first.
+	 */
+	R2_FILL_STREAM_MAX_MB?: string;
 	/** Optional key prefix inside the R2 bucket. */
 	R2_PREFIX?: string;
 	/** Secret: required for ?flush=true. When unset, flushing is disabled. */

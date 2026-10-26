@@ -37,5 +37,6 @@ GITHUB_RELEASES_URL = "https://github.com/lucee/Lucee/releases/download/"
 R2_MODE = "off"
 # "true": in serve mode, store immutable artifacts in R2 on their first request (lazy migration)
 R2_FILL_ON_MISS = "false"
+R2_FILL_STREAM_MAX_MB = "32"
 R2_PREFIX = ""
 # FLUSH_TOKEN is a secret: wrangler secret put FLUSH_TOKEN (flush is disabled without it)

@@ -182,6 +182,10 @@ describe("helpers", () => {
 		expect(() => readConfig({ R2_MODE: "bogus" } as unknown as Env)).toThrow("Invalid R2_MODE");
 		expect(readConfig({ R2_FILL_ON_MISS: "true" } as unknown as Env).r2FillOnMiss).toBe(true);
 		expect(readConfig({} as unknown as Env).r2FillOnMiss).toBe(false);
+		expect(readConfig({} as unknown as Env).r2FillStreamMaxBytes).toBe(32 * 1024 * 1024);
+		expect(readConfig({ R2_FILL_STREAM_MAX_MB: "8" } as unknown as Env).r2FillStreamMaxBytes).toBe(8 * 1024 * 1024);
+		expect(readConfig({ R2_FILL_STREAM_MAX_MB: "0" } as unknown as Env).r2FillStreamMaxBytes).toBe(0);
+		expect(() => readConfig({ R2_FILL_STREAM_MAX_MB: "-1" } as unknown as Env)).toThrow("Invalid R2_FILL_STREAM_MAX_MB");
 	});
 	it("only treats final/RC files as immutable", () => {
 		expect(isImmutableArtifact("7.1.0.10", "lucee-7.1.0.10.jar")).toBe(true);
