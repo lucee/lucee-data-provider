@@ -12,7 +12,7 @@ running on Cloud Run until the cutover below. `skill.lucee.io` is not touched by
 | Path | Answer |
 |------|--------|
 | `/`, `/index.cfm` | landing page: one card per skill (name, description, size, last update), same HTML as `index.cfm` |
-| `/<file>.skill` | the skill file (`text/plain; charset=utf-8`), only for files listed in `SKILLS` |
+| `/<file>.skill` | the skill file (`text/plain; charset=utf-8`), only for files listed in `SKILLS` (name matched case-insensitively, like the Cloud Run site) |
 | `/health`, `/health.cfm` | `ok`, or `503 <file> not available` when a skill cannot be loaded |
 | `/res/*` | static assets (`public/res`, copied from `apps/skill/www/res`) |
 | anything else | `404 Not Found`; methods other than `GET`/`HEAD` answer `405` |
@@ -28,15 +28,14 @@ namespace `SKILL_CACHE` (key `skill:<file>`: body, ETag, source ETag, Last-Modif
 - When the source fails, the last good copy is kept and served. The cron run is marked as failed
   (it throws), so the failure shows up in the worker logs.
 - When KV has no copy yet (first deploy, new entry in `SKILLS`), the file is fetched on the first
-  request. Concurrent requests in one isolate share that fetch. If the source fails then, the skill
-  answers `503`.
+  request. If the source fails then, the skill answers `503`.
 - A copy older than `REFRESH_MINUTES` is also refreshed in the background (`waitUntil`) when it is
-  requested, in case a cron run was missed.
+  requested, in case a cron run was missed (at most one such refresh per file and isolate at a time).
 
 ### Skill file responses
 
-- `ETag` (SHA-256 of the body), `Last-Modified` (from the source, or the fetch time when the source
-  sends none), `cache-control: public, max-age=600`.
+- `ETag` (SHA-256 of the body), `Last-Modified` (from the source, or the time the body last changed
+  when the source sends none), `cache-control: public, max-age=600`.
 - `If-None-Match` (or `If-Modified-Since` without `If-None-Match`) answers `304`.
 - `HEAD` answers the headers and the `content-length` of the body without the body.
 
@@ -83,13 +82,14 @@ provisioning and deploy steps.
 
 ## Compare with the current site
 
+`scripts/compare.mjs` requests each path on both hosts and compares status, content type and a
+hash of the body. HTML is normalized first (whitespace, character references, the host in the skill
+link and the "Updated" date); error pages are compared by status only.
+
 ```sh
-for p in / /main.skill /health /health.cfm /missing; do
-  echo "== $p"
-  curl -s -o /dev/null -w "%{http_code} %{content_type}\n" "https://skill.lucee-services.com$p"
-  curl -s -o /dev/null -w "%{http_code} %{content_type}\n" "https://skl.lucee-services.com$p"
-done
-diff <(curl -s https://skill.lucee-services.com/main.skill) <(curl -s https://skl.lucee-services.com/main.skill)
+npm run compare                                   # skill.lucee-services.com vs skl.lucee-services.com
+npm run compare -- --target http://127.0.0.1:8787 --verbose   # against `wrangler dev`
+npm run compare -- --paths my-paths.txt --strict
 ```
 
 ## Differences to apps/skill
@@ -101,7 +101,11 @@ diff <(curl -s https://skill.lucee-services.com/main.skill) <(curl -s https://sk
 - The skill card's "Refreshed hourly from …" names the host of the skill's source.
 - A skill that was never mirrored is fetched on the first request instead of waiting for the next
   refresh.
-- Methods other than `GET` and `HEAD` answer `405`.
+- Methods other than `GET` and `HEAD` answer `405` (Cloud Run answered them like `GET`).
+- `/health` is new (Cloud Run only has `/health.cfm`); both answer `text/plain` instead of `text/html`.
+- Error pages are a plain `Not Found` (`text/plain`) instead of the Tomcat HTML page.
+- The landing page HTML-encodes fewer characters (e.g. `:`, `/`, `(`, `—` stay as they are); the
+  rendered page is the same.
 
 ## Cutover
 
