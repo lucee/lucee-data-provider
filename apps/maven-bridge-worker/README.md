@@ -58,7 +58,9 @@ streamed by the worker (content type, ETag, Last-Modified, Content-Length, `Rang
 `If-None-Match`/`If-Modified-Since` → 304, `HEAD`). A miss falls back to the redirect logic above, or with fill on miss is fetched from the
 source and stored (see below). `R2_HOSTS` limits R2 to some hostnames (comma separated, empty = all);
 the other hostnames keep the plain redirects.
-Group-level files (`maven-metadata.xml`, `index.html`) of upstream groups are read from R2 first too.
+Listings and `maven-metadata.xml` files of upstream groups are read from the upstream first; a copy in
+R2 is only used when the upstream does not have the file or cannot be reached (so a bulk copy can never
+pin old metadata).
 
 Object keys use the Maven layout of the upstream, so a copy of `cdn.lucee.org` can be used as is:
 
@@ -122,7 +124,7 @@ The CFML bridge kept everything in the server scope. Here:
   `METADATA_CACHE_TTL_MINUTES` (default 5), so new releases show up within minutes, and positive `HEAD`
   checks on the upstream for `CACHE_TTL_MINUTES`, keyed by a cache generation that a flush bumps.
   The Cache API is per Cloudflare location, and a zone purge by URL does not reach these entries
-  (the Worker uses its own cache keys); use the invalidate endpoint below instead.
+  (the Worker uses its own cache keys); use `?flush=metadata` (below) instead.
 
 ### Flush
 
@@ -135,18 +137,15 @@ like `health.cfm?flush=true`. It needs the `FLUSH_TOKEN` secret, sent as `X-Flus
 curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/health?flush=true"
 ```
 
-### Invalidate listings and metadata
-
-`POST /_invalidate` drops the cached directory listings and `maven-metadata.xml` files in all
-locations, so a release shows up right after it is uploaded instead of after up to
-`METADATA_CACHE_TTL_MINUTES`. Nothing else is touched (artifacts, checksums and provider indexes stay
-cached). It bumps a generation counter in KV (`metadata-generation`) that is part of the cache keys;
-KV changes can take about a minute to reach every location. It needs the `INVALIDATE_TOKEN` secret,
-sent as `Authorization: Bearer <token>` or `X-Invalidate-Token: <token>`. Without the secret the
-endpoint is disabled (403).
+`?flush=metadata` (same token) only drops the cached directory listings and `maven-metadata.xml`
+files, in all locations, so a release shows up right after it is uploaded instead of after up to
+`METADATA_CACHE_TTL_MINUTES`. Artifacts, checksums and provider indexes stay cached and nothing is
+resynced. It bumps a generation counter in KV (`metadata-generation`) that is part of the cache keys;
+KV changes can take about a minute to reach every location. The request is then answered as usual,
+so the listing of the new release comes back fresh:
 
 ```sh
-curl -X POST -H "Authorization: Bearer $INVALIDATE_TOKEN" "https://mvn.lucee-services.com/_invalidate"
+curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/org/lucee/tasks-extension/?flush=metadata"
 ```
 
 ## Configuration
@@ -170,8 +169,7 @@ curl -X POST -H "Authorization: Bearer $INVALIDATE_TOKEN" "https://mvn.lucee-ser
 | `R2_PREFIX` | empty | key prefix in the bucket |
 
 Secrets: `FLUSH_TOKEN` (`wrangler secret put FLUSH_TOKEN`; CI sets it from the
-`MAVEN_BRIDGE_FLUSH_TOKEN` secret when that exists) and `INVALIDATE_TOKEN` (`wrangler secret put
-INVALIDATE_TOKEN`; CI sets it from the `MAVEN_BRIDGE_INVALIDATE_TOKEN` secret when that exists).
+`MAVEN_BRIDGE_FLUSH_TOKEN` secret when that exists).
 
 Bindings: KV `BRIDGE_CACHE` (namespace `lucee-maven-bridge-cache`), R2 `ARTIFACTS`
 (bucket `lucee-artifacts`, read in serve mode, written with fill on miss). Custom domains: `maven.lucee-services.com`, `mvn.lucee-services.com`.
@@ -253,7 +251,7 @@ It exits with 1 when anything differs.
 - When a provider or the upstream fails, the last good copy from KV is served instead of an error.
 - Positive upstream `HEAD` checks are cached (Cache API); the CFML bridge checked on each request.
 - Content types always come from the path's extension.
-- Flushing requires `FLUSH_TOKEN`, `POST /_invalidate` requires `INVALIDATE_TOKEN`.
+- Flushing requires `FLUSH_TOKEN`.
 - Optional R2 serving and fill-on-miss (not in the CFML bridge).
 - Checksums missing upstream are computed; the CFML bridge answered 404 (upstream groups) or
   redirected them to the `.lex` download (REST provider groups).

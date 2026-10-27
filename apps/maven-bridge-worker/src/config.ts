@@ -29,8 +29,6 @@ export interface BridgeConfig {
 	/** bytes; larger checksums are computed in the background (404 until cached) */
 	checksumInlineMaxBytes: number;
 	flushToken: string;
-	/** secret for POST /_invalidate; empty = endpoint disabled */
-	invalidateToken: string;
 }
 
 export const DEFAULT_GITHUB_RELEASES_URL = "https://github.com/lucee/Lucee/releases/download/";
@@ -183,7 +181,6 @@ export function readConfig(env: Env, hostname?: string): BridgeConfig {
 		r2FillStreamMaxBytes: Math.floor(streamMaxMb * 1024 * 1024),
 		checksumMaxBytes: Math.floor(checksumMaxMb * 1024 * 1024),
 		checksumInlineMaxBytes: Math.floor(checksumInlineMaxMb * 1024 * 1024),
-		flushToken: String(env.FLUSH_TOKEN ?? ""),
-		invalidateToken: String(env.INVALIDATE_TOKEN ?? "")
+		flushToken: String(env.FLUSH_TOKEN ?? "")
 	};
 }

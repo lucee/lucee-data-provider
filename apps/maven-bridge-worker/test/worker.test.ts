@@ -252,11 +252,25 @@ describe("R2", () => {
 		expect(res.status).toBe(302);
 	});
 
-	it("serves maven-metadata.xml from R2 when present", async () => {
-		mockFetch(baseRoutes());
+	it("serves maven-metadata.xml from R2 only when the upstream does not have it", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}org/lucee/redis-extension/maven-metadata.xml`]: new Response("missing", { status: 404 }) });
 		await bindings.ARTIFACTS!.put("org/lucee/redis-extension/maven-metadata.xml", "<metadata/>");
 		const res = await call("/org/lucee/redis-extension/maven-metadata.xml", {}, R2);
 		expect(await res.text()).toBe("<metadata/>");
+	});
+
+	it("prefers the upstream maven-metadata.xml over an old copy in R2", async () => {
+		mockFetch(baseRoutes());
+		await bindings.ARTIFACTS!.put("org/lucee/redis-extension/maven-metadata.xml", "<old/>");
+		await bindings.ARTIFACTS!.put("org/lucee/maven-metadata.xml", "<old/>");
+		expect(await (await call("/org/lucee/redis-extension/maven-metadata.xml", {}, R2)).text()).toBe(REDIS_METADATA);
+		expect(await (await call("/org/lucee/maven-metadata.xml", {}, R2)).text()).toBe(GROUP_METADATA);
+	});
+
+	it("falls back to the R2 copy of maven-metadata.xml when the upstream fails", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}org/lucee/redis-extension/maven-metadata.xml`]: new Response("down", { status: 503 }) });
+		await bindings.ARTIFACTS!.put("org/lucee/redis-extension/maven-metadata.xml", "<metadata/>");
+		expect(await (await call("/org/lucee/redis-extension/maven-metadata.xml", {}, R2)).text()).toBe("<metadata/>");
 	});
 });
 
@@ -1072,54 +1086,43 @@ describe("listings and maven-metadata.xml cache time", () => {
 		expect(await res.text()).toBe(GROUP_METADATA);
 	});
 
-	it("shows a new release in the artifact listing after POST /_invalidate", async () => {
+	it("shows a new release in the artifact listing after ?flush=metadata", async () => {
 		mockFetch(baseRoutes());
 		expect(await (await call("/org/lucee/redis-extension/")).text()).not.toContain("2.0.0.2-RC");
 		mockFetch({ ...baseRoutes(), [`${CDN}org/lucee/redis-extension/maven-metadata.xml`]: metadataWith("2.0.0.2-RC") });
 		// still the cached listing
 		expect(await (await call("/org/lucee/redis-extension/")).text()).not.toContain("2.0.0.2-RC");
-		const res = await call("/_invalidate", { method: "POST", headers: { authorization: "Bearer test-invalidate-token" } });
+		const res = await call("/org/lucee/redis-extension/?flush=metadata", { headers: { "x-flush-token": "test-flush-token" } });
 		expect(res.status).toBe(200);
-		expect(res.headers.get("cache-control")).toBe("no-store");
-		const json = (await res.json()) as { generation: string };
-		expect(await bindings.BRIDGE_CACHE.get("metadata-generation")).toBe(json.generation);
+		// the request itself already answers with the fresh listing
+		expect(await res.text()).toContain("2.0.0.2-RC");
+		expect(await bindings.BRIDGE_CACHE.get("metadata-generation")).not.toBeNull();
 		expect(await (await call("/org/lucee/redis-extension/")).text()).toContain("2.0.0.2-RC");
 		expect(await (await call("/org/lucee/redis-extension/maven-metadata.xml")).text()).toContain("2.0.0.2-RC");
 	});
 
-	it("keeps the cache generation (and so artifacts and checksums) on invalidate", async () => {
+	it("keeps artifacts, checksums and indexes on ?flush=metadata", async () => {
 		mockFetch(baseRoutes());
+		await call("/health");
 		const before = await bindings.BRIDGE_CACHE.get("cache-generation");
-		const res = await call("/_invalidate", { method: "POST", headers: { "x-invalidate-token": "test-invalidate-token" } });
+		const index = await bindings.BRIDGE_CACHE.get("index:io.forgebox");
+		const res = await call("/health?flush=metadata", { headers: { authorization: "Bearer test-flush-token" } });
 		expect(res.status).toBe(200);
+		expect(((await res.json()) as Record<string, unknown>).flushed).toBe(true);
 		expect(await bindings.BRIDGE_CACHE.get("cache-generation")).toBe(before);
+		expect(await bindings.BRIDGE_CACHE.get("index:io.forgebox")).toBe(index);
 	});
 
-	it("rejects invalidate without the right token", async () => {
+	it("needs the flush token for ?flush=metadata", async () => {
 		mockFetch(baseRoutes());
-		const none = await call("/_invalidate", { method: "POST" });
+		const none = await call("/health?flush=metadata");
 		expect(none.status).toBe(403);
 		expect(await none.text()).toBe("Forbidden");
-		const wrong = await call("/_invalidate", { method: "POST", headers: { authorization: "Bearer wrong" } });
+		const wrong = await call("/health?flush=metadata", { headers: { "x-flush-token": "wrong" } });
 		expect(wrong.status).toBe(403);
-		// the flush token is not accepted
-		const flush = await call("/_invalidate", { method: "POST", headers: { authorization: "Bearer test-flush-token" } });
-		expect(flush.status).toBe(403);
-		expect(await bindings.BRIDGE_CACHE.get("metadata-generation")).toBeNull();
-	});
-
-	it("disables invalidate when INVALIDATE_TOKEN is not set", async () => {
-		mockFetch(baseRoutes());
-		const res = await call("/_invalidate", { method: "POST", headers: { authorization: "Bearer test-invalidate-token" } }, { INVALIDATE_TOKEN: "" });
-		expect(res.status).toBe(403);
-		expect(await res.text()).toBe("Invalidate is disabled");
-	});
-
-	it("only accepts POST for invalidate", async () => {
-		mockFetch(baseRoutes());
-		const res = await call("/_invalidate", { headers: { authorization: "Bearer test-invalidate-token" } });
-		expect(res.status).toBe(405);
-		expect(res.headers.get("allow")).toBe("POST");
+		const disabled = await call("/health?flush=metadata", { headers: { "x-flush-token": "test-flush-token" } }, { FLUSH_TOKEN: "" });
+		expect(disabled.status).toBe(403);
+		expect(await disabled.text()).toBe("Flush is disabled");
 		expect(await bindings.BRIDGE_CACHE.get("metadata-generation")).toBeNull();
 	});
 });

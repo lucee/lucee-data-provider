@@ -55,6 +55,4 @@ export interface Env {
 	R2_PREFIX?: string;
 	/** Secret: required for ?flush=true. When unset, flushing is disabled. */
 	FLUSH_TOKEN?: string;
-	/** Secret: required for POST /_invalidate. When unset, the endpoint is disabled. */
-	INVALIDATE_TOKEN?: string;
 }

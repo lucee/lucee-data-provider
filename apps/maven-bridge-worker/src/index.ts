@@ -9,7 +9,6 @@ import { RuntimeIo, USER_AGENT } from "./store";
 
 const TEXT = "text/plain; charset=utf-8";
 const HEALTH_PATHS = ["/health", "/healthcheck", "/health.cfm"];
-export const INVALIDATE_PATH = "/_invalidate";
 
 /** same truthy values as isFlushRequest() in Application.cfc */
 export function isFlushRequested(url: URL): boolean {
@@ -20,8 +19,16 @@ export function isFlushRequested(url: URL): boolean {
 	return value.length > 0 && Number.isFinite(n) && n !== 0;
 }
 
-function presentedToken(request: Request, headerName: string): string {
-	const header = request.headers.get(headerName);
+/**
+ * ?flush=metadata drops only the cached directory listings and maven-metadata.xml files, in every
+ * location (e.g. right after a release upload); artifacts, checksums and indexes stay cached.
+ */
+export function isMetadataFlushRequested(url: URL): boolean {
+	return (url.searchParams.get("flush") ?? "").trim().toLowerCase() === "metadata";
+}
+
+function presentedToken(request: Request): string {
+	const header = request.headers.get("x-flush-token");
 	if (header) return header.trim();
 	const auth = request.headers.get("authorization") ?? "";
 	const match = /^Bearer\s+(.+)$/i.exec(auth.trim());
@@ -32,38 +39,13 @@ async function digest(value: string): Promise<ArrayBuffer> {
 	return crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
 }
 
-async function tokenMatches(token: string, secret: string): Promise<boolean> {
-	if (!secret.length || !token.length) return false;
-	const [a, b] = await Promise.all([digest(token), digest(secret)]);
-	return crypto.subtle.timingSafeEqual(a, b);
-}
-
 /** Flushing needs the FLUSH_TOKEN secret; without the secret flushing is disabled. */
 export async function isFlushAuthorized(request: Request, config: BridgeConfig): Promise<boolean> {
-	return tokenMatches(presentedToken(request, "x-flush-token"), config.flushToken);
-}
-
-/** POST /_invalidate needs the INVALIDATE_TOKEN secret; without the secret the endpoint is disabled. */
-export async function isInvalidateAuthorized(request: Request, config: BridgeConfig): Promise<boolean> {
-	return tokenMatches(presentedToken(request, "x-invalidate-token"), config.invalidateToken);
-}
-
-/**
- * Drops all cached directory listings and maven-metadata.xml files in every location (called after
- * a release is uploaded), without touching anything else.
- */
-async function invalidateResponse(request: Request, config: BridgeConfig, io: RuntimeIo): Promise<Response> {
-	if (request.method !== "POST") {
-		return new Response("Method Not Allowed", { status: 405, headers: { "content-type": TEXT, allow: "POST" } });
-	}
-	if (!(await isInvalidateAuthorized(request, config))) {
-		return textResponse(403, TEXT, config.invalidateToken.length ? "Forbidden" : "Invalidate is disabled");
-	}
-	const generation = await io.bumpMetadataGeneration();
-	return new Response(JSON.stringify({ invalidated: "listings and maven-metadata.xml", generation }), {
-		status: 200,
-		headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" }
-	});
+	if (!config.flushToken.length) return false;
+	const token = presentedToken(request);
+	if (!token.length) return false;
+	const [a, b] = await Promise.all([digest(token), digest(config.flushToken)]);
+	return crypto.subtle.timingSafeEqual(a, b);
 }
 
 function createBridge(env: Env, waitUntil: (p: Promise<unknown>) => void, url?: URL) {
@@ -78,12 +60,14 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
 	const url = new URL(request.url);
 	const { config, io, registry } = createBridge(env, (p) => ctx.waitUntil(p), url);
 
-	if (normalizeRequestPath(url.pathname).toLowerCase() === INVALIDATE_PATH) {
-		return invalidateResponse(request, config, io);
-	}
-
 	let flushed = false;
-	if (isFlushRequested(url)) {
+	if (isMetadataFlushRequested(url)) {
+		if (!(await isFlushAuthorized(request, config))) {
+			return textResponse(403, TEXT, config.flushToken.length ? "Forbidden" : "Flush is disabled");
+		}
+		await io.bumpMetadataGeneration();
+		flushed = true;
+	} else if (isFlushRequested(url)) {
 		if (!(await isFlushAuthorized(request, config))) {
 			return textResponse(403, TEXT, config.flushToken.length ? "Forbidden" : "Flush is disabled");
 		}

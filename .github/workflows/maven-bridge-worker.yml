@@ -50,7 +50,6 @@ jobs:
     # the Cloudflare secrets are only given to the steps that need them, not to npm ci
     env:
       HAS_FLUSH_TOKEN: ${{ secrets.MAVEN_BRIDGE_FLUSH_TOKEN != '' }}
-      HAS_INVALIDATE_TOKEN: ${{ secrets.MAVEN_BRIDGE_INVALIDATE_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,10 +79,3 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           FLUSH_TOKEN: ${{ secrets.MAVEN_BRIDGE_FLUSH_TOKEN }}
         run: printf '%s' "$FLUSH_TOKEN" | npx wrangler secret put FLUSH_TOKEN
-      - name: Set INVALIDATE_TOKEN (only when the secret exists)
-        if: env.HAS_INVALIDATE_TOKEN == 'true'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          INVALIDATE_TOKEN: ${{ secrets.MAVEN_BRIDGE_INVALIDATE_TOKEN }}
-        run: printf '%s' "$INVALIDATE_TOKEN" | npx wrangler secret put INVALIDATE_TOKEN

@@ -9,7 +9,7 @@ import { buildIndex, deserializeIndex, serializeIndex, type RestIndex, type Stor
 import { contentTypeForPath, type BridgeSupport, type SupportIo, type UpstreamContent } from "./support";
 
 const GENERATION_KEY = "cache-generation";
-/** bumped by POST /_invalidate; part of the Cache API key of every listing and metadata file */
+/** bumped by ?flush=metadata; part of the Cache API key of every listing and metadata file */
 export const METADATA_GENERATION_KEY = "metadata-generation";
 /** extra time a KV entry stays "fresh" so a slightly late cron run does not cause live loads */
 const GRACE_MS = 15 * 60 * 1000;
@@ -132,14 +132,30 @@ export class RuntimeIo implements SupportIo {
 
 	// --- upstream text files ---
 
-	/** Live read of an upstream file: R2 first (in serve mode), then the upstream URL. */
+	/**
+	 * Live read of an upstream file: R2 first (in serve mode), then the upstream URL. Listings and
+	 * maven-metadata.xml change with every release, so for those the upstream comes first and a copy
+	 * in R2 is only used when the upstream does not have the file or cannot be reached.
+	 */
 	async fetchUpstreamLive(support: BridgeSupport, relativePath: string): Promise<UpstreamContent> {
 		const rel = cleanRel(relativePath);
 		const r2 = this.r2;
-		if (r2) {
+		if (!r2) return this.fetchUpstreamUrl(support, rel);
+		const fromR2 = async () => {
 			const obj = await r2.get(this.config.r2Prefix + rel);
-			if (obj) return { body: await obj.text(), contentType: contentTypeForPath(rel) };
+			return obj ? { body: await obj.text(), contentType: contentTypeForPath(rel) } : undefined;
+		};
+		if (!isMetadataFile(rel)) return (await fromR2()) ?? this.fetchUpstreamUrl(support, rel);
+		try {
+			return await this.fetchUpstreamUrl(support, rel);
+		} catch (e) {
+			const stored = await fromR2();
+			if (stored) return stored;
+			throw e;
 		}
+	}
+
+	private async fetchUpstreamUrl(support: BridgeSupport, rel: string): Promise<UpstreamContent> {
 		const url = support.upstreamUrl + rel;
 		const res = await fetch(url, { headers: { "user-agent": USER_AGENT }, signal: this.signal(support) });
 		if (res.status === 404) {

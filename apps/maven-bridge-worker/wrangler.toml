@@ -59,4 +59,3 @@ CHECKSUM_MAX_MB = "128"
 # larger artifacts are hashed in the background (the checksum answers 404 until it is cached), 0 = always
 CHECKSUM_INLINE_MAX_MB = "16"
 # FLUSH_TOKEN is a secret: wrangler secret put FLUSH_TOKEN (flush is disabled without it)
-# INVALIDATE_TOKEN is a secret: wrangler secret put INVALIDATE_TOKEN (POST /_invalidate is disabled without it)
