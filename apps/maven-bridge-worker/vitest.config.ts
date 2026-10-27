@@ -6,7 +6,8 @@ export default defineConfig({
 		cloudflareTest({
 			wrangler: { configPath: "./wrangler.toml" },
 			miniflare: {
-				bindings: { FLUSH_TOKEN: "test-flush-token" }
+				// tests choose the R2 settings themselves, independent of the deployed defaults
+				bindings: { FLUSH_TOKEN: "test-flush-token", R2_MODE: "off", R2_FILL_ON_MISS: "false", R2_HOSTS: "" }
 			}
 		})
 	]

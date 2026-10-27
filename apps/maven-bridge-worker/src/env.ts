@@ -36,6 +36,16 @@ export interface Env {
 	 * ones are hashed in the background and answer 404 until they are cached. Default 16, 0 = always background.
 	 */
 	CHECKSUM_INLINE_MAX_MB?: string;
+	/**
+	 * Stored SNAPSHOT files are served from R2 for this many minutes after they were stored
+	 * or last revalidated, then revalidated against their source. Default 5, 0 = on every request.
+	 */
+	R2_REVALIDATE_MINUTES?: string;
+	/**
+	 * Comma separated hostnames that use R2 (R2_MODE, R2_FILL_ON_MISS); other hostnames
+	 * and the cron behave as with R2_MODE = "off". Empty = every hostname.
+	 */
+	R2_HOSTS?: string;
 	/** Optional key prefix inside the R2 bucket. */
 	R2_PREFIX?: string;
 	/** Secret: required for ?flush=true. When unset, flushing is disabled. */

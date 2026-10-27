@@ -40,8 +40,9 @@ export async function isFlushAuthorized(request: Request, config: BridgeConfig):
 	return crypto.subtle.timingSafeEqual(a, b);
 }
 
-function createBridge(env: Env, waitUntil: (p: Promise<unknown>) => void, origin?: string) {
-	const config = readConfig(env);
+function createBridge(env: Env, waitUntil: (p: Promise<unknown>) => void, url?: URL) {
+	const config = readConfig(env, url?.hostname);
+	const origin = url?.origin;
 	const io = new RuntimeIo(env, config, waitUntil, origin);
 	const registry = new BridgeRegistry(config, io);
 	return { config, io, registry };
@@ -49,7 +50,7 @@ function createBridge(env: Env, waitUntil: (p: Promise<unknown>) => void, origin
 
 async function handle(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 	const url = new URL(request.url);
-	const { config, io, registry } = createBridge(env, (p) => ctx.waitUntil(p), url.origin);
+	const { config, io, registry } = createBridge(env, (p) => ctx.waitUntil(p), url);
 
 	let flushed = false;
 	if (isFlushRequested(url)) {
@@ -74,6 +75,7 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
 			request,
 			waitUntil: (p) => ctx.waitUntil(p),
 			bucket: io.r2,
+			freshness: io,
 			checksums: new ChecksumStore(
 				env.BRIDGE_CACHE,
 				{

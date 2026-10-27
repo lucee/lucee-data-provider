@@ -92,8 +92,27 @@ export async function serveFromR2(bucket: R2Bucket, key: string, request: Reques
  */
 export function isImmutableArtifact(version: string, fileName: string): boolean {
 	if (containsNoCase(version, "-SNAPSHOT") || containsNoCase(fileName, "SNAPSHOT")) return false;
+	return isStorableFile(fileName);
+}
+
+/**
+ * Files that may be kept in R2 at all: everything but metadata and indexes, which the
+ * worker passes through (and caches) separately. SNAPSHOT files are storable, but are
+ * revalidated against their source (see revalidateFromSource).
+ */
+export function isStorableFile(fileName: string): boolean {
 	const lower = fileName.toLowerCase();
 	return !(lower.startsWith("maven-metadata") || lower.endsWith(".html"));
+}
+
+/**
+ * A stored mutable (SNAPSHOT) object is fresh for `ttlMs` after it was stored; a
+ * successful revalidation extends that elsewhere (Cache API marker).
+ */
+export function isFreshlyFilled(obj: R2Object, ttlMs: number, now = Date.now()): boolean {
+	if (ttlMs <= 0) return false;
+	const filledAt = Date.parse(obj.customMetadata?.filledAt ?? "");
+	return Number.isFinite(filledAt) && now - filledAt < ttlMs;
 }
 
 export interface FillOptions {
@@ -105,13 +124,26 @@ export interface FillOptions {
 	request: Request;
 }
 
+/** GET of the source, answer headers within the timeout (the body may take longer). Null when unreachable. */
+async function fetchSource(sourceUrl: string, options: FillOptions, extraHeaders: Record<string, string> = {}): Promise<Response | null> {
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(new Error(`Timeout fetching [${sourceUrl}]`)), options.timeoutSeconds * 1000);
+	try {
+		return await fetch(sourceUrl, {
+			redirect: "follow",
+			headers: { "user-agent": options.userAgent, "accept-encoding": "identity", ...extraHeaders },
+			signal: controller.signal
+		});
+	} catch (e) {
+		console.warn(`fetching [${sourceUrl}] failed`, e);
+		return null;
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
 /**
  * Lazy migration: fetch `sourceUrl` and store a copy in R2 under `key`.
- *
- * Files up to `streamMaxBytes` are streamed to the client and stored at the same
- * time (tee). A tee buffers what the slower branch has not read yet, so for larger
- * files a slow client could hold most of the file in memory; those are stored
- * first and then served from R2.
  *
  * Returns null when the source did not answer 200 or could not be reached (the
  * caller falls back to the redirect logic).
@@ -123,27 +155,32 @@ export async function fetchAndFill(
 	waitUntil: (p: Promise<unknown>) => void,
 	options: FillOptions
 ): Promise<Response | null> {
-	// the timeout covers the answer, not the body: a large file to a slow client may take longer
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(new Error(`Timeout fetching [${sourceUrl}]`)), options.timeoutSeconds * 1000);
-	let upstream: Response;
-	try {
-		upstream = await fetch(sourceUrl, {
-			redirect: "follow",
-			headers: { "user-agent": options.userAgent, "accept-encoding": "identity" },
-			signal: controller.signal
-		});
-	} catch (e) {
-		console.warn(`R2 fill of [${key}]: fetching [${sourceUrl}] failed`, e);
-		return null;
-	} finally {
-		clearTimeout(timer);
-	}
+	const upstream = await fetchSource(sourceUrl, options);
+	if (!upstream) return null;
 	if (upstream.status !== 200 || !upstream.body) {
 		await upstream.body?.cancel();
 		return null;
 	}
+	return storeAndServe(bucket, key, sourceUrl, upstream, waitUntil, options);
+}
 
+/**
+ * Stores a 200 answer of the source in R2 and answers the client.
+ *
+ * Files up to `streamMaxBytes` are streamed to the client and stored at the same
+ * time (tee). A tee buffers what the slower branch has not read yet, so for larger
+ * files a slow client could hold most of the file in memory; those are stored
+ * first and then served from R2. Answers without a usable length are streamed
+ * without being stored. Null when storing a large file failed.
+ */
+async function storeAndServe(
+	bucket: R2Bucket,
+	key: string,
+	sourceUrl: string,
+	upstream: Response,
+	waitUntil: (p: Promise<unknown>) => void,
+	options: FillOptions
+): Promise<Response | null> {
 	const contentType = contentTypeForArtifact(key);
 	const headers = new Headers({ "content-type": contentType });
 	const etag = upstream.headers.get("etag");
@@ -158,15 +195,16 @@ export async function fetchAndFill(
 		return new Response(upstream.body, { status: 200, headers });
 	}
 
-	const putOptions: R2PutOptions = {
-		httpMetadata: { contentType },
-		customMetadata: { source: sourceUrl, filledAt: new Date().toISOString() }
-	};
+	// the source's validators are kept for conditional revalidation of mutable files
+	const customMetadata: Record<string, string> = { source: sourceUrl, filledAt: new Date().toISOString() };
+	if (etag) customMetadata.sourceEtag = etag;
+	if (lastModified) customMetadata.sourceLastModified = lastModified;
+	const putOptions: R2PutOptions = { httpMetadata: { contentType }, customMetadata };
 
 	if (length > options.streamMaxBytes) {
 		try {
 			// FixedLengthStream fails the put when the source ends early or sends more
-			await bucket.put(key, upstream.body.pipeThrough(new FixedLengthStream(length)), putOptions);
+			await bucket.put(key, upstream.body!.pipeThrough(new FixedLengthStream(length)), putOptions);
 		} catch (e) {
 			console.error(`R2 fill of [${key}] from [${sourceUrl}] failed`, e);
 			return null;
@@ -177,7 +215,7 @@ export async function fetchAndFill(
 	headers.set("content-length", String(length));
 	headers.set("accept-ranges", "bytes");
 	// both tee branches of a fetch body keep its known length, which R2 needs for a streamed put
-	const [toClient, toBucket] = upstream.body.tee();
+	const [toClient, toBucket] = upstream.body!.tee();
 	waitUntil(
 		bucket.put(key, toBucket, putOptions).catch((e) => {
 			console.error(`R2 fill of [${key}] from [${sourceUrl}] failed`, e);
@@ -186,3 +224,49 @@ export async function fetchAndFill(
 	return new Response(toClient, { status: 200, headers });
 }
 
+export type RevalidateResult =
+	/** the stored copy is current (304) */
+	| { status: "not-modified" }
+	/** the source has a new version: it was stored and is in `response` */
+	| { status: "replaced"; response: Response }
+	/** the source no longer has the file (404/410) */
+	| { status: "gone" }
+	/** the source failed or could not be reached: the stored copy may be served */
+	| { status: "error" };
+
+/**
+ * Conditional GET of the source of a stored mutable object, using the validators
+ * stored with it (ETag, then Last-Modified). A 200 replaces the stored object.
+ */
+export async function revalidateFromSource(
+	bucket: R2Bucket,
+	key: string,
+	stored: R2Object,
+	sourceUrl: string,
+	waitUntil: (p: Promise<unknown>) => void,
+	options: FillOptions
+): Promise<RevalidateResult> {
+	const conditional: Record<string, string> = {};
+	const etag = stored.customMetadata?.sourceEtag;
+	const lastModified = stored.customMetadata?.sourceLastModified;
+	if (etag) conditional["if-none-match"] = etag;
+	else if (lastModified) conditional["if-modified-since"] = lastModified;
+
+	const upstream = await fetchSource(sourceUrl, options, conditional);
+	if (!upstream) return { status: "error" };
+	if (upstream.status === 304) {
+		await upstream.body?.cancel();
+		return { status: "not-modified" };
+	}
+	if (upstream.status === 404 || upstream.status === 410) {
+		await upstream.body?.cancel();
+		return { status: "gone" };
+	}
+	if (upstream.status !== 200 || !upstream.body) {
+		await upstream.body?.cancel();
+		console.warn(`revalidating [${key}] against [${sourceUrl}]: HTTP ${upstream.status}`);
+		return { status: "error" };
+	}
+	const response = await storeAndServe(bucket, key, sourceUrl, upstream, waitUntil, options);
+	return response ? { status: "replaced", response } : { status: "error" };
+}

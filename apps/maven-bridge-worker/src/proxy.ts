@@ -3,7 +3,7 @@ import { cfJsonDate, compareNoCase, containsNoCase, encodeForHtml, startsWithNoC
 import { checksumOfText, splitChecksum, type ChecksumStore, type ChecksumType } from "./checksum";
 import type { BridgeConfig } from "./config";
 import { isUpstreamNotFound } from "./errors";
-import { fetchAndFill, isImmutableArtifact, serveFromR2 } from "./r2";
+import { fetchAndFill, isFreshlyFilled, isImmutableArtifact, isStorableFile, revalidateFromSource, serveFromR2, type FillOptions } from "./r2";
 import type { BridgeRegistry } from "./registry";
 import { USER_AGENT } from "./store";
 import type { BridgeSupport, ParsedPath, ParsedType } from "./support";
@@ -48,6 +48,13 @@ export interface ProxyContext {
 	bucket?: R2Bucket;
 	/** computes checksums the upstream does not have; undefined = never compute */
 	checksums?: ChecksumStore;
+	/** remembers revalidated SNAPSHOT objects in R2; undefined = revalidate once their fill time is older than the TTL */
+	freshness?: R2Freshness;
+}
+
+export interface R2Freshness {
+	isR2Fresh(key: string): Promise<boolean>;
+	markR2Fresh(key: string, ttlSeconds: number): void;
 }
 
 export async function invokePath(ctx: ProxyContext, cleanPath: string): Promise<Response> {
@@ -104,25 +111,42 @@ export function r2KeysFor(config: BridgeConfig, support: BridgeSupport, parsed: 
 	return keys;
 }
 
+/** URL of an upstream-mirror file at its source, "" when the source does not have it. */
+async function upstreamTarget(support: BridgeSupport, parsed: ParsedPath): Promise<string> {
+	// GitHub Releases (7.1+), then the Maven layout on the CDN, then the legacy flat CDN name
+	if (support.isCoreFile(parsed)) return support.findCoreFileUrl(parsed);
+	const upstreamPath = support.toUpstreamRelativePath(parsed);
+	return (await support.io.upstreamResourceExists(support, upstreamPath)) ? support.upstreamUrl + upstreamPath : "";
+}
+
+function fillOptions(ctx: ProxyContext, support: BridgeSupport): FillOptions {
+	return {
+		timeoutSeconds: support.timeout,
+		userAgent: USER_AGENT,
+		streamMaxBytes: ctx.config.r2FillStreamMaxBytes,
+		request: ctx.request
+	};
+}
+
 async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, parsed: ParsedPath): Promise<Response> {
 	const key = r2KeyFor(ctx.config, support, parsed);
+	const fileName = key.split("/").pop() ?? "";
+	// with fill-on-miss, stored SNAPSHOT files of upstream mirrors are revalidated against their source
+	const revalidate =
+		support.hasUpstream() && ctx.config.r2FillOnMiss && !isImmutableArtifact(parsed.version ?? "", fileName) && isStorableFile(fileName);
 	if (ctx.bucket) {
 		for (const candidate of r2KeysFor(ctx.config, support, parsed)) {
-			const fromR2 = await serveFromR2(ctx.bucket, candidate, ctx.request);
+			const fromR2 =
+				revalidate && candidate === key
+					? await mutableFromR2(ctx, support, parsed, key)
+					: await serveFromR2(ctx.bucket, candidate, ctx.request);
 			if (fromR2) return fromR2;
 		}
 	}
 
 	// upstream mirrors serve files from the upstream repo only, never from the REST provider
 	if (support.hasUpstream()) {
-		let target = "";
-		if (support.isCoreFile(parsed)) {
-			// GitHub Releases (7.1+), then the Maven layout on the CDN, then the legacy flat CDN name
-			target = await support.findCoreFileUrl(parsed);
-		} else {
-			const upstreamPath = support.toUpstreamRelativePath(parsed);
-			if (await support.io.upstreamResourceExists(support, upstreamPath)) target = support.upstreamUrl + upstreamPath;
-		}
+		const target = await upstreamTarget(support, parsed);
 		if (!target.length) {
 			// no checksum file upstream (e.g. core poms, RCs, snapshots): compute it from the artifact
 			const checksum = splitChecksum(parsed);
@@ -130,13 +154,8 @@ async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, p
 			return textResponse(404, TEXT, "Not found");
 		}
 
-		if (shouldFill(ctx, parsed, key)) {
-			const filled = await fetchAndFill(ctx.bucket!, key, target, ctx.waitUntil, {
-				timeoutSeconds: support.timeout,
-				userAgent: USER_AGENT,
-				streamMaxBytes: ctx.config.r2FillStreamMaxBytes,
-				request: ctx.request
-			});
+		if (canFill(ctx) && (revalidate || shouldFill(ctx, parsed, key))) {
+			const filled = await fetchAndFill(ctx.bucket!, key, target, ctx.waitUntil, fillOptions(ctx, support));
 			if (filled) return filled;
 		}
 		return redirectResponse(target);
@@ -158,6 +177,46 @@ async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, p
 		);
 	}
 	return redirectResponse(downloadUrl);
+}
+
+/**
+ * A stored SNAPSHOT file (mutable: the same name is published again): served from R2 while it
+ * is fresh (stored or revalidated less than R2_REVALIDATE_MINUTES ago), otherwise revalidated
+ * with a conditional GET of its source first. When the source cannot be reached the stored
+ * copy is served. Null (redirect logic) when R2 has no copy, or the copy is stale and the request
+ * is a HEAD or Range request, which never fetch the whole file.
+ */
+async function mutableFromR2(ctx: ProxyContext, support: BridgeSupport, parsed: ParsedPath, key: string): Promise<Response | null> {
+	const bucket = ctx.bucket!;
+	const stored = await bucket.head(key);
+	if (!stored) return null;
+	const ttlSeconds = ctx.config.r2RevalidateSeconds;
+	if (isFreshlyFilled(stored, ttlSeconds * 1000) || (ttlSeconds > 0 && ctx.freshness && (await ctx.freshness.isR2Fresh(key)))) {
+		return serveFromR2(bucket, key, ctx.request);
+	}
+	if (!canFill(ctx)) return null;
+
+	const recorded = stored.customMetadata?.source ?? "";
+	const source = /^https?:\/\//i.test(recorded) ? recorded : await upstreamTarget(support, parsed);
+	if (!source.length) return null;
+
+	const result = await revalidateFromSource(bucket, key, stored, source, ctx.waitUntil, fillOptions(ctx, support));
+	switch (result.status) {
+		case "not-modified":
+			ctx.freshness?.markR2Fresh(key, ttlSeconds);
+			return serveFromR2(bucket, key, ctx.request);
+		case "replaced":
+			return result.response;
+		case "gone": {
+			await bucket.delete(key);
+			const res = textResponse(404, TEXT, "Not found");
+			res.headers.set("cache-control", "no-store");
+			return res;
+		}
+		default:
+			// stale-if-error: the source is down, the stored copy is the best answer
+			return serveFromR2(bucket, key, ctx.request);
+	}
 }
 
 /**
@@ -191,13 +250,7 @@ async function computedChecksumResponse(
 			}
 		}
 		if (!inR2) {
-			let url = "";
-			if (support.isCoreFile(artifact)) {
-				url = await support.findCoreFileUrl(artifact);
-			} else {
-				const upstreamPath = support.toUpstreamRelativePath(artifact);
-				if (await support.io.upstreamResourceExists(support, upstreamPath)) url = support.upstreamUrl + upstreamPath;
-			}
+			const url = await upstreamTarget(support, artifact);
 			if (url.length) value = await store.ofUrl(url, type, immutable);
 		}
 	} else if (equalsExt(artifact, "pom")) {
@@ -229,12 +282,16 @@ function equalsExt(parsed: ParsedPath, ext: string): boolean {
 	return (parsed.extension ?? "").toLowerCase() === ext;
 }
 
-/** fill-on-miss only for plain GETs of immutable files, and only with a bucket in serve mode */
-function shouldFill(ctx: ProxyContext, parsed: ParsedPath, key: string): boolean {
+/** fill-on-miss only for plain GETs, and only with a bucket in serve mode */
+function canFill(ctx: ProxyContext): boolean {
 	if (!ctx.bucket || !ctx.config.r2FillOnMiss) return false;
-	if (ctx.request.method !== "GET" || ctx.request.headers.has("range")) return false;
+	return ctx.request.method === "GET" && !ctx.request.headers.has("range");
+}
+
+/** permanent fill (no revalidation): immutable files only */
+function shouldFill(ctx: ProxyContext, parsed: ParsedPath, key: string): boolean {
 	const fileName = key.split("/").pop() ?? "";
-	return isImmutableArtifact(parsed.version ?? "", fileName);
+	return canFill(ctx) && isImmutableArtifact(parsed.version ?? "", fileName);
 }
 
 async function upstreamContentResponse(support: BridgeSupport, parsed: ParsedPath): Promise<Response> {

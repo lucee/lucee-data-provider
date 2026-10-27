@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/env";
 import worker from "../src/index";
-import { CDN, GITHUB, GROUP_METADATA, REDIS_METADATA, call, calls, forgeboxRoute, mockFetch, resetState, testEnv } from "./helpers";
+import { CDN, GITHUB, GROUP_METADATA, REDIS_METADATA, call, calls, forgeboxRoute, mockFetch, resetState, testEnv, type Route } from "./helpers";
 
 const bindings = env as unknown as Env;
 const R2 = { R2_MODE: "serve" } as const;
@@ -313,14 +313,6 @@ describe("R2 fill-on-miss", () => {
 		expect(stored!.customMetadata?.source).toBe(`${CDN}lucee-light-6.2.0.321.jar`);
 	});
 
-	it("never stores SNAPSHOT files", async () => {
-		const snap = "org/lucee/redis-extension/3.0.0.1-SNAPSHOT/redis-extension-3.0.0.1-SNAPSHOT.lex";
-		mockFetch({ ...baseRoutes(), [CDN + snap]: body });
-		const res = await call("/" + snap, {}, FILL);
-		expect(res.status).toBe(302);
-		expect(await bindings.ARTIFACTS!.head(snap)).toBeNull();
-	});
-
 	it("never stores maven-metadata.xml", async () => {
 		mockFetch(baseRoutes());
 		const res = await call("/org/lucee/redis-extension/maven-metadata.xml", {}, FILL);
@@ -427,6 +419,186 @@ describe("R2 fill-on-miss", () => {
 		const res = await call("/" + path, {}, R2);
 		expect(res.status).toBe(302);
 		expect(await bindings.ARTIFACTS!.head(path)).toBeNull();
+	});
+});
+
+describe("R2 read-through of SNAPSHOT files", () => {
+	const snap = "org/lucee/redis-extension/3.0.0.1-SNAPSHOT/redis-extension-3.0.0.1-SNAPSHOT.lex";
+	const STALE = { ...FILL, R2_REVALIDATE_MINUTES: "0" } as const;
+
+	/** CDN-like source: ETag validator, 304 on a matching If-None-Match */
+	function source(state: { body: string; etag: string; seen: (string | null)[] }): Route {
+		return (req) => {
+			if (req.method === "GET") state.seen.push(req.headers.get("if-none-match"));
+			if (req.headers.get("if-none-match") === state.etag) return new Response(null, { status: 304, headers: { etag: state.etag } });
+			const headers = { etag: state.etag, "content-length": String(state.body.length), "last-modified": "Tue, 27 Oct 2026 16:21:27 GMT" };
+			return new Response(req.method === "HEAD" ? null : state.body, { status: 200, headers });
+		};
+	}
+
+	it("stores SNAPSHOT files with the source's validators and serves them from R2 while fresh", async () => {
+		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
+		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
+		const res = await call("/" + snap, {}, FILL);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe("snapshot-1");
+		const stored = await bindings.ARTIFACTS!.head(snap);
+		expect(stored!.customMetadata?.source).toBe(CDN + snap);
+		expect(stored!.customMetadata?.sourceEtag).toBe('"v1"');
+		expect(stored!.customMetadata?.sourceLastModified).toBe("Tue, 27 Oct 2026 16:21:27 GMT");
+
+		mockFetch(baseRoutes());
+		const again = await call("/" + snap, {}, FILL);
+		expect(again.status).toBe(200);
+		expect(await again.text()).toBe("snapshot-1");
+		expect(calls.some((c) => c.includes(snap))).toBe(false);
+		// HEAD of a fresh copy is answered from R2 too
+		const head = await call("/" + snap, { method: "HEAD" }, FILL);
+		expect(head.status).toBe(200);
+		expect(head.headers.get("content-length")).toBe("10");
+	});
+
+	it("revalidates a stale copy with If-None-Match and keeps it on 304", async () => {
+		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
+		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
+		await call("/" + snap, {}, STALE);
+		const before = await bindings.ARTIFACTS!.head(snap);
+
+		const res = await call("/" + snap, {}, STALE);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe("snapshot-1");
+		expect(state.seen).toEqual([null, '"v1"']);
+		// not rewritten
+		expect((await bindings.ARTIFACTS!.head(snap))!.uploaded.getTime()).toBe(before!.uploaded.getTime());
+	});
+
+	it("replaces a stale copy when the source has a new version", async () => {
+		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
+		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
+		await call("/" + snap, {}, STALE);
+		state.body = "snapshot-two";
+		state.etag = '"v2"';
+
+		const res = await call("/" + snap, {}, STALE);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe("snapshot-two");
+		const stored = await bindings.ARTIFACTS!.get(snap);
+		expect(await stored!.text()).toBe("snapshot-two");
+		expect(stored!.customMetadata?.sourceEtag).toBe('"v2"');
+	});
+
+	it("remembers a successful revalidation for R2_REVALIDATE_MINUTES", async () => {
+		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
+		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
+		// stored long ago
+		await bindings.ARTIFACTS!.put(snap, "snapshot-1", {
+			customMetadata: { source: CDN + snap, filledAt: "2026-01-01T00:00:00.000Z", sourceEtag: '"v1"' }
+		});
+		expect(await (await call("/" + snap, {}, FILL)).text()).toBe("snapshot-1");
+		expect(state.seen).toEqual(['"v1"']);
+		expect(await (await call("/" + snap, {}, FILL)).text()).toBe("snapshot-1");
+		expect(state.seen).toEqual(['"v1"']);
+	});
+
+	it("falls back to If-Modified-Since when the source sent no ETag", async () => {
+		let ims: string | null = null;
+		mockFetch({
+			...baseRoutes(),
+			[CDN + snap]: (req) => {
+				ims = req.headers.get("if-modified-since");
+				return new Response(null, { status: 304 });
+			}
+		});
+		await bindings.ARTIFACTS!.put(snap, "old", {
+			customMetadata: { source: CDN + snap, filledAt: "2026-01-01T00:00:00.000Z", sourceLastModified: "Tue, 27 Oct 2026 16:21:27 GMT" }
+		});
+		expect(await (await call("/" + snap, {}, FILL)).text()).toBe("old");
+		expect(ims).toBe("Tue, 27 Oct 2026 16:21:27 GMT");
+	});
+
+	it("drops the stored copy when the source no longer has the file", async () => {
+		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
+		const routes = { ...baseRoutes(), [CDN + snap]: source(state) };
+		mockFetch(routes);
+		await call("/" + snap, {}, STALE);
+		mockFetch(baseRoutes());
+		const res = await call("/" + snap, {}, STALE);
+		expect(res.status).toBe(404);
+		expect(res.headers.get("cache-control")).toBe("no-store");
+		expect(await bindings.ARTIFACTS!.head(snap)).toBeNull();
+	});
+
+	it("serves the stored copy when the source cannot be reached", async () => {
+		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
+		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
+		await call("/" + snap, {}, STALE);
+		for (const failing of [() => Promise.reject(new TypeError("Network connection lost")), () => new Response("busy", { status: 503 })]) {
+			mockFetch({ ...baseRoutes(), [CDN + snap]: failing as Route });
+			const res = await call("/" + snap, {}, STALE);
+			expect(res.status).toBe(200);
+			expect(await res.text()).toBe("snapshot-1");
+		}
+		expect(await bindings.ARTIFACTS!.head(snap)).not.toBeNull();
+	});
+
+	it("redirects HEAD and Range requests for a stale copy instead of revalidating", async () => {
+		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
+		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
+		await call("/" + snap, {}, STALE);
+		state.seen = [];
+		const head = await call("/" + snap, { method: "HEAD" }, STALE);
+		expect(head.status).toBe(302);
+		const range = await call("/" + snap, { headers: { range: "bytes=0-1" } }, STALE);
+		expect(range.status).toBe(302);
+		expect(state.seen).toEqual([]);
+	});
+
+	it("stores SNAPSHOT checksum files from the source instead of computing them", async () => {
+		const pom = "org/lucee/redis-extension/3.0.0.1-SNAPSHOT/redis-extension-3.0.0.1-SNAPSHOT.pom";
+		mockFetch({ ...baseRoutes(), [`${CDN}${pom}.sha1`]: "0123456789abcdef0123456789abcdef01234567" });
+		const res = await call(`/${pom}.sha1`, {}, FILL);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe("0123456789abcdef0123456789abcdef01234567");
+		expect(calls.some((c) => c === `GET ${CDN}${pom}`)).toBe(false);
+		const stored = await bindings.ARTIFACTS!.head(`${pom}.sha1`);
+		expect(stored!.customMetadata?.source).toBe(`${CDN}${pom}.sha1`);
+	});
+
+	it("keeps SNAPSHOT files in R2 as they are when fill-on-miss is off", async () => {
+		mockFetch(baseRoutes());
+		await bindings.ARTIFACTS!.put(snap, "copied", { customMetadata: { filledAt: "2026-01-01T00:00:00.000Z" } });
+		const res = await call("/" + snap, {}, R2);
+		expect(await res.text()).toBe("copied");
+		expect(calls.some((c) => c.includes(snap))).toBe(false);
+	});
+});
+
+describe("R2_HOSTS", () => {
+	const path = "org/lucee/redis-extension/2.0.0.1/redis-extension-2.0.0.1.lex";
+
+	async function callHost(origin: string): Promise<Response> {
+		const ctx = createExecutionContext();
+		const res = await worker.fetch(
+			new Request(origin + "/" + path) as never,
+			testEnv({ ...FILL, R2_HOSTS: "mvn.lucee-services.com" }),
+			ctx
+		);
+		const body = res.body ? await res.arrayBuffer() : null;
+		await waitOnExecutionContext(ctx);
+		return new Response(body, { status: res.status, headers: res.headers });
+	}
+
+	it("uses R2 only on the listed hostnames", async () => {
+		mockFetch({ ...baseRoutes(), [CDN + path]: "extension-bytes" });
+		const other = await callHost("https://maven.lucee-services.com");
+		expect(other.status).toBe(302);
+		expect(await bindings.ARTIFACTS!.head(path)).toBeNull();
+
+		const listed = await callHost("https://mvn.lucee-services.com");
+		expect(listed.status).toBe(200);
+		expect(await bindings.ARTIFACTS!.head(path)).not.toBeNull();
+		// the other hostname still redirects, even with the object in R2
+		expect((await callHost("https://maven.lucee-services.com")).status).toBe(302);
 	});
 });
 
