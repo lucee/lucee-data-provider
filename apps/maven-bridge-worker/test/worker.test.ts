@@ -590,6 +590,8 @@ describe("R2 read-through of SNAPSHOT files", () => {
 
 	it("revalidates a compressed SNAPSHOT file with its weak ETag", async () => {
 		const pom = "org/lucee/tasks-extension/1.1.1.1-SNAPSHOT/tasks-extension-1.1.1.1-SNAPSHOT.pom";
+		// the stored copy, whatever key prefix SNAPSHOT files are stored under
+		const storedKey = async () => (await bindings.ARTIFACTS!.list()).objects.find((o) => o.key.endsWith(pom))!.key;
 		// like the CDN with a compressed answer: weak ETag, no content-length, 304 on a matching If-None-Match
 		const state = { body: "<project>1</project>", etag: 'W/"v1"', seen: [] as (string | null)[] };
 		mockFetch({
@@ -604,19 +606,19 @@ describe("R2 read-through of SNAPSHOT files", () => {
 			}
 		});
 		expect(await (await call("/" + pom, {}, STALE)).text()).toBe("<project>1</project>");
-		const before = await bindings.ARTIFACTS!.head(pom);
+		const before = await bindings.ARTIFACTS!.head(await storedKey());
 		expect(before!.customMetadata?.sourceEtag).toBe('W/"v1"');
 
 		// unchanged: 304, the stored copy is kept
 		expect(await (await call("/" + pom, {}, STALE)).text()).toBe("<project>1</project>");
 		expect(state.seen).toEqual([null, 'W/"v1"']);
-		expect((await bindings.ARTIFACTS!.head(pom))!.uploaded.getTime()).toBe(before!.uploaded.getTime());
+		expect((await bindings.ARTIFACTS!.head(await storedKey()))!.uploaded.getTime()).toBe(before!.uploaded.getTime());
 
 		// republished: the new version is stored
 		state.body = "<project>two</project>";
 		state.etag = 'W/"v2"';
 		expect(await (await call("/" + pom, {}, STALE)).text()).toBe("<project>two</project>");
-		const stored = await bindings.ARTIFACTS!.get(pom);
+		const stored = await bindings.ARTIFACTS!.get(await storedKey());
 		expect(await stored!.text()).toBe("<project>two</project>");
 		expect(stored!.size).toBe("<project>two</project>".length);
 		expect(stored!.customMetadata?.sourceEtag).toBe('W/"v2"');
