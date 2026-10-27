@@ -19,6 +19,16 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				// validate they work!;
 			});
 
+			it(title="LDEV-6738 maps both MariaDB Connector/J bundle names to maven", body=function(){
+				var mavenMappings = deserializeJSON( fileRead( mavenMappingsFile ) );
+				// Connector/J 2.x uses the Bundle-SymbolicName org.mariadb.jdbc, 3.x uses mariadb-java-client
+				loop list="org.mariadb.jdbc,mariadb-java-client" item="local.bundleName" {
+					expect( mavenMappings ).toHaveKey( bundleName );
+					expect( mavenMappings[ bundleName ].group ).toBe( "org.mariadb.jdbc" );
+					expect( mavenMappings[ bundleName ].artifact ).toBe( "mariadb-java-client" );
+				}
+			});
+
 		});
 	}
 }

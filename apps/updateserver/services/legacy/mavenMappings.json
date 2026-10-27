@@ -48,6 +48,7 @@
     "jta": { "artifact": "jboss-transaction-api", "group": "org.jboss.javaee" },
     "log4j": { "artifact": "log4j", "group": "log4j" },
     "lowagie.itext": { "artifact": "itext", "group": "com.lowagie" },
+    "mariadb-java-client": { "artifact": "mariadb-java-client", "group": "org.mariadb.jdbc" },
     "metadata.extractor": { "artifact": "metadata-extractor", "group": "com.drewnoakes" },
     "net.sf.ehcache": { "artifact": "ehcache", "group": "net.sf.ehcache" },
     "nu.xom": { "artifact": "xom", "group": "xom" },
