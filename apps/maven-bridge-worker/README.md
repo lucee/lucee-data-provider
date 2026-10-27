@@ -66,13 +66,18 @@ Object keys use the Maven layout of the upstream, so a copy of `cdn.lucee.org` c
 - core files are also looked up under their legacy flat CDN name at the bucket root
   (`lucee-light-6.2.0.321.jar`, `6.2.0.321.lco`) when the Maven-layout key is missing; fill on miss
   always writes the Maven-layout key.
+- `SNAPSHOT` files the worker stores go below `R2_SNAPSHOT_PREFIX` (default `snapshots/`), e.g.
+  `snapshots/org/lucee/lucee/7.1.0.10-SNAPSHOT/lucee-7.1.0.10-SNAPSHOT.jar`, so a lifecycle rule can
+  expire them (see [SNAPSHOT expiry](#snapshot-expiry)). The plain Maven-layout key is still looked up
+  after that.
 
-`R2_PREFIX` is prepended to every key.
+`R2_PREFIX` is prepended to every key (before `R2_SNAPSHOT_PREFIX`).
 
 #### Fill on miss (lazy migration)
 
 With `R2_MODE = "serve"` and `R2_FILL_ON_MISS = "true"`, a miss for an upstream-mirror file is fetched
-from its source (GitHub Releases or the CDN) and stored in R2 under its Maven-layout key. The next request is
+from its source (GitHub Releases or the CDN) and stored in R2 under its Maven-layout key (SNAPSHOT files
+below `R2_SNAPSHOT_PREFIX`). The next request is
 served from R2; the redirect is only the fallback.
 
 - Files up to `R2_FILL_STREAM_MAX_MB` (default 32) are streamed to the client and stored at the same
@@ -102,7 +107,18 @@ it was stored or last checked. After that the next `GET` asks the source with `I
 `HEAD` and `Range` requests for a stale SNAPSHOT copy (or a miss) keep the redirect. With
 `R2_REVALIDATE_MINUTES = "0"` every SNAPSHOT `GET` is checked against the source. SNAPSHOT objects
 put into the bucket by other means (bulk copy, legacy flat keys) are served as they are while fill on
-miss is off.
+miss is off. With fill on miss, a SNAPSHOT copy under its plain Maven-layout key is not served: the file
+is fetched again, stored below `R2_SNAPSHOT_PREFIX`, and the plain copy is deleted.
+
+#### SNAPSHOT expiry
+
+`scripts/provision.mjs` sets a lifecycle rule on the bucket (id `lucee-maven-bridge-snapshot-expiry`)
+that deletes objects below `R2_PREFIX` + `R2_SNAPSHOT_PREFIX` `R2_SNAPSHOT_RETENTION_DAYS` (default 90)
+days after they were stored. A `304` revalidation does not rewrite the object, a new version (`200`)
+does and starts the count again. An expired SNAPSHOT file is simply fetched from its source again on the
+next request. Release files are never expired. `R2_SNAPSHOT_RETENTION_DAYS = "0"` removes the rule.
+The provision script reads the bucket's rules first and keeps all other rules (the lifecycle API
+replaces the whole list); it only writes when the rule differs.
 
 ForgeBox downloads are not filled (they are served by ForgeBox, not mirrored).
 
@@ -148,6 +164,8 @@ curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/health?flu
 | `CHECKSUM_INLINE_MAX_MB` | `16` | computed checksums of larger artifacts are hashed in the background and answer 404 until cached (`0` = always in the background) |
 | `R2_FILL_STREAM_MAX_MB` | `32` | fill-on-miss files up to this size are streamed while stored; larger ones are stored first (`0` = always store first) |
 | `R2_PREFIX` | empty | key prefix in the bucket |
+| `R2_SNAPSHOT_PREFIX` | `snapshots/` | key prefix (after `R2_PREFIX`) of the SNAPSHOT files the worker stores; never empty |
+| `R2_SNAPSHOT_RETENTION_DAYS` | `90` | stored SNAPSHOT files are deleted by an R2 lifecycle rule this many days after they were stored (`0` = never); applied by `scripts/provision.mjs` on deploy |
 
 Secrets: `FLUSH_TOKEN` (`wrangler secret put FLUSH_TOKEN`; CI sets it from the
 `MAVEN_BRIDGE_FLUSH_TOKEN` secret when that exists).
@@ -177,13 +195,14 @@ ForgeBox provider answer and the pom production generates for it.
 
 - pull requests touching `apps/maven-bridge-worker/**`: typecheck, tests, dry run — no deploy
 - push to `main` touching the folder, or a manual run on `main`: tests, then
-  `scripts/provision.mjs` creates the KV namespace and the R2 bucket if missing (idempotent) and writes
-  the KV id into `wrangler.toml`, then `cloudflare/wrangler-action` deploys
+  `scripts/provision.mjs` creates the KV namespace and the R2 bucket if missing, sets the bucket's
+  SNAPSHOT lifecycle rule (all idempotent) and writes the KV id into `wrangler.toml`, then
+  `cloudflare/wrangler-action` deploys
 
 It uses the org secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; they are passed only to the
 provision, deploy and secret steps. Token permissions:
 
-- Account: Workers Scripts Edit, Workers KV Storage Edit, Workers R2 Storage Edit
+- Account: Workers Scripts Edit, Workers KV Storage Edit, Workers R2 Storage Edit (bucket and lifecycle rule)
 - Zone `lucee-services.com`: Workers Routes Edit (custom domain), DNS Edit
 
 Cloudflare creates the DNS record of each custom domain. A deploy from CI (non-interactive) replaces an

@@ -1,5 +1,6 @@
 import { DEFAULT_CHECKSUM_INLINE_MAX_MB, DEFAULT_CHECKSUM_MAX_MB } from "./checksum";
 import type { Env } from "./env";
+import { normalizeSnapshotPrefix } from "../scripts/lifecycle.mjs";
 
 export interface ProviderEntry {
 	provider: string;
@@ -16,6 +17,8 @@ export interface BridgeConfig {
 	r2Mode: "off" | "serve";
 	r2FillOnMiss: boolean;
 	r2Prefix: string;
+	/** key prefix (after r2Prefix) of stored SNAPSHOT files, ends with a slash */
+	r2SnapshotPrefix: string;
 	/** seconds a stored SNAPSHOT file is served before it is revalidated against its source */
 	r2RevalidateSeconds: number;
 	/** lower case hostnames using R2; empty = all */
@@ -167,6 +170,7 @@ export function readConfig(env: Env, hostname?: string): BridgeConfig {
 		r2Mode: mode === "serve" && r2ForHost ? "serve" : "off",
 		r2FillOnMiss: ["1", "true", "yes", "on"].includes(String(env.R2_FILL_ON_MISS ?? "").trim().toLowerCase()),
 		r2Prefix: String(env.R2_PREFIX ?? ""),
+		r2SnapshotPrefix: normalizeSnapshotPrefix(env.R2_SNAPSHOT_PREFIX),
 		r2RevalidateSeconds: Math.floor(revalidateMinutes * 60),
 		r2Hosts,
 		r2FillStreamMaxBytes: Math.floor(streamMaxMb * 1024 * 1024),

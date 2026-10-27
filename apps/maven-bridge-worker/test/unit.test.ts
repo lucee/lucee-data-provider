@@ -6,6 +6,15 @@ import type { Env } from "../src/env";
 import { isImmutableArtifact } from "../src/r2";
 import { buildIndex, sortVersions } from "../src/rest-index";
 import { normalizeRequestPath, r2KeyFor, r2KeysFor } from "../src/proxy";
+import {
+	SNAPSHOT_RULE_ID,
+	mergeLifecycleRules,
+	normalizeSnapshotPrefix,
+	parseRetentionDays,
+	readTomlVar,
+	snapshotExpiryRule
+} from "../scripts/lifecycle.mjs";
+import wranglerToml from "../wrangler.toml?raw";
 import { BridgeSupport, type SupportIo } from "../src/support";
 import forgebox from "./fixtures/forgebox-info.json";
 import mongoPom from "./fixtures/ortus-mongodb-cache-extension-1.2.0.5291.pom?raw";
@@ -84,21 +93,72 @@ describe("legacy core mapping", () => {
 
 describe("R2 keys", () => {
 	const s = lucee();
-	const config = { r2Prefix: "" } as Parameters<typeof r2KeyFor>[0];
+	const config = { r2Prefix: "", r2SnapshotPrefix: "snapshots/" } as Parameters<typeof r2KeyFor>[0];
 	const core = (version: string, classifier: string, extension: string) =>
 		({ type: "artifact-file", groupId: "org.lucee", artifactId: "lucee", version, classifier, extension }) as const;
 	it("uses the Maven layout first, then the legacy core name", () => {
-		expect(r2KeyFor(config, s, core("8.0.1.12-SNAPSHOT", "", "pom"))).toBe("org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.pom");
+		expect(r2KeyFor(config, s, core("6.2.0.321", "", "pom"))).toBe("org/lucee/lucee/6.2.0.321/lucee-6.2.0.321.pom");
 		expect(r2KeysFor(config, s, core("6.2.0.321", "light", "jar"))).toEqual([
 			"org/lucee/lucee/6.2.0.321/lucee-6.2.0.321-light.jar",
 			"lucee-light-6.2.0.321.jar"
 		]);
 	});
 	it("has a single key for non-core files and applies the prefix", () => {
-		const prefixed = { r2Prefix: "maven/" } as Parameters<typeof r2KeyFor>[0];
+		const prefixed = { r2Prefix: "maven/", r2SnapshotPrefix: "snapshots/" } as Parameters<typeof r2KeyFor>[0];
 		const lex = { type: "artifact-file", groupId: "org.lucee", artifactId: "redis-extension", version: "2.0.0.1", classifier: "", extension: "lex" } as const;
 		expect(r2KeysFor(prefixed, s, lex)).toEqual(["maven/org/lucee/redis-extension/2.0.0.1/redis-extension-2.0.0.1.lex"]);
 		expect(r2KeysFor(prefixed, s, core("7.1.0.10", "", "lco"))).toEqual(["maven/org/lucee/lucee/7.1.0.10/lucee-7.1.0.10.lco", "maven/7.1.0.10.lco"]);
+	});
+	it("stores SNAPSHOT files below the SNAPSHOT prefix and still finds plain copies", () => {
+		const pom = "org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.pom";
+		expect(r2KeyFor(config, s, core("8.0.1.12-SNAPSHOT", "", "pom"))).toBe("snapshots/" + pom);
+		expect(r2KeysFor(config, s, core("8.0.1.12-SNAPSHOT", "", "pom"))).toEqual(["snapshots/" + pom, pom, "lucee-8.0.1.12-SNAPSHOT.pom"]);
+		const prefixed = { r2Prefix: "maven/", r2SnapshotPrefix: "snap/" } as Parameters<typeof r2KeyFor>[0];
+		expect(r2KeyFor(prefixed, s, core("8.0.1.12-SNAPSHOT", "", "pom"))).toBe("maven/snap/" + pom);
+		const release = core("8.0.1.12", "", "pom");
+		expect(r2KeyFor(prefixed, s, release)).toBe("maven/org/lucee/lucee/8.0.1.12/lucee-8.0.1.12.pom");
+	});
+});
+
+describe("R2 lifecycle", () => {
+	const rule = (prefix: string, days: number) => snapshotExpiryRule(prefix, days)!;
+	const abort = { id: "default-multipart-abort-rule", enabled: true, conditions: { prefix: "" }, abortMultipartUploadsTransition: { condition: { type: "Age", maxAge: 604800 } } };
+	it("normalizes the SNAPSHOT prefix and never lets it be empty", () => {
+		expect(normalizeSnapshotPrefix(undefined)).toBe("snapshots/");
+		expect(normalizeSnapshotPrefix("  ")).toBe("snapshots/");
+		expect(normalizeSnapshotPrefix("/snap")).toBe("snap/");
+		expect(normalizeSnapshotPrefix("a/b/")).toBe("a/b/");
+	});
+	it("parses the retention in days", () => {
+		expect(parseRetentionDays(undefined)).toBe(90);
+		expect(parseRetentionDays("30")).toBe(30);
+		expect(parseRetentionDays("0")).toBe(0);
+		expect(() => parseRetentionDays("90d")).toThrow();
+		expect(() => parseRetentionDays("-1")).toThrow();
+	});
+	it("builds an age rule for the prefix", () => {
+		expect(rule("snapshots/", 90)).toEqual({
+			id: SNAPSHOT_RULE_ID,
+			enabled: true,
+			conditions: { prefix: "snapshots/" },
+			deleteObjectsTransition: { condition: { type: "Age", maxAge: 90 * 86400 } }
+		});
+		expect(snapshotExpiryRule("snapshots/", 0)).toBeNull();
+		expect(() => snapshotExpiryRule("", 90)).toThrow();
+	});
+	it("keeps the bucket's other rules and only changes when needed", () => {
+		const added = mergeLifecycleRules([abort], rule("snapshots/", 90));
+		expect(added).toEqual({ rules: [abort, rule("snapshots/", 90)], changed: true });
+		expect(mergeLifecycleRules(added.rules, rule("snapshots/", 90)).changed).toBe(false);
+		expect(mergeLifecycleRules(added.rules, rule("snapshots/", 30))).toEqual({ rules: [abort, rule("snapshots/", 30)], changed: true });
+		expect(mergeLifecycleRules(added.rules, null)).toEqual({ rules: [abort], changed: true });
+		expect(mergeLifecycleRules([abort], null)).toEqual({ rules: [abort], changed: false });
+		expect(mergeLifecycleRules(undefined, rule("snapshots/", 90)).rules).toHaveLength(1);
+	});
+	it("defaults to 90 days below snapshots/ in wrangler.toml", () => {
+		expect(readTomlVar(wranglerToml, "R2_SNAPSHOT_PREFIX")).toBe("snapshots/");
+		expect(readTomlVar(wranglerToml, "R2_SNAPSHOT_RETENTION_DAYS")).toBe("90");
+		expect(readTomlVar(wranglerToml, "NOT_THERE")).toBeUndefined();
 	});
 });
 

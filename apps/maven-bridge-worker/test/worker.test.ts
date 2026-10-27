@@ -424,6 +424,8 @@ describe("R2 fill-on-miss", () => {
 
 describe("R2 read-through of SNAPSHOT files", () => {
 	const snap = "org/lucee/redis-extension/3.0.0.1-SNAPSHOT/redis-extension-3.0.0.1-SNAPSHOT.lex";
+	/** R2 key of the stored copy: below R2_SNAPSHOT_PREFIX */
+	const snapKey = "snapshots/" + snap;
 	const STALE = { ...FILL, R2_REVALIDATE_MINUTES: "0" } as const;
 
 	/** CDN-like source: ETag validator, 304 on a matching If-None-Match */
@@ -442,7 +444,7 @@ describe("R2 read-through of SNAPSHOT files", () => {
 		const res = await call("/" + snap, {}, FILL);
 		expect(res.status).toBe(200);
 		expect(await res.text()).toBe("snapshot-1");
-		const stored = await bindings.ARTIFACTS!.head(snap);
+		const stored = await bindings.ARTIFACTS!.head(snapKey);
 		expect(stored!.customMetadata?.source).toBe(CDN + snap);
 		expect(stored!.customMetadata?.sourceEtag).toBe('"v1"');
 		expect(stored!.customMetadata?.sourceLastModified).toBe("Tue, 27 Oct 2026 16:21:27 GMT");
@@ -462,14 +464,14 @@ describe("R2 read-through of SNAPSHOT files", () => {
 		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
 		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
 		await call("/" + snap, {}, STALE);
-		const before = await bindings.ARTIFACTS!.head(snap);
+		const before = await bindings.ARTIFACTS!.head(snapKey);
 
 		const res = await call("/" + snap, {}, STALE);
 		expect(res.status).toBe(200);
 		expect(await res.text()).toBe("snapshot-1");
 		expect(state.seen).toEqual([null, '"v1"']);
 		// not rewritten
-		expect((await bindings.ARTIFACTS!.head(snap))!.uploaded.getTime()).toBe(before!.uploaded.getTime());
+		expect((await bindings.ARTIFACTS!.head(snapKey))!.uploaded.getTime()).toBe(before!.uploaded.getTime());
 	});
 
 	it("replaces a stale copy when the source has a new version", async () => {
@@ -482,7 +484,7 @@ describe("R2 read-through of SNAPSHOT files", () => {
 		const res = await call("/" + snap, {}, STALE);
 		expect(res.status).toBe(200);
 		expect(await res.text()).toBe("snapshot-two");
-		const stored = await bindings.ARTIFACTS!.get(snap);
+		const stored = await bindings.ARTIFACTS!.get(snapKey);
 		expect(await stored!.text()).toBe("snapshot-two");
 		expect(stored!.customMetadata?.sourceEtag).toBe('"v2"');
 	});
@@ -491,7 +493,7 @@ describe("R2 read-through of SNAPSHOT files", () => {
 		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
 		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
 		// stored long ago
-		await bindings.ARTIFACTS!.put(snap, "snapshot-1", {
+		await bindings.ARTIFACTS!.put(snapKey, "snapshot-1", {
 			customMetadata: { source: CDN + snap, filledAt: "2026-01-01T00:00:00.000Z", sourceEtag: '"v1"' }
 		});
 		expect(await (await call("/" + snap, {}, FILL)).text()).toBe("snapshot-1");
@@ -509,7 +511,7 @@ describe("R2 read-through of SNAPSHOT files", () => {
 				return new Response(null, { status: 304 });
 			}
 		});
-		await bindings.ARTIFACTS!.put(snap, "old", {
+		await bindings.ARTIFACTS!.put(snapKey, "old", {
 			customMetadata: { source: CDN + snap, filledAt: "2026-01-01T00:00:00.000Z", sourceLastModified: "Tue, 27 Oct 2026 16:21:27 GMT" }
 		});
 		expect(await (await call("/" + snap, {}, FILL)).text()).toBe("old");
@@ -525,7 +527,7 @@ describe("R2 read-through of SNAPSHOT files", () => {
 		const res = await call("/" + snap, {}, STALE);
 		expect(res.status).toBe(404);
 		expect(res.headers.get("cache-control")).toBe("no-store");
-		expect(await bindings.ARTIFACTS!.head(snap)).toBeNull();
+		expect(await bindings.ARTIFACTS!.head(snapKey)).toBeNull();
 	});
 
 	it("serves the stored copy when the source cannot be reached", async () => {
@@ -538,7 +540,7 @@ describe("R2 read-through of SNAPSHOT files", () => {
 			expect(res.status).toBe(200);
 			expect(await res.text()).toBe("snapshot-1");
 		}
-		expect(await bindings.ARTIFACTS!.head(snap)).not.toBeNull();
+		expect(await bindings.ARTIFACTS!.head(snapKey)).not.toBeNull();
 	});
 
 	it("redirects HEAD and Range requests for a stale copy instead of revalidating", async () => {
@@ -560,7 +562,7 @@ describe("R2 read-through of SNAPSHOT files", () => {
 		expect(res.status).toBe(200);
 		expect(await res.text()).toBe("0123456789abcdef0123456789abcdef01234567");
 		expect(calls.some((c) => c === `GET ${CDN}${pom}`)).toBe(false);
-		const stored = await bindings.ARTIFACTS!.head(`${pom}.sha1`);
+		const stored = await bindings.ARTIFACTS!.head(`snapshots/${pom}.sha1`);
 		expect(stored!.customMetadata?.source).toBe(`${CDN}${pom}.sha1`);
 	});
 
@@ -570,6 +572,25 @@ describe("R2 read-through of SNAPSHOT files", () => {
 		const res = await call("/" + snap, {}, R2);
 		expect(await res.text()).toBe("copied");
 		expect(calls.some((c) => c.includes(snap))).toBe(false);
+	});
+
+	it("replaces a SNAPSHOT copy under the plain Maven key with one below the SNAPSHOT prefix", async () => {
+		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
+		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
+		await bindings.ARTIFACTS!.put(snap, "unprefixed", { customMetadata: { source: CDN + snap, filledAt: new Date().toISOString(), sourceEtag: '"v0"' } });
+		const res = await call("/" + snap, {}, FILL);
+		expect(await res.text()).toBe("snapshot-1");
+		expect(state.seen).toEqual([null]);
+		expect(await (await bindings.ARTIFACTS!.get(snapKey))!.text()).toBe("snapshot-1");
+		expect(await bindings.ARTIFACTS!.head(snap)).toBeNull();
+	});
+
+	it("honours a custom R2_SNAPSHOT_PREFIX", async () => {
+		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
+		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
+		await call("/" + snap, {}, { ...FILL, R2_SNAPSHOT_PREFIX: "snap" });
+		expect(await bindings.ARTIFACTS!.head("snap/" + snap)).not.toBeNull();
+		expect(await bindings.ARTIFACTS!.head(snapKey)).toBeNull();
 	});
 });
 
