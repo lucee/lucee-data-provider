@@ -337,7 +337,7 @@ describe("R2 fill-on-miss", () => {
 		expect(await bindings.ARTIFACTS!.head(path)).toBeNull();
 	});
 
-	it("streams without storing when the upstream sends no content-length", async () => {
+	it("stores a small file the upstream sends without content-length", async () => {
 		mockFetch({
 			...baseRoutes(),
 			[CDN + path]: (req) =>
@@ -348,6 +348,91 @@ describe("R2 fill-on-miss", () => {
 		const res = await call("/" + path, {}, FILL);
 		expect(res.status).toBe(200);
 		expect(await res.text()).toBe(body);
+		expect(res.headers.get("content-length")).toBe(String(body.length));
+		const stored = await bindings.ARTIFACTS!.get(path);
+		expect(stored!.size).toBe(body.length);
+		expect(await stored!.text()).toBe(body);
+	});
+
+	it("stores a gzip answer without content-length (like the CDN for a .pom) decoded, with its real length", async () => {
+		const pom = "org/lucee/tasks-extension/1.1.1.0/tasks-extension-1.1.1.0.pom";
+		const xml = "<project><artifactId>tasks-extension</artifactId></project>";
+		// fetch hands over the decoded body; content-encoding and the weak ETag stay on the answer
+		mockFetch({
+			...baseRoutes(),
+			[CDN + pom]: () =>
+				new Response(new Blob([xml]).stream(), { status: 200, headers: { "content-encoding": "gzip", etag: 'W/"abc"' } })
+		});
+		const res = await call("/" + pom, {}, FILL);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe(xml);
+		expect(res.headers.get("content-length")).toBe(String(xml.length));
+		expect(res.headers.get("content-type")).toBe("application/xml; charset=utf-8");
+		const stored = await bindings.ARTIFACTS!.get(pom);
+		expect(stored!.size).toBe(xml.length);
+		expect(await stored!.text()).toBe(xml);
+		expect(stored!.httpMetadata?.contentType).toBe("application/xml; charset=utf-8");
+		expect(stored!.httpMetadata?.contentEncoding).toBeUndefined();
+		expect(stored!.customMetadata?.sourceEtag).toBe('W/"abc"');
+
+		// the next request is served from R2 without touching the upstream
+		mockFetch(baseRoutes());
+		const again = await call("/" + pom, {}, FILL);
+		expect(await again.text()).toBe(xml);
+		expect(calls.some((c) => c.includes(pom))).toBe(false);
+	});
+
+	it("streams a larger file without content-length without storing it", async () => {
+		// 1.5 MB in 64 KB chunks, over a 1 MB limit
+		const chunk = new Uint8Array(64 * 1024);
+		for (let i = 0; i < chunk.length; i++) chunk[i] = i % 251;
+		const count = 24;
+		mockFetch({
+			...baseRoutes(),
+			[CDN + path]: (req) => {
+				if (req.method === "HEAD") return new Response(null, { status: 200 });
+				let sent = 0;
+				const stream = new ReadableStream({
+					pull(controller) {
+						if (sent++ < count) controller.enqueue(chunk.slice());
+						else controller.close();
+					}
+				});
+				return new Response(stream, { status: 200, headers: { "content-encoding": "gzip" } });
+			}
+		});
+		const res = await call("/" + path, {}, { ...FILL, R2_FILL_STREAM_MAX_MB: "1" });
+		expect(res.status).toBe(200);
+		expect(res.headers.get("content-length")).toBeNull();
+		const received = new Uint8Array(await res.arrayBuffer());
+		expect(received.byteLength).toBe(chunk.length * count);
+		for (let n = 0; n < count; n++) {
+			expect(received.subarray(n * chunk.length, (n + 1) * chunk.length)).toEqual(chunk);
+		}
+		expect(await bindings.ARTIFACTS!.head(path)).toBeNull();
+	});
+
+	it("does not store a file without content-length when reading it fails", async () => {
+		mockFetch({
+			...baseRoutes(),
+			[CDN + path]: (req) => {
+				if (req.method === "HEAD") return new Response(null, { status: 200 });
+				let sent = false;
+				const stream = new ReadableStream({
+					pull(controller) {
+						if (sent) controller.error(new TypeError("Network connection lost"));
+						else {
+							sent = true;
+							controller.enqueue(new TextEncoder().encode("part"));
+						}
+					}
+				});
+				return new Response(stream, { status: 200, headers: { "content-encoding": "gzip" } });
+			}
+		});
+		const res = await call("/" + path, {}, FILL);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe(CDN + path);
 		expect(await bindings.ARTIFACTS!.head(path)).toBeNull();
 	});
 
@@ -388,7 +473,7 @@ describe("R2 fill-on-miss", () => {
 		expect(await bindings.ARTIFACTS!.head(path)).toBeNull();
 	});
 
-	it("streams without storing when the source sends an encoded body", async () => {
+	it("stores an encoded answer with the decoded length, not the content-length of the encoded body", async () => {
 		mockFetch({
 			...baseRoutes(),
 			[CDN + path]: (req) =>
@@ -399,8 +484,11 @@ describe("R2 fill-on-miss", () => {
 		});
 		const res = await call("/" + path, {}, FILL);
 		expect(res.status).toBe(200);
-		expect(res.headers.get("content-length")).not.toBe("7");
-		expect(await bindings.ARTIFACTS!.head(path)).toBeNull();
+		expect(await res.text()).toBe(body);
+		expect(res.headers.get("content-length")).toBe(String(body.length));
+		const stored = await bindings.ARTIFACTS!.get(path);
+		expect(stored!.size).toBe(body.length);
+		expect(await stored!.text()).toBe(body);
 	});
 
 	it("falls back to the redirect when the source cannot be reached", async () => {
@@ -498,6 +586,42 @@ describe("R2 read-through of SNAPSHOT files", () => {
 		expect(state.seen).toEqual(['"v1"']);
 		expect(await (await call("/" + snap, {}, FILL)).text()).toBe("snapshot-1");
 		expect(state.seen).toEqual(['"v1"']);
+	});
+
+	it("revalidates a compressed SNAPSHOT file with its weak ETag", async () => {
+		const pom = "org/lucee/tasks-extension/1.1.1.1-SNAPSHOT/tasks-extension-1.1.1.1-SNAPSHOT.pom";
+		// the stored copy, whatever key prefix SNAPSHOT files are stored under
+		const storedKey = async () => (await bindings.ARTIFACTS!.list()).objects.find((o) => o.key.endsWith(pom))!.key;
+		// like the CDN with a compressed answer: weak ETag, no content-length, 304 on a matching If-None-Match
+		const state = { body: "<project>1</project>", etag: 'W/"v1"', seen: [] as (string | null)[] };
+		mockFetch({
+			...baseRoutes(),
+			[CDN + pom]: (req) => {
+				if (req.method === "GET") state.seen.push(req.headers.get("if-none-match"));
+				if (req.headers.get("if-none-match") === state.etag) return new Response(null, { status: 304, headers: { etag: state.etag } });
+				return new Response(req.method === "HEAD" ? null : new Blob([state.body]).stream(), {
+					status: 200,
+					headers: { etag: state.etag, "content-encoding": "gzip", "last-modified": "Tue, 27 Oct 2026 16:21:27 GMT" }
+				});
+			}
+		});
+		expect(await (await call("/" + pom, {}, STALE)).text()).toBe("<project>1</project>");
+		const before = await bindings.ARTIFACTS!.head(await storedKey());
+		expect(before!.customMetadata?.sourceEtag).toBe('W/"v1"');
+
+		// unchanged: 304, the stored copy is kept
+		expect(await (await call("/" + pom, {}, STALE)).text()).toBe("<project>1</project>");
+		expect(state.seen).toEqual([null, 'W/"v1"']);
+		expect((await bindings.ARTIFACTS!.head(await storedKey()))!.uploaded.getTime()).toBe(before!.uploaded.getTime());
+
+		// republished: the new version is stored
+		state.body = "<project>two</project>";
+		state.etag = 'W/"v2"';
+		expect(await (await call("/" + pom, {}, STALE)).text()).toBe("<project>two</project>");
+		const stored = await bindings.ARTIFACTS!.get(await storedKey());
+		expect(await stored!.text()).toBe("<project>two</project>");
+		expect(stored!.size).toBe("<project>two</project>".length);
+		expect(stored!.customMetadata?.sourceEtag).toBe('W/"v2"');
 	});
 
 	it("falls back to If-Modified-Since when the source sent no ETag", async () => {
