@@ -91,6 +91,19 @@ export class RuntimeIo implements SupportIo {
 		this.background(caches.default.put(key, res));
 	}
 
+	// --- freshness of stored SNAPSHOT files (Cache API marker, per cache generation) ---
+
+	/** true while a revalidation of the R2 object `key` is recent enough */
+	async isR2Fresh(key: string): Promise<boolean> {
+		return (await this.cacheGet(await this.cacheKey("r2-fresh", key))) !== undefined;
+	}
+
+	/** records a successful revalidation of the R2 object `key` for `ttlSeconds` */
+	markR2Fresh(key: string, ttlSeconds: number): void {
+		if (ttlSeconds <= 0) return;
+		this.background(this.cacheKey("r2-fresh", key).then((k) => this.cachePut(k, "1", ttlSeconds)));
+	}
+
 	// --- upstream text files ---
 
 	/** Live read of an upstream file: R2 first (in serve mode), then the upstream URL. */

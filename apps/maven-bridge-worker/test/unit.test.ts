@@ -207,6 +207,17 @@ describe("helpers", () => {
 		expect(readConfig({ R2_FILL_STREAM_MAX_MB: "8" } as unknown as Env).r2FillStreamMaxBytes).toBe(8 * 1024 * 1024);
 		expect(readConfig({ R2_FILL_STREAM_MAX_MB: "0" } as unknown as Env).r2FillStreamMaxBytes).toBe(0);
 		expect(() => readConfig({ R2_FILL_STREAM_MAX_MB: "-1" } as unknown as Env)).toThrow("Invalid R2_FILL_STREAM_MAX_MB");
+		expect(readConfig({} as unknown as Env).r2RevalidateSeconds).toBe(300);
+		expect(readConfig({ R2_REVALIDATE_MINUTES: "0" } as unknown as Env).r2RevalidateSeconds).toBe(0);
+		expect(readConfig({ R2_REVALIDATE_MINUTES: "1.5" } as unknown as Env).r2RevalidateSeconds).toBe(90);
+		expect(() => readConfig({ R2_REVALIDATE_MINUTES: "-1" } as unknown as Env)).toThrow("Invalid R2_REVALIDATE_MINUTES");
+		const hosts = { R2_MODE: "serve", R2_HOSTS: " mvn.example.org , other.example.org" } as unknown as Env;
+		expect(readConfig(hosts, "mvn.example.org").r2Mode).toBe("serve");
+		expect(readConfig(hosts, "MVN.example.org").r2Mode).toBe("serve");
+		expect(readConfig(hosts, "maven.example.org").r2Mode).toBe("off");
+		expect(readConfig(hosts).r2Mode).toBe("off");
+		expect(readConfig({ R2_MODE: "serve", R2_HOSTS: "" } as unknown as Env, "any.example.org").r2Mode).toBe("serve");
+		expect(readConfig({ R2_MODE: "serve" } as unknown as Env).r2Mode).toBe("serve");
 	});
 	it("only treats final/RC files as immutable", () => {
 		expect(isImmutableArtifact("7.1.0.10", "lucee-7.1.0.10.jar")).toBe(true);

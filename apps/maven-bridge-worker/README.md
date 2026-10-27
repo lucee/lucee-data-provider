@@ -55,7 +55,9 @@ Two kinds of groups, configured in `EXTENSION_PROVIDERS`:
 
 With `R2_MODE = "serve"` every artifact file request first looks in the `ARTIFACTS` bucket. A hit is
 streamed by the worker (content type, ETag, Last-Modified, Content-Length, `Range` → 206,
-`If-None-Match`/`If-Modified-Since` → 304, `HEAD`). A miss falls back to the redirect logic above.
+`If-None-Match`/`If-Modified-Since` → 304, `HEAD`). A miss falls back to the redirect logic above, or with fill on miss is fetched from the
+source and stored (see below). `R2_HOSTS` limits R2 to some hostnames (comma separated, empty = all);
+the other hostnames keep the plain redirects.
 Group-level files (`maven-metadata.xml`, `index.html`) of upstream groups are read from R2 first too.
 
 Object keys use the Maven layout of the upstream, so a copy of `cdn.lucee.org` can be used as is:
@@ -71,7 +73,7 @@ Object keys use the Maven layout of the upstream, so a copy of `cdn.lucee.org` c
 
 With `R2_MODE = "serve"` and `R2_FILL_ON_MISS = "true"`, a miss for an upstream-mirror file is fetched
 from its source (GitHub Releases or the CDN) and stored in R2 under its Maven-layout key. The next request is
-served from R2.
+served from R2; the redirect is only the fallback.
 
 - Files up to `R2_FILL_STREAM_MAX_MB` (default 32) are streamed to the client and stored at the same
   time (`waitUntil`).
@@ -79,9 +81,28 @@ served from R2.
   never makes the worker hold a large file in memory.
 - If the source cannot be reached, or the store fails, the request falls back to the redirect.
 
-Only immutable files are stored: a `200` answer with a known `Content-Length` and no `Content-Encoding`, for a plain `GET`
-(no `Range`), and never `SNAPSHOT` versions, `maven-metadata.xml*` or `index.html`. Anything else
-keeps the redirect behaviour. Stored objects carry `customMetadata.source` and `filledAt`.
+Only a `200` answer with a known `Content-Length` and no `Content-Encoding`, for a plain `GET` (no `Range`),
+is stored; a `404` (or any other answer) of the source is never stored. `maven-metadata.xml*` and
+`index.html` are never stored. Checksum files (`.sha1`, `.md5`, ...) the source has are stored like any
+other file; checksums the source does not have are computed as before. Stored objects carry
+`customMetadata.source`, `filledAt` and the source's `ETag` / `Last-Modified` (`sourceEtag`,
+`sourceLastModified`).
+
+Release files never change and are served from R2 forever. `SNAPSHOT` files are republished under the
+same name, so a stored SNAPSHOT copy is only served as is for `R2_REVALIDATE_MINUTES` (default 5) after
+it was stored or last checked. After that the next `GET` asks the source with `If-None-Match` /
+`If-Modified-Since`:
+
+- `304`: the stored copy is served and counts as checked for another `R2_REVALIDATE_MINUTES` (per colo,
+  Cache API)
+- `200`: the new file replaces the stored copy and is served
+- `404`/`410`: the stored copy is deleted and the request answers `404`
+- source unreachable or any other answer: the stored copy is served
+
+`HEAD` and `Range` requests for a stale SNAPSHOT copy (or a miss) keep the redirect. With
+`R2_REVALIDATE_MINUTES = "0"` every SNAPSHOT `GET` is checked against the source. SNAPSHOT objects
+put into the bucket by other means (bulk copy, legacy flat keys) are served as they are while fill on
+miss is off.
 
 ForgeBox downloads are not filled (they are served by ForgeBox, not mirrored).
 
@@ -120,7 +141,9 @@ curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/health?flu
 | `TIMEOUT` | `300` | upstream/provider timeout in seconds |
 | `GITHUB_RELEASES_URL` | `https://github.com/lucee/Lucee/releases/download/` | 7.1+ core builds; empty disables |
 | `R2_MODE` | `off` | `off` or `serve` |
-| `R2_FILL_ON_MISS` | `false` | store immutable upstream files in R2 on first request (serve mode only) |
+| `R2_FILL_ON_MISS` | `false` | store upstream files in R2 on first request, SNAPSHOTs revalidated (serve mode only) |
+| `R2_REVALIDATE_MINUTES` | `5` | how long a stored SNAPSHOT file is served without asking the source (`0` = every request) |
+| `R2_HOSTS` | empty | hostnames that use R2, comma separated; empty = all hostnames |
 | `CHECKSUM_MAX_MB` | `128` | checksums the upstream does not have are computed for artifacts up to this size; larger ones answer 404 (`0` = never compute) |
 | `CHECKSUM_INLINE_MAX_MB` | `16` | computed checksums of larger artifacts are hashed in the background and answer 404 until cached (`0` = always in the background) |
 | `R2_FILL_STREAM_MAX_MB` | `32` | fill-on-miss files up to this size are streamed while stored; larger ones are stored first (`0` = always store first) |
@@ -130,7 +153,7 @@ Secrets: `FLUSH_TOKEN` (`wrangler secret put FLUSH_TOKEN`; CI sets it from the
 `MAVEN_BRIDGE_FLUSH_TOKEN` secret when that exists).
 
 Bindings: KV `BRIDGE_CACHE` (namespace `lucee-maven-bridge-cache`), R2 `ARTIFACTS`
-(bucket `lucee-artifacts`, only read in serve mode). Custom domains: `maven.lucee-services.com`, `mvn.lucee-services.com`.
+(bucket `lucee-artifacts`, read in serve mode, written with fill on miss). Custom domains: `maven.lucee-services.com`, `mvn.lucee-services.com`.
 
 ## Develop and test
 
@@ -199,6 +222,8 @@ It exits with 1 when anything differs.
      redirect to (CDN or GitHub Releases), without access to the source bucket; files nobody asks
      for are never copied.
    - Once R2 has everything, the upstream redirects remain only as a fallback.
+   - `wrangler.toml` enables serve mode and fill on miss for `mvn.lucee-services.com` only
+     (`R2_HOSTS`); clear `R2_HOSTS` (or add `maven.lucee-services.com`) to use R2 on production too.
 
 ## Differences from `apps/maven-bridge`
 

@@ -32,7 +32,7 @@ enabled = true
 [[kv_namespaces]]
 binding = "BRIDGE_CACHE"
 
-# Artifact bucket, only read when R2_MODE = "serve".
+# Artifact bucket, only used when R2_MODE = "serve" (and on the hostnames in R2_HOSTS).
 [[r2_buckets]]
 binding = "ARTIFACTS"
 bucket_name = "lucee-artifacts"
@@ -43,9 +43,13 @@ CACHE_TTL_MINUTES = "60"
 TIMEOUT = "300"
 GITHUB_RELEASES_URL = "https://github.com/lucee/Lucee/releases/download/"
 # "off": upstream redirects only (like maven-bridge); "serve": serve objects found in R2 first
-R2_MODE = "off"
-# "true": in serve mode, store immutable artifacts in R2 on their first request (lazy migration)
-R2_FILL_ON_MISS = "false"
+R2_MODE = "serve"
+# "true": in serve mode, store artifacts in R2 on their first request (read-through cache, lazy migration);
+# SNAPSHOT files are stored too and revalidated against their source after R2_REVALIDATE_MINUTES
+R2_FILL_ON_MISS = "true"
+R2_REVALIDATE_MINUTES = "5"
+# hostnames that use R2 (R2_MODE, R2_FILL_ON_MISS); all others keep the upstream redirects. Empty = all hostnames.
+R2_HOSTS = "mvn.lucee-services.com"
 R2_FILL_STREAM_MAX_MB = "32"
 R2_PREFIX = ""
 # checksums missing upstream are computed from artifacts up to this size (MB), 0 = never
