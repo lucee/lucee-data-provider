@@ -209,6 +209,14 @@ describe("helpers", () => {
 		expect(() => readConfig({ R2_FILL_STREAM_MAX_MB: "-1" } as unknown as Env)).toThrow("Invalid R2_FILL_STREAM_MAX_MB");
 		expect(readConfig({} as unknown as Env).r2RevalidateSeconds).toBe(300);
 		expect(readConfig({ R2_REVALIDATE_MINUTES: "0" } as unknown as Env).r2RevalidateSeconds).toBe(0);
+		expect(readConfig({} as unknown as Env).metadataCacheTtlSeconds).toBe(300);
+		expect(readConfig({ METADATA_CACHE_TTL_MINUTES: "" } as unknown as Env).metadataCacheTtlSeconds).toBe(300);
+		expect(readConfig({ METADATA_CACHE_TTL_MINUTES: "2" } as unknown as Env).metadataCacheTtlSeconds).toBe(120);
+		expect(readConfig({ METADATA_CACHE_TTL_MINUTES: "0.5" } as unknown as Env).metadataCacheTtlSeconds).toBe(30);
+		expect(readConfig({ METADATA_CACHE_TTL_MINUTES: "0" } as unknown as Env).metadataCacheTtlSeconds).toBe(0);
+		expect(() => readConfig({ METADATA_CACHE_TTL_MINUTES: "-1" } as unknown as Env)).toThrow("Invalid METADATA_CACHE_TTL_MINUTES");
+		expect(readConfig({ CACHE_TTL_MINUTES: "60", METADATA_CACHE_TTL_MINUTES: "5" } as unknown as Env).cacheTtlMinutes).toBe(60);
+		expect(readConfig({} as unknown as Env).invalidateToken).toBe("");
 		expect(readConfig({ R2_REVALIDATE_MINUTES: "1.5" } as unknown as Env).r2RevalidateSeconds).toBe(90);
 		expect(() => readConfig({ R2_REVALIDATE_MINUTES: "-1" } as unknown as Env)).toThrow("Invalid R2_REVALIDATE_MINUTES");
 		const hosts = { R2_MODE: "serve", R2_HOSTS: " mvn.example.org , other.example.org" } as unknown as Env;

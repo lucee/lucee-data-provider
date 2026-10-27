@@ -1014,3 +1014,112 @@ describe("health, landing and scheduled", () => {
 		await waitOnExecutionContext(ctx);
 	});
 });
+
+describe("listings and maven-metadata.xml cache time", () => {
+	const metadataWith = (version: string) => REDIS_METADATA.replace("<version>2.0.0.1</version>", `<version>2.0.0.1</version>\n      <version>${version}</version>`);
+	const cachedEntry = async (kind: string, id: string) => {
+		const gen = await bindings.BRIDGE_CACHE.get("cache-generation");
+		return caches.default.match(`https://mvn.lucee-services.com/__maven-bridge-cache/${gen}/${kind}/${encodeURIComponent(id)}`);
+	};
+
+	it("caches maven-metadata.xml for METADATA_CACHE_TTL_MINUTES, not CACHE_TTL_MINUTES", async () => {
+		mockFetch(baseRoutes());
+		await call("/org/lucee/redis-extension/maven-metadata.xml");
+		const entry = await cachedEntry("metadata", `0/${CDN}org/lucee/redis-extension/maven-metadata.xml`);
+		expect(entry?.headers.get("cache-control")).toBe("public, max-age=300");
+		await entry?.arrayBuffer();
+		mockFetch(baseRoutes());
+		expect(await (await call("/org/lucee/redis-extension/maven-metadata.xml")).text()).toBe(REDIS_METADATA);
+		expect(calls).not.toContain(`GET ${CDN}org/lucee/redis-extension/maven-metadata.xml`);
+	});
+
+	it("uses the configured cache time for listings", async () => {
+		mockFetch(baseRoutes());
+		await call("/org/lucee/redis-extension/", {}, { METADATA_CACHE_TTL_MINUTES: "2" });
+		const entry = await cachedEntry("metadata", `0/${CDN}org/lucee/redis-extension/maven-metadata.xml`);
+		expect(entry?.headers.get("cache-control")).toBe("public, max-age=120");
+		await entry?.arrayBuffer();
+	});
+
+	it("does not cache listings and metadata with METADATA_CACHE_TTL_MINUTES = 0", async () => {
+		mockFetch(baseRoutes());
+		await call("/org/lucee/redis-extension/maven-metadata.xml", {}, { METADATA_CACHE_TTL_MINUTES: "0" });
+		mockFetch(baseRoutes());
+		await call("/org/lucee/redis-extension/maven-metadata.xml", {}, { METADATA_CACHE_TTL_MINUTES: "0" });
+		expect(calls).toContain(`GET ${CDN}org/lucee/redis-extension/maven-metadata.xml`);
+	});
+
+	it("reads the group maven-metadata.xml again once the short cache is gone, even with a fresh KV copy", async () => {
+		await bindings.BRIDGE_CACHE.put(
+			`upstream:${CDN}org/lucee/maven-metadata.xml`,
+			JSON.stringify({ body: "<old/>", contentType: "application/xml", fetchedAt: Date.now() })
+		);
+		mockFetch(baseRoutes());
+		const res = await call("/org/lucee/maven-metadata.xml", {}, { METADATA_CACHE_TTL_MINUTES: "0" });
+		expect(await res.text()).toBe(GROUP_METADATA);
+		// the changed file replaces the KV copy
+		expect(await bindings.BRIDGE_CACHE.get(`upstream:${CDN}org/lucee/maven-metadata.xml`, "json")).toMatchObject({ body: GROUP_METADATA });
+	});
+
+	it("serves the KV copy of a group file when the CDN fails", async () => {
+		await bindings.BRIDGE_CACHE.put(
+			`upstream:${CDN}org/lucee/maven-metadata.xml`,
+			JSON.stringify({ body: GROUP_METADATA, contentType: "application/xml", fetchedAt: 0 })
+		);
+		mockFetch({ ...baseRoutes(), [`${CDN}org/lucee/maven-metadata.xml`]: new Response("down", { status: 503 }) });
+		const res = await call("/org/lucee/maven-metadata.xml");
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe(GROUP_METADATA);
+	});
+
+	it("shows a new release in the artifact listing after POST /_invalidate", async () => {
+		mockFetch(baseRoutes());
+		expect(await (await call("/org/lucee/redis-extension/")).text()).not.toContain("2.0.0.2-RC");
+		mockFetch({ ...baseRoutes(), [`${CDN}org/lucee/redis-extension/maven-metadata.xml`]: metadataWith("2.0.0.2-RC") });
+		// still the cached listing
+		expect(await (await call("/org/lucee/redis-extension/")).text()).not.toContain("2.0.0.2-RC");
+		const res = await call("/_invalidate", { method: "POST", headers: { authorization: "Bearer test-invalidate-token" } });
+		expect(res.status).toBe(200);
+		expect(res.headers.get("cache-control")).toBe("no-store");
+		const json = (await res.json()) as { generation: string };
+		expect(await bindings.BRIDGE_CACHE.get("metadata-generation")).toBe(json.generation);
+		expect(await (await call("/org/lucee/redis-extension/")).text()).toContain("2.0.0.2-RC");
+		expect(await (await call("/org/lucee/redis-extension/maven-metadata.xml")).text()).toContain("2.0.0.2-RC");
+	});
+
+	it("keeps the cache generation (and so artifacts and checksums) on invalidate", async () => {
+		mockFetch(baseRoutes());
+		const before = await bindings.BRIDGE_CACHE.get("cache-generation");
+		const res = await call("/_invalidate", { method: "POST", headers: { "x-invalidate-token": "test-invalidate-token" } });
+		expect(res.status).toBe(200);
+		expect(await bindings.BRIDGE_CACHE.get("cache-generation")).toBe(before);
+	});
+
+	it("rejects invalidate without the right token", async () => {
+		mockFetch(baseRoutes());
+		const none = await call("/_invalidate", { method: "POST" });
+		expect(none.status).toBe(403);
+		expect(await none.text()).toBe("Forbidden");
+		const wrong = await call("/_invalidate", { method: "POST", headers: { authorization: "Bearer wrong" } });
+		expect(wrong.status).toBe(403);
+		// the flush token is not accepted
+		const flush = await call("/_invalidate", { method: "POST", headers: { authorization: "Bearer test-flush-token" } });
+		expect(flush.status).toBe(403);
+		expect(await bindings.BRIDGE_CACHE.get("metadata-generation")).toBeNull();
+	});
+
+	it("disables invalidate when INVALIDATE_TOKEN is not set", async () => {
+		mockFetch(baseRoutes());
+		const res = await call("/_invalidate", { method: "POST", headers: { authorization: "Bearer test-invalidate-token" } }, { INVALIDATE_TOKEN: "" });
+		expect(res.status).toBe(403);
+		expect(await res.text()).toBe("Invalidate is disabled");
+	});
+
+	it("only accepts POST for invalidate", async () => {
+		mockFetch(baseRoutes());
+		const res = await call("/_invalidate", { headers: { authorization: "Bearer test-invalidate-token" } });
+		expect(res.status).toBe(405);
+		expect(res.headers.get("allow")).toBe("POST");
+		expect(await bindings.BRIDGE_CACHE.get("metadata-generation")).toBeNull();
+	});
+});
