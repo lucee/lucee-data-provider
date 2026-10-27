@@ -52,6 +52,10 @@ R2_REVALIDATE_MINUTES = "5"
 R2_HOSTS = "mvn.lucee-services.com"
 R2_FILL_STREAM_MAX_MB = "32"
 R2_PREFIX = ""
+# SNAPSHOT files are stored under this key prefix (after R2_PREFIX), so a lifecycle rule can expire them
+R2_SNAPSHOT_PREFIX = "snapshots/"
+# days after which stored SNAPSHOT files are deleted (lifecycle rule set by scripts/provision.mjs), 0 = keep forever
+R2_SNAPSHOT_RETENTION_DAYS = "90"
 # checksums missing upstream are computed from artifacts up to this size (MB), 0 = never
 CHECKSUM_MAX_MB = "128"
 # larger artifacts are hashed in the background (the checksum answers 404 until it is cached), 0 = always

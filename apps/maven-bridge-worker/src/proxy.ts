@@ -95,20 +95,53 @@ export async function invokePath(ctx: ProxyContext, cleanPath: string): Promise<
 	}
 }
 
-/** R2 object key of an artifact file: the Maven layout, as used by the upstream and for fill-on-miss. */
-export function r2KeyFor(config: BridgeConfig, support: BridgeSupport, parsed: ParsedPath): string {
+/**
+ * SNAPSHOT files the worker stores in R2: kept under their own key prefix (R2_SNAPSHOT_PREFIX)
+ * so the bucket's lifecycle rule can expire them, and revalidated against their source.
+ */
+export function isSnapshotFile(parsed: ParsedPath, fileName: string): boolean {
+	return !isImmutableArtifact(parsed.version ?? "", fileName) && isStorableFile(fileName);
+}
+
+/** R2 key of an artifact file in the plain Maven layout of the upstream. */
+export function r2MavenKeyFor(config: BridgeConfig, support: BridgeSupport, parsed: ParsedPath): string {
 	return config.r2Prefix + support.toUpstreamRelativePath(parsed);
 }
 
 /**
- * R2 keys looked up for an artifact file, in order: the Maven-layout key, then for
- * core files of upstream mirrors the legacy flat CDN name (bucket copies of cdn.lucee.org).
+ * R2 object key fill-on-miss writes for an artifact file: the Maven layout, for SNAPSHOT
+ * files below R2_SNAPSHOT_PREFIX.
+ */
+export function r2KeyFor(config: BridgeConfig, support: BridgeSupport, parsed: ParsedPath): string {
+	const rel = support.toUpstreamRelativePath(parsed);
+	const prefix = isSnapshotFile(parsed, rel.split("/").pop() ?? "") ? config.r2Prefix + config.r2SnapshotPrefix : config.r2Prefix;
+	return prefix + rel;
+}
+
+/**
+ * R2 keys looked up for an artifact file, in order: the key fill-on-miss writes, for SNAPSHOT
+ * files then the plain Maven-layout key (bulk copies), then for core files of upstream mirrors
+ * the legacy flat CDN name (bucket copies of cdn.lucee.org).
  */
 export function r2KeysFor(config: BridgeConfig, support: BridgeSupport, parsed: ParsedPath): string[] {
 	const keys = [r2KeyFor(config, support, parsed)];
+	const maven = r2MavenKeyFor(config, support, parsed);
+	if (maven !== keys[0]) keys.push(maven);
 	const legacy = support.hasUpstream() ? support.toUpstreamLegacyCorePath(parsed) : "";
 	if (legacy.length) keys.push(config.r2Prefix + legacy);
 	return keys;
+}
+
+/**
+ * Keys looked up in R2 for an artifact file. When the worker revalidates SNAPSHOT files, it only
+ * uses its own copies below R2_SNAPSHOT_PREFIX: a SNAPSHOT copy under the plain Maven key would
+ * never be revalidated nor expired, it is replaced by the next fill (see artifactFileResponse).
+ */
+function r2LookupKeys(ctx: ProxyContext, support: BridgeSupport, parsed: ParsedPath, revalidate: boolean): string[] {
+	const keys = r2KeysFor(ctx.config, support, parsed);
+	if (!revalidate) return keys;
+	const maven = r2MavenKeyFor(ctx.config, support, parsed);
+	return keys.filter((k, i) => i === 0 || k !== maven);
 }
 
 /** URL of an upstream-mirror file at its source, "" when the source does not have it. */
@@ -132,10 +165,9 @@ async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, p
 	const key = r2KeyFor(ctx.config, support, parsed);
 	const fileName = key.split("/").pop() ?? "";
 	// with fill-on-miss, stored SNAPSHOT files of upstream mirrors are revalidated against their source
-	const revalidate =
-		support.hasUpstream() && ctx.config.r2FillOnMiss && !isImmutableArtifact(parsed.version ?? "", fileName) && isStorableFile(fileName);
+	const revalidate = support.hasUpstream() && ctx.config.r2FillOnMiss && isSnapshotFile(parsed, fileName);
 	if (ctx.bucket) {
-		for (const candidate of r2KeysFor(ctx.config, support, parsed)) {
+		for (const candidate of r2LookupKeys(ctx, support, parsed, revalidate)) {
 			const fromR2 =
 				revalidate && candidate === key
 					? await mutableFromR2(ctx, support, parsed, key)
@@ -156,7 +188,10 @@ async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, p
 
 		if (canFill(ctx) && (revalidate || shouldFill(ctx, parsed, key))) {
 			const filled = await fetchAndFill(ctx.bucket!, key, target, ctx.waitUntil, fillOptions(ctx, support));
-			if (filled) return filled;
+			if (filled) {
+				if (revalidate) dropUnprefixedSnapshot(ctx, support, parsed, key);
+				return filled;
+			}
 		}
 		return redirectResponse(target);
 	}
@@ -177,6 +212,21 @@ async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, p
 		);
 	}
 	return redirectResponse(downloadUrl);
+}
+
+/**
+ * Once a SNAPSHOT file is stored below R2_SNAPSHOT_PREFIX, a copy under its plain Maven key
+ * (stored before SNAPSHOT files had their own prefix, or copied in) is deleted: it is no longer
+ * served while fill on miss is on, and the lifecycle rule does not cover it.
+ */
+function dropUnprefixedSnapshot(ctx: ProxyContext, support: BridgeSupport, parsed: ParsedPath, key: string): void {
+	const maven = r2MavenKeyFor(ctx.config, support, parsed);
+	if (maven === key) return;
+	ctx.waitUntil(
+		ctx.bucket!.delete(maven).catch((e) => {
+			console.warn(`deleting the unprefixed SNAPSHOT copy [${maven}] failed`, e);
+		})
+	);
 }
 
 /**
@@ -240,7 +290,8 @@ async function computedChecksumResponse(
 	if (support.hasUpstream()) {
 		let inR2 = false;
 		if (ctx.bucket) {
-			for (const candidate of r2KeysFor(ctx.config, support, artifact)) {
+			const revalidated = ctx.config.r2FillOnMiss && isSnapshotFile(artifact, fileName);
+			for (const candidate of r2LookupKeys(ctx, support, artifact, revalidated)) {
 				const fromR2 = await store.ofR2(ctx.bucket, candidate, type);
 				if (fromR2 !== null) {
 					value = fromR2;

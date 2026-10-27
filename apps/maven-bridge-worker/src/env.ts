@@ -48,6 +48,16 @@ export interface Env {
 	R2_HOSTS?: string;
 	/** Optional key prefix inside the R2 bucket. */
 	R2_PREFIX?: string;
+	/**
+	 * Key prefix (after R2_PREFIX) of the SNAPSHOT files the worker stores, so a lifecycle
+	 * rule can expire them. Default "snapshots/".
+	 */
+	R2_SNAPSHOT_PREFIX?: string;
+	/**
+	 * Days after which stored SNAPSHOT files are deleted. Only read by scripts/provision.mjs,
+	 * which sets the bucket's lifecycle rule. Default 90, 0 = keep forever.
+	 */
+	R2_SNAPSHOT_RETENTION_DAYS?: string;
 	/** Secret: required for ?flush=true. When unset, flushing is disabled. */
 	FLUSH_TOKEN?: string;
 }
