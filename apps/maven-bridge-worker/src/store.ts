@@ -1,6 +1,7 @@
 // Runtime I/O for the supports: replaces the server-scope / file cache of the
-// CFML bridge with Workers KV (provider indexes and upstream group files, kept
-// fresh by the hourly cron) and the Cache API (everything else, TTL based).
+// CFML bridge with Workers KV (provider indexes, and upstream group files as a fallback,
+// kept fresh by the hourly cron) and the Cache API (everything else, TTL based).
+// Directory listings and maven-metadata.xml use the short METADATA_CACHE_TTL_MINUTES.
 import type { BridgeConfig } from "./config";
 import type { Env } from "./env";
 import { BridgeError, UPSTREAM_NOT_FOUND } from "./errors";
@@ -8,6 +9,8 @@ import { buildIndex, deserializeIndex, serializeIndex, type RestIndex, type Stor
 import { contentTypeForPath, type BridgeSupport, type SupportIo, type UpstreamContent } from "./support";
 
 const GENERATION_KEY = "cache-generation";
+/** bumped by ?flush=metadata; part of the Cache API key of every listing and metadata file */
+export const METADATA_GENERATION_KEY = "metadata-generation";
 /** extra time a KV entry stays "fresh" so a slightly late cron run does not cause live loads */
 const GRACE_MS = 15 * 60 * 1000;
 export const USER_AGENT = "lucee-maven-bridge-worker";
@@ -31,12 +34,19 @@ export function groupLevelFiles(support: BridgeSupport): string[] {
 	return [`${support.groupPath}/maven-metadata.xml`, `${support.groupPath}/index.html`];
 }
 
+/** true for upstream files that change with every publish: maven-metadata.xml (+ checksums) and index.html listings */
+export function isMetadataFile(relativePath: string): boolean {
+	const name = (relativePath.split("/").pop() ?? "").toLowerCase();
+	return name.startsWith("maven-metadata") || name === "index.html";
+}
+
 function cleanRel(relativePath: string): string {
 	return relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
 }
 
 export class RuntimeIo implements SupportIo {
 	private generation: Promise<string> | undefined;
+	private metadataGeneration: Promise<string> | undefined;
 
 	constructor(
 		readonly env: Env,
@@ -73,6 +83,22 @@ export class RuntimeIo implements SupportIo {
 		this.generation = Promise.resolve(next);
 	}
 
+	getMetadataGeneration(): Promise<string> {
+		this.metadataGeneration ??= this.env.BRIDGE_CACHE.get(METADATA_GENERATION_KEY).then((g) => g ?? "0");
+		return this.metadataGeneration;
+	}
+
+	/**
+	 * Drops every cached listing and metadata file in all locations: the new generation is part of
+	 * their Cache API keys (KV reads are cached for about a minute per location, so that is the delay).
+	 */
+	async bumpMetadataGeneration(): Promise<string> {
+		const next = String(Date.now());
+		await this.env.BRIDGE_CACHE.put(METADATA_GENERATION_KEY, next);
+		this.metadataGeneration = Promise.resolve(next);
+		return next;
+	}
+
 	private async cacheKey(kind: string, id: string): Promise<Request | undefined> {
 		if (!this.cacheOrigin) return undefined;
 		const gen = await this.getGeneration();
@@ -106,14 +132,30 @@ export class RuntimeIo implements SupportIo {
 
 	// --- upstream text files ---
 
-	/** Live read of an upstream file: R2 first (in serve mode), then the upstream URL. */
+	/**
+	 * Live read of an upstream file: R2 first (in serve mode), then the upstream URL. Listings and
+	 * maven-metadata.xml change with every release, so for those the upstream comes first and a copy
+	 * in R2 is only used when the upstream does not have the file or cannot be reached.
+	 */
 	async fetchUpstreamLive(support: BridgeSupport, relativePath: string): Promise<UpstreamContent> {
 		const rel = cleanRel(relativePath);
 		const r2 = this.r2;
-		if (r2) {
+		if (!r2) return this.fetchUpstreamUrl(support, rel);
+		const fromR2 = async () => {
 			const obj = await r2.get(this.config.r2Prefix + rel);
-			if (obj) return { body: await obj.text(), contentType: contentTypeForPath(rel) };
+			return obj ? { body: await obj.text(), contentType: contentTypeForPath(rel) } : undefined;
+		};
+		if (!isMetadataFile(rel)) return (await fromR2()) ?? this.fetchUpstreamUrl(support, rel);
+		try {
+			return await this.fetchUpstreamUrl(support, rel);
+		} catch (e) {
+			const stored = await fromR2();
+			if (stored) return stored;
+			throw e;
 		}
+	}
+
+	private async fetchUpstreamUrl(support: BridgeSupport, rel: string): Promise<UpstreamContent> {
 		const url = support.upstreamUrl + rel;
 		const res = await fetch(url, { headers: { "user-agent": USER_AGENT }, signal: this.signal(support) });
 		if (res.status === 404) {
@@ -129,27 +171,53 @@ export class RuntimeIo implements SupportIo {
 
 	async getUpstreamContent(support: BridgeSupport, relativePath: string): Promise<UpstreamContent> {
 		const rel = cleanRel(relativePath);
-		const ttlMs = support.cacheTtlMinutes * 60 * 1000;
-
-		if (groupLevelFiles(support).includes(rel)) {
-			const key = upstreamKey(support, rel);
-			const stored = await this.env.BRIDGE_CACHE.get<StoredUpstream>(key, "json");
-			if (stored) {
-				if (Date.now() - Date.parse(stored.fetchedAt) >= ttlMs + GRACE_MS) {
-					this.background(this.refreshUpstreamFile(support, rel));
-				}
-				return { body: stored.body, contentType: stored.contentType };
-			}
-			const live = await this.fetchUpstreamLive(support, rel);
-			this.background(this.storeUpstreamFile(support, rel, live));
-			return live;
-		}
+		if (isMetadataFile(rel)) return this.getMetadataContent(support, rel);
 
 		const cacheKey = await this.cacheKey("upstream", support.upstreamUrl + rel);
 		const hit = await this.cacheGet(cacheKey);
 		if (hit) return { body: await hit.text(), contentType: contentTypeForPath(rel) };
 		const live = await this.fetchUpstreamLive(support, rel);
 		this.cachePut(cacheKey, live.body, support.cacheTtlMinutes * 60, live.contentType);
+		return live;
+	}
+
+	/**
+	 * Listings and maven-metadata.xml: cached per location for METADATA_CACHE_TTL_MINUTES only, so a
+	 * new release shows up within minutes everywhere. Group level files keep their KV copy (written
+	 * when it changed, and by the cron) as the answer when the upstream cannot be reached.
+	 */
+	private async getMetadataContent(support: BridgeSupport, rel: string): Promise<UpstreamContent> {
+		const ttlSeconds = this.config.metadataCacheTtlSeconds;
+		const cacheKey =
+			ttlSeconds > 0
+				? await this.cacheKey("metadata", `${await this.getMetadataGeneration()}/${support.upstreamUrl}${rel}`)
+				: undefined;
+		const hit = await this.cacheGet(cacheKey);
+		if (hit) return { body: await hit.text(), contentType: contentTypeForPath(rel) };
+
+		if (!groupLevelFiles(support).includes(rel)) {
+			const live = await this.fetchUpstreamLive(support, rel);
+			this.cachePut(cacheKey, live.body, ttlSeconds, live.contentType);
+			return live;
+		}
+
+		const stored = await this.env.BRIDGE_CACHE.get<StoredUpstream>(upstreamKey(support, rel), "json");
+		let live: UpstreamContent;
+		try {
+			live = await this.fetchUpstreamLive(support, rel);
+		} catch (e) {
+			if (e instanceof BridgeError && e.type === UPSTREAM_NOT_FOUND) {
+				// gone upstream (or not there yet during migration): drop the KV copy, like the cron does
+				if (stored) this.background(this.env.BRIDGE_CACHE.delete(upstreamKey(support, rel)));
+				throw e;
+			}
+			if (!stored) throw e;
+			console.warn(`maven-bridge upstream [${rel}] failed, serving the stored copy`, e);
+			return { body: stored.body, contentType: stored.contentType };
+		}
+		this.cachePut(cacheKey, live.body, ttlSeconds, live.contentType);
+		// KV is only written when the file changed (the cron rewrites it every hour anyway)
+		if (!stored || stored.body !== live.body) this.background(this.storeUpstreamFile(support, rel, live));
 		return live;
 	}
 

@@ -40,6 +40,8 @@ bucket_name = "lucee-artifacts"
 [vars]
 EXTENSION_PROVIDERS = "https://www.forgebox.io|io.forgebox,https://extension.lucee.org|org.lucee|https://cdn.lucee.org/"
 CACHE_TTL_MINUTES = "60"
+# directory listings and maven-metadata.xml are cached per location for this long, so new releases show up quickly; 0 = not cached
+METADATA_CACHE_TTL_MINUTES = "5"
 TIMEOUT = "300"
 GITHUB_RELEASES_URL = "https://github.com/lucee/Lucee/releases/download/"
 # "off": upstream redirects only (like maven-bridge); "serve": serve objects found in R2 first

@@ -19,6 +19,14 @@ export function isFlushRequested(url: URL): boolean {
 	return value.length > 0 && Number.isFinite(n) && n !== 0;
 }
 
+/**
+ * ?flush=metadata drops only the cached directory listings and maven-metadata.xml files, in every
+ * location (e.g. right after a release upload); artifacts, checksums and indexes stay cached.
+ */
+export function isMetadataFlushRequested(url: URL): boolean {
+	return (url.searchParams.get("flush") ?? "").trim().toLowerCase() === "metadata";
+}
+
 function presentedToken(request: Request): string {
 	const header = request.headers.get("x-flush-token");
 	if (header) return header.trim();
@@ -53,7 +61,13 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
 	const { config, io, registry } = createBridge(env, (p) => ctx.waitUntil(p), url);
 
 	let flushed = false;
-	if (isFlushRequested(url)) {
+	if (isMetadataFlushRequested(url)) {
+		if (!(await isFlushAuthorized(request, config))) {
+			return textResponse(403, TEXT, config.flushToken.length ? "Forbidden" : "Flush is disabled");
+		}
+		await io.bumpMetadataGeneration();
+		flushed = true;
+	} else if (isFlushRequested(url)) {
 		if (!(await isFlushAuthorized(request, config))) {
 			return textResponse(403, TEXT, config.flushToken.length ? "Forbidden" : "Flush is disabled");
 		}

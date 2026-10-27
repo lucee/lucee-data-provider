@@ -11,6 +11,8 @@ export interface ProviderEntry {
 export interface BridgeConfig {
 	providers: ProviderEntry[];
 	cacheTtlMinutes: number;
+	/** seconds directory listings and maven-metadata.xml files are cached per location; 0 = not cached */
+	metadataCacheTtlSeconds: number;
 	/** seconds */
 	timeout: number;
 	githubReleasesUrl: string;
@@ -35,6 +37,7 @@ export interface BridgeConfig {
 export const DEFAULT_GITHUB_RELEASES_URL = "https://github.com/lucee/Lucee/releases/download/";
 export const DEFAULT_R2_FILL_STREAM_MAX_MB = 32;
 export const DEFAULT_R2_REVALIDATE_MINUTES = 5;
+export const DEFAULT_METADATA_CACHE_TTL_MINUTES = 5;
 
 export function defaultProviders(): ProviderEntry[] {
 	return [
@@ -156,6 +159,11 @@ export function readConfig(env: Env, hostname?: string): BridgeConfig {
 		: val(env.R2_REVALIDATE_MINUTES);
 	if (revalidateMinutes < 0) throw new Error(`Invalid R2_REVALIDATE_MINUTES [${env.R2_REVALIDATE_MINUTES}]`);
 
+	const metadataTtlMinutes = env.METADATA_CACHE_TTL_MINUTES === undefined || String(env.METADATA_CACHE_TTL_MINUTES).trim() === ""
+		? DEFAULT_METADATA_CACHE_TTL_MINUTES
+		: val(env.METADATA_CACHE_TTL_MINUTES);
+	if (metadataTtlMinutes < 0) throw new Error(`Invalid METADATA_CACHE_TTL_MINUTES [${env.METADATA_CACHE_TTL_MINUTES}]`);
+
 	const r2Hosts = String(env.R2_HOSTS ?? "")
 		.split(",")
 		.map((h) => h.trim().toLowerCase())
@@ -165,6 +173,7 @@ export function readConfig(env: Env, hostname?: string): BridgeConfig {
 	return {
 		providers,
 		cacheTtlMinutes,
+		metadataCacheTtlSeconds: Math.floor(metadataTtlMinutes * 60),
 		timeout,
 		githubReleasesUrl,
 		r2Mode: mode === "serve" && r2ForHost ? "serve" : "off",

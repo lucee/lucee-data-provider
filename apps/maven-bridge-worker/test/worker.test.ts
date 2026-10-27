@@ -252,11 +252,25 @@ describe("R2", () => {
 		expect(res.status).toBe(302);
 	});
 
-	it("serves maven-metadata.xml from R2 when present", async () => {
-		mockFetch(baseRoutes());
+	it("serves maven-metadata.xml from R2 only when the upstream does not have it", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}org/lucee/redis-extension/maven-metadata.xml`]: new Response("missing", { status: 404 }) });
 		await bindings.ARTIFACTS!.put("org/lucee/redis-extension/maven-metadata.xml", "<metadata/>");
 		const res = await call("/org/lucee/redis-extension/maven-metadata.xml", {}, R2);
 		expect(await res.text()).toBe("<metadata/>");
+	});
+
+	it("prefers the upstream maven-metadata.xml over an old copy in R2", async () => {
+		mockFetch(baseRoutes());
+		await bindings.ARTIFACTS!.put("org/lucee/redis-extension/maven-metadata.xml", "<old/>");
+		await bindings.ARTIFACTS!.put("org/lucee/maven-metadata.xml", "<old/>");
+		expect(await (await call("/org/lucee/redis-extension/maven-metadata.xml", {}, R2)).text()).toBe(REDIS_METADATA);
+		expect(await (await call("/org/lucee/maven-metadata.xml", {}, R2)).text()).toBe(GROUP_METADATA);
+	});
+
+	it("falls back to the R2 copy of maven-metadata.xml when the upstream fails", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}org/lucee/redis-extension/maven-metadata.xml`]: new Response("down", { status: 503 }) });
+		await bindings.ARTIFACTS!.put("org/lucee/redis-extension/maven-metadata.xml", "<metadata/>");
+		expect(await (await call("/org/lucee/redis-extension/maven-metadata.xml", {}, R2)).text()).toBe("<metadata/>");
 	});
 });
 
@@ -1033,5 +1047,103 @@ describe("health, landing and scheduled", () => {
 		const ctx = createExecutionContext();
 		await expect(worker.scheduled(createScheduledController() as never, testEnv(), ctx)).rejects.toThrow();
 		await waitOnExecutionContext(ctx);
+	});
+});
+
+describe("listings and maven-metadata.xml cache time", () => {
+	const metadataWith = (version: string) => REDIS_METADATA.replace("<version>2.0.0.1</version>", `<version>2.0.0.1</version>\n      <version>${version}</version>`);
+	const cachedEntry = async (kind: string, id: string) => {
+		const gen = await bindings.BRIDGE_CACHE.get("cache-generation");
+		return caches.default.match(`https://mvn.lucee-services.com/__maven-bridge-cache/${gen}/${kind}/${encodeURIComponent(id)}`);
+	};
+
+	it("caches maven-metadata.xml for METADATA_CACHE_TTL_MINUTES, not CACHE_TTL_MINUTES", async () => {
+		mockFetch(baseRoutes());
+		await call("/org/lucee/redis-extension/maven-metadata.xml");
+		const entry = await cachedEntry("metadata", `0/${CDN}org/lucee/redis-extension/maven-metadata.xml`);
+		expect(entry?.headers.get("cache-control")).toBe("public, max-age=300");
+		await entry?.arrayBuffer();
+		mockFetch(baseRoutes());
+		expect(await (await call("/org/lucee/redis-extension/maven-metadata.xml")).text()).toBe(REDIS_METADATA);
+		expect(calls).not.toContain(`GET ${CDN}org/lucee/redis-extension/maven-metadata.xml`);
+	});
+
+	it("uses the configured cache time for listings", async () => {
+		mockFetch(baseRoutes());
+		await call("/org/lucee/redis-extension/", {}, { METADATA_CACHE_TTL_MINUTES: "2" });
+		const entry = await cachedEntry("metadata", `0/${CDN}org/lucee/redis-extension/maven-metadata.xml`);
+		expect(entry?.headers.get("cache-control")).toBe("public, max-age=120");
+		await entry?.arrayBuffer();
+	});
+
+	it("does not cache listings and metadata with METADATA_CACHE_TTL_MINUTES = 0", async () => {
+		mockFetch(baseRoutes());
+		await call("/org/lucee/redis-extension/maven-metadata.xml", {}, { METADATA_CACHE_TTL_MINUTES: "0" });
+		mockFetch(baseRoutes());
+		await call("/org/lucee/redis-extension/maven-metadata.xml", {}, { METADATA_CACHE_TTL_MINUTES: "0" });
+		expect(calls).toContain(`GET ${CDN}org/lucee/redis-extension/maven-metadata.xml`);
+	});
+
+	it("reads the group maven-metadata.xml again once the short cache is gone, even with a fresh KV copy", async () => {
+		await bindings.BRIDGE_CACHE.put(
+			`upstream:${CDN}org/lucee/maven-metadata.xml`,
+			JSON.stringify({ body: "<old/>", contentType: "application/xml", fetchedAt: Date.now() })
+		);
+		mockFetch(baseRoutes());
+		const res = await call("/org/lucee/maven-metadata.xml", {}, { METADATA_CACHE_TTL_MINUTES: "0" });
+		expect(await res.text()).toBe(GROUP_METADATA);
+		// the changed file replaces the KV copy
+		expect(await bindings.BRIDGE_CACHE.get(`upstream:${CDN}org/lucee/maven-metadata.xml`, "json")).toMatchObject({ body: GROUP_METADATA });
+	});
+
+	it("serves the KV copy of a group file when the CDN fails", async () => {
+		await bindings.BRIDGE_CACHE.put(
+			`upstream:${CDN}org/lucee/maven-metadata.xml`,
+			JSON.stringify({ body: GROUP_METADATA, contentType: "application/xml", fetchedAt: 0 })
+		);
+		mockFetch({ ...baseRoutes(), [`${CDN}org/lucee/maven-metadata.xml`]: new Response("down", { status: 503 }) });
+		const res = await call("/org/lucee/maven-metadata.xml");
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe(GROUP_METADATA);
+	});
+
+	it("shows a new release in the artifact listing after ?flush=metadata", async () => {
+		mockFetch(baseRoutes());
+		expect(await (await call("/org/lucee/redis-extension/")).text()).not.toContain("2.0.0.2-RC");
+		mockFetch({ ...baseRoutes(), [`${CDN}org/lucee/redis-extension/maven-metadata.xml`]: metadataWith("2.0.0.2-RC") });
+		// still the cached listing
+		expect(await (await call("/org/lucee/redis-extension/")).text()).not.toContain("2.0.0.2-RC");
+		const res = await call("/org/lucee/redis-extension/?flush=metadata", { headers: { "x-flush-token": "test-flush-token" } });
+		expect(res.status).toBe(200);
+		// the request itself already answers with the fresh listing
+		expect(await res.text()).toContain("2.0.0.2-RC");
+		expect(await bindings.BRIDGE_CACHE.get("metadata-generation")).not.toBeNull();
+		expect(await (await call("/org/lucee/redis-extension/")).text()).toContain("2.0.0.2-RC");
+		expect(await (await call("/org/lucee/redis-extension/maven-metadata.xml")).text()).toContain("2.0.0.2-RC");
+	});
+
+	it("keeps artifacts, checksums and indexes on ?flush=metadata", async () => {
+		mockFetch(baseRoutes());
+		await call("/health");
+		const before = await bindings.BRIDGE_CACHE.get("cache-generation");
+		const index = await bindings.BRIDGE_CACHE.get("index:io.forgebox");
+		const res = await call("/health?flush=metadata", { headers: { authorization: "Bearer test-flush-token" } });
+		expect(res.status).toBe(200);
+		expect(((await res.json()) as Record<string, unknown>).flushed).toBe(true);
+		expect(await bindings.BRIDGE_CACHE.get("cache-generation")).toBe(before);
+		expect(await bindings.BRIDGE_CACHE.get("index:io.forgebox")).toBe(index);
+	});
+
+	it("needs the flush token for ?flush=metadata", async () => {
+		mockFetch(baseRoutes());
+		const none = await call("/health?flush=metadata");
+		expect(none.status).toBe(403);
+		expect(await none.text()).toBe("Forbidden");
+		const wrong = await call("/health?flush=metadata", { headers: { "x-flush-token": "wrong" } });
+		expect(wrong.status).toBe(403);
+		const disabled = await call("/health?flush=metadata", { headers: { "x-flush-token": "test-flush-token" } }, { FLUSH_TOKEN: "" });
+		expect(disabled.status).toBe(403);
+		expect(await disabled.text()).toBe("Flush is disabled");
+		expect(await bindings.BRIDGE_CACHE.get("metadata-generation")).toBeNull();
 	});
 });

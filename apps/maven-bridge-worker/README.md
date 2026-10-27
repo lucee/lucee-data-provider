@@ -58,7 +58,9 @@ streamed by the worker (content type, ETag, Last-Modified, Content-Length, `Rang
 `If-None-Match`/`If-Modified-Since` → 304, `HEAD`). A miss falls back to the redirect logic above, or with fill on miss is fetched from the
 source and stored (see below). `R2_HOSTS` limits R2 to some hostnames (comma separated, empty = all);
 the other hostnames keep the plain redirects.
-Group-level files (`maven-metadata.xml`, `index.html`) of upstream groups are read from R2 first too.
+Listings and `maven-metadata.xml` files of upstream groups are read from the upstream first; a copy in
+R2 is only used when the upstream does not have the file or cannot be reached (so a bulk copy can never
+pin old metadata).
 
 Object keys use the Maven layout of the upstream, so a copy of `cdn.lucee.org` can be used as is:
 
@@ -126,14 +128,19 @@ ForgeBox downloads are not filled (they are served by ForgeBox, not mirrored).
 
 The CFML bridge kept everything in the server scope. Here:
 
-- **KV (`BRIDGE_CACHE`)**: REST provider indexes (`index:<groupId>`) and upstream group files
-  (`upstream:<url>`), refreshed by the **hourly cron**. Entries older than `CACHE_TTL_MINUTES` are
-  served while a refresh runs in the background; if the provider is down the last good copy is used.
+- **KV (`BRIDGE_CACHE`)**: REST provider indexes (`index:<groupId>`), refreshed by the **hourly cron**.
+  Entries older than `CACHE_TTL_MINUTES` are served while a refresh runs in the background; if the
+  provider is down the last good copy is used. Upstream group files (`upstream:<url>`, the group
+  `maven-metadata.xml` and listing) are kept in KV too, written by the cron and whenever they change,
+  but only served from there when the upstream cannot be reached.
   Computed checksums (`checksum:<generation>:<type>:<source>`) are kept in KV too, with an expiration,
   next to the short-lived markers of background computations (`checksum-pending:<generation>:<source>`)
   and their attempt counts (`checksum-attempts:<generation>:<source>`, 1 day).
-- **Cache API**: upstream metadata/index pages and positive `HEAD` checks on the upstream, keyed by a
-  cache generation that a flush bumps.
+- **Cache API**: upstream directory listings and `maven-metadata.xml` files for
+  `METADATA_CACHE_TTL_MINUTES` (default 5), so new releases show up within minutes, and positive `HEAD`
+  checks on the upstream for `CACHE_TTL_MINUTES`, keyed by a cache generation that a flush bumps.
+  The Cache API is per Cloudflare location, and a zone purge by URL does not reach these entries
+  (the Worker uses its own cache keys); use `?flush=metadata` (below) instead.
 
 ### Flush
 
@@ -146,6 +153,17 @@ like `health.cfm?flush=true`. It needs the `FLUSH_TOKEN` secret, sent as `X-Flus
 curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/health?flush=true"
 ```
 
+`?flush=metadata` (same token) only drops the cached directory listings and `maven-metadata.xml`
+files, in all locations, so a release shows up right after it is uploaded instead of after up to
+`METADATA_CACHE_TTL_MINUTES`. Artifacts, checksums and provider indexes stay cached and nothing is
+resynced. It bumps a generation counter in KV (`metadata-generation`) that is part of the cache keys;
+KV changes can take about a minute to reach every location. The request is then answered as usual,
+so the listing of the new release comes back fresh:
+
+```sh
+curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/org/lucee/tasks-extension/?flush=metadata"
+```
+
 ## Configuration
 
 `wrangler.toml` `[vars]` (no secrets in the file):
@@ -154,6 +172,7 @@ curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/health?flu
 |----------|---------|---------|
 | `EXTENSION_PROVIDERS` | ForgeBox + extension.lucee.org/cdn | `provider\|groupId[\|upstream]`, comma separated, or a JSON array of `{provider, groupId, upstream}` |
 | `CACHE_TTL_MINUTES` | `60` | age after which KV entries are refreshed |
+| `METADATA_CACHE_TTL_MINUTES` | `5` | how long directory listings and `maven-metadata.xml` are cached per location (`0` = not cached) |
 | `TIMEOUT` | `300` | upstream/provider timeout in seconds |
 | `GITHUB_RELEASES_URL` | `https://github.com/lucee/Lucee/releases/download/` | 7.1+ core builds; empty disables |
 | `R2_MODE` | `off` | `off` or `serve` |

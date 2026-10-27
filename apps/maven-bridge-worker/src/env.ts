@@ -10,6 +10,11 @@ export interface Env {
 	EXTENSION_PROVIDER?: string;
 	GROUP_ID?: string;
 	CACHE_TTL_MINUTES?: string;
+	/**
+	 * Directory listings (index.html) and maven-metadata.xml files are cached per location for
+	 * this many minutes, then read again from the upstream. Default 5, 0 = not cached.
+	 */
+	METADATA_CACHE_TTL_MINUTES?: string;
 	/** Timeout in seconds for upstream/provider requests. */
 	TIMEOUT?: string;
 	/** Base URL of the GitHub Release assets for core files; empty disables the lookup. */
