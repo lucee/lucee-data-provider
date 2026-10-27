@@ -203,9 +203,10 @@ async function storeAndServe(
 	if (!Number.isSafeInteger(length) || length <= 0) {
 		// e.g. a gzip answer of the CDN for a .pom: fetch hands over the decoded body, so small
 		// files are read completely and stored with their real length (and no content-encoding)
+		if (!upstream.body) return new Response(null, { status: 200, headers });
 		let read: ReadResult;
 		try {
-			read = await readUpTo(upstream.body!, options.streamMaxBytes);
+			read = await readUpTo(upstream.body, options.streamMaxBytes);
 		} catch (e) {
 			console.error(`reading [${sourceUrl}] for the R2 fill of [${key}] failed`, e);
 			return null;
