@@ -99,7 +99,7 @@ component {
 
 		if ( StructCount( ext ) ) {
 			header statuscode="302" statustext="Found";
-			header name="Location" value=variables.cdnURL & ext.filename;
+			header name="Location" value=metaReader.getDownloadUrl( ext.filename, variables.cdnURL );
 			return;
 		}
 
@@ -129,7 +129,7 @@ component {
 
 		if ( StructCount( ext ) ) {
 			header statuscode="302" statustext="Found";
-			header name="Location" value=variables.cdnURL & ext.filename;
+			header name="Location" value=metaReader.getDownloadUrl( ext.filename, variables.cdnURL );
 			return;
 		}
 

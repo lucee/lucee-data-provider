@@ -48,7 +48,7 @@ component accessors=true {
 			, bundleVersion = arguments.bundleVersion
 		);
 		if ( Len( Trim( extensionLexFile ) ) ) {
-			bundleUrl = getExtensionsCdnUrl() & extensionLexFile;
+			bundleUrl = getExtensionMetaReader().getDownloadUrl( extensionLexFile, getExtensionsCdnUrl() );
 			return _saveToCache( argumentCollection=arguments, bundleUrl=bundleUrl, cacheExpires="never" );
 		}
 

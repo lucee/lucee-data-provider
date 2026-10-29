@@ -1,9 +1,17 @@
 component accessors=true {
 
 	property name="s3root"                type="string" default="";
+	// LDEV-6789: extensions published only to the Maven layout (<mavenRoot>/<artifactId>/<version>/<artifactId>-<version>.lex)
+	property name="mavenRoot"             type="string" default="";
+	property name="mavenCdnUrl"           type="string" default="";
 	property name="extensionMeta"         type="query";
 	property name="extensionVersions"     type="struct";
 	property name="bundleDownloadService" type="any";
+
+	// LDEV-6789: file name > path relative to mavenRoot, for the files that are not in the flat bucket
+	variables._mavenPaths   = {};
+	// LDEV-6789: maven files already checked and found to be known (same id and version)
+	variables._mavenSkipped = {};
 
 	reset();
 
@@ -16,11 +24,12 @@ component accessors=true {
 			var meta           = isQuery( arguments.srcMeta ) ? arguments.srcMeta : _readExistingMetaFileFromS3();
 			var existingByFile = _mapExtensionQueryByFilename( meta );
 			var lexFiles       = _listLexFilesFromBucket();
+			var mavenFiles     = _listMavenLexFiles();
 			var metaChanged    = false;
 
 			if (meta.recordcount == 0){ 
 				// rebuilding the index takes a while as all extensions need to be re-downloaded and processed
-				setting requesttimeout="#lexFiles.recordcount#*4";
+				setting requesttimeout=Max( 600, ( lexFiles.recordcount + ArrayLen( mavenFiles.files ) ) * 4 ); // was the string "n*4", which can't be cast to a number
 			}
 
 			for( var lexFile in lexFiles ) {
@@ -31,8 +40,23 @@ component accessors=true {
 				}
 			}
 
-			if ( QueryRecordCount( lexFiles ) > 100 ) { // protect from disaster of accidentally not fetching the lex files
-				metaChanged = _removeRedundantExtensions( meta, lexFiles ) || metaChanged;
+			var knownNames = _namesFromListing( lexFiles );
+
+			// LDEV-6789: extensions are published to the Maven layout only, add what the flat bucket doesn't have
+			if ( ArrayLen( mavenFiles.files ) ) {
+				metaChanged = _addMavenLexFiles( meta, mavenFiles.files, knownNames ) || metaChanged;
+				_setMavenPaths( mavenFiles, knownNames, meta );
+				for ( var mavenFile in mavenFiles.files ) {
+					knownNames[ mavenFile.name ] = true;
+				}
+			} else if ( mavenFiles.complete ) {
+				variables._mavenPaths = {};
+			}
+
+			// protect from disaster of accidentally not fetching the lex files
+			// (and from dropping the maven extensions when the maven layout could not be listed)
+			if ( QueryRecordCount( lexFiles ) > 100 && mavenFiles.complete ) {
+				metaChanged = _removeRedundantExtensions( meta, knownNames ) || metaChanged;
 			}
 
 			if ( metaChanged ) {
@@ -127,6 +151,20 @@ component accessors=true {
 		return {};
 	}
 
+	/**
+	 * The url to download an extension file from. Files that are only available in the Maven layout (LDEV-6789)
+	 * are served from the Maven cdn url, everything else from the given default (flat extensions cdn) url.
+	 */
+	public string function getDownloadUrl( required string fileName, required string defaultBaseUrl ) {
+		var mavenPath = variables._mavenPaths[ arguments.fileName ] ?: "";
+
+		if ( Len( mavenPath ) && Len( getMavenCdnUrl() ) ) {
+			return _withTrailingSlash( getMavenCdnUrl() ) & mavenPath;
+		}
+
+		return arguments.defaultBaseUrl & arguments.fileName;
+	}
+
 	public function getExtensionFileMatchingBundle( required string bundleName, required string bundleVersion ) {
 		var exts = _mapExtensionQueryByFilename( getExtensionMeta() );
 
@@ -179,6 +217,127 @@ component accessors=true {
 		);
 	}
 
+	/**
+	 * LDEV-6789: lists the extension files in the Maven layout, one folder per artifact
+	 * <mavenRoot>/<artifactId>-extension/<version>/<artifactId>-extension-<version>.lex
+	 * The -lite.lex variants are not extensions in their own right and are ignored.
+	 * "complete" is false when part of the layout could not be listed.
+	 */
+	private struct function _listMavenLexFiles() {
+		var result = { files=[], complete=true };
+		var root   = getMavenRoot();
+
+		if ( !Len( root ) ) {
+			return result;
+		}
+		root = _withTrailingSlash( root );
+
+		try {
+			var artifacts = DirectoryList( path=root, listInfo="query", sort="name", type="dir" );
+		} catch( any e ) {
+			SystemOutput( "Error listing the maven layout [#root#]: #e.message#", true );
+			result.complete = false;
+			return result;
+		}
+
+		for ( var artifact in artifacts ) {
+			if ( !artifact.name.endsWith( "-extension" ) ) {
+				continue;
+			}
+
+			try {
+				var lexFiles = DirectoryList( path=root & artifact.name, recurse=true, listInfo="query", sort="name", filter="*.lex" );
+			} catch( any e ) {
+				SystemOutput( "Error listing the maven layout for [#artifact.name#]: #e.message#", true );
+				result.complete = false;
+				continue;
+			}
+
+			for ( var lex in lexFiles ) {
+				var version = ListLast( lex.directory, "/\" );
+
+				if ( lex.type == "file" && lex.name == artifact.name & "-" & version & ".lex" ) {
+					ArrayAppend( result.files, {
+						  name = lex.name
+						, path = artifact.name & "/" & version & "/" & lex.name
+					} );
+				}
+			}
+		}
+
+		return result;
+	}
+
+	private function _namesFromListing( lexFiles ) {
+		var names = {};
+
+		for ( var i=1; i<=QueryRecordCount( arguments.lexFiles ); i++ ) {
+			names[ arguments.lexFiles.name[ i ] ] = true;
+		}
+
+		return names;
+	}
+
+	// remembers where the files of the extension meta that only exist in the maven layout are
+	private function _setMavenPaths( mavenFiles, flatNames, meta ) {
+		// when part of the layout could not be listed, keep what we know already
+		var paths = arguments.mavenFiles.complete ? {} : variables._mavenPaths;
+		var inMeta = _mapExtensionQueryByFilename( arguments.meta );
+
+		for ( var mavenFile in arguments.mavenFiles.files ) {
+			if ( StructKeyExists( inMeta, mavenFile.name ) && !StructKeyExists( arguments.flatNames, mavenFile.name ) ) {
+				paths[ mavenFile.name ] = mavenFile.path;
+			}
+		}
+
+		variables._mavenPaths = paths;
+	}
+
+	/**
+	 * Adds the files from the Maven layout the extension meta doesn't have yet. The Maven layout also holds
+	 * older versions (copied over from the flat bucket, partly under a different file name), so a file is
+	 * only added when its id and version are not known yet. Files found to be known are not looked at again
+	 * until the next restart.
+	 */
+	private function _addMavenLexFiles( meta, mavenFiles, flatNames ) {
+		var changed       = false;
+		var knownFiles    = {};
+		var knownVersions = {};
+
+		for ( var i=1; i<=QueryRecordCount( arguments.meta ); i++ ) {
+			knownFiles   [ arguments.meta.filename[ i ] ] = true;
+			knownVersions[ arguments.meta.id[ i ] & "|" & arguments.meta.version[ i ] ] = true;
+		}
+
+		for ( var mavenFile in arguments.mavenFiles ) {
+			if (    StructKeyExists( knownFiles, mavenFile.name )
+				 || StructKeyExists( arguments.flatNames, mavenFile.name )
+				 || StructKeyExists( variables._mavenSkipped, mavenFile.name )
+			) {
+				continue;
+			}
+
+			var result = _addLexFile(
+				  fileName           = mavenFile.name
+				, extensionMetaQuery = arguments.meta
+				, remoteFile         = _withTrailingSlash( getMavenRoot() ) & mavenFile.path
+				, knownVersions      = knownVersions
+			);
+
+			if ( result == "added" ) {
+				changed = true;
+			} else if ( result == "known" ) {
+				variables._mavenSkipped[ mavenFile.name ] = true;
+			}
+		}
+
+		return changed;
+	}
+
+	private function _withTrailingSlash( path ) {
+		return Right( arguments.path, 1 ) == "/" ? arguments.path : arguments.path & "/";
+	}
+
 	// this happens once at startup / init
 	private function _readExistingMetaFileFromS3() {
 		var metaFile = getS3Root() & "/extensions.json";
@@ -226,13 +385,26 @@ component accessors=true {
 		return mapped;
 	}
 
-	private function _addLexFile( fileName, extensionMetaQuery ) {
+	/**
+	 * returns "added", "failed" or, when knownVersions is passed and the id and version of the file are
+	 * in there already, "known" (the file is not added)
+	 */
+	private function _addLexFile( fileName, extensionMetaQuery, remoteFile="", struct knownVersions ) {
 		SystemOutput( "Loading new extension file [#arguments.fileName#] from S3.", true );
 
 		try {
-			var tmpFile  = _copyRemoteFileToTmpFile( arguments.fileName );
+			var tmpFile  = _copyRemoteFileToTmpFile( arguments.fileName, arguments.remoteFile );
 			var qryCols  = ListToArray( arguments.extensionMetaQuery.columnList );
 			var extMeta  = _initExtensionMetaFromManifest( tmpFile, qryCols );
+
+			if ( StructKeyExists( arguments, "knownVersions" ) ) {
+				if ( StructKeyExists( arguments.knownVersions, extMeta.id & "|" & extMeta.version ) ) {
+					SystemOutput( "Extension file [#arguments.fileName#] has the same id and version as a known extension, ignoring it.", true );
+					_deleteTmpFile( tmpFile );
+					return "known";
+				}
+				arguments.knownVersions[ extMeta.id & "|" & extMeta.version ] = true;
+			}
 
 			extMeta.filename        = arguments.fileName;
 			extMeta.versionSortable = Len( extMeta.version ) ? VersionUtils::sortableVersionString( extMeta.version ) : "";
@@ -243,15 +415,22 @@ component accessors=true {
 			QueryAddRow( arguments.extensionMetaQuery, extMeta );
 
 			_processExtensionJars( tmpFile );
+			_deleteTmpFile( tmpFile );
 
-			try {
-				FileDelete( tmpFile );
-			} catch( any e ) {
-				SystemOutput( e, true );
-			}
+			return "added";
 		} catch( any e ) {
 			// for now, just to get through them all!
-			SystemOutput( "Error processing lex file: [#arguments.fileName#]", true );
+			SystemOutput( "Error processing lex file: [#arguments.fileName#]: #e.message#", true );
+		}
+
+		return "failed";
+	}
+
+	private function _deleteTmpFile( tmpFile ) {
+		try {
+			FileDelete( arguments.tmpFile );
+		} catch( any e ) {
+			SystemOutput( e, true );
 		}
 	}
 
@@ -263,10 +442,10 @@ component accessors=true {
 		return mf.main ?: {};
 	}
 
-	private function _copyRemoteFileToTmpFile( fileName ) {
-		var remoteFile = getS3Root() & "/" & arguments.fileName;
+	private function _copyRemoteFileToTmpFile( fileName, remoteFile="" ) {
+		var source  = Len( arguments.remoteFile ) ? arguments.remoteFile : getS3Root() & "/" & arguments.fileName;
 		var tmpFile = GetTempFile( GetTempDirectory(), "lexfile", Listlast( arguments.fileName, "." ) );
-		FileCopy( remoteFile, tmpFile );
+		FileCopy( source, tmpFile );
 		return tmpFile;
 	}
 
@@ -418,18 +597,11 @@ component accessors=true {
 		return stripped;
 	}
 
-	private function _removeRedundantExtensions( cachedExts, lexFiles ) {
+	private function _removeRedundantExtensions( cachedExts, knownNames ) {
 		var changed = false;
 
 		for( var i=QueryRecordCount( arguments.cachedExts ); i>0; i-- ){
-			var found = false;
-			for( var f in lexFiles ) {
-				if ( f.name == arguments.cachedExts.filename[ i ] ) {
-					found = true;
-					break;
-				}
-			}
-			if ( !found ) {
+			if ( !StructKeyExists( arguments.knownNames, arguments.cachedExts.filename[ i ] ) ) {
 				changed = true;
 				SystemOutput( "Deleting [#arguments.cachedExts.filename[ i ]#] extension from cached query as it no longer exists in our lex file lookup.", true );
 				QueryDeleteRow( arguments.cachedExts, i );
