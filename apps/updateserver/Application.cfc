@@ -57,6 +57,10 @@ component {
 		}
 	}
 
+	private string function _withTrailingSlash( required string path ) {
+		return Right( arguments.path, 1 ) == "/" ? arguments.path : arguments.path & "/";
+	}
+
 	function _loadServices() {
 		setting requesttimeout=600;
 
@@ -64,11 +68,15 @@ component {
 		var coreCdnUrl   = server.system.environment.S3_CORE_CDN_URL       ?: "https://cdn.lucee.org/";
 		var extS3Root    = server.system.environment.S3_EXTENSIONS_ROOT    ?: "s3:///extension-downloads/";
 		var extCdnUrl    = server.system.environment.S3_EXTENSIONS_CDN_URL ?: "https://ext.lucee.org/";
+		// LDEV-6789: extensions published to the Maven layout of the core bucket: <coreS3Root><extMavenPath><artifactId>/<version>/
+		var extMavenPath = server.system.environment.S3_EXTENSIONS_MAVEN_PATH ?: "org/lucee/";
 		var bundleS3Root = server.system.environment.S3_BUNDLES_ROOT       ?: "s3:///bundle-download/";
 		var bundleCdnUrl = server.system.environment.S3_BUNDLES_CDN_URL    ?: "https://bundle.lucee.org/";
 
 		var extMetaReader = new services.ExtensionMetadataReader(
-			s3root = extS3Root
+			  s3root      = extS3Root
+			, mavenRoot   = Len( extMavenPath ) ? _withTrailingSlash( coreS3Root ) & extMavenPath : ""
+			, mavenCdnUrl = Len( extMavenPath ) ? _withTrailingSlash( coreCdnUrl ) & extMavenPath : ""
 		);
 
 		var jiraChangelogService = new services.JiraChangelogService(
