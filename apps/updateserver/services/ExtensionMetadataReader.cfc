@@ -119,6 +119,12 @@ component accessors=true {
 				extensions = _filterByCoreVersion( extensions, arguments.coreVersion );
 			}
 
+			// LDEV-6789: filter by release type first, so the version an extension is listed with is the newest one of
+			// that type (the newest final for "release"), and its older versions are of that type too
+			if ( arguments.type != "all" ) {
+				_filterByReleaseType( extensions, arguments.type );
+			}
+
 			if ( !arguments.all ) {
 				extensions = _stripAllButLatestVersions( extensions );
 				// After grouping to latest version, sort by name (case-insensitive, and versionSortable desc for tie-breaker)
@@ -132,10 +138,6 @@ component accessors=true {
 				} );
 			}
 
-			if ( arguments.type != "all" ) {
-				_filterByReleaseType( extensions, arguments.type );
-			}
-
 			if ( !arguments.withLogo ) {
 				_stripExtensionLogos( extensions );
 			}
@@ -145,12 +147,18 @@ component accessors=true {
 		return variables._simpleCache[ cacheKey ];
 	}
 
+	/**
+	 * The details of an extension. Without a version (or "latest") that is the newest version of the given type
+	 * (see list()) that fits the core version, "release" being the newest final. A version that is given
+	 * explicitly is returned as it is, whatever its type.
+	 */
 	public function getExtensionDetail(
 		  required string  id
 		,          string  version      = "latest"
 		,          boolean flush        = false
 		,          boolean withLogo     = false
-		,          string  coreVersion  = coreVersion
+		,          string  coreVersion  = ""
+		,          string  type         = "all"
 	) {
 		if ( !IsQuery( variables.extensionMeta ?: "" ) || arguments.flush ) {
 			loadMeta();
@@ -159,7 +167,7 @@ component accessors=true {
 
 		if ( StructKeyExists( mapped, arguments.id ) ) {
 			if ( arguments.version == "latest" || isEmpty( arguments.version ) ) {
-				arguments.version = _getLatestversion( mapped[ arguments.id ], arguments.coreVersion );
+				arguments.version = _getLatestVersion( mapped[ arguments.id ], arguments.coreVersion, arguments.type );
 			}
 			if ( StructKeyExists( mapped[ arguments.id ], arguments.version ) ) {
 				var ext = StructCopy( mapped[ arguments.id ][ arguments.version ] );
@@ -748,31 +756,32 @@ component accessors=true {
 
 	private function _filterByReleaseType( extensions, type ) {
 		for( var i=arguments.extensions.recordcount; i>=1; i-- ) {
-			switch( arguments.type ) {
-				case "snapshot":
-					if( !FindNoCase( '-SNAPSHOT', arguments.extensions.version[ i ] ) ) {
-						QueryDeleteRow( arguments.extensions, i );
-					}
-				break;
-				case "abc":
-					if(    !FindNoCase( '-ALPHA', arguments.extensions.version[ i ] )
-						&& !FindNoCase( '-BETA' , arguments.extensions.version[ i ] )
-						&& !FindNoCase( '-RC'   , arguments.extensions.version[ i ] )
-					) {
-						QueryDeleteRow( arguments.extensions, i );
-					}
-				break;
-				case "release":
-					if(    FindNoCase( '-ALPHA'   , arguments.extensions.version[ i ] )
-						|| FindNoCase( '-BETA'    , arguments.extensions.version[ i ] )
-						|| FindNoCase( '-RC'      , arguments.extensions.version[ i ] )
-						|| FindNoCase( '-SNAPSHOT', arguments.extensions.version[ i ] )
-					) {
-						QueryDeleteRow( arguments.extensions, i );
-					}
-				break;
+			if ( !_matchesReleaseType( arguments.extensions.version[ i ], arguments.type ) ) {
+				QueryDeleteRow( arguments.extensions, i );
 			}
 		}
+	}
+
+	/**
+	 * Is a version of the given release type? "snapshot": only snapshots, "abc": only alphas, betas and release
+	 * candidates, "release": finals only (none of the above), any other type, including "all": every version.
+	 */
+	private boolean function _matchesReleaseType( required string version, required string type ) {
+		switch( arguments.type ) {
+			case "snapshot":
+				return FindNoCase( '-SNAPSHOT', arguments.version ) > 0;
+			case "abc":
+				return FindNoCase( '-ALPHA', arguments.version ) > 0
+					|| FindNoCase( '-BETA' , arguments.version ) > 0
+					|| FindNoCase( '-RC'   , arguments.version ) > 0;
+			case "release":
+				return FindNoCase( '-ALPHA'   , arguments.version ) == 0
+					&& FindNoCase( '-BETA'    , arguments.version ) == 0
+					&& FindNoCase( '-RC'      , arguments.version ) == 0
+					&& FindNoCase( '-SNAPSHOT', arguments.version ) == 0;
+		}
+
+		return true;
 	}
 
 	private function _stripExtensionLogos( extensions, type ) {
@@ -851,14 +860,29 @@ component accessors=true {
 		return filtered;
 	}
 
-	private function _getLatestVersion( extVersions, coreVersion ) {
-		if ( len( arguments.coreVersion ) == 0 ) return arguments.extVersions._latest;
-		var cv = listToArray( arguments.coreVersion, "." );
+	/**
+	 * The newest version of the extension of the given release type that fits the core version, the versions are
+	 * in the order of the extension meta, newest first. An empty string when there is no version of that type.
+	 */
+	private function _getLatestVersion( extVersions, coreVersion, type="all" ) {
+		if ( len( arguments.coreVersion ) == 0 && arguments.type == "all" ) return arguments.extVersions._latest;
+
+		var cv          = listToArray( arguments.coreVersion, "." );
+		var typeMatched = false;
+
 		loop collection="#arguments.extVersions#" key="local.k" value="local.v" {
 			if (k == "_latest") continue;
+			if ( !_matchesReleaseType( k, arguments.type ) ) continue;
+			typeMatched = true;
+			if ( len( arguments.coreVersion ) == 0 ) return k;
 			if ( services.versionUtils::checkVersionGTE( v.minCoreVersion, cv[ 1 ], cv[ 2 ], cv[ 3 ], cv[ 4 ] ) )
 				return k;
 		}
-		throw "No extension version available for [#arguments.coreVersion#]";
-	};
+
+		if ( typeMatched ) {
+			throw "No extension version available for [#arguments.coreVersion#]";
+		}
+
+		return "";
+	}
 }

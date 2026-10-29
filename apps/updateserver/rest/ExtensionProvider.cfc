@@ -50,6 +50,7 @@ component {
 		,          string  version  = ""       restargsource="url"
 		,          string  coreVersion = ""    restargsource="url"
 		,          boolean flush    = false    restargsource="url"
+		,          string  type     = "release" restargsource="url" // the type of version to answer with when no version is given
 	){
 		var ext = metaReader.getExtensionDetail(
 			  id       	    = arguments.id
@@ -57,6 +58,7 @@ component {
 			, version       = arguments.version
 			, coreVersion   = arguments.coreVersion
 			, flush         = arguments.flush
+			, type          = arguments.type
 		);
 
 		if ( StructCount( ext ) ) {
@@ -87,6 +89,7 @@ component {
 		,          string  version = ""     restargsource="url"
 		,          string  coreVersion = "" restargsource="url"
 		,          boolean flush   = false  restargsource="url"
+		,          string  type    = "release" restargsource="url" // the type of version to answer with when no version is given
 	) {
 
 		var ext = metaReader.getExtensionDetail(
@@ -95,6 +98,7 @@ component {
 			, coreVersion   = arguments.coreVersion
 			, flush    = arguments.flush
 			, withLogo = false
+			, type     = arguments.type
 		);
 
 		if ( StructCount( ext ) ) {
@@ -117,6 +121,7 @@ component {
 		,          string  version = ""     restargsource="url"
 		,          string  coreVersion = "" restargsource="url"
 		,          boolean flush   = false  restargsource="url"
+		,          string  type    = "release" restargsource="url" // the type of version to answer with when no version is given
 	) {
 
 		var ext = metaReader.getExtensionDetail(
@@ -125,6 +130,7 @@ component {
 			, coreVersion   = arguments.coreVersion
 			, flush    = arguments.flush
 			, withLogo = false
+			, type     = arguments.type
 		);
 
 		if ( StructCount( ext ) ) {
