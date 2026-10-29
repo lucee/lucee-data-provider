@@ -4,14 +4,24 @@ component accessors=true {
 	// LDEV-6789: extensions published only to the Maven layout (<mavenRoot>/<artifactId>/<version>/<artifactId>-<version>.lex)
 	property name="mavenRoot"             type="string" default="";
 	property name="mavenCdnUrl"           type="string" default="";
+	// LDEV-6789: extensions published to Maven repositories (Central, snapshots, Lucee repository), see MavenExtensionSource
+	property name="mavenSource"           type="any";
+	property name="fetchThreads"          type="numeric" default=5; // extension files downloaded and read at the same time
 	property name="extensionMeta"         type="query";
 	property name="extensionVersions"     type="struct";
 	property name="bundleDownloadService" type="any";
 
 	// LDEV-6789: file name > path relative to mavenRoot, for the files that are not in the flat bucket
 	variables._mavenPaths   = {};
-	// LDEV-6789: maven files already checked and found to be known (same id and version)
-	variables._mavenSkipped = {};
+	// LDEV-6789: file name > { artifact, version, repos } for the files that are only available from a Maven repository
+	variables._mavenRemote  = {};
+	// LDEV-6789: what was found out about the maven files, kept in <s3root>/extensions-maven.json so it survives a restart
+	//   skipped:     maven files found to be known already (same id and version), not downloaded again
+	//   artifactIds: artifact > extension id, so known versions can be skipped without downloading the file
+	variables._mavenState        = { skipped={}, artifactIds={} };
+	variables._mavenStateLoaded  = false;
+	variables._mavenStateChanged = false;
+	variables._fetchBatchSize    = 20;
 
 	reset();
 
@@ -25,11 +35,15 @@ component accessors=true {
 			var existingByFile = _mapExtensionQueryByFilename( meta );
 			var lexFiles       = _listLexFilesFromBucket();
 			var mavenFiles     = _listMavenLexFiles();
+			var remoteFiles    = _listRemoteMavenFiles();
 			var metaChanged    = false;
+			var timeoutSecs    = 600;
+			var rebuild        = meta.recordCount == 0;
 
 			if (meta.recordcount == 0){ 
 				// rebuilding the index takes a while as all extensions need to be re-downloaded and processed
-				setting requesttimeout=Max( 600, ( lexFiles.recordcount + ArrayLen( mavenFiles.files ) ) * 4 ); // was the string "n*4", which can't be cast to a number
+				timeoutSecs = Max( 600, ( lexFiles.recordcount + ArrayLen( mavenFiles.files ) + ArrayLen( remoteFiles.files ) ) * 4 ); // was the string "n*4", which can't be cast to a number
+				setting requesttimeout=timeoutSecs;
 			}
 
 			for( var lexFile in lexFiles ) {
@@ -42,20 +56,28 @@ component accessors=true {
 
 			var knownNames = _namesFromListing( lexFiles );
 
-			// LDEV-6789: extensions are published to the Maven layout only, add what the flat bucket doesn't have
-			if ( ArrayLen( mavenFiles.files ) ) {
-				metaChanged = _addMavenLexFiles( meta, mavenFiles.files, knownNames ) || metaChanged;
-				_setMavenPaths( mavenFiles, knownNames, meta );
-				for ( var mavenFile in mavenFiles.files ) {
-					knownNames[ mavenFile.name ] = true;
+			// LDEV-6789: extensions are published to Maven only, add what the flat bucket doesn't have
+			// the files of the Maven folder of our bucket come first, so they are preferred over the ones of the Maven repositories
+			var candidates = _mavenCandidates( mavenFiles.files, remoteFiles.files );
+
+			if ( StructCount( candidates ) ) {
+				metaChanged = _addMavenCandidates( meta, candidates, knownNames, timeoutSecs, rebuild ) || metaChanged;
+				_setMavenLocations( candidates, mavenFiles.complete, remoteFiles.complete, knownNames, meta );
+				for ( var name in candidates ) {
+					knownNames[ name ] = true;
 				}
-			} else if ( mavenFiles.complete ) {
-				variables._mavenPaths = {};
+			} else {
+				if ( mavenFiles.complete ) {
+					variables._mavenPaths = {};
+				}
+				if ( remoteFiles.complete ) {
+					variables._mavenRemote = {};
+				}
 			}
 
 			// protect from disaster of accidentally not fetching the lex files
-			// (and from dropping the maven extensions when the maven layout could not be listed)
-			if ( QueryRecordCount( lexFiles ) > 100 && mavenFiles.complete ) {
+			// (and from dropping the maven extensions when the maven sources could not be listed)
+			if ( QueryRecordCount( lexFiles ) > 100 && mavenFiles.complete && remoteFiles.complete ) {
 				metaChanged = _removeRedundantExtensions( meta, knownNames ) || metaChanged;
 			}
 
@@ -152,14 +174,27 @@ component accessors=true {
 	}
 
 	/**
-	 * The url to download an extension file from. Files that are only available in the Maven layout (LDEV-6789)
-	 * are served from the Maven cdn url, everything else from the given default (flat extensions cdn) url.
+	 * The url to download an extension file from. Files that are only available in the Maven folder of our bucket
+	 * (LDEV-6789) are served from the Maven cdn url, files only available from a Maven repository from there,
+	 * everything else from the given default (flat extensions cdn) url.
 	 */
 	public string function getDownloadUrl( required string fileName, required string defaultBaseUrl ) {
 		var mavenPath = variables._mavenPaths[ arguments.fileName ] ?: "";
 
 		if ( Len( mavenPath ) && Len( getMavenCdnUrl() ) ) {
 			return _withTrailingSlash( getMavenCdnUrl() ) & mavenPath;
+		}
+
+		var remote = variables._mavenRemote[ arguments.fileName ] ?: "";
+
+		if ( IsStruct( remote ) ) {
+			var resolved = getMavenSource().getFileUrl( remote.artifact, remote.version, remote.repos );
+
+			if ( Len( resolved ) ) {
+				return resolved;
+			}
+
+			SystemOutput( "Could not resolve the download url of [#arguments.fileName#] in the maven repositories.", true );
 		}
 
 		return arguments.defaultBaseUrl & arguments.fileName;
@@ -258,8 +293,10 @@ component accessors=true {
 
 				if ( lex.type == "file" && lex.name == artifact.name & "-" & version & ".lex" ) {
 					ArrayAppend( result.files, {
-						  name = lex.name
-						, path = artifact.name & "/" & version & "/" & lex.name
+						  name     = lex.name
+						, path     = artifact.name & "/" & version & "/" & lex.name
+						, artifact = artifact.name
+						, version  = version
 					} );
 				}
 			}
@@ -278,60 +315,229 @@ component accessors=true {
 		return names;
 	}
 
-	// remembers where the files of the extension meta that only exist in the maven layout are
-	private function _setMavenPaths( mavenFiles, flatNames, meta ) {
-		// when part of the layout could not be listed, keep what we know already
-		var paths = arguments.mavenFiles.complete ? {} : variables._mavenPaths;
-		var inMeta = _mapExtensionQueryByFilename( arguments.meta );
+	/**
+	 * LDEV-6789: the extension files of the Maven repositories, the same structs as _listMavenLexFiles() returns
+	 * (with repos instead of a path). "complete" is false when part of the repositories could not be listed.
+	 */
+	private struct function _listRemoteMavenFiles() {
+		var result = { files=[], complete=true };
 
-		for ( var mavenFile in arguments.mavenFiles.files ) {
-			if ( StructKeyExists( inMeta, mavenFile.name ) && !StructKeyExists( arguments.flatNames, mavenFile.name ) ) {
-				paths[ mavenFile.name ] = mavenFile.path;
-			}
+		if ( !IsObject( getMavenSource() ?: "" ) || !getMavenSource().hasRepos() ) {
+			return result;
 		}
 
-		variables._mavenPaths = paths;
+		try {
+			result = getMavenSource().listExtensions();
+		} catch ( any e ) {
+			SystemOutput( "Error listing the maven repositories: #e.message#", true );
+			result = { files=[], complete=false };
+		}
+
+		return result;
 	}
 
 	/**
-	 * Adds the files from the Maven layout the extension meta doesn't have yet. The Maven layout also holds
-	 * older versions (copied over from the flat bucket, partly under a different file name), so a file is
-	 * only added when its id and version are not known yet. Files found to be known are not looked at again
-	 * until the next restart.
+	 * All the files of the maven sources by file name. A file that is in the Maven folder of our bucket and in
+	 * a Maven repository is taken from our bucket.
 	 */
-	private function _addMavenLexFiles( meta, mavenFiles, flatNames ) {
+	private struct function _mavenCandidates( required array bucketFiles, required array remoteFiles ) {
+		var candidates = [:];
+
+		for ( var file in arguments.bucketFiles ) {
+			candidates[ file.name ] = { name=file.name, artifact=file.artifact, version=file.version, source="bucket", path=file.path };
+		}
+
+		for ( var file in arguments.remoteFiles ) {
+			if ( !StructKeyExists( candidates, file.name ) ) {
+				candidates[ file.name ] = { name=file.name, artifact=file.artifact, version=file.version, source="repo", repos=file.repos };
+			}
+		}
+
+		return candidates;
+	}
+
+	// remembers where the files of the extension meta that only exist in the maven sources are
+	private function _setMavenLocations( candidates, bucketComplete, remoteComplete, flatNames, meta ) {
+		// when part of a source could not be listed, keep what we know already
+		var paths  = arguments.bucketComplete ? {} : variables._mavenPaths;
+		var remote = arguments.remoteComplete ? {} : variables._mavenRemote;
+		var inMeta = _mapExtensionQueryByFilename( arguments.meta );
+
+		for ( var name in arguments.candidates ) {
+			var candidate = arguments.candidates[ name ];
+
+			if ( !StructKeyExists( inMeta, name ) || StructKeyExists( arguments.flatNames, name ) ) {
+				continue;
+			}
+
+			if ( candidate.source == "bucket" ) {
+				paths[ name ] = candidate.path;
+			} else {
+				remote[ name ] = { artifact=candidate.artifact, version=candidate.version, repos=candidate.repos };
+			}
+		}
+
+		variables._mavenPaths  = paths;
+		variables._mavenRemote = remote;
+	}
+
+	/**
+	 * Adds the files from the maven sources the extension meta doesn't have yet. The Maven sources also hold
+	 * older versions (copied over from the flat bucket, partly under a different file name), so a file is
+	 * only added when its id and version are not known yet. Files found to be known are remembered (also
+	 * after a restart) and not looked at again.
+	 *
+	 * To not download all the files that are known already, the id of an extension is learned from the newest
+	 * file of each artifact first, the older versions of that id are then skipped when known without a download.
+	 * The files are downloaded and read in parallel, in batches.
+	 */
+	private function _addMavenCandidates( meta, candidates, flatNames, timeoutSecs, rebuild ) {
 		var changed       = false;
 		var knownFiles    = {};
 		var knownVersions = {};
+		var pending       = [];
+
+		_loadMavenState( arguments.rebuild );
 
 		for ( var i=1; i<=QueryRecordCount( arguments.meta ); i++ ) {
 			knownFiles   [ arguments.meta.filename[ i ] ] = true;
 			knownVersions[ arguments.meta.id[ i ] & "|" & arguments.meta.version[ i ] ] = true;
 		}
 
-		for ( var mavenFile in arguments.mavenFiles ) {
-			if (    StructKeyExists( knownFiles, mavenFile.name )
-				 || StructKeyExists( arguments.flatNames, mavenFile.name )
-				 || StructKeyExists( variables._mavenSkipped, mavenFile.name )
+		for ( var name in arguments.candidates ) {
+			if (    !StructKeyExists( knownFiles, name )
+				 && !StructKeyExists( arguments.flatNames, name )
+				 && !StructKeyExists( variables._mavenState.skipped, name )
 			) {
-				continue;
+				ArrayAppend( pending, arguments.candidates[ name ] );
+			}
+		}
+
+		pending = _skipKnownVersions( pending, knownVersions );
+
+		if ( ArrayLen( pending ) ) {
+			setting requesttimeout=Max( arguments.timeoutSecs, ArrayLen( pending ) * 4 );
+
+			// the newest version first, the first of every artifact we don't know the id of yet goes first
+			ArraySort( pending, function( a, b ) {
+				return Compare( VersionUtils::sortableVersionString( b.version ), VersionUtils::sortableVersionString( a.version ) );
+			} );
+
+			var first = [];
+			var rest  = [];
+			var seen  = {};
+
+			for ( var candidate in pending ) {
+				if ( StructKeyExists( variables._mavenState.artifactIds, candidate.artifact ) || StructKeyExists( seen, candidate.artifact ) ) {
+					ArrayAppend( rest, candidate );
+				} else {
+					seen[ candidate.artifact ] = true;
+					ArrayAppend( first, candidate );
+				}
 			}
 
-			var result = _addLexFile(
-				  fileName           = mavenFile.name
-				, extensionMetaQuery = arguments.meta
-				, remoteFile         = _withTrailingSlash( getMavenRoot() ) & mavenFile.path
-				, knownVersions      = knownVersions
-			);
+			changed = _fetchAndAdd( arguments.meta, first, knownVersions );
+			rest    = _skipKnownVersions( rest, knownVersions );
+			changed = _fetchAndAdd( arguments.meta, rest, knownVersions ) || changed;
+		}
 
-			if ( result == "added" ) {
+		_saveMavenState();
+
+		return changed;
+	}
+
+	// drops the files of which the id of the artifact is known and the version is known too
+	private array function _skipKnownVersions( required array candidates, required struct knownVersions ) {
+		var remaining = [];
+
+		for ( var candidate in arguments.candidates ) {
+			var id = variables._mavenState.artifactIds[ candidate.artifact ] ?: "";
+
+			if ( Len( id ) && StructKeyExists( arguments.knownVersions, id & "|" & candidate.version ) ) {
+				_skipMavenFile( candidate.name );
+			} else {
+				ArrayAppend( remaining, candidate );
+			}
+		}
+
+		return remaining;
+	}
+
+	private function _skipMavenFile( required string fileName ) {
+		SystemOutput( "Extension file [#arguments.fileName#] has the same id and version as a known extension, ignoring it.", true );
+		variables._mavenState.skipped[ arguments.fileName ] = true;
+		variables._mavenStateChanged = true;
+	}
+
+	// downloads and reads the files in batches, adds them one by one (the extension meta isn't thread safe)
+	private function _fetchAndAdd( required query meta, required array candidates, required struct knownVersions ) {
+		var changed = false;
+		var cols    = ListToArray( arguments.meta.columnList );
+		var count   = ArrayLen( arguments.candidates );
+
+		for ( var start=1; start<=count; start+=variables._fetchBatchSize ) {
+			var batch   = ArraySlice( arguments.candidates, start, Min( variables._fetchBatchSize, count - start + 1 ) );
+			var fetched = StructNew( "sync" );
+
+			ArrayEach( batch, function( candidate, index ) {
+				fetched[ arguments.index ] = _fetchLexFile( arguments.candidate, cols );
+			}, true, getFetchThreads() );
+
+			for ( var i=1; i<=ArrayLen( batch ); i++ ) {
+				var candidate = batch[ i ];
+				var result    = fetched[ i ];
+
+				if ( StructKeyExists( result, "error" ) ) {
+					// will be tried again with the next refresh
+					SystemOutput( "Error processing lex file: [#candidate.name#]: #result.error#", true );
+					continue;
+				}
+
+				var key = result.extMeta.id & "|" & result.extMeta.version;
+
+				if ( Len( result.extMeta.id ) && ( variables._mavenState.artifactIds[ candidate.artifact ] ?: "" ) != result.extMeta.id ) {
+					variables._mavenState.artifactIds[ candidate.artifact ] = result.extMeta.id;
+					variables._mavenStateChanged = true;
+				}
+
+				if ( StructKeyExists( arguments.knownVersions, key ) ) {
+					_skipMavenFile( candidate.name );
+					_deleteTmpFile( result.tmpFile );
+					continue;
+				}
+
+				arguments.knownVersions[ key ] = true;
+				_storeLexFile( arguments.meta, candidate.name, result );
 				changed = true;
-			} else if ( result == "known" ) {
-				variables._mavenSkipped[ mavenFile.name ] = true;
 			}
 		}
 
 		return changed;
+	}
+
+	private function _loadMavenState( required boolean rebuild ) {
+		if ( arguments.rebuild ) {
+			// the extension meta is built from scratch, so is what we know about the files
+			variables._mavenState = { skipped={}, artifactIds={} };
+			variables._mavenStateChanged = true;
+			variables._mavenStateLoaded  = true;
+		} else if ( !variables._mavenStateLoaded ) {
+			var stateFile = getS3Root() & "/extensions-maven.json";
+
+			if ( FileExists( stateFile ) ) {
+				var state = DeserializeJson( FileRead( stateFile ), false );
+
+				variables._mavenState = { skipped=state.skipped ?: {}, artifactIds=state.artifactIds ?: {} };
+			}
+			variables._mavenStateLoaded = true;
+		}
+	}
+
+	private function _saveMavenState() {
+		if ( variables._mavenStateChanged ) {
+			FileWrite( getS3Root() & "/extensions-maven.json", SerializeJson( variables._mavenState ) );
+			variables._mavenStateChanged = false;
+		}
 	}
 
 	private function _withTrailingSlash( path ) {
@@ -386,44 +592,75 @@ component accessors=true {
 	}
 
 	/**
-	 * returns "added", "failed" or, when knownVersions is passed and the id and version of the file are
-	 * in there already, "known" (the file is not added)
+	 * adds a file of the flat bucket, returns "added" or "failed"
 	 */
-	private function _addLexFile( fileName, extensionMetaQuery, remoteFile="", struct knownVersions ) {
+	private function _addLexFile( fileName, extensionMetaQuery ) {
 		SystemOutput( "Loading new extension file [#arguments.fileName#] from S3.", true );
 
-		try {
-			var tmpFile  = _copyRemoteFileToTmpFile( arguments.fileName, arguments.remoteFile );
-			var qryCols  = ListToArray( arguments.extensionMetaQuery.columnList );
-			var extMeta  = _initExtensionMetaFromManifest( tmpFile, qryCols );
+		var fetched = _fetchLexFile(
+			  { name=arguments.fileName, source="flat" }
+			, ListToArray( arguments.extensionMetaQuery.columnList )
+		);
 
-			if ( StructKeyExists( arguments, "knownVersions" ) ) {
-				if ( StructKeyExists( arguments.knownVersions, extMeta.id & "|" & extMeta.version ) ) {
-					SystemOutput( "Extension file [#arguments.fileName#] has the same id and version as a known extension, ignoring it.", true );
-					_deleteTmpFile( tmpFile );
-					return "known";
-				}
-				arguments.knownVersions[ extMeta.id & "|" & extMeta.version ] = true;
-			}
-
-			extMeta.filename        = arguments.fileName;
-			extMeta.versionSortable = Len( extMeta.version ) ? VersionUtils::sortableVersionString( extMeta.version ) : "";
-			extMeta.trial           = false; // "TODO"???
-			extMeta.releaseType     = Len( extMeta.releaseType ) ? extMeta.releaseType : "all";
-			extMeta.image           = _getLogoThumbnail( tmpFile );
-
-			QueryAddRow( arguments.extensionMetaQuery, extMeta );
-
-			_processExtensionJars( tmpFile );
-			_deleteTmpFile( tmpFile );
-
-			return "added";
-		} catch( any e ) {
+		if ( StructKeyExists( fetched, "error" ) ) {
 			// for now, just to get through them all!
-			SystemOutput( "Error processing lex file: [#arguments.fileName#]: #e.message#", true );
+			SystemOutput( "Error processing lex file: [#arguments.fileName#]: #fetched.error#", true );
+			return "failed";
 		}
 
-		return "failed";
+		_storeLexFile( arguments.extensionMetaQuery, arguments.fileName, fetched );
+
+		return "added";
+	}
+
+	/**
+	 * Gets a file (from the flat bucket, the Maven folder of our bucket or a Maven repository) and reads its
+	 * manifest and logo. Returns { tmpFile, extMeta } or, when that fails, { error }. Can run in parallel.
+	 */
+	private struct function _fetchLexFile( required struct candidate, required array cols ) {
+		var tmpFile = GetTempFile( GetTempDirectory(), "lexfile", ListLast( arguments.candidate.name, "." ) );
+
+		try {
+			switch ( arguments.candidate.source ) {
+				case "bucket":
+					FileCopy( _withTrailingSlash( getMavenRoot() ) & arguments.candidate.path, tmpFile );
+				break;
+				case "repo":
+					getMavenSource().download( arguments.candidate.artifact, arguments.candidate.version, arguments.candidate.repos, tmpFile );
+				break;
+				default:
+					FileCopy( getS3Root() & "/" & arguments.candidate.name, tmpFile );
+			}
+
+			var extMeta   = _initExtensionMetaFromManifest( tmpFile, arguments.cols );
+			extMeta.image = _getLogoThumbnail( tmpFile );
+
+			return { tmpFile=tmpFile, extMeta=extMeta };
+		} catch ( any e ) {
+			_deleteTmpFile( tmpFile );
+
+			return { error=e.message };
+		}
+	}
+
+	// adds a file got by _fetchLexFile() to the extension meta and registers its bundles
+	private function _storeLexFile( required query meta, required string fileName, required struct fetched ) {
+		var extMeta = arguments.fetched.extMeta;
+
+		extMeta.filename        = arguments.fileName;
+		extMeta.versionSortable = Len( extMeta.version ) ? VersionUtils::sortableVersionString( extMeta.version ) : "";
+		extMeta.trial           = false; // "TODO"???
+		extMeta.releaseType     = Len( extMeta.releaseType ) ? extMeta.releaseType : "all";
+
+		QueryAddRow( arguments.meta, extMeta );
+
+		try {
+			_processExtensionJars( arguments.fetched.tmpFile );
+		} catch ( any e ) {
+			SystemOutput( "Error registering the bundles of lex file: [#arguments.fileName#]: #e.message#", true );
+		}
+
+		_deleteTmpFile( arguments.fetched.tmpFile );
 	}
 
 	private function _deleteTmpFile( tmpFile ) {
@@ -440,13 +677,6 @@ component accessors=true {
 		} catch( any e ) {}
 
 		return mf.main ?: {};
-	}
-
-	private function _copyRemoteFileToTmpFile( fileName, remoteFile="" ) {
-		var source  = Len( arguments.remoteFile ) ? arguments.remoteFile : getS3Root() & "/" & arguments.fileName;
-		var tmpFile = GetTempFile( GetTempDirectory(), "lexfile", Listlast( arguments.fileName, "." ) );
-		FileCopy( source, tmpFile );
-		return tmpFile;
 	}
 
 	private function _initExtensionMetaFromManifest( lexFile, cols ) {

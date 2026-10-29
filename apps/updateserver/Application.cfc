@@ -61,6 +61,32 @@ component {
 		return Right( arguments.path, 1 ) == "/" ? arguments.path : arguments.path & "/";
 	}
 
+	/**
+	 * LDEV-6789: the Maven repositories extensions are discovered in, the ones Lucee core uses by default, set the
+	 * same way core does (comma separated urls). EXTENSIONS_MAVEN_REPOS_* take precedence, then the LUCEE_MVN_REPO_*
+	 * variables of core. A value of "none" disables a repository type, EXTENSIONS_MAVEN_REPOS_ENABLED=false all.
+	 */
+	private function _createMavenSource() {
+		var env = server.system.environment;
+
+		if ( !( env.EXTENSIONS_MAVEN_REPOS_ENABLED ?: true ) ) {
+			return "";
+		}
+
+		return new services.MavenExtensionSource(
+			  releaseRepos    = _mavenRepos( env.EXTENSIONS_MAVEN_REPOS_RELEASES  ?: env.LUCEE_MVN_REPO_RELEASES  ?: "https://repo1.maven.org/maven2/" )
+			, snapshotRepos   = _mavenRepos( env.EXTENSIONS_MAVEN_REPOS_SNAPSHOTS ?: env.LUCEE_MVN_REPO_SNAPSHOTS ?: "https://central.sonatype.com/repository/maven-snapshots/" )
+			, mixedRepos      = _mavenRepos( env.EXTENSIONS_MAVEN_REPOS_MIXED     ?: env.LUCEE_MVN_REPO_MIXED     ?: "https://maven.lucee-services.com/" )
+			, timeout         = Val( env.EXTENSIONS_MAVEN_TIMEOUT          ?: 20  )
+			, downloadTimeout = Val( env.EXTENSIONS_MAVEN_DOWNLOAD_TIMEOUT ?: 120 )
+			, maxThreads      = Val( env.EXTENSIONS_MAVEN_THREADS          ?: 10  )
+		);
+	}
+
+	private array function _mavenRepos( required string repos ) {
+		return Trim( arguments.repos ) == "none" ? [] : ListToArray( arguments.repos, "," );
+	}
+
 	function _loadServices() {
 		setting requesttimeout=600;
 
@@ -74,9 +100,11 @@ component {
 		var bundleCdnUrl = server.system.environment.S3_BUNDLES_CDN_URL    ?: "https://bundle.lucee.org/";
 
 		var extMetaReader = new services.ExtensionMetadataReader(
-			  s3root      = extS3Root
-			, mavenRoot   = Len( extMavenPath ) ? _withTrailingSlash( coreS3Root ) & extMavenPath : ""
-			, mavenCdnUrl = Len( extMavenPath ) ? _withTrailingSlash( coreCdnUrl ) & extMavenPath : ""
+			  s3root       = extS3Root
+			, mavenRoot    = Len( extMavenPath ) ? _withTrailingSlash( coreS3Root ) & extMavenPath : ""
+			, mavenCdnUrl  = Len( extMavenPath ) ? _withTrailingSlash( coreCdnUrl ) & extMavenPath : ""
+			, mavenSource  = _createMavenSource()
+			, fetchThreads = Val( server.system.environment.EXTENSIONS_MAVEN_FETCH_THREADS ?: 5 )
 		);
 
 		var jiraChangelogService = new services.JiraChangelogService(
