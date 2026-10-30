@@ -72,7 +72,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				}
 
 				expect( count ).toBe( 1 );
-				expect( reader.getDownloadUrl( "mail-1.1.0.8-RC.lex", cdnUrl ) ).toBe( cdnUrl & "mail-1.1.0.8-RC.lex" );
+				// LDEV-6795: Maven first, the flat file is served from the Maven layout, as the layout has that id and version
+				expect( reader.getDownloadUrl( "mail-1.1.0.8-RC.lex", cdnUrl ) )
+					.toBe( mavenCdn & "mail-extension/1.1.0.8-RC/mail-extension-1.1.0.8-RC.lex" );
 				expect( reader.getDownloadUrl( "mail-extension-1.1.0.8-RC.lex", cdnUrl ) ).toBe( cdnUrl & "mail-extension-1.1.0.8-RC.lex" );
 			});
 
@@ -93,8 +95,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 					.toBe( mavenCdn & "mail-extension/1.1.0.17/mail-extension-1.1.0.17.lex" );
 				expect( reader.getDownloadUrl( "ftp-extension-1.0.0.8.lex", cdnUrl ) )
 					.toBe( mavenCdn & "ftp-extension/1.0.0.8/ftp-extension-1.0.0.8.lex" );
+				// LDEV-6795: a flat file that is in the Maven layout too (same id and version, other file name) is served from the layout
 				expect( reader.getDownloadUrl( "mail-1.1.0.8-RC.lex", cdnUrl ) )
-					.toBe( cdnUrl & "mail-1.1.0.8-RC.lex" );
+					.toBe( mavenCdn & "mail-extension/1.1.0.8-RC/mail-extension-1.1.0.8-RC.lex" );
 			});
 
 			it( title="does not touch the maven layout when it is not configured", body=function() {

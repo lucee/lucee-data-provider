@@ -83,6 +83,13 @@ component {
 		);
 	}
 
+	// an environment variable of true or false, the default when it is not set or not a boolean
+	private boolean function _envBoolean( required string name, required boolean fallback ) {
+		var value = Trim( server.system.environment[ arguments.name ] ?: "" );
+
+		return IsBoolean( value ) ? value : arguments.fallback;
+	}
+
 	private array function _mavenRepos( required string repos ) {
 		return Trim( arguments.repos ) == "none" ? [] : ListToArray( arguments.repos, "," );
 	}
@@ -105,6 +112,15 @@ component {
 			, mavenCdnUrl  = Len( extMavenPath ) ? _withTrailingSlash( coreCdnUrl ) & extMavenPath : ""
 			, mavenSource  = _createMavenSource()
 			, fetchThreads = Val( server.system.environment.EXTENSIONS_MAVEN_FETCH_THREADS ?: 5 )
+			// LDEV-6795: extensions are served from the Maven layout first, with this on (the default) the ones that
+			// are not in there are served from the old flat files of S3 (S3_EXTENSIONS_ROOT) as the fallback. To be switched off
+			// (EXTENSIONS_FLAT_S3_FALLBACK=false) once the flat files are no longer needed.
+			, flatFallback         = _envBoolean( "EXTENSIONS_FLAT_S3_FALLBACK", true )
+			// LDEV-6795: the min core version for extensions packaged for Maven (no jars folder), which older Lucee versions
+			// can't load. Empty (the default): the min core version of the extension manifest is all there is.
+			, mavenOnlyMinCore     = Trim( server.system.environment.EXTENSIONS_MAVEN_ONLY_MIN_CORE ?: "" )
+			// LDEV-6795: how many extension files are read per load to find out their packaging (only done with the min core version above)
+			, packagingBackfillMax = Val( server.system.environment.EXTENSIONS_PACKAGING_BACKFILL_MAX ?: 200 )
 		);
 
 		var jiraChangelogService = new services.JiraChangelogService(

@@ -191,7 +191,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 
 				expect( count ).toBe( 1 );
 				expect( world.downloads ).notToInclude( releases & "org/lucee/mail-extension/1.1.0.18-RC/mail-extension-1.1.0.18-RC.lex" );
-				expect( reader.getDownloadUrl( "mail-1.1.0.18-RC.lex", cdnUrl ) ).toBe( cdnUrl & "mail-1.1.0.18-RC.lex" );
+				// LDEV-6795: Maven first, the flat file is served from the repository, which has that id and version
+				expect( reader.getDownloadUrl( "mail-1.1.0.18-RC.lex", cdnUrl ) )
+					.toBe( releases & "org/lucee/mail-extension/1.1.0.18-RC/mail-extension-1.1.0.18-RC.lex" );
 				expect( reader.getDownloadUrl( "mail-extension-1.1.0.18-RC.lex", cdnUrl ) ).toBe( cdnUrl & "mail-extension-1.1.0.18-RC.lex" );
 			});
 
