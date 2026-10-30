@@ -8,6 +8,8 @@ component {
 	variables.s3Root                = application.coreS3Root;
 	variables.cdnUrl                = application.coreCdnUrl;
 	variables.jiraChangelogService  = application.jiraChangelogService;
+	// LDEV-6796: the core versions and files, from the Maven layout first, the flat files of S3 as the fallback
+	variables.coreVersions          = application.coreVersions;
 
 	variables.providerLog = "update-provider";
 
@@ -58,10 +60,22 @@ component {
 
 
 
-			local.s3=new services.legacy.S3(variables.s3Root);
-			var versions=s3.getVersions();
+			var versions=variables.coreVersions.getVersions();
+
+			// LDEV-6796: only the versions the calling Lucee can load, all of them for ALL_VERSION
+			if(ALL_VERSION!=version.display)
+				versions=variables.coreVersions.filterForCaller(versions,version);
+
 			var keys=structKeyArray(versions);
 			arraySort(keys,"textnocase");
+
+			if(arrayLen(keys)==0)
+				return {
+					"type":"info",
+					"message":"There is no update available for your version (#version.display#).",
+					"otherVersions":[]
+				};
+
 			var latest = {};
 			latest.version = versions[keys[arrayLen(keys)]].version;
 			var latestVersion=toVersion(latest.version);
@@ -146,10 +160,7 @@ component {
 			string ioid="" restargsource="url")
 		httpmethod="GET" restpath="loader/{version}" {
 
-		createArtifactIfNecessary("jar",version);
-
-		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&"lucee-"&arguments.version&".jar";
+		redirectToCore("jar",arguments.version);
 		return;
 	}
 
@@ -162,10 +173,7 @@ component {
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="light/{version}" {
 
-		createArtifactIfNecessary("light",version);
-
-		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&"lucee-light-"&arguments.version&".jar";
+		redirectToCore("light",arguments.version);
 		return;
 	}
 
@@ -233,10 +241,7 @@ component {
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="download/{version}" {
 
-		createArtifactIfNecessary("lco",version);
-
-		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&arguments.version&".lco";
+		redirectToCore("lco",arguments.version);
 		return;
 	}
 
@@ -256,10 +261,7 @@ component {
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="war/{version}" {
 
-		createArtifactIfNecessary("war",version);
-
-		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&"lucee-"&arguments.version&".war";
+		redirectToCore("war",arguments.version);
 		return;
 	}
 
@@ -429,6 +431,7 @@ component {
 		httpmethod="GET" restpath="reset" {
 		new services.legacy.MavenRepo().reset();
 		new services.legacy.S3(variables.s3Root).reset();
+		variables.coreVersions.reset();
 		jiraChangelogService.updateIssuesAsync(); // async
 	}
 
@@ -440,29 +443,53 @@ component {
 		) httpmethod="GET" restpath="latest/{version}/{type}/{distribution}/{format}" {
 
 		try {
-			var s3 = new services.legacy.S3( variables.s3Root );
-			var versions = s3.getVersions();
+			var versions = variables.coreVersions.getVersions();
 
 			if ( arguments.type eq "all" )
 				arguments.type ="";
 			if ( arguments.version eq 0 )
 				arguments.version = "";
 
-			
-			var matchedVersion = services.VersionUtils::matchVersion( versions, arguments.type, 
-				arguments.version, arguments.distribution );  // i.e. 06.002.001.0048.000
+			// LDEV-6796: the version has to have the file, in the Maven layout or (the fallback) the flat files. If it hasn't, the next one is looked for
+			var candidates = versions;
+			var copied = false;
+			var matchedVersion = "";
+			var file = {};
 
-			if ( len( matchedVersion ) eq 0 ){
+			for ( var attempt=1; attempt<=10; attempt++ ) {
+				matchedVersion = services.VersionUtils::matchVersion( candidates, arguments.type,
+					arguments.version, arguments.distribution );  // i.e. 06.002.001.0048.000
+
+				if ( len( matchedVersion ) eq 0 )
+					break;
+
+				file = variables.coreVersions.resolveFile( arguments.distribution, candidates[ matchedVersion ].version );
+
+				// a flat file that is not there yet is not good enough here, it is only built for the downloads
+				if ( !structIsEmpty( file ) && ( file.source eq "maven" || file.present ) )
+					break;
+
+				file = {};
+
+				if ( !copied ) {
+					candidates = duplicate( versions, false );
+					copied = true;
+				}
+
+				structDelete( candidates, matchedVersion );
+			}
+
+			if ( len( matchedVersion ) eq 0 || structIsEmpty( file ) ){
 				header statuscode="404";
 				return "Requested version not found";
 			}
 			if ( len( arguments.format ) eq 0)
 				arguments.format = "redirect";
-			
+
 
 			var _version = versions[ matchedVersion ].version; // i.e 6.2.1.48-SNAPSHOT
 
-			var versionUrl = "https://cdn.lucee.org/#versions[ matchedVersion ][ arguments.distribution ]#";
+			var versionUrl = file.url;
 
 			switch (arguments.format){
 				case "redirect":
@@ -575,10 +602,7 @@ component {
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="express/{version}" {
 
-		createArtifactIfNecessary("express",version);
-
-		header statuscode="302" statustext="Found";
-		header name="Location" value=variables.cdnURL&"lucee-express-"&arguments.version&".zip";
+		redirectToCore("express",arguments.version);
 		return;
 	}
 
@@ -789,6 +813,27 @@ component {
 	    var file=listLast(path,'\/');
 	    directory filter=file name="local.res" directory=dir action="list";
 	    return res.recordcount==1?res.size:0;
+	}
+
+	/**
+	* LDEV-6796: redirects to the file of a type (jar, light, lco, war, express) of a version. The file in the Maven layout is the first
+	* choice, the flat file on S3 is only the fallback (it is built when it is not there yet), see CoreVersions.
+	*/
+	private function redirectToCore(required string type, required string version) {
+		var file=variables.coreVersions.resolveFile(type,version);
+
+		if(structIsEmpty(file)) {
+			content type="text/plain";
+			header statuscode="404" statustext="Not Found";
+			echo("artifact #encodeForHtml(type)# for version #encodeForHtml(version)# does not exist");
+			abort;
+		}
+
+		if(file.source=="flat")
+			createArtifactIfNecessary(type,version);
+
+		header statuscode="302" statustext="Found";
+		header name="Location" value=file.url;
 	}
 
 	private function createArtifactIfNecessary(type,version) {
