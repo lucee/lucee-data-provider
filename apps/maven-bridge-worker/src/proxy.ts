@@ -3,7 +3,7 @@ import { cfJsonDate, compareNoCase, containsNoCase, encodeForHtml, startsWithNoC
 import { checksumOfText, splitChecksum, type ChecksumStore, type ChecksumType } from "./checksum";
 import type { BridgeConfig } from "./config";
 import { isUpstreamNotFound } from "./errors";
-import { fetchAndFill, isFreshlyFilled, isImmutableArtifact, isStorableFile, revalidateFromSource, serveFromR2, type FillOptions } from "./r2";
+import { fetchAndFill, fillOnly, isImmutableArtifact, isStorableFile, serveFromR2, type FillOptions } from "./r2";
 import type { BridgeRegistry } from "./registry";
 import { USER_AGENT } from "./store";
 import type { BridgeSupport, ParsedPath, ParsedType } from "./support";
@@ -48,13 +48,6 @@ export interface ProxyContext {
 	bucket?: R2Bucket;
 	/** computes checksums the upstream does not have; undefined = never compute */
 	checksums?: ChecksumStore;
-	/** remembers revalidated SNAPSHOT objects in R2; undefined = revalidate once their fill time is older than the TTL */
-	freshness?: R2Freshness;
-}
-
-export interface R2Freshness {
-	isR2Fresh(key: string): Promise<boolean>;
-	markR2Fresh(key: string, ttlSeconds: number): void;
 }
 
 export async function invokePath(ctx: ProxyContext, cleanPath: string): Promise<Response> {
@@ -97,7 +90,8 @@ export async function invokePath(ctx: ProxyContext, cleanPath: string): Promise<
 
 /**
  * SNAPSHOT files the worker stores in R2: kept under their own key prefix (R2_SNAPSHOT_PREFIX)
- * so the bucket's lifecycle rule can expire them, and revalidated against their source.
+ * so the bucket's lifecycle rule can expire them. Like every stored file they are served as
+ * stored and never fetched from their source again (every build has its own file name).
  */
 export function isSnapshotFile(parsed: ParsedPath, fileName: string): boolean {
 	return !isImmutableArtifact(parsed.version ?? "", fileName) && isStorableFile(fileName);
@@ -132,18 +126,6 @@ export function r2KeysFor(config: BridgeConfig, support: BridgeSupport, parsed: 
 	return keys;
 }
 
-/**
- * Keys looked up in R2 for an artifact file. When the worker revalidates SNAPSHOT files, it only
- * uses its own copies below R2_SNAPSHOT_PREFIX: a SNAPSHOT copy under the plain Maven key would
- * never be revalidated nor expired, it is replaced by the next fill (see artifactFileResponse).
- */
-function r2LookupKeys(ctx: ProxyContext, support: BridgeSupport, parsed: ParsedPath, revalidate: boolean): string[] {
-	const keys = r2KeysFor(ctx.config, support, parsed);
-	if (!revalidate) return keys;
-	const maven = r2MavenKeyFor(ctx.config, support, parsed);
-	return keys.filter((k, i) => i === 0 || k !== maven);
-}
-
 /** URL of an upstream-mirror file at its source, "" when the source does not have it. */
 async function upstreamTarget(support: BridgeSupport, parsed: ParsedPath): Promise<string> {
 	// GitHub Releases (7.1+), then the Maven layout on the CDN, then the legacy flat CDN name
@@ -164,14 +146,10 @@ function fillOptions(ctx: ProxyContext, support: BridgeSupport): FillOptions {
 async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, parsed: ParsedPath): Promise<Response> {
 	const key = r2KeyFor(ctx.config, support, parsed);
 	const fileName = key.split("/").pop() ?? "";
-	// with fill-on-miss, stored SNAPSHOT files of upstream mirrors are revalidated against their source
-	const revalidate = support.hasUpstream() && ctx.config.r2FillOnMiss && isSnapshotFile(parsed, fileName);
+	// a stored file is served as stored: it is never checked against its source again
 	if (ctx.bucket) {
-		for (const candidate of r2LookupKeys(ctx, support, parsed, revalidate)) {
-			const fromR2 =
-				revalidate && candidate === key
-					? await mutableFromR2(ctx, support, parsed, key)
-					: await serveFromR2(ctx.bucket, candidate, ctx.request);
+		for (const candidate of r2KeysFor(ctx.config, support, parsed)) {
+			const fromR2 = await serveFromR2(ctx.bucket, candidate, ctx.request);
 			if (fromR2) return fromR2;
 		}
 	}
@@ -186,12 +164,9 @@ async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, p
 			return textResponse(404, TEXT, "Not found");
 		}
 
-		if (canFill(ctx) && (revalidate || shouldFill(ctx, parsed, key))) {
+		if (shouldFill(ctx, key)) {
 			const filled = await fetchAndFill(ctx.bucket!, key, target, ctx.waitUntil, fillOptions(ctx, support));
-			if (filled) {
-				if (revalidate) dropUnprefixedSnapshot(ctx, support, parsed, key);
-				return filled;
-			}
+			if (filled) return filled;
 		}
 		return redirectResponse(target);
 	}
@@ -215,64 +190,12 @@ async function artifactFileResponse(ctx: ProxyContext, support: BridgeSupport, p
 }
 
 /**
- * Once a SNAPSHOT file is stored below R2_SNAPSHOT_PREFIX, a copy under its plain Maven key
- * (stored before SNAPSHOT files had their own prefix, or copied in) is deleted: it is no longer
- * served while fill on miss is on, and the lifecycle rule does not cover it.
- */
-function dropUnprefixedSnapshot(ctx: ProxyContext, support: BridgeSupport, parsed: ParsedPath, key: string): void {
-	const maven = r2MavenKeyFor(ctx.config, support, parsed);
-	if (maven === key) return;
-	ctx.waitUntil(
-		ctx.bucket!.delete(maven).catch((e) => {
-			console.warn(`deleting the unprefixed SNAPSHOT copy [${maven}] failed`, e);
-		})
-	);
-}
-
-/**
- * A stored SNAPSHOT file (mutable: the same name is published again): served from R2 while it
- * is fresh (stored or revalidated less than R2_REVALIDATE_MINUTES ago), otherwise revalidated
- * with a conditional GET of its source first. When the source cannot be reached the stored
- * copy is served. Null (redirect logic) when R2 has no copy, or the copy is stale and the request
- * is a HEAD or Range request, which never fetch the whole file.
- */
-async function mutableFromR2(ctx: ProxyContext, support: BridgeSupport, parsed: ParsedPath, key: string): Promise<Response | null> {
-	const bucket = ctx.bucket!;
-	const stored = await bucket.head(key);
-	if (!stored) return null;
-	const ttlSeconds = ctx.config.r2RevalidateSeconds;
-	if (isFreshlyFilled(stored, ttlSeconds * 1000) || (ttlSeconds > 0 && ctx.freshness && (await ctx.freshness.isR2Fresh(key)))) {
-		return serveFromR2(bucket, key, ctx.request);
-	}
-	if (!canFill(ctx)) return null;
-
-	const recorded = stored.customMetadata?.source ?? "";
-	const source = /^https?:\/\//i.test(recorded) ? recorded : await upstreamTarget(support, parsed);
-	if (!source.length) return null;
-
-	const result = await revalidateFromSource(bucket, key, stored, source, ctx.waitUntil, fillOptions(ctx, support));
-	switch (result.status) {
-		case "not-modified":
-			ctx.freshness?.markR2Fresh(key, ttlSeconds);
-			return serveFromR2(bucket, key, ctx.request);
-		case "replaced":
-			return result.response;
-		case "gone": {
-			await bucket.delete(key);
-			const res = textResponse(404, TEXT, "Not found");
-			res.headers.set("cache-control", "no-store");
-			return res;
-		}
-		default:
-			// stale-if-error: the source is down, the stored copy is the best answer
-			return serveFromR2(bucket, key, ctx.request);
-	}
-}
-
-/**
  * Checksum of an artifact computed by the bridge (hex digest, as in a Maven checksum file):
  * upstream mirrors hash the artifact from R2 or its upstream URL, REST providers hash the
  * generated pom or the extension download. 404 (not cacheable) when the artifact is missing, too large or its checksum is still being computed.
+ *
+ * An artifact of an upstream mirror that is not in R2 yet is downloaded once into R2 (when fill-on-miss
+ * is on) and hashed from there, so the file is not downloaded a second time when it is requested.
  */
 async function computedChecksumResponse(
 	ctx: ProxyContext,
@@ -283,15 +206,12 @@ async function computedChecksumResponse(
 ): Promise<Response> {
 	const store = ctx.checksums;
 	if (!store || ctx.config.checksumMaxBytes <= 0) return textResponse(404, TEXT, "Not found");
-	const fileName = support.toUpstreamRelativePath(artifact).split("/").pop() ?? "";
-	const immutable = isImmutableArtifact(artifact.version ?? "", fileName);
 
 	let value = "";
 	if (support.hasUpstream()) {
 		let inR2 = false;
 		if (ctx.bucket) {
-			const revalidated = ctx.config.r2FillOnMiss && isSnapshotFile(artifact, fileName);
-			for (const candidate of r2LookupKeys(ctx, support, artifact, revalidated)) {
+			for (const candidate of r2KeysFor(ctx.config, support, artifact)) {
 				const fromR2 = await store.ofR2(ctx.bucket, candidate, type);
 				if (fromR2 !== null) {
 					value = fromR2;
@@ -302,14 +222,14 @@ async function computedChecksumResponse(
 		}
 		if (!inR2) {
 			const url = await upstreamTarget(support, artifact);
-			if (url.length) value = await store.ofUrl(url, type, immutable);
+			if (url.length) value = await checksumOfUpstream(ctx, support, store, artifact, url, type);
 		}
 	} else if (equalsExt(artifact, "pom")) {
 		// same bytes as the generated pom served for this version
 		value = await checksumOfText(await support.buildMinimalPom(artifact.artifactId!, artifact.version!), type);
 	} else if (equalsExt(artifact, "lex")) {
 		const downloadUrl = await support.getDownloadUrl(artifact.artifactId!, artifact.version!);
-		if (downloadUrl.length) value = await store.ofUrl(downloadUrl, type, immutable);
+		if (downloadUrl.length) value = await store.ofUrl(downloadUrl, type);
 	}
 	if (!value.length) {
 		// may be a checksum still being computed in the background: never let a cache keep this 404
@@ -318,7 +238,7 @@ async function computedChecksumResponse(
 		return res;
 	}
 
-	if (support.hasUpstream() && shouldFill(ctx, artifact, checksumKey)) {
+	if (support.hasUpstream() && shouldFill(ctx, checksumKey)) {
 		ctx.waitUntil(
 			ctx.bucket!.put(checksumKey, value, {
 				httpMetadata: { contentType: "text/plain" },
@@ -327,6 +247,31 @@ async function computedChecksumResponse(
 		);
 	}
 	return textResponse(200, TEXT, value);
+}
+
+/** checksum of an artifact of an upstream mirror that R2 does not have: stored in R2 by one download, else hashed from the source */
+async function checksumOfUpstream(
+	ctx: ProxyContext,
+	support: BridgeSupport,
+	store: ChecksumStore,
+	artifact: ParsedPath,
+	url: string,
+	type: ChecksumType
+): Promise<string> {
+	const key = r2KeyFor(ctx.config, support, artifact);
+	const fileName = key.split("/").pop() ?? "";
+	if (!ctx.bucket || !ctx.config.r2FillOnMiss || !isStorableFile(fileName)) return store.ofUrl(url, type);
+	const filled = await fillOnly(ctx.bucket, key, url, { ...fillOptions(ctx, support), maxBytes: ctx.config.checksumMaxBytes });
+	switch (filled) {
+		case "stored":
+			return (await store.ofR2(ctx.bucket, key, type)) ?? "";
+		case "unsupported":
+			// the source states no length, so it cannot be stored (nothing was downloaded)
+			return store.ofUrl(url, type);
+		default:
+			// failed or too large: the source was answered once already, not asked again for the same request
+			return "";
+	}
 }
 
 function equalsExt(parsed: ParsedPath, ext: string): boolean {
@@ -339,10 +284,9 @@ function canFill(ctx: ProxyContext): boolean {
 	return ctx.request.method === "GET" && !ctx.request.headers.has("range");
 }
 
-/** permanent fill (no revalidation): immutable files only */
-function shouldFill(ctx: ProxyContext, parsed: ParsedPath, key: string): boolean {
-	const fileName = key.split("/").pop() ?? "";
-	return canFill(ctx) && isImmutableArtifact(parsed.version ?? "", fileName);
+/** every storable file is stored once and served from R2 from then on */
+function shouldFill(ctx: ProxyContext, key: string): boolean {
+	return canFill(ctx) && isStorableFile(key.split("/").pop() ?? "");
 }
 
 async function upstreamContentResponse(support: BridgeSupport, parsed: ParsedPath): Promise<Response> {

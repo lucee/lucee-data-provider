@@ -89,14 +89,12 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
 			request,
 			waitUntil: (p) => ctx.waitUntil(p),
 			bucket: io.r2,
-			freshness: io,
 			checksums: new ChecksumStore(
 				env.BRIDGE_CACHE,
 				{
 					maxBytes: config.checksumMaxBytes,
 					inlineMaxBytes: config.checksumInlineMaxBytes,
 					timeoutSeconds: config.timeout,
-					mutableTtlSeconds: config.cacheTtlMinutes * 60,
 					userAgent: USER_AGENT
 				},
 				() => io.getGeneration(),

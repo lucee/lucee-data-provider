@@ -13,6 +13,8 @@ export interface BridgeConfig {
 	cacheTtlMinutes: number;
 	/** seconds directory listings and maven-metadata.xml files are cached per location; 0 = not cached */
 	metadataCacheTtlSeconds: number;
+	/** seconds a 404 of the upstream is remembered per location; 0 = never */
+	negativeCacheTtlSeconds: number;
 	/** seconds */
 	timeout: number;
 	githubReleasesUrl: string;
@@ -21,8 +23,6 @@ export interface BridgeConfig {
 	r2Prefix: string;
 	/** key prefix (after r2Prefix) of stored SNAPSHOT files, ends with a slash */
 	r2SnapshotPrefix: string;
-	/** seconds a stored SNAPSHOT file is served before it is revalidated against its source */
-	r2RevalidateSeconds: number;
 	/** lower case hostnames using R2; empty = all */
 	r2Hosts: string[];
 	/** bytes; larger fill-on-miss files are stored in R2 before they are served */
@@ -36,7 +36,7 @@ export interface BridgeConfig {
 
 export const DEFAULT_GITHUB_RELEASES_URL = "https://github.com/lucee/Lucee/releases/download/";
 export const DEFAULT_R2_FILL_STREAM_MAX_MB = 32;
-export const DEFAULT_R2_REVALIDATE_MINUTES = 5;
+export const DEFAULT_NEGATIVE_CACHE_TTL_MINUTES = 5;
 export const DEFAULT_METADATA_CACHE_TTL_MINUTES = 5;
 
 export function defaultProviders(): ProviderEntry[] {
@@ -154,10 +154,10 @@ export function readConfig(env: Env, hostname?: string): BridgeConfig {
 		: val(env.CHECKSUM_INLINE_MAX_MB);
 	if (checksumInlineMaxMb < 0) throw new Error(`Invalid CHECKSUM_INLINE_MAX_MB [${env.CHECKSUM_INLINE_MAX_MB}]`);
 
-	const revalidateMinutes = env.R2_REVALIDATE_MINUTES === undefined || String(env.R2_REVALIDATE_MINUTES).trim() === ""
-		? DEFAULT_R2_REVALIDATE_MINUTES
-		: val(env.R2_REVALIDATE_MINUTES);
-	if (revalidateMinutes < 0) throw new Error(`Invalid R2_REVALIDATE_MINUTES [${env.R2_REVALIDATE_MINUTES}]`);
+	const negativeTtlMinutes = env.NEGATIVE_CACHE_TTL_MINUTES === undefined || String(env.NEGATIVE_CACHE_TTL_MINUTES).trim() === ""
+		? DEFAULT_NEGATIVE_CACHE_TTL_MINUTES
+		: val(env.NEGATIVE_CACHE_TTL_MINUTES);
+	if (negativeTtlMinutes < 0) throw new Error(`Invalid NEGATIVE_CACHE_TTL_MINUTES [${env.NEGATIVE_CACHE_TTL_MINUTES}]`);
 
 	const metadataTtlMinutes = env.METADATA_CACHE_TTL_MINUTES === undefined || String(env.METADATA_CACHE_TTL_MINUTES).trim() === ""
 		? DEFAULT_METADATA_CACHE_TTL_MINUTES
@@ -174,13 +174,13 @@ export function readConfig(env: Env, hostname?: string): BridgeConfig {
 		providers,
 		cacheTtlMinutes,
 		metadataCacheTtlSeconds: Math.floor(metadataTtlMinutes * 60),
+		negativeCacheTtlSeconds: Math.floor(negativeTtlMinutes * 60),
 		timeout,
 		githubReleasesUrl,
 		r2Mode: mode === "serve" && r2ForHost ? "serve" : "off",
 		r2FillOnMiss: ["1", "true", "yes", "on"].includes(String(env.R2_FILL_ON_MISS ?? "").trim().toLowerCase()),
 		r2Prefix: String(env.R2_PREFIX ?? ""),
 		r2SnapshotPrefix: normalizeSnapshotPrefix(env.R2_SNAPSHOT_PREFIX),
-		r2RevalidateSeconds: Math.floor(revalidateMinutes * 60),
 		r2Hosts,
 		r2FillStreamMaxBytes: Math.floor(streamMaxMb * 1024 * 1024),
 		checksumMaxBytes: Math.floor(checksumMaxMb * 1024 * 1024),

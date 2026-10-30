@@ -47,9 +47,10 @@ GITHUB_RELEASES_URL = "https://github.com/lucee/Lucee/releases/download/"
 # "off": upstream redirects only (like maven-bridge); "serve": serve objects found in R2 first
 R2_MODE = "serve"
 # "true": in serve mode, store artifacts in R2 on their first request (read-through cache, lazy migration);
-# SNAPSHOT files are stored too and revalidated against their source after R2_REVALIDATE_MINUTES
+# SNAPSHOT files are stored too; a stored file is never fetched from its source again (file names are immutable)
 R2_FILL_ON_MISS = "true"
-R2_REVALIDATE_MINUTES = "5"
+# minutes a 404 of the upstream is remembered (0 = never)
+NEGATIVE_CACHE_TTL_MINUTES = "5"
 # hostnames that use R2 (R2_MODE, R2_FILL_ON_MISS); all others keep the upstream redirects. Empty = all hostnames.
 R2_HOSTS = "mvn.lucee-services.com"
 R2_FILL_STREAM_MAX_MB = "32"

@@ -42,10 +42,11 @@ export interface Env {
 	 */
 	CHECKSUM_INLINE_MAX_MB?: string;
 	/**
-	 * Stored SNAPSHOT files are served from R2 for this many minutes after they were stored
-	 * or last revalidated, then revalidated against their source. Default 5, 0 = on every request.
+	 * Minutes a 404 of the upstream (existence checks, listings, metadata) is remembered per location,
+	 * so crawlers asking for files that do not exist do not reach the upstream every time.
+	 * Default 5, 0 = never.
 	 */
-	R2_REVALIDATE_MINUTES?: string;
+	NEGATIVE_CACHE_TTL_MINUTES?: string;
 	/**
 	 * Comma separated hostnames that use R2 (R2_MODE, R2_FILL_ON_MISS); other hostnames
 	 * and the cron behave as with R2_MODE = "off". Empty = every hostname.
