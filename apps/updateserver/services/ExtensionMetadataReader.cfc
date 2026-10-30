@@ -7,6 +7,14 @@ component accessors=true {
 	// LDEV-6789: extensions published to Maven repositories (Central, snapshots, Lucee repository), see MavenExtensionSource
 	property name="mavenSource"           type="any";
 	property name="fetchThreads"          type="numeric" default=5; // extension files downloaded and read at the same time
+	// LDEV-6795: serve the extensions that only exist in the flat S3 bucket (no copy in the Maven layout)? Maven is served first
+	// either way. This is the fallback to the old flat files, to be switched off once everything is in the Maven layout.
+	property name="flatFallback"          type="boolean" default=true;
+	// LDEV-6795: minimum core version needed to load an extension packaged for Maven (no jars folder, see _probePackaging),
+	// empty: no such minimum, the min core version of the manifest is all there is
+	property name="mavenOnlyMinCore"      type="string" default="";
+	// LDEV-6795: how many extension files without a known packaging are read per load, only done when mavenOnlyMinCore is set
+	property name="packagingBackfillMax"  type="numeric" default=200;
 	property name="extensionMeta"         type="query";
 	property name="extensionVersions"     type="struct";
 	property name="bundleDownloadService" type="any";
@@ -22,6 +30,10 @@ component accessors=true {
 	variables._mavenStateLoaded  = false;
 	variables._mavenStateChanged = false;
 	variables._fetchBatchSize    = 20;
+	// LDEV-6795: the extension meta as it is served (flat fallback and effective min core applied), set by loadMeta()
+	variables._served            = "";
+	// LDEV-6795: file name > number of times it was served from the flat bucket although a Maven source is configured
+	variables._flatHits          = StructNew( "sync" );
 
 	reset();
 
@@ -29,9 +41,29 @@ component accessors=true {
 		variables._simpleCache = StructNew( "max:100" );
 	}
 
+	// the settings change what is served, so when the meta is loaded already, what is served is rebuilt
+	function setFlatFallback( required boolean flatFallback ) {
+		variables.flatFallback = arguments.flatFallback;
+		_settingsChanged();
+	}
+
+	function setMavenOnlyMinCore( required string mavenOnlyMinCore ) {
+		variables.mavenOnlyMinCore = Trim( arguments.mavenOnlyMinCore );
+		_settingsChanged();
+	}
+
+	/**
+	 * LDEV-6795: how often files were served from the flat bucket (fallback) since this reader was created,
+	 * by file name. Only counts when a Maven source is configured.
+	 */
+	public struct function getFlatFallbackHits() {
+		return Duplicate( variables._flatHits );
+	}
+
 	function loadMeta( query srcMeta ) {
 		lock type="exclusive" name="readExtMeta" timeout=0 {
 			var meta           = isQuery( arguments.srcMeta ) ? arguments.srcMeta : _readExistingMetaFileFromS3();
+			_ensureColumns( meta );
 			var existingByFile = _mapExtensionQueryByFilename( meta );
 			var lexFiles       = _listLexFilesFromBucket();
 			var mavenFiles     = _listMavenLexFiles();
@@ -62,7 +94,7 @@ component accessors=true {
 
 			if ( StructCount( candidates ) ) {
 				metaChanged = _addMavenCandidates( meta, candidates, knownNames, timeoutSecs, rebuild ) || metaChanged;
-				_setMavenLocations( candidates, mavenFiles.complete, remoteFiles.complete, knownNames, meta );
+				_setMavenLocations( candidates, mavenFiles.complete, remoteFiles.complete, meta );
 				for ( var name in candidates ) {
 					knownNames[ name ] = true;
 				}
@@ -81,14 +113,19 @@ component accessors=true {
 				metaChanged = _removeRedundantExtensions( meta, knownNames ) || metaChanged;
 			}
 
+			// LDEV-6795: the packaging of the files we don't know it of yet (only needed with a min core version for Maven)
+			metaChanged = _backfillPackaging( meta ) || metaChanged;
+
 			if ( metaChanged ) {
 				QuerySort( meta, "id,versionSortable", "asc,desc" );
 				_writeMetaFileToS3( meta );
 			}
 
 			setExtensionMeta( meta );
+			_buildServed();
 			setExtensionVersions( _createExtensionAndVersionMap() );
 			reset();
+			_logFallbackSummary( meta );
 			return meta;
 		}
 
@@ -113,7 +150,7 @@ component accessors=true {
 				loadMeta();
 			}
 
-			var extensions = Duplicate( getExtensionMeta() );
+			var extensions = Duplicate( _getServed() );
 
 			if ( len( arguments.coreVersion ) ) {
 				extensions = _filterByCoreVersion( extensions, arguments.coreVersion );
@@ -171,9 +208,16 @@ component accessors=true {
 			}
 			if ( StructKeyExists( mapped[ arguments.id ], arguments.version ) ) {
 				var ext = StructCopy( mapped[ arguments.id ][ arguments.version ] );
+
+				// LDEV-6795: a version that is asked for explicitly is not served to a core that can't load it. Without a
+				// core version there is nothing to check against, so it is served as it is.
+				if ( Len( arguments.coreVersion ) && !_fitsCoreVersion( ext.minCoreVersion, arguments.coreVersion ) ) {
+					return {};
+				}
 				if ( !arguments.withLogo ) {
 					ext.image = "";
 				}
+				_logFlatFallback( ext.filename, "details" );
 				return ext;
 			}
 		}
@@ -182,9 +226,10 @@ component accessors=true {
 	}
 
 	/**
-	 * The url to download an extension file from. Files that are only available in the Maven folder of our bucket
-	 * (LDEV-6789) are served from the Maven cdn url, files only available from a Maven repository from there,
-	 * everything else from the given default (flat extensions cdn) url.
+	 * The url to download an extension file from. Maven first (LDEV-6795): a file that is in the Maven folder of our
+	 * bucket (LDEV-6789) is served from the Maven cdn url, a file that is available from a Maven repository from
+	 * there, this goes for a flat file too when the Maven layout has the same extension and version. Everything
+	 * else is the fallback to the flat bucket, served from the given default (flat extensions cdn) url.
 	 */
 	public string function getDownloadUrl( required string fileName, required string defaultBaseUrl ) {
 		var mavenPath = variables._mavenPaths[ arguments.fileName ] ?: "";
@@ -204,6 +249,8 @@ component accessors=true {
 
 			SystemOutput( "Could not resolve the download url of [#arguments.fileName#] in the maven repositories.", true );
 		}
+
+		_logFlatFallback( arguments.fileName, "download" );
 
 		return arguments.defaultBaseUrl & arguments.fileName;
 	}
@@ -364,24 +411,40 @@ component accessors=true {
 		return candidates;
 	}
 
-	// remembers where the files of the extension meta that only exist in the maven sources are
-	private function _setMavenLocations( candidates, bucketComplete, remoteComplete, flatNames, meta ) {
+	/**
+	 * Remembers where the files of the extension meta can be had from a Maven source (LDEV-6795: Maven first). That is
+	 * a file of the meta with the name of a Maven file, and a file with another name (the flat bucket has the older
+	 * ones under their old names) of an id and version the Maven sources have.
+	 */
+	private function _setMavenLocations( candidates, bucketComplete, remoteComplete, meta ) {
 		// when part of a source could not be listed, keep what we know already
 		var paths  = arguments.bucketComplete ? {} : variables._mavenPaths;
 		var remote = arguments.remoteComplete ? {} : variables._mavenRemote;
-		var inMeta = _mapExtensionQueryByFilename( arguments.meta );
+		var byKey  = {};
 
+		// the id of an artifact is learned when its first file is read, see _addMavenCandidates
 		for ( var name in arguments.candidates ) {
 			var candidate = arguments.candidates[ name ];
+			var id        = variables._mavenState.artifactIds[ candidate.artifact ] ?: "";
 
-			if ( !StructKeyExists( inMeta, name ) || StructKeyExists( arguments.flatNames, name ) ) {
+			if ( Len( id ) && !StructKeyExists( byKey, id & "|" & candidate.version ) ) {
+				byKey[ id & "|" & candidate.version ] = candidate;
+			}
+		}
+
+		for ( var i=1; i<=QueryRecordCount( arguments.meta ); i++ ) {
+			var fileName = arguments.meta.filename[ i ];
+			var key      = arguments.meta.id[ i ] & "|" & arguments.meta.version[ i ];
+			var found    = arguments.candidates[ fileName ] ?: ( byKey[ key ] ?: "" );
+
+			if ( !IsStruct( found ) ) {
 				continue;
 			}
 
-			if ( candidate.source == "bucket" ) {
-				paths[ name ] = candidate.path;
+			if ( found.source == "bucket" ) {
+				paths[ fileName ] = found.path;
 			} else {
-				remote[ name ] = { artifact=candidate.artifact, version=candidate.version, repos=candidate.repos };
+				remote[ fileName ] = { artifact=found.artifact, version=found.version, repos=found.repos };
 			}
 		}
 
@@ -586,7 +649,122 @@ component accessors=true {
 	private function _getEmptyExtensionsQuery() {
 		return QueryNew( "id,version,versionSortable,name,description,filename,image,category,author,created,releaseType,"
 			& "minLoaderVersion,minCoreVersion,price,currency,disableFull,trial,older,olderName,"
-			& "olderDate,promotionLevel,promotionText,projectUrl,sourceUrl,documentionUrl" );
+			& "olderDate,promotionLevel,promotionText,projectUrl,sourceUrl,documentionUrl,packaging" );
+	}
+
+	// LDEV-6795: is there a Maven source to serve from? Without one everything is served from the flat bucket.
+	private boolean function _hasMavenSource() {
+		var source = getMavenSource() ?: "";
+
+		return Len( getMavenRoot() ) > 0 || ( IsObject( source ) && source.hasRepos() );
+	}
+
+	// LDEV-6795: is the file served from a Maven source (Maven first), the others are the fallback to the flat bucket
+	private boolean function _isMavenServed( required string fileName ) {
+		return ( StructKeyExists( variables._mavenPaths, arguments.fileName ) && Len( getMavenCdnUrl() ) > 0 )
+			|| StructKeyExists( variables._mavenRemote, arguments.fileName );
+	}
+
+	/**
+	 * LDEV-6795: the extension meta as it is served, which is not all there is in the meta:
+	 * - without the flat fallback only what is served from a Maven source (not when there is no Maven source
+	 *   at all, that would leave nothing to serve)
+	 * - the min core version of the packaging for Maven applied, so every list, latest and download answer is
+	 *   based on the version an extension can be loaded with
+	 */
+	private function _buildServed() {
+		var served   = Duplicate( getExtensionMeta() );
+		var dropFlat = !getFlatFallback();
+
+		if ( dropFlat && !_hasMavenSource() ) {
+			SystemOutput( "The flat S3 fallback is switched off, but there is no Maven source configured. Ignoring that, the flat files are served.", true );
+			dropFlat = false;
+		}
+
+		for ( var i=QueryRecordCount( served ); i>=1; i-- ) {
+			if ( dropFlat && !_isMavenServed( served.filename[ i ] ) ) {
+				QueryDeleteRow( served, i );
+			} else {
+				served.minCoreVersion[ i ] = _effectiveMinCore( served.minCoreVersion[ i ], served.packaging[ i ] );
+			}
+		}
+
+		variables._served = served;
+	}
+
+	private query function _getServed() {
+		if ( !IsQuery( variables._served ) ) {
+			_buildServed();
+		}
+
+		return variables._served;
+	}
+
+	private function _settingsChanged() {
+		if ( IsQuery( variables.extensionMeta ?: "" ) ) {
+			_buildServed();
+			setExtensionVersions( _createExtensionAndVersionMap() );
+			reset();
+		}
+	}
+
+	/**
+	 * LDEV-6795: the minimum core version to load an extension, the one of its manifest, or the minimum core version
+	 * for Maven packaged extensions (mavenOnlyMinCore) when that is higher and the extension is packaged for Maven.
+	 */
+	private string function _effectiveMinCore( required string minCore, required string packaging ) {
+		var cutoff = getMavenOnlyMinCore();
+
+		if ( !Len( cutoff ) || arguments.packaging != "maven" ) {
+			return arguments.minCore;
+		}
+		if ( !Len( arguments.minCore ) ) {
+			return cutoff;
+		}
+
+		return Compare( VersionUtils::sortableVersionString( cutoff ), VersionUtils::sortableVersionString( arguments.minCore ) ) > 0
+			? cutoff : arguments.minCore;
+	}
+
+	// can a core version (of 4 parts) load an extension with the given minimum core version? When in doubt: yes
+	private boolean function _fitsCoreVersion( required string minCore, required string coreVersion ) {
+		var v = ListToArray( arguments.coreVersion, "." );
+
+		if ( !Len( arguments.minCore ) || ArrayLen( v ) < 4 ) {
+			return true;
+		}
+
+		return services.versionUtils::checkVersionGTE( arguments.minCore, v[ 1 ], v[ 2 ], v[ 3 ], v[ 4 ] );
+	}
+
+	// LDEV-6795: a file that is not served from a Maven source, although there is one, is served by the fallback to the flat bucket
+	private function _logFlatFallback( required string fileName, required string what ) {
+		if ( !_hasMavenSource() || _isMavenServed( arguments.fileName ) ) {
+			return;
+		}
+
+		if ( arguments.what == "download" ) {
+			variables._flatHits[ arguments.fileName ] = ( variables._flatHits[ arguments.fileName ] ?: 0 ) + 1;
+		}
+
+		SystemOutput( "Flat S3 fallback: the #arguments.what# of [#arguments.fileName#] is served from the flat bucket, it is not in the Maven layout.", true );
+	}
+
+	private function _logFallbackSummary( required query meta ) {
+		if ( !_hasMavenSource() ) {
+			return;
+		}
+
+		var flatOnly = 0;
+
+		for ( var i=1; i<=QueryRecordCount( arguments.meta ); i++ ) {
+			if ( !_isMavenServed( arguments.meta.filename[ i ] ) ) {
+				flatOnly++;
+			}
+		}
+
+		SystemOutput( "Extensions: [#flatOnly#] of [#QueryRecordCount( arguments.meta )#] files are only in the flat S3 bucket, the flat S3 fallback is [#getFlatFallback() ? 'on' : 'off'#]"
+			& ( getFlatFallback() ? "." : ", they are not served." ), true );
 	}
 
 	private function _mapExtensionQueryByFilename( extensionQuery ) {
@@ -629,16 +807,7 @@ component accessors=true {
 		var tmpFile = GetTempFile( GetTempDirectory(), "lexfile", ListLast( arguments.candidate.name, "." ) );
 
 		try {
-			switch ( arguments.candidate.source ) {
-				case "bucket":
-					FileCopy( _withTrailingSlash( getMavenRoot() ) & arguments.candidate.path, tmpFile );
-				break;
-				case "repo":
-					getMavenSource().download( arguments.candidate.artifact, arguments.candidate.version, arguments.candidate.repos, tmpFile );
-				break;
-				default:
-					FileCopy( getS3Root() & "/" & arguments.candidate.name, tmpFile );
-			}
+			_downloadCandidate( arguments.candidate, tmpFile );
 
 			var extMeta   = _initExtensionMetaFromManifest( tmpFile, arguments.cols );
 			extMeta.image = _getLogoThumbnail( tmpFile );
@@ -648,6 +817,20 @@ component accessors=true {
 			_deleteTmpFile( tmpFile );
 
 			return { error=e.message };
+		}
+	}
+
+	// gets a file of the flat bucket, the Maven folder of our bucket or a Maven repository to the given (temp) file
+	private function _downloadCandidate( required struct candidate, required string target ) {
+		switch ( arguments.candidate.source ) {
+			case "bucket":
+				FileCopy( _withTrailingSlash( getMavenRoot() ) & arguments.candidate.path, arguments.target );
+			break;
+			case "repo":
+				getMavenSource().download( arguments.candidate.artifact, arguments.candidate.version, arguments.candidate.repos, arguments.target );
+			break;
+			default:
+				FileCopy( getS3Root() & "/" & arguments.candidate.name, arguments.target );
 		}
 	}
 
@@ -707,7 +890,117 @@ component accessors=true {
 			}
 		}
 
+		if ( StructKeyExists( meta, "packaging" ) ) {
+			meta.packaging = _probePackaging( arguments.lexFile, mf );
+		}
+
 		return meta;
+	}
+
+	/**
+	 * LDEV-6795: how an extension file is packaged, "osgi" (the jars of the extension in a jars folder, which any
+	 * Lucee can load), "maven" (the jars are Maven artifacts, no jars folder, which only newer Lucee versions can
+	 * load) or "unknown". Unknown is treated like osgi, we don't hold back an extension when we are not sure.
+	 */
+	private string function _probePackaging( required string lexFile, struct manifest={} ) {
+		try {
+			var zip       = "zip://" & arguments.lexFile & "!";
+			var hasJars   = DirectoryExists( zip & "jars/" ) && ArrayLen( DirectoryList( path=zip & "jars/", filter="*.jar" ) ) > 0;
+			var hasMaven  = DirectoryExists( zip & "maven/" ) || DirectoryExists( zip & "mvn/" );
+			var hasCoords = Len( arguments.manifest.groupId ?: "" ) && Len( arguments.manifest.artifactId ?: "" );
+
+			if ( hasJars ) {
+				return "osgi";
+			}
+			if ( hasMaven || hasCoords ) {
+				return "maven";
+			}
+		} catch ( any e ) {
+			SystemOutput( "Could not probe the packaging of [#arguments.lexFile#]: #e.message#", true );
+		}
+
+		return "unknown";
+	}
+
+	/**
+	 * LDEV-6795: the packaging is only needed for the minimum core version of Maven packaged extensions, so
+	 * the files in the meta that were added before it was recorded are only read for it when that minimum is set.
+	 * Limited to packagingBackfillMax files per load, the rest is done by the next ones. Returns whether the meta changed.
+	 */
+	private boolean function _backfillPackaging( required query meta ) {
+		if ( !Len( getMavenOnlyMinCore() ) ) {
+			return false;
+		}
+
+		var pending = [];
+
+		for ( var i=1; i<=QueryRecordCount( arguments.meta ) && ArrayLen( pending ) < getPackagingBackfillMax(); i++ ) {
+			if ( !Len( arguments.meta.packaging[ i ] ) ) {
+				ArrayAppend( pending, i );
+			}
+		}
+
+		if ( !ArrayLen( pending ) ) {
+			return false;
+		}
+
+		SystemOutput( "Reading the packaging of [#ArrayLen( pending )#] extension files.", true );
+		setting requesttimeout=Max( 600, ArrayLen( pending ) * 4 );
+
+		var found   = StructNew( "sync" );
+		var changed = false;
+
+		ArrayEach( pending, function( row ) {
+			var candidate = _locateFile( meta.filename[ row ] );
+			var tmpFile   = GetTempFile( GetTempDirectory(), "lexfile", "lex" );
+
+			try {
+				_downloadCandidate( candidate, tmpFile );
+				found[ row ] = _probePackaging( tmpFile, _readLexManifest( tmpFile ) );
+			} catch ( any e ) {
+				// stays empty, is tried again with the next load
+				SystemOutput( "Error probing the packaging of [#meta.filename[ row ]#]: #e.message#", true );
+			}
+
+			_deleteTmpFile( tmpFile );
+		}, true, getFetchThreads() );
+
+		for ( var row in found ) {
+			arguments.meta.packaging[ Val( row ) ] = found[ row ];
+			changed = true;
+		}
+
+		return changed;
+	}
+
+	// where the file of the given name is served from, in the form of the candidates of _mavenCandidates()
+	private struct function _locateFile( required string fileName ) {
+		if ( StructKeyExists( variables._mavenPaths, arguments.fileName ) ) {
+			return { name=arguments.fileName, source="bucket", path=variables._mavenPaths[ arguments.fileName ] };
+		}
+		if ( StructKeyExists( variables._mavenRemote, arguments.fileName ) ) {
+			var remote = Duplicate( variables._mavenRemote[ arguments.fileName ] );
+
+			remote.name   = arguments.fileName;
+			remote.source = "repo";
+
+			return remote;
+		}
+
+		return { name=arguments.fileName, source="flat" };
+	}
+
+	// the extension meta of a state file written before the packaging was recorded has no such column
+	private function _ensureColumns( required query meta ) {
+		if ( !ListFindNoCase( arguments.meta.columnList, "packaging" ) ) {
+			var values = [];
+
+			for ( var i=1; i<=arguments.meta.recordCount; i++ ) {
+				ArrayAppend( values, "" );
+			}
+
+			QueryAddColumn( arguments.meta, "packaging", "varchar", values );
+		}
 	}
 
 	private function _getLogoThumbnail( lexFile ){
@@ -732,7 +1025,7 @@ component accessors=true {
 	}
 
 	private function _createExtensionAndVersionMap() {
-		var raw = getExtensionMeta();
+		var raw = _getServed();
 		var mapped = {};
 		for( var extAndVersion in raw ) {
 			mapped[ extAndVersion.id ] = mapped[ extAndVersion.id ] ?: [ _latest=extAndVersion.version ];
