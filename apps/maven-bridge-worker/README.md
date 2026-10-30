@@ -258,8 +258,10 @@ It exits with 1 when anything differs.
      redirect to (CDN or GitHub Releases), without access to the source bucket; files nobody asks
      for are never copied.
    - Once R2 has everything, the upstream redirects remain only as a fallback.
-   - `wrangler.toml` enables serve mode and fill on miss for `mvn.lucee-services.com` only
-     (`R2_HOSTS`); clear `R2_HOSTS` (or add `maven.lucee-services.com`) to use R2 on production too.
+   - `wrangler.toml` enables serve mode and fill on miss for `maven.lucee-services.com` and
+     `mvn.lucee-services.com` (`R2_HOSTS`), so production serves from R2 and downloads each
+     artifact from its source once, on the first request. Rollback: remove `maven.lucee-services.com`
+     from `R2_HOSTS` and deploy; that hostname goes back to the upstream redirects.
 
 ## Differences from `apps/maven-bridge`
 
