@@ -52,7 +52,7 @@ R2_FILL_ON_MISS = "true"
 # minutes a 404 of the upstream is remembered (0 = never)
 NEGATIVE_CACHE_TTL_MINUTES = "5"
 # hostnames that use R2 (R2_MODE, R2_FILL_ON_MISS); all others keep the upstream redirects. Empty = all hostnames.
-R2_HOSTS = "mvn.lucee-services.com"
+R2_HOSTS = "maven.lucee-services.com,mvn.lucee-services.com"
 R2_FILL_STREAM_MAX_MB = "32"
 R2_PREFIX = ""
 # SNAPSHOT files are stored under this key prefix (after R2_PREFIX), so a lifecycle rule can expire them

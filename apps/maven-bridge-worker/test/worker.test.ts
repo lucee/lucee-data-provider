@@ -690,6 +690,18 @@ describe("R2_HOSTS", () => {
 		// the other hostname still redirects, even with the object in R2
 		expect((await callHost("https://maven.lucee-services.com")).status).toBe(302);
 	});
+
+	it("uses R2 on production and test hostname when both are listed", async () => {
+		mockFetch({ ...baseRoutes(), [CDN + path]: "extension-bytes" });
+		const both = { ...FILL, R2_HOSTS: "maven.lucee-services.com,mvn.lucee-services.com" };
+		const ctx = createExecutionContext();
+		const res = await worker.fetch(new Request("https://maven.lucee-services.com/" + path) as never, testEnv(both), ctx);
+		const body = await res.text();
+		await waitOnExecutionContext(ctx);
+		expect(res.status).toBe(200);
+		expect(body).toBe("extension-bytes");
+		expect(await bindings.ARTIFACTS!.head(path)).not.toBeNull();
+	});
 });
 
 const sha1 = async (text: string, algo = "SHA-1") =>
