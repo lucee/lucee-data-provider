@@ -46,8 +46,11 @@ Two kinds of groups, configured in `EXTENSION_PROVIDERS`:
   shares the invocation's CPU and memory limits and must finish within 30 s of the response; runs
   ended early are counted (`checksum-attempts:…`) and logged, and after 3 the artifact is left alone
   for a day. A download that ends short of its `content-length` is never cached. Results
-  are cached in KV, for 30 days for immutable artifacts and for `CACHE_TTL_MINUTES` for snapshots;
-  with fill-on-miss, checksums of immutable artifacts are also stored in R2 next to the artifact.
+  are cached in KV for 30 days, snapshots included (every file name, SNAPSHOT builds too, keeps its
+  content); with fill-on-miss, computed checksums are also stored in R2 next to the artifact.
+  With fill-on-miss, an artifact that is not in R2 yet is downloaded once into R2 and hashed from there
+  (R2 reads are not billed as egress), so a later request for the file is not a second download; without
+  R2 the artifact is downloaded once per 30 days at most (until the KV entry expires).
 - REST provider groups have no checksum files: pom checksums are computed from the generated pom,
   `.lex` checksums from the provider download. Anything else answers 404, never the artifact.
 
@@ -95,30 +98,25 @@ other file; checksums the source does not have are computed as before. Stored ob
 `customMetadata.source`, `filledAt` and the source's `ETag` / `Last-Modified` (`sourceEtag`,
 `sourceLastModified`).
 
-Release files never change and are served from R2 forever. `SNAPSHOT` files are republished under the
-same name, so a stored SNAPSHOT copy is only served as is for `R2_REVALIDATE_MINUTES` (default 5) after
-it was stored or last checked. After that the next `GET` asks the source with `If-None-Match` /
-`If-Modified-Since`:
+A file is fetched from its source once, and only when a client asks for it: a stored file (SNAPSHOT
+files included) is served from R2 and never fetched or revalidated again, no cron or listing
+downloads artifacts, and parallel requests for the same missing file share one download (per isolate).
+This holds because artifact file names are immutable: a new SNAPSHOT build is published under a new
+file name (it carries its own build number), never under the name of an older one. A SNAPSHOT copy under its plain Maven-layout key (bulk copy, legacy keys) is
+served as it is too. Files that were not stored yet answer from the source: the redirect is the
+fallback when the source cannot be reached or does not state a size.
 
-- `304`: the stored copy is served and counts as checked for another `R2_REVALIDATE_MINUTES` (per colo,
-  Cache API)
-- `200`: the new file replaces the stored copy and is served
-- `404`/`410`: the stored copy is deleted and the request answers `404`
-- source unreachable or any other answer: the stored copy is served
-
-`HEAD` and `Range` requests for a stale SNAPSHOT copy (or a miss) keep the redirect. With
-`R2_REVALIDATE_MINUTES = "0"` every SNAPSHOT `GET` is checked against the source. SNAPSHOT objects
-put into the bucket by other means (bulk copy, legacy flat keys) are served as they are while fill on
-miss is off. With fill on miss, a SNAPSHOT copy under its plain Maven-layout key is not served: the file
-is fetched again, stored below `R2_SNAPSHOT_PREFIX`, and the plain copy is deleted.
+Listings, `maven-metadata.xml` and existence checks only use `HEAD` or small text requests (cached, see
+`METADATA_CACHE_TTL_MINUTES`). A `404` of the source is remembered per location for
+`NEGATIVE_CACHE_TTL_MINUTES` (default 5), so crawlers asking for files that do not exist do not reach
+the source on every request; other errors are never remembered, and a flush clears the memory.
 
 #### SNAPSHOT expiry
 
 `scripts/provision.mjs` sets a lifecycle rule on the bucket (id `lucee-maven-bridge-snapshot-expiry`)
 that deletes objects below `R2_PREFIX` + `R2_SNAPSHOT_PREFIX` `R2_SNAPSHOT_RETENTION_DAYS` (default 90)
-days after they were stored. A `304` revalidation does not rewrite the object, a new version (`200`)
-does and starts the count again. An expired SNAPSHOT file is simply fetched from its source again on the
-next request. Release files are never expired. `R2_SNAPSHOT_RETENTION_DAYS = "0"` removes the rule.
+days after they were stored. An expired SNAPSHOT file is fetched from its source again on the next
+request for it (once more, then stored for another retention period). Release files are never expired. `R2_SNAPSHOT_RETENTION_DAYS = "0"` removes the rule.
 The provision script reads the bucket's rules first and keeps all other rules (the lifecycle API
 replaces the whole list); it only writes when the rule differs.
 
@@ -173,11 +171,11 @@ curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/org/lucee/
 | `EXTENSION_PROVIDERS` | ForgeBox + extension.lucee.org/cdn | `provider\|groupId[\|upstream]`, comma separated, or a JSON array of `{provider, groupId, upstream}` |
 | `CACHE_TTL_MINUTES` | `60` | age after which KV entries are refreshed |
 | `METADATA_CACHE_TTL_MINUTES` | `5` | how long directory listings and `maven-metadata.xml` are cached per location (`0` = not cached) |
+| `NEGATIVE_CACHE_TTL_MINUTES` | `5` | how long a 404 of the upstream (existence checks, listings, metadata) is remembered per location (`0` = not remembered) |
 | `TIMEOUT` | `300` | upstream/provider timeout in seconds |
 | `GITHUB_RELEASES_URL` | `https://github.com/lucee/Lucee/releases/download/` | 7.1+ core builds; empty disables |
 | `R2_MODE` | `off` | `off` or `serve` |
-| `R2_FILL_ON_MISS` | `false` | store upstream files in R2 on first request, SNAPSHOTs revalidated (serve mode only) |
-| `R2_REVALIDATE_MINUTES` | `5` | how long a stored SNAPSHOT file is served without asking the source (`0` = every request) |
+| `R2_FILL_ON_MISS` | `false` | store upstream files in R2 on first request and never fetch them again (serve mode only) |
 | `R2_HOSTS` | empty | hostnames that use R2, comma separated; empty = all hostnames |
 | `CHECKSUM_MAX_MB` | `128` | checksums the upstream does not have are computed for artifacts up to this size; larger ones answer 404 (`0` = never compute) |
 | `CHECKSUM_INLINE_MAX_MB` | `16` | computed checksums of larger artifacts are hashed in the background and answer 404 until cached (`0` = always in the background) |
