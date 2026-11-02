@@ -31,23 +31,13 @@ aiMd = arrayToList(aiLines, chr(10));
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<cfoutput><title>Changelog #encodeForHTML(verBase)# — Lucee Downloads</title></cfoutput>
 	<link rel="icon" type="image/png" href="/res/favicon.png">
-	<link rel="stylesheet" href="/res/download.css?v=9">
+	<cfinclude template="_lucee-head.cfm">
+	<link rel="stylesheet" href="/res/download.css?v=10">
 </head>
 <body>
 <cfoutput>
 
-<header class="site-header">
-	<a href="/" class="logo">
-		<img src="/res/lucee-logo.svg" alt="Lucee" height="36">
-		<span class="logo-subtitle">Downloads</span>
-	</a>
-	<nav>
-		<a href="https://docs.lucee.org"   target="_blank">Docs</a>
-		<a href="https://dev.lucee.org"    target="_blank">Forum</a>
-		<a href="https://github.com/lucee" target="_blank">GitHub</a>
-		<a href="https://hub.docker.com/r/lucee/lucee" target="_blank">Docker Hub</a>
-	</nav>
-</header>
+<cfinclude template="_lucee-header.cfm">
 
 <div class="container">
 	<div class="page-header">
