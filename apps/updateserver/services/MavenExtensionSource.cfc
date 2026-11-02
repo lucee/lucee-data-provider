@@ -418,9 +418,9 @@ component accessors=true {
 	}
 
 	/**
-	 * The http requests are made by a client with .get( url, timeout ) and .download( url, file, timeout ), both
-	 * return { status, error } (get also the content), a failed request has a status of 0 or a 5xx.
-	 * Redirects are followed. Tests pass a client of their own.
+	 * The http requests are made by a client with .get( url, timeout ), .head( url, timeout ) and .download( url, file, timeout ),
+	 * all return { status, error } (get also the content), a failed request has a status of 0 or a 5xx.
+	 * Redirects are followed, except by head(). Tests pass a client of their own.
 	 */
 	private struct function _defaultHttpClient() {
 		var userAgent = "lucee-data-provider extension provider (LDEV-6789)";
@@ -432,6 +432,14 @@ component accessors=true {
 					  status  = Val( local.res.statusCode ?: 0 )
 					, error   = local.res.errordetail ?: ""
 					, content = IsSimpleValue( local.res.fileContent ?: "" ) ? local.res.fileContent : ""
+				};
+			},
+			// LDEV-6796: does the file exist, redirects are not followed, a redirect is the answer of a repository that points to the file
+			head = function( required string url, required numeric timeout ) {
+				http url=arguments.url method="head" timeout=arguments.timeout redirect=false useragent=userAgent result="local.res" {}
+				return {
+					  status = Val( local.res.statusCode ?: 0 )
+					, error  = local.res.errordetail ?: ""
 				};
 			},
 			download = function( required string url, required string file, required numeric timeout ) {
