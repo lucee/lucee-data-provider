@@ -1,11 +1,14 @@
 #!/usr/bin/env node
-// Idempotently creates the KV namespace and the R2 bucket used by wrangler.toml
-// and writes the KV namespace id into wrangler.toml (CI only, not committed).
+// Idempotently creates the KV namespace and the R2 bucket used by wrangler.toml, sets the
+// bucket's SNAPSHOT expiry lifecycle rule and writes the KV namespace id into wrangler.toml
+// (CI only, not committed).
 //
 // env: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
 // optional: KV_TITLE (default "lucee-maven-bridge-cache"), R2_BUCKET (default: bucket_name in wrangler.toml)
+// wrangler.toml [vars]: R2_PREFIX, R2_SNAPSHOT_PREFIX, R2_SNAPSHOT_RETENTION_DAYS (see README)
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { mergeLifecycleRules, normalizeSnapshotPrefix, parseRetentionDays, readTomlVar, snapshotExpiryRule } from "./lifecycle.mjs";
 
 const token = process.env.CLOUDFLARE_API_TOKEN;
 const account = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -67,6 +70,23 @@ if (info.ok) {
 	console.log(`R2 bucket "${bucket}" created`);
 } else {
 	fail(`Reading R2 bucket "${bucket}"`, info);
+}
+
+// --- R2 lifecycle: delete SNAPSHOT objects some days after they were stored ---
+// the PUT replaces every rule of the bucket, so the other rules are read and kept
+const snapshotPrefix = (readTomlVar(toml, "R2_PREFIX") ?? "") + normalizeSnapshotPrefix(readTomlVar(toml, "R2_SNAPSHOT_PREFIX"));
+const retentionDays = parseRetentionDays(readTomlVar(toml, "R2_SNAPSHOT_RETENTION_DAYS"));
+const lifecyclePath = `/r2/buckets/${encodeURIComponent(bucket)}/lifecycle`;
+const lifecycle = await api("GET", lifecyclePath);
+if (!lifecycle.ok) fail(`Reading the lifecycle rules of R2 bucket "${bucket}"`, lifecycle);
+const merged = mergeLifecycleRules(lifecycle.json.result?.rules, snapshotExpiryRule(snapshotPrefix, retentionDays));
+const what = retentionDays ? `delete "${snapshotPrefix}*" after ${retentionDays} days` : "no SNAPSHOT expiry";
+if (merged.changed) {
+	const r = await api("PUT", lifecyclePath, { rules: merged.rules });
+	if (!r.ok) fail(`Setting the lifecycle rules of R2 bucket "${bucket}"`, r);
+	console.log(`R2 bucket "${bucket}" lifecycle set: ${what}`);
+} else {
+	console.log(`R2 bucket "${bucket}" lifecycle unchanged: ${what}`);
 }
 
 // --- wrangler.toml ---

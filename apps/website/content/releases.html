@@ -1,0 +1,33 @@
+title: Releases
+description: Supported Lucee versions, release dates and end-of-life information, with links to changelogs and downloads.
+path: releases.html
+nav: 
+---
+<div class="page-head"><div class="container">
+  <h1>Releases</h1>
+  <p>Which Lucee version to run, and what is still supported. Always take the current version numbers from the download page.</p>
+</div></div>
+
+<div class="container">
+<section id="supported">
+  <h2 class="section-title">Supported versions</h2>
+  <p class="section-intro">Take the exact version numbers from the <a href="https://download.lucee.org/">download page</a>.</p>
+  {{RELEASES_TABLE}}
+  <p class="table-note">Released is the date of the first final release of the line on Maven Central. The end of life of 5.4 and older is stated on the <a href="https://docs.lucee.org/">docs home page</a>. Security fixes are also backported to 6.2, see the <a href="https://docs.lucee.org/recipes/release-cycle.html">release cycle guide</a>.</p>
+  <p><a class="btn" href="https://download.lucee.org/">Download Lucee</a> &nbsp; <a href="https://download.lucee.org/versions.cfm">All releases</a> &middot; <a href="https://github.com/lucee/Lucee/releases">GitHub releases</a> &middot; <a href="https://download.lucee.org/changelog.cfm">Full changelog</a></p>
+</section>
+
+<section id="history">
+  <h2 class="section-title">History</h2>
+  {{RELEASES_TIMELINE}}
+  <p class="table-note">Sources: {{RELEASES_SOURCES}}</p>
+</section>
+
+<section>
+  <h2 class="section-title">Version numbers and branches</h2>
+  <div class="prose">
+  <p>A Lucee version has four parts, <code>MAJOR.MINOR.PATCH.BUILD</code>, plus an optional qualifier: <code>-SNAPSHOT</code> (development build), <code>-ALPHA</code> or <code>-BETA</code> (early builds), <code>-RC</code> (release candidate). A final release has no qualifier.</p>
+  <p>The source repository has one long-lived branch per version line. Bug fixes go to <code>7.1</code>, breaking-change fixes to <code>8.0</code>, and new features to <code>9.0</code>. Details are in the <a href="https://docs.lucee.org/recipes/release-cycle.html">release cycle and branching guide</a>.</p>
+  </div>
+</section>
+</div>

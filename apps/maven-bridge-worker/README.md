@@ -46,8 +46,11 @@ Two kinds of groups, configured in `EXTENSION_PROVIDERS`:
   shares the invocation's CPU and memory limits and must finish within 30 s of the response; runs
   ended early are counted (`checksum-attempts:…`) and logged, and after 3 the artifact is left alone
   for a day. A download that ends short of its `content-length` is never cached. Results
-  are cached in KV, for 30 days for immutable artifacts and for `CACHE_TTL_MINUTES` for snapshots;
-  with fill-on-miss, checksums of immutable artifacts are also stored in R2 next to the artifact.
+  are cached in KV for 30 days, snapshots included (every file name, SNAPSHOT builds too, keeps its
+  content); with fill-on-miss, computed checksums are also stored in R2 next to the artifact.
+  With fill-on-miss, an artifact that is not in R2 yet is downloaded once into R2 and hashed from there
+  (R2 reads are not billed as egress), so a later request for the file is not a second download; without
+  R2 the artifact is downloaded once per 30 days at most (until the KV entry expires).
 - REST provider groups have no checksum files: pom checksums are computed from the generated pom,
   `.lex` checksums from the provider download. Anything else answers 404, never the artifact.
 
@@ -58,7 +61,9 @@ streamed by the worker (content type, ETag, Last-Modified, Content-Length, `Rang
 `If-None-Match`/`If-Modified-Since` → 304, `HEAD`). A miss falls back to the redirect logic above, or with fill on miss is fetched from the
 source and stored (see below). `R2_HOSTS` limits R2 to some hostnames (comma separated, empty = all);
 the other hostnames keep the plain redirects.
-Group-level files (`maven-metadata.xml`, `index.html`) of upstream groups are read from R2 first too.
+Listings and `maven-metadata.xml` files of upstream groups are read from the upstream first; a copy in
+R2 is only used when the upstream does not have the file or cannot be reached (so a bulk copy can never
+pin old metadata).
 
 Object keys use the Maven layout of the upstream, so a copy of `cdn.lucee.org` can be used as is:
 
@@ -66,13 +71,18 @@ Object keys use the Maven layout of the upstream, so a copy of `cdn.lucee.org` c
 - core files are also looked up under their legacy flat CDN name at the bucket root
   (`lucee-light-6.2.0.321.jar`, `6.2.0.321.lco`) when the Maven-layout key is missing; fill on miss
   always writes the Maven-layout key.
+- `SNAPSHOT` files the worker stores go below `R2_SNAPSHOT_PREFIX` (default `snapshots/`), e.g.
+  `snapshots/org/lucee/lucee/7.1.0.10-SNAPSHOT/lucee-7.1.0.10-SNAPSHOT.jar`, so a lifecycle rule can
+  expire them (see [SNAPSHOT expiry](#snapshot-expiry)). The plain Maven-layout key is still looked up
+  after that.
 
-`R2_PREFIX` is prepended to every key.
+`R2_PREFIX` is prepended to every key (before `R2_SNAPSHOT_PREFIX`).
 
 #### Fill on miss (lazy migration)
 
 With `R2_MODE = "serve"` and `R2_FILL_ON_MISS = "true"`, a miss for an upstream-mirror file is fetched
-from its source (GitHub Releases or the CDN) and stored in R2 under its Maven-layout key. The next request is
+from its source (GitHub Releases or the CDN) and stored in R2 under its Maven-layout key (SNAPSHOT files
+below `R2_SNAPSHOT_PREFIX`). The next request is
 served from R2; the redirect is only the fallback.
 
 - Files up to `R2_FILL_STREAM_MAX_MB` (default 32) are streamed to the client and stored at the same
@@ -92,21 +102,27 @@ source is never stored. `maven-metadata.xml*` and `index.html` are never stored.
 have are computed as before. Stored objects carry `customMetadata.source`, `filledAt` and the
 source's `ETag` / `Last-Modified` (`sourceEtag`, `sourceLastModified`).
 
-Release files never change and are served from R2 forever. `SNAPSHOT` files are republished under the
-same name, so a stored SNAPSHOT copy is only served as is for `R2_REVALIDATE_MINUTES` (default 5) after
-it was stored or last checked. After that the next `GET` asks the source with `If-None-Match` /
-`If-Modified-Since`:
+A file is fetched from its source once, and only when a client asks for it: a stored file (SNAPSHOT
+files included) is served from R2 and never fetched or revalidated again, no cron or listing
+downloads artifacts, and parallel requests for the same missing file share one download (per isolate).
+This holds because artifact file names are immutable: a new SNAPSHOT build is published under a new
+file name (it carries its own build number), never under the name of an older one. A SNAPSHOT copy under its plain Maven-layout key (bulk copy, legacy keys) is
+served as it is too. Files that were not stored yet answer from the source: the redirect is the
+fallback when the source cannot be reached or does not state a size.
 
-- `304`: the stored copy is served and counts as checked for another `R2_REVALIDATE_MINUTES` (per colo,
-  Cache API)
-- `200`: the new file replaces the stored copy and is served
-- `404`/`410`: the stored copy is deleted and the request answers `404`
-- source unreachable or any other answer: the stored copy is served
+Listings, `maven-metadata.xml` and existence checks only use `HEAD` or small text requests (cached, see
+`METADATA_CACHE_TTL_MINUTES`). A `404` of the source is remembered per location for
+`NEGATIVE_CACHE_TTL_MINUTES` (default 5), so crawlers asking for files that do not exist do not reach
+the source on every request; other errors are never remembered, and a flush clears the memory.
 
-`HEAD` and `Range` requests for a stale SNAPSHOT copy (or a miss) keep the redirect. With
-`R2_REVALIDATE_MINUTES = "0"` every SNAPSHOT `GET` is checked against the source. SNAPSHOT objects
-put into the bucket by other means (bulk copy, legacy flat keys) are served as they are while fill on
-miss is off.
+#### SNAPSHOT expiry
+
+`scripts/provision.mjs` sets a lifecycle rule on the bucket (id `lucee-maven-bridge-snapshot-expiry`)
+that deletes objects below `R2_PREFIX` + `R2_SNAPSHOT_PREFIX` `R2_SNAPSHOT_RETENTION_DAYS` (default 90)
+days after they were stored. An expired SNAPSHOT file is fetched from its source again on the next
+request for it (once more, then stored for another retention period). Release files are never expired. `R2_SNAPSHOT_RETENTION_DAYS = "0"` removes the rule.
+The provision script reads the bucket's rules first and keeps all other rules (the lifecycle API
+replaces the whole list); it only writes when the rule differs.
 
 ForgeBox downloads are not filled (they are served by ForgeBox, not mirrored).
 
@@ -114,14 +130,19 @@ ForgeBox downloads are not filled (they are served by ForgeBox, not mirrored).
 
 The CFML bridge kept everything in the server scope. Here:
 
-- **KV (`BRIDGE_CACHE`)**: REST provider indexes (`index:<groupId>`) and upstream group files
-  (`upstream:<url>`), refreshed by the **hourly cron**. Entries older than `CACHE_TTL_MINUTES` are
-  served while a refresh runs in the background; if the provider is down the last good copy is used.
+- **KV (`BRIDGE_CACHE`)**: REST provider indexes (`index:<groupId>`), refreshed by the **hourly cron**.
+  Entries older than `CACHE_TTL_MINUTES` are served while a refresh runs in the background; if the
+  provider is down the last good copy is used. Upstream group files (`upstream:<url>`, the group
+  `maven-metadata.xml` and listing) are kept in KV too, written by the cron and whenever they change,
+  but only served from there when the upstream cannot be reached.
   Computed checksums (`checksum:<generation>:<type>:<source>`) are kept in KV too, with an expiration,
   next to the short-lived markers of background computations (`checksum-pending:<generation>:<source>`)
   and their attempt counts (`checksum-attempts:<generation>:<source>`, 1 day).
-- **Cache API**: upstream metadata/index pages and positive `HEAD` checks on the upstream, keyed by a
-  cache generation that a flush bumps.
+- **Cache API**: upstream directory listings and `maven-metadata.xml` files for
+  `METADATA_CACHE_TTL_MINUTES` (default 5), so new releases show up within minutes, and positive `HEAD`
+  checks on the upstream for `CACHE_TTL_MINUTES`, keyed by a cache generation that a flush bumps.
+  The Cache API is per Cloudflare location, and a zone purge by URL does not reach these entries
+  (the Worker uses its own cache keys); use `?flush=metadata` (below) instead.
 
 ### Flush
 
@@ -134,6 +155,17 @@ like `health.cfm?flush=true`. It needs the `FLUSH_TOKEN` secret, sent as `X-Flus
 curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/health?flush=true"
 ```
 
+`?flush=metadata` (same token) only drops the cached directory listings and `maven-metadata.xml`
+files, in all locations, so a release shows up right after it is uploaded instead of after up to
+`METADATA_CACHE_TTL_MINUTES`. Artifacts, checksums and provider indexes stay cached and nothing is
+resynced. It bumps a generation counter in KV (`metadata-generation`) that is part of the cache keys;
+KV changes can take about a minute to reach every location. The request is then answered as usual,
+so the listing of the new release comes back fresh:
+
+```sh
+curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/org/lucee/tasks-extension/?flush=metadata"
+```
+
 ## Configuration
 
 `wrangler.toml` `[vars]` (no secrets in the file):
@@ -142,16 +174,19 @@ curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/health?flu
 |----------|---------|---------|
 | `EXTENSION_PROVIDERS` | ForgeBox + extension.lucee.org/cdn | `provider\|groupId[\|upstream]`, comma separated, or a JSON array of `{provider, groupId, upstream}` |
 | `CACHE_TTL_MINUTES` | `60` | age after which KV entries are refreshed |
+| `METADATA_CACHE_TTL_MINUTES` | `5` | how long directory listings and `maven-metadata.xml` are cached per location (`0` = not cached) |
+| `NEGATIVE_CACHE_TTL_MINUTES` | `5` | how long a 404 of the upstream (existence checks, listings, metadata) is remembered per location (`0` = not remembered) |
 | `TIMEOUT` | `300` | upstream/provider timeout in seconds |
 | `GITHUB_RELEASES_URL` | `https://github.com/lucee/Lucee/releases/download/` | 7.1+ core builds; empty disables |
 | `R2_MODE` | `off` | `off` or `serve` |
-| `R2_FILL_ON_MISS` | `false` | store upstream files in R2 on first request, SNAPSHOTs revalidated (serve mode only) |
-| `R2_REVALIDATE_MINUTES` | `5` | how long a stored SNAPSHOT file is served without asking the source (`0` = every request) |
+| `R2_FILL_ON_MISS` | `false` | store upstream files in R2 on first request and never fetch them again (serve mode only) |
 | `R2_HOSTS` | empty | hostnames that use R2, comma separated; empty = all hostnames |
 | `CHECKSUM_MAX_MB` | `128` | checksums the upstream does not have are computed for artifacts up to this size; larger ones answer 404 (`0` = never compute) |
 | `CHECKSUM_INLINE_MAX_MB` | `16` | computed checksums of larger artifacts are hashed in the background and answer 404 until cached (`0` = always in the background) |
 | `R2_FILL_STREAM_MAX_MB` | `32` | fill-on-miss files up to this size are streamed while stored; larger ones are stored first (`0` = always store first). Answers without a usable length (e.g. compressed) are only stored up to this size |
 | `R2_PREFIX` | empty | key prefix in the bucket |
+| `R2_SNAPSHOT_PREFIX` | `snapshots/` | key prefix (after `R2_PREFIX`) of the SNAPSHOT files the worker stores; never empty |
+| `R2_SNAPSHOT_RETENTION_DAYS` | `90` | stored SNAPSHOT files are deleted by an R2 lifecycle rule this many days after they were stored (`0` = never); applied by `scripts/provision.mjs` on deploy |
 
 Secrets: `FLUSH_TOKEN` (`wrangler secret put FLUSH_TOKEN`; CI sets it from the
 `MAVEN_BRIDGE_FLUSH_TOKEN` secret when that exists).
@@ -181,13 +216,14 @@ ForgeBox provider answer and the pom production generates for it.
 
 - pull requests touching `apps/maven-bridge-worker/**`: typecheck, tests, dry run — no deploy
 - push to `main` touching the folder, or a manual run on `main`: tests, then
-  `scripts/provision.mjs` creates the KV namespace and the R2 bucket if missing (idempotent) and writes
-  the KV id into `wrangler.toml`, then `cloudflare/wrangler-action` deploys
+  `scripts/provision.mjs` creates the KV namespace and the R2 bucket if missing, sets the bucket's
+  SNAPSHOT lifecycle rule (all idempotent) and writes the KV id into `wrangler.toml`, then
+  `cloudflare/wrangler-action` deploys
 
 It uses the org secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; they are passed only to the
 provision, deploy and secret steps. Token permissions:
 
-- Account: Workers Scripts Edit, Workers KV Storage Edit, Workers R2 Storage Edit
+- Account: Workers Scripts Edit, Workers KV Storage Edit, Workers R2 Storage Edit (bucket and lifecycle rule)
 - Zone `lucee-services.com`: Workers Routes Edit (custom domain), DNS Edit
 
 Cloudflare creates the DNS record of each custom domain. A deploy from CI (non-interactive) replaces an
@@ -226,8 +262,10 @@ It exits with 1 when anything differs.
      redirect to (CDN or GitHub Releases), without access to the source bucket; files nobody asks
      for are never copied.
    - Once R2 has everything, the upstream redirects remain only as a fallback.
-   - `wrangler.toml` enables serve mode and fill on miss for `mvn.lucee-services.com` only
-     (`R2_HOSTS`); clear `R2_HOSTS` (or add `maven.lucee-services.com`) to use R2 on production too.
+   - `wrangler.toml` enables serve mode and fill on miss for `maven.lucee-services.com` and
+     `mvn.lucee-services.com` (`R2_HOSTS`), so production serves from R2 and downloads each
+     artifact from its source once, on the first request. Rollback: remove `maven.lucee-services.com`
+     from `R2_HOSTS` and deploy; that hostname goes back to the upstream redirects.
 
 ## Differences from `apps/maven-bridge`
 

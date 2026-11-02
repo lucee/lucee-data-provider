@@ -50,13 +50,15 @@ component {
 		,          string  version  = ""       restargsource="url"
 		,          string  coreVersion = ""    restargsource="url"
 		,          boolean flush    = false    restargsource="url"
+		,          string  type     = "release" restargsource="url" // the type of version to answer with when no version is given
 	){
-		var ext = metaReader.getExtensionDetail(
+		var ext = _getDetail(
 			  id       	    = arguments.id
 			, withLogo      = arguments.withLogo
 			, version       = arguments.version
 			, coreVersion   = arguments.coreVersion
 			, flush         = arguments.flush
+			, type          = arguments.type
 		);
 
 		if ( StructCount( ext ) ) {
@@ -87,19 +89,21 @@ component {
 		,          string  version = ""     restargsource="url"
 		,          string  coreVersion = "" restargsource="url"
 		,          boolean flush   = false  restargsource="url"
+		,          string  type    = "release" restargsource="url" // the type of version to answer with when no version is given
 	) {
 
-		var ext = metaReader.getExtensionDetail(
+		var ext = _getDetail(
 			  id       = arguments.id
 			, version  = arguments.version
 			, coreVersion   = arguments.coreVersion
 			, flush    = arguments.flush
 			, withLogo = false
+			, type     = arguments.type
 		);
 
 		if ( StructCount( ext ) ) {
 			header statuscode="302" statustext="Found";
-			header name="Location" value=variables.cdnURL & ext.filename;
+			header name="Location" value=metaReader.getDownloadUrl( ext.filename, variables.cdnURL );
 			return;
 		}
 
@@ -117,19 +121,21 @@ component {
 		,          string  version = ""     restargsource="url"
 		,          string  coreVersion = "" restargsource="url"
 		,          boolean flush   = false  restargsource="url"
+		,          string  type    = "release" restargsource="url" // the type of version to answer with when no version is given
 	) {
 
-		var ext = metaReader.getExtensionDetail(
+		var ext = _getDetail(
 			  id       = arguments.id
 			, version  = arguments.version
 			, coreVersion   = arguments.coreVersion
 			, flush    = arguments.flush
 			, withLogo = false
+			, type     = arguments.type
 		);
 
 		if ( StructCount( ext ) ) {
 			header statuscode="302" statustext="Found";
-			header name="Location" value=variables.cdnURL & ext.filename;
+			header name="Location" value=metaReader.getDownloadUrl( ext.filename, variables.cdnURL );
 			return;
 		}
 
@@ -163,4 +169,21 @@ component {
 	remote function reset() {
 		metaReader.loadMeta();
 	}
+
+	/**
+	 * LDEV-6795: the details of an extension, empty when there is none for the arguments. That includes the
+	 * case that there are versions, but none that the core version can load: that is a 404, as for a version
+	 * that is not there, not an error.
+	 */
+	private struct function _getDetail() {
+		try {
+			return metaReader.getExtensionDetail( argumentCollection=arguments );
+		} catch ( any e ) {
+			if ( e.message contains "No extension version available" ) {
+				return {};
+			}
+			rethrow;
+		}
+	}
+
 }

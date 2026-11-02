@@ -10,6 +10,11 @@ export interface Env {
 	EXTENSION_PROVIDER?: string;
 	GROUP_ID?: string;
 	CACHE_TTL_MINUTES?: string;
+	/**
+	 * Directory listings (index.html) and maven-metadata.xml files are cached per location for
+	 * this many minutes, then read again from the upstream. Default 5, 0 = not cached.
+	 */
+	METADATA_CACHE_TTL_MINUTES?: string;
 	/** Timeout in seconds for upstream/provider requests. */
 	TIMEOUT?: string;
 	/** Base URL of the GitHub Release assets for core files; empty disables the lookup. */
@@ -37,10 +42,11 @@ export interface Env {
 	 */
 	CHECKSUM_INLINE_MAX_MB?: string;
 	/**
-	 * Stored SNAPSHOT files are served from R2 for this many minutes after they were stored
-	 * or last revalidated, then revalidated against their source. Default 5, 0 = on every request.
+	 * Minutes a 404 of the upstream (existence checks, listings, metadata) is remembered per location,
+	 * so crawlers asking for files that do not exist do not reach the upstream every time.
+	 * Default 5, 0 = never.
 	 */
-	R2_REVALIDATE_MINUTES?: string;
+	NEGATIVE_CACHE_TTL_MINUTES?: string;
 	/**
 	 * Comma separated hostnames that use R2 (R2_MODE, R2_FILL_ON_MISS); other hostnames
 	 * and the cron behave as with R2_MODE = "off". Empty = every hostname.
@@ -48,6 +54,16 @@ export interface Env {
 	R2_HOSTS?: string;
 	/** Optional key prefix inside the R2 bucket. */
 	R2_PREFIX?: string;
+	/**
+	 * Key prefix (after R2_PREFIX) of the SNAPSHOT files the worker stores, so a lifecycle
+	 * rule can expire them. Default "snapshots/".
+	 */
+	R2_SNAPSHOT_PREFIX?: string;
+	/**
+	 * Days after which stored SNAPSHOT files are deleted. Only read by scripts/provision.mjs,
+	 * which sets the bucket's lifecycle rule. Default 90, 0 = keep forever.
+	 */
+	R2_SNAPSHOT_RETENTION_DAYS?: string;
 	/** Secret: required for ?flush=true. When unset, flushing is disabled. */
 	FLUSH_TOKEN?: string;
 }

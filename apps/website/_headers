@@ -1,0 +1,24 @@
+# Cloudflare Workers static assets custom headers
+# Keep the *.workers.dev URLs (production and preview aliases) out of search engines.
+# Does not apply to a custom domain such as lucee.org.
+https://:version.:subdomain.workers.dev/*
+  X-Robots-Tag: noindex
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+/assets/*
+  Cache-Control: public, max-age=3600
+
+# Shared header component is included by other Lucee sites (download, mcp, skill),
+# so it must be readable cross-origin and cached briefly so changes roll out quickly.
+/shared/*
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=300
+  Cross-Origin-Resource-Policy: cross-origin
+
+/.well-known/security.txt
+  Content-Type: text/plain; charset=utf-8

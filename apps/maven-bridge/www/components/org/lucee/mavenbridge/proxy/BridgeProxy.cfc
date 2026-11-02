@@ -78,23 +78,11 @@ component {
 	private struct function artifactFileResponse(required any support, required struct parsed) {
 		// upstream mirrors serve files from the upstream repo only, never from the REST provider
 		if (support.hasUpstream()) {
-			// core "lucee" files are canonical at the upstream root (legacy layout)
-			var legacyPath = support.toUpstreamLegacyCorePath(arguments.parsed);
-			if (len(legacyPath)) {
-				// 7.1+ core builds are published as GitHub Release assets and may not be
-				// on the upstream CDN at all; prefer GitHub, keep the CDN as fallback
-				var githubUrl = support.findGithubReleaseUrl(arguments.parsed);
-				if (len(githubUrl)) {
-					return redirectResponse(githubUrl);
-				}
-				if (support.upstreamResourceExists(legacyPath)) {
-					return redirectResponse(support.getUpstreamUrl() & legacyPath);
-				}
-				return textResponse(404, "text/plain; charset=utf-8", "Not found");
-			}
-			var upstreamPath = support.toUpstreamRelativePath(arguments.parsed);
-			if (support.upstreamResourceExists(upstreamPath)) {
-				return redirectResponse(support.getUpstreamUrl() & upstreamPath);
+			// 7.1+ core files come from the GitHub Release; then the legacy flat layout at the
+			// upstream root and the Maven layout (see BridgeSupport.toUpstreamFileCandidates)
+			var fileUrl = support.findUpstreamFileUrl(arguments.parsed);
+			if (len(fileUrl)) {
+				return redirectResponse(fileUrl);
 			}
 			return textResponse(404, "text/plain; charset=utf-8", "Not found");
 		}

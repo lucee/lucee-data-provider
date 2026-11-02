@@ -40,18 +40,25 @@ bucket_name = "lucee-artifacts"
 [vars]
 EXTENSION_PROVIDERS = "https://www.forgebox.io|io.forgebox,https://extension.lucee.org|org.lucee|https://cdn.lucee.org/"
 CACHE_TTL_MINUTES = "60"
+# directory listings and maven-metadata.xml are cached per location for this long, so new releases show up quickly; 0 = not cached
+METADATA_CACHE_TTL_MINUTES = "5"
 TIMEOUT = "300"
 GITHUB_RELEASES_URL = "https://github.com/lucee/Lucee/releases/download/"
 # "off": upstream redirects only (like maven-bridge); "serve": serve objects found in R2 first
 R2_MODE = "serve"
 # "true": in serve mode, store artifacts in R2 on their first request (read-through cache, lazy migration);
-# SNAPSHOT files are stored too and revalidated against their source after R2_REVALIDATE_MINUTES
+# SNAPSHOT files are stored too; a stored file is never fetched from its source again (file names are immutable)
 R2_FILL_ON_MISS = "true"
-R2_REVALIDATE_MINUTES = "5"
+# minutes a 404 of the upstream is remembered (0 = never)
+NEGATIVE_CACHE_TTL_MINUTES = "5"
 # hostnames that use R2 (R2_MODE, R2_FILL_ON_MISS); all others keep the upstream redirects. Empty = all hostnames.
-R2_HOSTS = "mvn.lucee-services.com"
+R2_HOSTS = "maven.lucee-services.com,mvn.lucee-services.com"
 R2_FILL_STREAM_MAX_MB = "32"
 R2_PREFIX = ""
+# SNAPSHOT files are stored under this key prefix (after R2_PREFIX), so a lifecycle rule can expire them
+R2_SNAPSHOT_PREFIX = "snapshots/"
+# days after which stored SNAPSHOT files are deleted (lifecycle rule set by scripts/provision.mjs), 0 = keep forever
+R2_SNAPSHOT_RETENTION_DAYS = "90"
 # checksums missing upstream are computed from artifacts up to this size (MB), 0 = never
 CHECKSUM_MAX_MB = "128"
 # larger artifacts are hashed in the background (the checksum answers 404 until it is cached), 0 = always

@@ -252,11 +252,25 @@ describe("R2", () => {
 		expect(res.status).toBe(302);
 	});
 
-	it("serves maven-metadata.xml from R2 when present", async () => {
-		mockFetch(baseRoutes());
+	it("serves maven-metadata.xml from R2 only when the upstream does not have it", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}org/lucee/redis-extension/maven-metadata.xml`]: new Response("missing", { status: 404 }) });
 		await bindings.ARTIFACTS!.put("org/lucee/redis-extension/maven-metadata.xml", "<metadata/>");
 		const res = await call("/org/lucee/redis-extension/maven-metadata.xml", {}, R2);
 		expect(await res.text()).toBe("<metadata/>");
+	});
+
+	it("prefers the upstream maven-metadata.xml over an old copy in R2", async () => {
+		mockFetch(baseRoutes());
+		await bindings.ARTIFACTS!.put("org/lucee/redis-extension/maven-metadata.xml", "<old/>");
+		await bindings.ARTIFACTS!.put("org/lucee/maven-metadata.xml", "<old/>");
+		expect(await (await call("/org/lucee/redis-extension/maven-metadata.xml", {}, R2)).text()).toBe(REDIS_METADATA);
+		expect(await (await call("/org/lucee/maven-metadata.xml", {}, R2)).text()).toBe(GROUP_METADATA);
+	});
+
+	it("falls back to the R2 copy of maven-metadata.xml when the upstream fails", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}org/lucee/redis-extension/maven-metadata.xml`]: new Response("down", { status: 503 }) });
+		await bindings.ARTIFACTS!.put("org/lucee/redis-extension/maven-metadata.xml", "<metadata/>");
+		expect(await (await call("/org/lucee/redis-extension/maven-metadata.xml", {}, R2)).text()).toBe("<metadata/>");
 	});
 });
 
@@ -512,7 +526,8 @@ describe("R2 fill-on-miss", () => {
 
 describe("R2 read-through of SNAPSHOT files", () => {
 	const snap = "org/lucee/redis-extension/3.0.0.1-SNAPSHOT/redis-extension-3.0.0.1-SNAPSHOT.lex";
-	const STALE = { ...FILL, R2_REVALIDATE_MINUTES: "0" } as const;
+	/** R2 key of the stored copy: below R2_SNAPSHOT_PREFIX */
+	const snapKey = "snapshots/" + snap;
 
 	/** CDN-like source: ETag validator, 304 on a matching If-None-Match */
 	function source(state: { body: string; etag: string; seen: (string | null)[] }): Route {
@@ -524,13 +539,13 @@ describe("R2 read-through of SNAPSHOT files", () => {
 		};
 	}
 
-	it("stores SNAPSHOT files with the source's validators and serves them from R2 while fresh", async () => {
+	it("stores SNAPSHOT files with the source's validators and serves them from R2 without asking the source again", async () => {
 		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
 		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
 		const res = await call("/" + snap, {}, FILL);
 		expect(res.status).toBe(200);
 		expect(await res.text()).toBe("snapshot-1");
-		const stored = await bindings.ARTIFACTS!.head(snap);
+		const stored = await bindings.ARTIFACTS!.head(snapKey);
 		expect(stored!.customMetadata?.source).toBe(CDN + snap);
 		expect(stored!.customMetadata?.sourceEtag).toBe('"v1"');
 		expect(stored!.customMetadata?.sourceLastModified).toBe("Tue, 27 Oct 2026 16:21:27 GMT");
@@ -546,135 +561,54 @@ describe("R2 read-through of SNAPSHOT files", () => {
 		expect(head.headers.get("content-length")).toBe("10");
 	});
 
-	it("revalidates a stale copy with If-None-Match and keeps it on 304", async () => {
-		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
-		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
-		await call("/" + snap, {}, STALE);
-		const before = await bindings.ARTIFACTS!.head(snap);
-
-		const res = await call("/" + snap, {}, STALE);
-		expect(res.status).toBe(200);
-		expect(await res.text()).toBe("snapshot-1");
-		expect(state.seen).toEqual([null, '"v1"']);
-		// not rewritten
-		expect((await bindings.ARTIFACTS!.head(snap))!.uploaded.getTime()).toBe(before!.uploaded.getTime());
-	});
-
-	it("replaces a stale copy when the source has a new version", async () => {
-		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
-		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
-		await call("/" + snap, {}, STALE);
-		state.body = "snapshot-two";
-		state.etag = '"v2"';
-
-		const res = await call("/" + snap, {}, STALE);
-		expect(res.status).toBe(200);
-		expect(await res.text()).toBe("snapshot-two");
-		const stored = await bindings.ARTIFACTS!.get(snap);
-		expect(await stored!.text()).toBe("snapshot-two");
-		expect(stored!.customMetadata?.sourceEtag).toBe('"v2"');
-	});
-
-	it("remembers a successful revalidation for R2_REVALIDATE_MINUTES", async () => {
+	it("never asks the source again for a stored SNAPSHOT, however old the copy is or what the source has now", async () => {
 		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
 		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
 		// stored long ago
-		await bindings.ARTIFACTS!.put(snap, "snapshot-1", {
+		await bindings.ARTIFACTS!.put(snapKey, "snapshot-1", {
 			customMetadata: { source: CDN + snap, filledAt: "2026-01-01T00:00:00.000Z", sourceEtag: '"v1"' }
 		});
-		expect(await (await call("/" + snap, {}, FILL)).text()).toBe("snapshot-1");
-		expect(state.seen).toEqual(['"v1"']);
-		expect(await (await call("/" + snap, {}, FILL)).text()).toBe("snapshot-1");
-		expect(state.seen).toEqual(['"v1"']);
+		state.body = "something else";
+		state.etag = '"v2"';
+		const before = await bindings.ARTIFACTS!.head(snapKey);
+		for (let i = 0; i < 3; i++) {
+			const res = await call("/" + snap, {}, FILL);
+			expect(res.status).toBe(200);
+			expect(await res.text()).toBe("snapshot-1");
+		}
+		const head = await call("/" + snap, { method: "HEAD" }, FILL);
+		expect(head.status).toBe(200);
+		expect(head.headers.get("content-length")).toBe("10");
+		const range = await call("/" + snap, { headers: { range: "bytes=0-1" } }, FILL);
+		expect(range.status).toBe(206);
+		expect(await range.text()).toBe("sn");
+		expect(calls.filter((c) => c.includes(snap))).toEqual([]);
+		expect((await bindings.ARTIFACTS!.head(snapKey))!.uploaded.getTime()).toBe(before!.uploaded.getTime());
 	});
 
-	it("revalidates a compressed SNAPSHOT file with its weak ETag", async () => {
-		const pom = "org/lucee/tasks-extension/1.1.1.1-SNAPSHOT/tasks-extension-1.1.1.1-SNAPSHOT.pom";
-		// the stored copy, whatever key prefix SNAPSHOT files are stored under
-		const storedKey = async () => (await bindings.ARTIFACTS!.list()).objects.find((o) => o.key.endsWith(pom))!.key;
-		// like the CDN with a compressed answer: weak ETag, no content-length, 304 on a matching If-None-Match
-		const state = { body: "<project>1</project>", etag: 'W/"v1"', seen: [] as (string | null)[] };
-		mockFetch({
-			...baseRoutes(),
-			[CDN + pom]: (req) => {
-				if (req.method === "GET") state.seen.push(req.headers.get("if-none-match"));
-				if (req.headers.get("if-none-match") === state.etag) return new Response(null, { status: 304, headers: { etag: state.etag } });
-				return new Response(req.method === "HEAD" ? null : new Blob([state.body]).stream(), {
-					status: 200,
-					headers: { etag: state.etag, "content-encoding": "gzip", "last-modified": "Tue, 27 Oct 2026 16:21:27 GMT" }
-				});
-			}
-		});
-		expect(await (await call("/" + pom, {}, STALE)).text()).toBe("<project>1</project>");
-		const before = await bindings.ARTIFACTS!.head(await storedKey());
-		expect(before!.customMetadata?.sourceEtag).toBe('W/"v1"');
-
-		// unchanged: 304, the stored copy is kept
-		expect(await (await call("/" + pom, {}, STALE)).text()).toBe("<project>1</project>");
-		expect(state.seen).toEqual([null, 'W/"v1"']);
-		expect((await bindings.ARTIFACTS!.head(await storedKey()))!.uploaded.getTime()).toBe(before!.uploaded.getTime());
-
-		// republished: the new version is stored
-		state.body = "<project>two</project>";
-		state.etag = 'W/"v2"';
-		expect(await (await call("/" + pom, {}, STALE)).text()).toBe("<project>two</project>");
-		const stored = await bindings.ARTIFACTS!.get(await storedKey());
-		expect(await stored!.text()).toBe("<project>two</project>");
-		expect(stored!.size).toBe("<project>two</project>".length);
-		expect(stored!.customMetadata?.sourceEtag).toBe('W/"v2"');
-	});
-
-	it("falls back to If-Modified-Since when the source sent no ETag", async () => {
-		let ims: string | null = null;
-		mockFetch({
-			...baseRoutes(),
-			[CDN + snap]: (req) => {
-				ims = req.headers.get("if-modified-since");
-				return new Response(null, { status: 304 });
-			}
-		});
-		await bindings.ARTIFACTS!.put(snap, "old", {
-			customMetadata: { source: CDN + snap, filledAt: "2026-01-01T00:00:00.000Z", sourceLastModified: "Tue, 27 Oct 2026 16:21:27 GMT" }
-		});
-		expect(await (await call("/" + snap, {}, FILL)).text()).toBe("old");
-		expect(ims).toBe("Tue, 27 Oct 2026 16:21:27 GMT");
-	});
-
-	it("drops the stored copy when the source no longer has the file", async () => {
+	it("serves a stored SNAPSHOT even when the source no longer has the file", async () => {
 		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
-		const routes = { ...baseRoutes(), [CDN + snap]: source(state) };
-		mockFetch(routes);
-		await call("/" + snap, {}, STALE);
+		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
+		await call("/" + snap, {}, FILL);
 		mockFetch(baseRoutes());
-		const res = await call("/" + snap, {}, STALE);
-		expect(res.status).toBe(404);
-		expect(res.headers.get("cache-control")).toBe("no-store");
-		expect(await bindings.ARTIFACTS!.head(snap)).toBeNull();
+		const res = await call("/" + snap, {}, FILL);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe("snapshot-1");
+		expect(await bindings.ARTIFACTS!.head(snapKey)).not.toBeNull();
+		expect(calls.some((c) => c.includes(snap))).toBe(false);
 	});
 
 	it("serves the stored copy when the source cannot be reached", async () => {
 		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
 		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
-		await call("/" + snap, {}, STALE);
+		await call("/" + snap, {}, FILL);
 		for (const failing of [() => Promise.reject(new TypeError("Network connection lost")), () => new Response("busy", { status: 503 })]) {
 			mockFetch({ ...baseRoutes(), [CDN + snap]: failing as Route });
-			const res = await call("/" + snap, {}, STALE);
+			const res = await call("/" + snap, {}, FILL);
 			expect(res.status).toBe(200);
 			expect(await res.text()).toBe("snapshot-1");
 		}
-		expect(await bindings.ARTIFACTS!.head(snap)).not.toBeNull();
-	});
-
-	it("redirects HEAD and Range requests for a stale copy instead of revalidating", async () => {
-		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
-		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
-		await call("/" + snap, {}, STALE);
-		state.seen = [];
-		const head = await call("/" + snap, { method: "HEAD" }, STALE);
-		expect(head.status).toBe(302);
-		const range = await call("/" + snap, { headers: { range: "bytes=0-1" } }, STALE);
-		expect(range.status).toBe(302);
-		expect(state.seen).toEqual([]);
+		expect(await bindings.ARTIFACTS!.head(snapKey)).not.toBeNull();
 	});
 
 	it("stores SNAPSHOT checksum files from the source instead of computing them", async () => {
@@ -684,7 +618,7 @@ describe("R2 read-through of SNAPSHOT files", () => {
 		expect(res.status).toBe(200);
 		expect(await res.text()).toBe("0123456789abcdef0123456789abcdef01234567");
 		expect(calls.some((c) => c === `GET ${CDN}${pom}`)).toBe(false);
-		const stored = await bindings.ARTIFACTS!.head(`${pom}.sha1`);
+		const stored = await bindings.ARTIFACTS!.head(`snapshots/${pom}.sha1`);
 		expect(stored!.customMetadata?.source).toBe(`${CDN}${pom}.sha1`);
 	});
 
@@ -694,6 +628,126 @@ describe("R2 read-through of SNAPSHOT files", () => {
 		const res = await call("/" + snap, {}, R2);
 		expect(await res.text()).toBe("copied");
 		expect(calls.some((c) => c.includes(snap))).toBe(false);
+	});
+
+	it("serves a SNAPSHOT copy under the plain Maven key without asking the source", async () => {
+		mockFetch({ ...baseRoutes(), [CDN + snap]: "from the source" });
+		await bindings.ARTIFACTS!.put(snap, "unprefixed", { customMetadata: { source: CDN + snap, filledAt: "2026-01-01T00:00:00.000Z" } });
+		const res = await call("/" + snap, {}, FILL);
+		expect(await res.text()).toBe("unprefixed");
+		expect(calls.some((c) => c.includes(snap))).toBe(false);
+		expect(await bindings.ARTIFACTS!.head(snapKey)).toBeNull();
+	});
+
+	it("honours a custom R2_SNAPSHOT_PREFIX", async () => {
+		const state = { body: "snapshot-1", etag: '"v1"', seen: [] as (string | null)[] };
+		mockFetch({ ...baseRoutes(), [CDN + snap]: source(state) });
+		await call("/" + snap, {}, { ...FILL, R2_SNAPSHOT_PREFIX: "snap" });
+		expect(await bindings.ARTIFACTS!.head("snap/" + snap)).not.toBeNull();
+		expect(await bindings.ARTIFACTS!.head(snapKey)).toBeNull();
+	});
+});
+
+describe("download once", () => {
+	const path = "org/lucee/redis-extension/2.0.0.1/redis-extension-2.0.0.1.lex";
+	const body = "lex-bytes";
+
+	it("makes one request to the source for concurrent requests of the same missing file", async () => {
+		let gets = 0;
+		mockFetch({
+			...baseRoutes(),
+			[CDN + path]: async (req) => {
+				if (req.method === "GET") {
+					gets++;
+					await new Promise((r) => setTimeout(r, 50));
+				}
+				return new Response(req.method === "HEAD" ? null : body, { status: 200, headers: { "content-length": String(body.length) } });
+			}
+		});
+		const results = await Promise.all(Array.from({ length: 6 }, () => call("/" + path, {}, FILL)));
+		for (const res of results) {
+			expect(res.status).toBe(200);
+			expect(await res.text()).toBe(body);
+		}
+		expect(gets).toBe(1);
+		expect(await bindings.ARTIFACTS!.head(path)).not.toBeNull();
+	});
+
+	it("redirects the concurrent requests when the single download fails, without starting more downloads", async () => {
+		let gets = 0;
+		mockFetch({
+			...baseRoutes(),
+			[CDN + path]: async (req) => {
+				if (req.method === "GET") {
+					gets++;
+					await new Promise((r) => setTimeout(r, 50));
+					return new Response("busy", { status: 503 });
+				}
+				return new Response(null, { status: 200 });
+			}
+		});
+		const results = await Promise.all(Array.from({ length: 4 }, () => call("/" + path, {}, FILL)));
+		for (const res of results) expect(res.status).toBe(302);
+		expect(gets).toBe(1);
+		expect(await bindings.ARTIFACTS!.head(path)).toBeNull();
+	});
+
+	it("never fetches a stored file again after a flush", async () => {
+		mockFetch({ ...baseRoutes(), [CDN + path]: body });
+		await call("/" + path, {}, FILL);
+		expect((await call("/health?flush=true", { headers: { "x-flush-token": "test-flush-token" } })).status).toBe(200);
+		mockFetch(baseRoutes());
+		const res = await call("/" + path, {}, FILL);
+		expect(await res.text()).toBe(body);
+		expect(calls.some((c) => c.includes(path))).toBe(false);
+	});
+});
+
+describe("negative cache", () => {
+	const missing = "org/lucee/redis-extension/9.9.9.9/redis-extension-9.9.9.9.lex";
+
+	it("does not ask the CDN again for a file it answered 404 for", async () => {
+		mockFetch(baseRoutes());
+		expect((await call("/" + missing)).status).toBe(404);
+		const first = calls.filter((c) => c.includes(missing)).length;
+		expect(first).toBeGreaterThan(0);
+		mockFetch(baseRoutes());
+		expect((await call("/" + missing)).status).toBe(404);
+		expect(calls.filter((c) => c.includes(missing))).toEqual([]);
+	});
+
+	it("asks again when NEGATIVE_CACHE_TTL_MINUTES is 0", async () => {
+		const off = { NEGATIVE_CACHE_TTL_MINUTES: "0" } as const;
+		mockFetch(baseRoutes());
+		expect((await call("/" + missing, {}, off)).status).toBe(404);
+		mockFetch(baseRoutes());
+		expect((await call("/" + missing, {}, off)).status).toBe(404);
+		expect(calls.filter((c) => c.includes(missing)).length).toBeGreaterThan(0);
+	});
+
+	it("finds a file that appears after a flush", async () => {
+		mockFetch(baseRoutes());
+		expect((await call("/" + missing)).status).toBe(404);
+		mockFetch({ ...baseRoutes(), [CDN + missing]: "lex" });
+		expect((await call("/health?flush=true", { headers: { "x-flush-token": "test-flush-token" } })).status).toBe(200);
+		expect((await call("/" + missing)).status).toBe(302);
+	});
+
+	it("does not remember errors of the CDN, only a 404", async () => {
+		mockFetch({ ...baseRoutes(), [CDN + missing]: () => new Response("busy", { status: 503 }) });
+		expect((await call("/" + missing)).status).toBe(404);
+		mockFetch({ ...baseRoutes(), [CDN + missing]: "lex" });
+		expect((await call("/" + missing)).status).toBe(302);
+	});
+
+	it("does not ask the CDN again for a missing listing or metadata file", async () => {
+		const meta = "org/lucee/nothing-extension/maven-metadata.xml";
+		mockFetch(baseRoutes());
+		expect((await call("/" + meta)).status).toBe(404);
+		expect(calls.some((c) => c.includes(meta))).toBe(true);
+		mockFetch(baseRoutes());
+		expect((await call("/" + meta)).status).toBe(404);
+		expect(calls.some((c) => c.includes(meta))).toBe(false);
 	});
 });
 
@@ -723,6 +777,18 @@ describe("R2_HOSTS", () => {
 		expect(await bindings.ARTIFACTS!.head(path)).not.toBeNull();
 		// the other hostname still redirects, even with the object in R2
 		expect((await callHost("https://maven.lucee-services.com")).status).toBe(302);
+	});
+
+	it("uses R2 on production and test hostname when both are listed", async () => {
+		mockFetch({ ...baseRoutes(), [CDN + path]: "extension-bytes" });
+		const both = { ...FILL, R2_HOSTS: "maven.lucee-services.com,mvn.lucee-services.com" };
+		const ctx = createExecutionContext();
+		const res = await worker.fetch(new Request("https://maven.lucee-services.com/" + path) as never, testEnv(both), ctx);
+		const body = await res.text();
+		await waitOnExecutionContext(ctx);
+		expect(res.status).toBe(200);
+		expect(body).toBe("extension-bytes");
+		expect(await bindings.ARTIFACTS!.head(path)).not.toBeNull();
 	});
 });
 
@@ -802,7 +868,7 @@ describe("checksums (org.lucee)", () => {
 		expect(await md5.text()).toBe(await sha1("lex-bytes", "MD5"));
 	});
 
-	it("caches snapshot checksums only for the cache TTL", async () => {
+	it("caches snapshot checksums as long as release ones (the file name never gets other content)", async () => {
 		const snap = "org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.pom";
 		mockFetch({ ...baseRoutes(), [CDN + snap]: pom });
 		expect(await (await call(`/${snap}.sha1`)).text()).toBe(await sha1(pom));
@@ -810,10 +876,47 @@ describe("checksums (org.lucee)", () => {
 		expect(keys).toHaveLength(4);
 		const now = Date.now() / 1000;
 		for (const key of keys) {
-			expect(key.expiration).toBeGreaterThan(now);
-			// CACHE_TTL_MINUTES = 60
-			expect(key.expiration).toBeLessThanOrEqual(now + 3600 + 60);
+			expect(key.expiration).toBeGreaterThan(now + 29 * 24 * 3600);
+			expect(key.expiration).toBeLessThanOrEqual(now + 30 * 24 * 3600 + 60);
 		}
+		mockFetch(baseRoutes());
+		expect(await (await call(`/${snap}.sha1`)).text()).toBe(await sha1(pom));
+		expect(calls.some((c) => c.includes("SNAPSHOT.pom") && !c.endsWith(".sha1"))).toBe(false);
+	});
+
+	it("downloads an artifact into R2 once to hash it, and serves the file from R2 afterwards", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}${rc}.pom`]: pom });
+		const res = await call(`/${rc}.pom.sha1`, {}, FILL);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe(await sha1(pom));
+		expect(calls.filter((c) => c === `GET ${CDN}${rc}.pom`)).toHaveLength(1);
+		expect(await bindings.ARTIFACTS!.head(`${rc}.pom`)).not.toBeNull();
+
+		// the other checksum types and the file itself need no further download
+		expect(await (await call(`/${rc}.pom.sha256`, {}, FILL)).text()).toBe(await sha1(pom, "SHA-256"));
+		const file = await call(`/${rc}.pom`, {}, FILL);
+		expect(file.status).toBe(200);
+		expect(await file.text()).toBe(pom);
+		expect(calls.filter((c) => c === `GET ${CDN}${rc}.pom`)).toHaveLength(1);
+	});
+
+	it("downloads a SNAPSHOT into R2 once to hash it", async () => {
+		const snap = "org/lucee/lucee/8.0.1.12-SNAPSHOT/lucee-8.0.1.12-SNAPSHOT.pom";
+		mockFetch({ ...baseRoutes(), [CDN + snap]: pom });
+		expect(await (await call(`/${snap}.sha1`, {}, FILL)).text()).toBe(await sha1(pom));
+		expect(await bindings.ARTIFACTS!.head(`snapshots/${snap}`)).not.toBeNull();
+		expect(await (await call(`/${snap}.md5`, {}, FILL)).text()).toBe(await sha1(pom, "MD5"));
+		expect((await call(`/${snap}`, {}, FILL)).status).toBe(200);
+		expect(calls.filter((c) => c === `GET ${CDN}${snap}`)).toHaveLength(1);
+	});
+
+	it("does not store an artifact over the checksum size limit in R2 to hash it", async () => {
+		mockFetch({ ...baseRoutes(), [`${CDN}${rc}.pom`]: pom });
+		const res = await call(`/${rc}.pom.sha1`, {}, { ...FILL, CHECKSUM_MAX_MB: "0.00001" });
+		expect(res.status).toBe(404);
+		// the source's headers state the size, the body is not read
+		expect(await bindings.ARTIFACTS!.head(`${rc}.pom`)).toBeNull();
+		expect(await bindings.BRIDGE_CACHE.list({ prefix: "checksum:" })).toMatchObject({ keys: [] });
 	});
 
 	it("answers 404 when the artifact does not exist", async () => {
@@ -1136,5 +1239,103 @@ describe("health, landing and scheduled", () => {
 		const ctx = createExecutionContext();
 		await expect(worker.scheduled(createScheduledController() as never, testEnv(), ctx)).rejects.toThrow();
 		await waitOnExecutionContext(ctx);
+	});
+});
+
+describe("listings and maven-metadata.xml cache time", () => {
+	const metadataWith = (version: string) => REDIS_METADATA.replace("<version>2.0.0.1</version>", `<version>2.0.0.1</version>\n      <version>${version}</version>`);
+	const cachedEntry = async (kind: string, id: string) => {
+		const gen = await bindings.BRIDGE_CACHE.get("cache-generation");
+		return caches.default.match(`https://mvn.lucee-services.com/__maven-bridge-cache/${gen}/${kind}/${encodeURIComponent(id)}`);
+	};
+
+	it("caches maven-metadata.xml for METADATA_CACHE_TTL_MINUTES, not CACHE_TTL_MINUTES", async () => {
+		mockFetch(baseRoutes());
+		await call("/org/lucee/redis-extension/maven-metadata.xml");
+		const entry = await cachedEntry("metadata", `0/${CDN}org/lucee/redis-extension/maven-metadata.xml`);
+		expect(entry?.headers.get("cache-control")).toBe("public, max-age=300");
+		await entry?.arrayBuffer();
+		mockFetch(baseRoutes());
+		expect(await (await call("/org/lucee/redis-extension/maven-metadata.xml")).text()).toBe(REDIS_METADATA);
+		expect(calls).not.toContain(`GET ${CDN}org/lucee/redis-extension/maven-metadata.xml`);
+	});
+
+	it("uses the configured cache time for listings", async () => {
+		mockFetch(baseRoutes());
+		await call("/org/lucee/redis-extension/", {}, { METADATA_CACHE_TTL_MINUTES: "2" });
+		const entry = await cachedEntry("metadata", `0/${CDN}org/lucee/redis-extension/maven-metadata.xml`);
+		expect(entry?.headers.get("cache-control")).toBe("public, max-age=120");
+		await entry?.arrayBuffer();
+	});
+
+	it("does not cache listings and metadata with METADATA_CACHE_TTL_MINUTES = 0", async () => {
+		mockFetch(baseRoutes());
+		await call("/org/lucee/redis-extension/maven-metadata.xml", {}, { METADATA_CACHE_TTL_MINUTES: "0" });
+		mockFetch(baseRoutes());
+		await call("/org/lucee/redis-extension/maven-metadata.xml", {}, { METADATA_CACHE_TTL_MINUTES: "0" });
+		expect(calls).toContain(`GET ${CDN}org/lucee/redis-extension/maven-metadata.xml`);
+	});
+
+	it("reads the group maven-metadata.xml again once the short cache is gone, even with a fresh KV copy", async () => {
+		await bindings.BRIDGE_CACHE.put(
+			`upstream:${CDN}org/lucee/maven-metadata.xml`,
+			JSON.stringify({ body: "<old/>", contentType: "application/xml", fetchedAt: Date.now() })
+		);
+		mockFetch(baseRoutes());
+		const res = await call("/org/lucee/maven-metadata.xml", {}, { METADATA_CACHE_TTL_MINUTES: "0" });
+		expect(await res.text()).toBe(GROUP_METADATA);
+		// the changed file replaces the KV copy
+		expect(await bindings.BRIDGE_CACHE.get(`upstream:${CDN}org/lucee/maven-metadata.xml`, "json")).toMatchObject({ body: GROUP_METADATA });
+	});
+
+	it("serves the KV copy of a group file when the CDN fails", async () => {
+		await bindings.BRIDGE_CACHE.put(
+			`upstream:${CDN}org/lucee/maven-metadata.xml`,
+			JSON.stringify({ body: GROUP_METADATA, contentType: "application/xml", fetchedAt: 0 })
+		);
+		mockFetch({ ...baseRoutes(), [`${CDN}org/lucee/maven-metadata.xml`]: new Response("down", { status: 503 }) });
+		const res = await call("/org/lucee/maven-metadata.xml");
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe(GROUP_METADATA);
+	});
+
+	it("shows a new release in the artifact listing after ?flush=metadata", async () => {
+		mockFetch(baseRoutes());
+		expect(await (await call("/org/lucee/redis-extension/")).text()).not.toContain("2.0.0.2-RC");
+		mockFetch({ ...baseRoutes(), [`${CDN}org/lucee/redis-extension/maven-metadata.xml`]: metadataWith("2.0.0.2-RC") });
+		// still the cached listing
+		expect(await (await call("/org/lucee/redis-extension/")).text()).not.toContain("2.0.0.2-RC");
+		const res = await call("/org/lucee/redis-extension/?flush=metadata", { headers: { "x-flush-token": "test-flush-token" } });
+		expect(res.status).toBe(200);
+		// the request itself already answers with the fresh listing
+		expect(await res.text()).toContain("2.0.0.2-RC");
+		expect(await bindings.BRIDGE_CACHE.get("metadata-generation")).not.toBeNull();
+		expect(await (await call("/org/lucee/redis-extension/")).text()).toContain("2.0.0.2-RC");
+		expect(await (await call("/org/lucee/redis-extension/maven-metadata.xml")).text()).toContain("2.0.0.2-RC");
+	});
+
+	it("keeps artifacts, checksums and indexes on ?flush=metadata", async () => {
+		mockFetch(baseRoutes());
+		await call("/health");
+		const before = await bindings.BRIDGE_CACHE.get("cache-generation");
+		const index = await bindings.BRIDGE_CACHE.get("index:io.forgebox");
+		const res = await call("/health?flush=metadata", { headers: { authorization: "Bearer test-flush-token" } });
+		expect(res.status).toBe(200);
+		expect(((await res.json()) as Record<string, unknown>).flushed).toBe(true);
+		expect(await bindings.BRIDGE_CACHE.get("cache-generation")).toBe(before);
+		expect(await bindings.BRIDGE_CACHE.get("index:io.forgebox")).toBe(index);
+	});
+
+	it("needs the flush token for ?flush=metadata", async () => {
+		mockFetch(baseRoutes());
+		const none = await call("/health?flush=metadata");
+		expect(none.status).toBe(403);
+		expect(await none.text()).toBe("Forbidden");
+		const wrong = await call("/health?flush=metadata", { headers: { "x-flush-token": "wrong" } });
+		expect(wrong.status).toBe(403);
+		const disabled = await call("/health?flush=metadata", { headers: { "x-flush-token": "test-flush-token" } }, { FLUSH_TOKEN: "" });
+		expect(disabled.status).toBe(403);
+		expect(await disabled.text()).toBe("Flush is disabled");
+		expect(await bindings.BRIDGE_CACHE.get("metadata-generation")).toBeNull();
 	});
 });

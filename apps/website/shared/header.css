@@ -1,0 +1,85 @@
+/* <lucee-header> styles. Self-contained: works without any other stylesheet.
+   Colours follow the design tokens of download.lucee.org / skill.lucee.io. */
+lucee-header {
+  --lh-bg: #373b45;
+  --lh-text: rgba(199, 204, 212, 1);
+  --lh-primary: #0070cc;
+  display: block;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  min-height: 100px;                /* reserve space before JS runs; same height as download.lucee.org */
+  background: var(--lh-bg);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+lucee-header * { box-sizing: border-box; }
+lucee-header a { text-decoration: none; }
+
+/* No-JS fallback: plain links placed inside <lucee-header> by the page */
+lucee-header:not(:defined) { padding: 36px 32px; color: var(--lh-text); }
+lucee-header:not(:defined) a { color: var(--lh-text); margin-right: 16px; }
+
+.lh { background: var(--lh-bg); color: var(--lh-text); border-bottom: 1px solid rgba(0,0,0,.25); }
+.lh-bar {
+  /* Full width like download.lucee.org (header: display:flex; padding:6px 32px 0; no max-width):
+     logo stays at the left edge, links at the right edge, at any window width. */
+  max-width: none; margin: 0; padding: 6px 32px 0;
+  min-height: 100px; display: flex; align-items: center; gap: 16px;
+}
+.lh-logo { display: block; flex: none; line-height: 0; border-radius: 4px; margin-bottom: 10px; }
+.lh-logo img { display: block; width: 172px; height: 81px; filter: brightness(0) invert(1); }
+
+.lh-menu { flex: 1; display: flex; align-items: center; justify-content: flex-end; /* links + tools pushed to the right edge, like download.lucee.org */  gap: 24px; min-width: 0; }
+.lh-nav ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 24px; }
+.lh-nav a {
+  display: block; padding: 6px 2px; color: var(--lh-text); font-weight: 500;
+  border-bottom: 2px solid transparent;
+}
+.lh-nav a:hover { color: #fff; }
+.lh-nav a[aria-current="page"] { color: #fff; border-bottom-color: var(--lh-primary); }
+
+.lh-tools { display: flex; align-items: center; gap: 16px; }
+.lh-github { display: grid; place-items: center; width: 34px; height: 34px; color: var(--lh-text); border-radius: 5px; }
+.lh-github:hover { color: #fff; }
+
+.lh-theme { display: flex; border: 1px solid rgba(255,255,255,.18); border-radius: 5px; overflow: hidden; background: rgba(255,255,255,.10); }
+.lh-theme button {
+  width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: none; color: var(--lh-text); cursor: pointer;
+}
+.lh-theme button + button { border-left: 1px solid rgba(255,255,255,.18); }
+.lh-theme button:hover { color: #fff; }
+.lh-theme button[aria-pressed="true"] { background: rgba(255,255,255,.24); color: #fff; }
+
+.lh-toggle { display: none; }
+
+lucee-header a:focus-visible, lucee-header button:focus-visible, lucee-header input:focus-visible {
+  outline: 2px solid #5aa9ee; outline-offset: 2px;
+}
+
+/* Mobile: hamburger */
+@media (max-width: 880px) {
+  .lh-bar { flex-wrap: wrap; padding: 6px 20px 0; gap: 0; justify-content: space-between; }
+  .lh-toggle {
+    display: grid; place-items: center; width: 44px; height: 44px; border-radius: 6px; cursor: pointer;
+    background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.18); color: var(--lh-text);
+  }
+  .lh-burger, .lh-burger::before, .lh-burger::after {
+    display: block; width: 20px; height: 2px; background: currentColor; border-radius: 1px; content: ""; position: relative;
+    transition: transform .15s, opacity .15s;
+  }
+  .lh-burger::before { position: absolute; top: -6px; left: 0; }
+  .lh-burger::after  { position: absolute; top: 6px; left: 0; }
+  .lh-open .lh-burger { background: transparent; }
+  .lh-open .lh-burger::before { transform: translateY(6px) rotate(45deg); }
+  .lh-open .lh-burger::after  { transform: translateY(-6px) rotate(-45deg); }
+
+  .lh-menu { display: none; flex: 0 0 100%; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 12px; padding: 8px 0 16px; }
+  .lh-open .lh-menu { display: flex; }
+  .lh-nav ul { flex-direction: column; gap: 0; }
+  .lh-nav a { padding: 12px 4px; border-bottom: 1px solid rgba(255,255,255,.10); font-size: 16px; }
+  .lh-nav a[aria-current="page"] { border-bottom-color: var(--lh-primary); }
+  .lh-tools { flex-wrap: wrap; justify-content: space-between; }
+  .lh-theme button { width: 40px; height: 40px; }
+  .lh-github { width: 40px; height: 40px; }
+}
+@media (prefers-reduced-motion: reduce) { .lh-burger, .lh-burger::before, .lh-burger::after { transition: none; } }

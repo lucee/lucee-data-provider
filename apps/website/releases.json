@@ -1,0 +1,84 @@
+{
+  "_comment": "Source of truth for the release tables on / and /releases.html (rendered by build.py at build time). Dates are ISO (YYYY-MM-DD). null = unknown, shown as a visible TODO. Never put a date here without a source. 'released' = first final release as published on Maven Central (see 'releasedSource').",
+  "updated": "2026-11-02",
+  "labelsNote": "Labels (latest / LTS / security) are set by the Lucee team for this site. download.lucee.org currently labels the tracks differently (6.2 LTS, 7.1 Stable, 8.0 Edge), as does the docs.lucee.org home page for 6.2 (LTS).",
+  "lines": [
+    {
+      "line": "9.0",
+      "status": "alpha",
+      "released": null,
+      "releasedText": "In development, alpha phase",
+      "notApplicable": true,
+      "activeSupportUntil": null,
+      "endOfLife": null,
+      "note": "Next major version, in alpha phase. New features go here. Not for production use.",
+      "history": "Next major version, in alpha phase.",
+      "releasedSource": "https://github.com/lucee/Lucee/tree/9.0"
+    },
+    {
+      "line": "8.0",
+      "status": "latest",
+      "released": "2026-11-06",
+      "activeSupportUntil": null,
+      "endOfLife": null,
+      "note": "Cutting edge. Takes fixes that are breaking changes, no new features.",
+      "history": "Cutting edge line.",
+      "releasedSource": "https://download.lucee.org/",
+      "notApplicable": true
+    },
+    {
+      "line": "7.1",
+      "status": "lts",
+      "released": "2026-08-21",
+      "activeSupportUntil": null,
+      "endOfLife": null,
+      "note": "Long-term support. The default branch for bug fixes.",
+      "history": "Long-term support line. Default target for bug fixes.",
+      "releasedSource": "https://repo1.maven.org/maven2/org/lucee/lucee/7.1.0.204/",
+      "notApplicable": true
+    },
+    {
+      "line": "6.2",
+      "status": "security",
+      "released": "2025-02-26",
+      "activeSupportUntil": "2026-10-31",
+      "endOfLife": "2027-04-30",
+      "note": "Previous LTS. Security fixes only (security fixes are backported here).",
+      "history": "Previous LTS. Security fixes only. Brought Jakarta Servlet support and Maven integration.",
+      "releasedSource": "https://repo1.maven.org/maven2/org/lucee/lucee/6.2.0.321/"
+    },
+    {
+      "line": "5.4",
+      "status": "eol",
+      "released": "2023-06-21",
+      "activeSupportUntil": "2025-02-26",
+      "endOfLife": "2025-12-31",
+      "note": "Reached end of life in December 2025.",
+      "history": "Reached end of life in December 2025.",
+      "releasedSource": "https://repo1.maven.org/maven2/org/lucee/lucee/5.4.0.80/",
+      "endOfLifeSource": "https://docs.lucee.org/"
+    }
+  ],
+  "sources": [
+    {
+      "label": "Maven Central, org.lucee:lucee",
+      "url": "https://repo1.maven.org/maven2/org/lucee/lucee/"
+    },
+    {
+      "label": "GitHub releases, lucee/Lucee",
+      "url": "https://github.com/lucee/Lucee/releases"
+    },
+    {
+      "label": "docs.lucee.org (end of life of 5.4 and older)",
+      "url": "https://docs.lucee.org/"
+    },
+    {
+      "label": "Release cycle and branching",
+      "url": "https://docs.lucee.org/recipes/release-cycle.html"
+    },
+    {
+      "label": "download.lucee.org",
+      "url": "https://download.lucee.org/"
+    }
+  ]
+}

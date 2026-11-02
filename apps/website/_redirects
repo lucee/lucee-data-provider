@@ -1,0 +1,8 @@
+# Cloudflare Workers static assets redirects (stub).
+# Workers static assets already serve /extensions for /extensions.html and redirects the .html form to it.
+# TODO: map old www.lucee.org URLs that should keep working, e.g.
+# /get-support.html          /support.html           301
+# /aboutlucee.html           /about.html             301
+# /aboutlucee/community.html /community.html         301
+# /get-support/forum.html    https://dev.lucee.org/  301
+# /get-support/ticket-tracker.html https://luceeserver.atlassian.net/projects/LDEV 301

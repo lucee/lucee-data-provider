@@ -1,0 +1,7 @@
+# Lucee security contact (RFC 9116)
+Contact: mailto:security@lucee.org
+# TODO: confirm with the Lucee team. Expires is required by RFC 9116; renew at least yearly.
+Expires: 2027-10-31T23:00:00.000Z
+Policy: https://github.com/lucee/Lucee/blob/7.1/SECURITY.md
+Canonical: https://lucee.org/.well-known/security.txt
+# TODO: Preferred-Languages, Acknowledgments and Encryption (PGP key) are not defined yet.

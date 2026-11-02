@@ -18,8 +18,6 @@ export const PENDING_TTL_SECONDS = 300;
 export const MAX_BACKGROUND_ATTEMPTS = 3;
 /** seconds the attempt count of an artifact is kept */
 export const ATTEMPTS_TTL_SECONDS = 24 * 60 * 60;
-/** KV minimum expiration */
-const MIN_KV_TTL_SECONDS = 60;
 
 export function isChecksumType(value: string): value is ChecksumType {
 	return Object.prototype.hasOwnProperty.call(ALGORITHMS, value.toLowerCase());
@@ -141,12 +139,10 @@ export interface ChecksumOptions {
 	inlineMaxBytes: number;
 	/** seconds for the whole download of the artifact */
 	timeoutSeconds: number;
-	/** seconds a checksum of a mutable artifact (SNAPSHOT) stays cached */
-	mutableTtlSeconds: number;
 	userAgent: string;
 }
 
-/** seconds a checksum of an immutable artifact stays cached in KV */
+/** seconds a computed checksum stays cached in KV (every artifact file is immutable: its name never gets other content) */
 export const IMMUTABLE_KV_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 type Computed = Record<ChecksumType, string> | null;
@@ -162,7 +158,7 @@ function contentLength(res: Response): number | null {
 }
 
 /**
- * Computed checksums, cached in KV: 30 days for immutable artifacts, the cache TTL otherwise.
+ * Computed checksums, cached in KV for 30 days (SNAPSHOT files included: each build has its own file name).
  * One download of the artifact yields every checksum type. Keys carry the cache generation,
  * so a flush invalidates them without deleting key by key.
  *
@@ -198,8 +194,8 @@ export class ChecksumStore {
 		return Math.min(this.options.inlineMaxBytes, this.options.maxBytes);
 	}
 
-	private async store(id: string, immutable: boolean, values: Record<ChecksumType, string>): Promise<void> {
-		const ttl = immutable ? IMMUTABLE_KV_TTL_SECONDS : Math.max(MIN_KV_TTL_SECONDS, this.options.mutableTtlSeconds);
+	private async store(id: string, values: Record<ChecksumType, string>): Promise<void> {
+		const ttl = IMMUTABLE_KV_TTL_SECONDS;
 		await Promise.all(
 			CHECKSUM_TYPES.map(async (t) => {
 				try {
@@ -230,7 +226,6 @@ export class ChecksumStore {
 	 */
 	private async background(
 		id: string,
-		immutable: boolean,
 		compute: () => Promise<Computed>,
 		discard: () => Promise<void> = async () => undefined
 	): Promise<void> {
@@ -258,7 +253,7 @@ export class ChecksumStore {
 				started = true;
 				const values = await compute();
 				if (values) {
-					await this.store(id, immutable, values);
+					await this.store(id, values);
 					await this.kv.delete(attemptsKey);
 				}
 			} catch (e) {
@@ -304,7 +299,7 @@ export class ChecksumStore {
 	}
 
 	/** Checksum of the file at `url`; "" when it is missing, too large, could not be read or is being computed. */
-	async ofUrl(url: string, type: ChecksumType, immutable: boolean): Promise<string> {
+	async ofUrl(url: string, type: ChecksumType): Promise<string> {
 		const known = await this.lookup(url, type);
 		if (known !== null) return known;
 
@@ -330,7 +325,7 @@ export class ChecksumStore {
 			if (length !== null && length > limit) {
 				// the open download is hashed in the background, no second request
 				const download = res;
-				await this.background(url, immutable, () => this.hashUrl(url, download), async () => {
+				await this.background(url, () => this.hashUrl(url, download), async () => {
 					await download.body!.cancel();
 				});
 				return "";
@@ -346,13 +341,13 @@ export class ChecksumStore {
 						console.warn(`checksum of [${url}] failed`, e);
 						return "";
 					}
-					await this.background(url, immutable, () => this.hashUrl(url));
+					await this.background(url, () => this.hashUrl(url));
 					return "";
 				}
 			}
 		}
 		if (!values) return "";
-		await this.store(url, immutable, values);
+		await this.store(url, values);
 		return values[type];
 	}
 
@@ -378,12 +373,12 @@ export class ChecksumStore {
 			}
 		};
 		if (head.size > this.inlineLimit) {
-			await this.background(id, true, compute);
+			await this.background(id, compute);
 			return "";
 		}
 		const values = await compute();
 		if (!values) return "";
-		await this.store(id, true, values);
+		await this.store(id, values);
 		return values[type];
 	}
 }
