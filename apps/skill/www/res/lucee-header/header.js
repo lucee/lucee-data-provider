@@ -30,9 +30,10 @@
   var NAV = [
     { key: 'download',   label: 'Download',   href: 'https://download.lucee.org/' },
     { key: 'docs',       label: 'Docs',       href: 'https://docs.lucee.org/' },
-    { key: 'extensions', label: 'Extensions', hub: 'extensions.html' },
-    { key: 'community',  label: 'Community',  hub: 'community.html' },
-    { key: 'ai',         label: 'AI',         hub: 'ai.html' },
+    // re-enable once lucee.org hub is live (2026-11-06)
+    // { key: 'extensions', label: 'Extensions', hub: 'extensions.html' },
+    // { key: 'community',  label: 'Community',  hub: 'community.html' },
+    // { key: 'ai',         label: 'AI',         hub: 'ai.html' },
     { key: 'support',    label: 'Support',    hub: 'support.html' }
   ];
 
