@@ -40,11 +40,23 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect(util.githubAssetCandidates("7.1.1.17", "express")[1]).toBe(gh & "7.1.1.17/lucee-express-7.1.1.17.zip");
 			});
 
+			it(title="war and installers use the numeric tag first, like the jar", body=function() {
+				expect(util.githubAssetCandidates("8.0.0.294-RC", "war")).toBe([
+					gh & "8.0.0.294/lucee-8.0.0.294-RC.war",
+					gh & "8.0.0.294-RC/lucee-8.0.0.294-RC.war"
+				]);
+				expect(util.githubAssetCandidates("8.0.0.294-RC", "win64")[1]).toBe(gh & "8.0.0.294/lucee-8.0.0.294-RC-windows-x64-installer.exe");
+				expect(util.githubAssetCandidates("8.0.0.294-RC", "linux-x64")[1]).toBe(gh & "8.0.0.294/lucee-8.0.0.294-RC-linux-x64-installer.run");
+				expect(util.githubAssetCandidates("8.0.0.294-RC", "linux-aarch64")[1]).toBe(gh & "8.0.0.294/lucee-8.0.0.294-RC-linux-aarch64-installer.run");
+				expect(util.githubAssetCandidates("7.1.1.17", "win64")).toBe([gh & "7.1.1.17/lucee-7.1.1.17-windows-x64-installer.exe"]);
+			});
+
 			it(title="6.2 / 7.0, snapshots and other types are not looked up on GitHub", body=function() {
 				expect(util.githubAssetCandidates("7.0.6.10", "jar")).toBe([]);
 				expect(util.githubAssetCandidates("6.2.4.24", "light")).toBe([]);
 				expect(util.githubAssetCandidates("7.1.2.190-SNAPSHOT", "jar")).toBe([]);
-				expect(util.githubAssetCandidates("7.1.1.17", "win64")).toBe([]);
+				expect(util.githubAssetCandidates("7.1.1.17", "unknown")).toBe([]);
+				expect(util.githubAssetCandidates("7.0.6.10", "win64")).toBe([]);
 				expect(util.githubAssetUrl("7.0.6.10", "jar")).toBe("");
 				expect(util.githubCoreLinks("6.2.4.24")).toBe({});
 			});
