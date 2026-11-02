@@ -203,3 +203,6 @@ th { background: var(--bright); font-weight: 600; white-space: nowrap; }
   .rel-table td { display: flex; justify-content: space-between; gap: 12px; padding: 6px 14px; border: 0; text-align: right; }
   .rel-table td::before { content: attr(data-label); color: var(--muted); text-align: left; flex: none; }
 }
+
+/* Lucee 8.0 launch notice: one plain line, no strip or banner */
+.launch-note { margin: 28px 0 -12px; padding: 2px 0 2px 12px; border-left: 3px solid var(--primary); color: var(--text); font-size: .95rem; }
