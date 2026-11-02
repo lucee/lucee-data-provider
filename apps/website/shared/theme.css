@@ -1,0 +1,25 @@
+/* Shared colour-theme tokens for all Lucee sites (same names as skill.lucee.io / download.lucee.org).
+   Default follows the system (prefers-color-scheme). <lucee-header> sets
+   <html data-theme="light|dark"> when the visitor picks a theme; no attribute = system. */
+:root { color-scheme: light dark; }
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"]  { color-scheme: dark; }
+
+
+:root[data-theme="light"] {
+  --bg: #ffffff; --bright: #f3f3f3; --text: rgba(51,51,51,1); --muted: rgba(113,113,113,1);
+  --lines: rgba(0,0,0,.12); --lines-bright: rgba(0,0,0,.18);
+  --shadow: 0 1px 4px rgba(0,0,0,.10); --shadow-hover: 0 4px 16px rgba(0,0,0,.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1e1e1e; --bright: #252525; --text: rgba(204,204,204,1); --muted: rgba(153,153,153,1);
+    --lines: rgba(255,255,255,.10); --lines-bright: rgba(255,255,255,.18);
+    --shadow: 0 1px 4px rgba(0,0,0,.40); --shadow-hover: 0 4px 16px rgba(0,0,0,.50);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1e1e1e; --bright: #252525; --text: rgba(204,204,204,1); --muted: rgba(153,153,153,1);
+  --lines: rgba(255,255,255,.10); --lines-bright: rgba(255,255,255,.18);
+  --shadow: 0 1px 4px rgba(0,0,0,.40); --shadow-hover: 0 4px 16px rgba(0,0,0,.50);
+}

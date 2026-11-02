@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Extensions · Lucee</title>
+<meta name="description" content="Find Lucee extensions on download.lucee.org and learn how Maven coordinates identify them.">
+<link rel="canonical" href="https://lucee.org/extensions.html">
+<link rel="icon" type="image/png" href="/favicon.png">
+<meta property="og:title" content="Extensions · Lucee">
+<meta property="og:description" content="Find Lucee extensions on download.lucee.org and learn how Maven coordinates identify them.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://lucee.org/extensions.html">
+<meta name="theme-color" content="#373b45">
+<script>try{var t=localStorage.getItem("lucee-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="stylesheet" href="/shared/theme.css">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/shared/header.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<lucee-header home="/" current="extensions">
+  <a href="/" aria-label="Lucee home">Lucee</a><a href="https://download.lucee.org/">Download</a><a href="https://docs.lucee.org/">Docs</a><a href="/extensions.html">Extensions</a><a href="/community.html">Community</a><a href="/ai.html">AI</a><a href="/support.html">Support</a>
+</lucee-header>
+<main id="main">
+<div class="page-head"><div class="container">
+  <h1>Extensions</h1>
+  <p>Extensions add capabilities to Lucee: datasource drivers, cache providers, resource providers such as S3 and Redis, image handling, PDF generation, and more.</p>
+</div></div>
+
+<div class="container">
+<section>
+  <h2 class="section-title">Find an extension</h2>
+  <p class="prose">The extension listing lives on the download site. Each extension is a self-contained <code>.lex</code> package. Pick one to see its versions and installation instructions.</p>
+  <p><a class="btn" href="https://download.lucee.org/#extensions">Browse extensions</a></p>
+</section>
+
+<section>
+  <h2 class="section-title">Maven coordinates</h2>
+  <div class="prose">
+  <p>Extensions are published to Maven Central. An extension is identified by its Maven coordinates, <code>groupId:artifactId:version</code>. Lucee's own extensions use the group <code>org.lucee</code> and an artifact name ending in <code>-extension</code>. The listing on the download site shows the coordinates of every extension, for example <code>org.lucee:administrator-extension</code>. Other publishers, such as <code>io.forgebox</code>, use their own group.</p>
+  <p>The released <code>.lex</code> files can be fetched from <a href="https://repo1.maven.org/maven2/org/lucee/">repo1.maven.org/maven2/org/lucee/</a>.</p>
+  <p>In Lucee 8 the coordinates are what you declare in <code>.CFConfig.json</code> to install an extension. Pin the version for reproducible deployments:</p>
+<pre><code>{
+  "extensions": [
+    { "maven": "org.lucee:s3-extension:2.0.2.21" },
+    { "maven": "org.lucee:redis-extension:3.0.0.56" }
+  ]
+}</code></pre>
+  <p>Other ways to install an extension, such as the Lucee Administrator or the <code>deploy</code> directory, are covered in the guide below.</p>
+  </div>
+</section>
+
+<section>
+  <h2 class="section-title">Guides</h2>
+  <div class="grid">
+    <a class="card" href="https://docs.lucee.org/recipes/extension-installation.html"><h3>Extension installation</h3><p>Every way to install an extension, and how to pin versions.</p></a>
+    <a class="card" href="https://docs.lucee.org/recipes/downloading-extensions.html"><h3>Downloading extensions</h3><p>Where to get extension files from.</p></a>
+    <a class="card" href="https://docs.lucee.org/recipes/maven-based-extensions.html"><h3>Maven based extensions</h3><p>Build and publish your own extension with Maven.</p></a>
+  </div>
+</section>
+</div>
+</main>
+<footer class="site-footer">
+  <div class="inner">
+    <nav aria-label="Footer"><ul>
+      <li><a href="/about.html">About</a></li>
+      <li><a href="/members.html">Members</a></li>
+      <li><a href="/releases.html">Releases</a></li>
+      <li><a href="https://github.com/lucee/Lucee/blob/7.1/License.txt">License (LGPL&nbsp;2.1)</a></li>
+      <li><a href="/security.html">Security</a></li>
+      <li><a href="https://github.com/lucee/Lucee">GitHub</a></li>
+    </ul></nav>
+    <p>Contact: <a href="mailto:hello@lucee.org">hello@lucee.org</a></p>
+    <p class="legal">Lucee is an open source project led by the Lucee Association Switzerland.</p>
+  </div>
+</footer>
+</body>
+</html>
