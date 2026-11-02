@@ -13,6 +13,24 @@ NAV = [("Download", "https://download.lucee.org/"), ("Docs", "https://docs.lucee
        ("Extensions", "/extensions.html"), ("Community", "/community.html"),
        ("AI", "/ai.html"), ("Support", "/support.html")]
 
+# ---- Lucee 8.0 launch notice (homepage, one plain line above "Get started") ----
+# Hidden by default: while LAUNCH_NOTICE is False nothing is rendered. To switch it on:
+#   1. fill in LAUNCH_HIGHLIGHTS and LAUNCH_CHANGELOG_URL below (the build refuses to run with TODOs left)
+#   2. set LAUNCH_NOTICE = True
+#   3. run `python3 build.py` and commit the regenerated index.html
+LAUNCH_NOTICE = False
+LAUNCH_HIGHLIGHTS = "TODO highlights"   # plain text, e.g. a short comma-separated list
+LAUNCH_CHANGELOG_URL = "TODO https://download.lucee.org/changelog.cfm?version=<8.0 version>"
+
+def launch_notice():
+    if not LAUNCH_NOTICE:
+        return ""
+    if "TODO" in LAUNCH_HIGHLIGHTS or "TODO" in LAUNCH_CHANGELOG_URL:
+        raise SystemExit("build.py: LAUNCH_NOTICE is on but LAUNCH_HIGHLIGHTS / LAUNCH_CHANGELOG_URL still contain TODO")
+    return ('<p class="launch-note"><strong>Lucee 8.0 is here:</strong> '
+            f'{html.escape(LAUNCH_HIGHLIGHTS)}. '
+            f'<a href="{html.escape(LAUNCH_CHANGELOG_URL, quote=True)}">Read what\'s new</a></p>\n')
+
 # Applies a saved theme before first paint (no flash). Mirrors shared/header.js.
 THEME_INIT = ('<script>try{var t=localStorage.getItem("lucee-theme");'
               'if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>')
@@ -105,7 +123,8 @@ def releases_sources(data):
     return " &middot; ".join(f'<a href="{html.escape(s["url"])}">{html.escape(s["label"])}</a>' for s in data["sources"])
 
 def inject(body, data):
-    return (body.replace("{{RELEASES_TABLE}}", releases_table(data))
+    return (body.replace("{{LAUNCH_NOTICE}}\n", launch_notice())
+                .replace("{{RELEASES_TABLE}}", releases_table(data))
                 .replace("{{RELEASES_TIMELINE}}", releases_timeline(data))
                 .replace("{{RELEASES_SOURCES}}", releases_sources(data))
                 .replace("{{RELEASE_STRIP}}", release_strip(data)))
