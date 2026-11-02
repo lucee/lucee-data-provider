@@ -20,14 +20,15 @@ nav:
       <p class="label">Docker</p>
 <pre><code>docker run -d -p 8888:8888 lucee/lucee:latest</code></pre>
       <p class="links"><a href="https://docs.lucee.org/recipes/docker.html">Docker guide</a> · <a href="https://hub.docker.com/r/lucee/lucee">Docker Hub</a></p>
-      <p class="label">CommandBox</p>
-<pre><code>box server start</code></pre>
-      <p class="links"><a href="https://docs.lucee.org/guides/getting-started/commandbox.html">CommandBox guide</a> · <a href="https://commandbox.ortusbooks.com/getting-started-guide">Install CommandBox</a></p>
-      <p>Run it in an empty directory. CommandBox starts an embedded Lucee server. Other options (JAR, Express, WAR, …) are on the <a href="https://download.lucee.org/">download page</a>.</p>
+      <p class="label">LuCLI</p>
+<pre><code>curl -LsSf https://lucli.dev/install.sh | sh
+lucli server start</code></pre>
+      <p class="links"><a href="https://lucli.dev/">LuCLI website</a> · <a href="https://github.com/cybersonic/LuCLI">LuCLI on GitHub</a></p>
+      <p>Run it in an empty directory. LuCLI starts a Lucee server for that directory. It needs Java 21 or newer; on Windows use the PowerShell installer from the LuCLI website. Other options (JAR, Express, WAR, …) are on the <a href="https://download.lucee.org/">download page</a>.</p>
     </div>
     <div class="step">
       <h3>Hello world</h3>
-      <p>Create <code>index.cfm</code> in your web root. With CommandBox that is the directory you started the server in. Use tags or script, your choice.</p>
+      <p>Create <code>index.cfm</code> in your web root. With LuCLI that is the directory you started the server in. Use tags or script, your choice.</p>
       <p class="label">Tags</p>
 <pre><code>&lt;cfset name = "World"&gt;
 &lt;cfoutput&gt;Hello #name#!&lt;/cfoutput&gt;</code></pre>
