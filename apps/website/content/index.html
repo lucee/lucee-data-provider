@@ -1,0 +1,66 @@
+title: Lucee
+description: Lucee is a high-performance, open source CFML server written in Java. Download it, read the docs, find extensions, and get help, all from one place.
+path: index.html
+nav: 
+---
+<section class="hero" aria-labelledby="hero-title" style="margin:0">
+  <div class="container">
+    <h1 id="hero-title">A high-performance, open source CFML server written in Java.</h1>
+    <p class="sub">Free to use under the LGPL 2.1. Runs on the JVM as a servlet, so it works with servlet containers such as Apache Tomcat and Eclipse Jetty. This is the starting point for everything Lucee.</p>
+  </div>
+</section>
+
+<div class="container">
+<section id="get-started" aria-labelledby="gs-title">
+  <h2 class="section-title" id="gs-title">Get started</h2>
+  <div class="steps">
+    <div class="step">
+      <h3>Install</h3>
+      <p class="label">Docker</p>
+<pre><code>docker run -d -p 8888:8888 lucee/lucee:latest</code></pre>
+      <p class="links"><a href="https://docs.lucee.org/recipes/docker.html">Docker guide</a> · <a href="https://hub.docker.com/r/lucee/lucee">Docker Hub</a></p>
+      <p class="label">CommandBox</p>
+<pre><code>box server start</code></pre>
+      <p class="links"><a href="https://docs.lucee.org/guides/getting-started/commandbox.html">CommandBox guide</a> · <a href="https://commandbox.ortusbooks.com/getting-started-guide">Install CommandBox</a></p>
+      <p>Run it in an empty directory. CommandBox starts an embedded Lucee server. Other options (JAR, Express, WAR, …) are on the <a href="https://download.lucee.org/">download page</a>.</p>
+    </div>
+    <div class="step">
+      <h3>Hello world</h3>
+      <p>Create <code>index.cfm</code> in your web root. With CommandBox that is the directory you started the server in. Use tags or script, your choice.</p>
+      <p class="label">Tags</p>
+<pre><code>&lt;cfset name = "World"&gt;
+&lt;cfoutput&gt;Hello #name#!&lt;/cfoutput&gt;</code></pre>
+      <p class="label">Script</p>
+<pre><code>&lt;cfscript&gt;
+	name = "World";
+	echo( "Hello #name#!" );
+&lt;/cfscript&gt;</code></pre>
+      <p>Refresh the browser. Using Docker? Mount your code into the container, see the <a href="https://docs.lucee.org/recipes/docker.html">Docker guide</a>.</p>
+    </div>
+    <div class="step">
+      <h3>Next steps</h3>
+      <ul>
+        <li><a href="https://docs.lucee.org/guides/getting-started/first-steps.html">First steps guide</a></li>
+        <li><a href="https://docs.lucee.org/recipes.html">Recipes</a> for common tasks</li>
+        <li><a href="https://docs.lucee.org/reference.html">Tag and function reference</a></li>
+        <li><a href="/extensions.html">Add extensions</a></li>
+        <li><a href="https://dev.lucee.org/">Ask on the forum</a></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="res-title">
+  <h2 class="section-title" id="res-title">Everything Lucee</h2>
+  <div class="grid">
+    <a class="card" href="https://download.lucee.org/"><h3>Download</h3><p>Lucee releases for every version line. JAR, Express, WAR, Docker images and more.</p><span class="more">download.lucee.org →</span></a>
+    <a class="card" href="https://docs.lucee.org/"><h3>Docs</h3><p>Guides, recipes and the full tag and function reference.</p><span class="more">docs.lucee.org →</span></a>
+    <a class="card" href="/extensions.html"><h3>Extensions</h3><p>Datasource drivers, cache providers, document processing and more. Find them and install them.</p><span class="more">Extensions →</span></a>
+    <a class="card" href="/ai.html"><h3>AI</h3><p>The Lucee MCP server, the Lucee skill, and the AI documentation in one place.</p><span class="more">AI →</span></a>
+    <a class="card" href="/community.html"><h3>Community</h3><p>Forum, CFML Slack, GitHub and the issue tracker. Ask questions and contribute.</p><span class="more">Community →</span></a>
+    <a class="card" href="/support.html"><h3>Support</h3><p>Free community help and professional support from Lucee Association member companies.</p><span class="more">Support →</span></a>
+    <a class="card" href="/releases.html"><h3>Releases</h3><p>Supported versions and end-of-life information, with links to changelogs.</p><span class="more">Releases →</span></a>
+    <a class="card" href="/security.html"><h3>Security</h3><p>How to report a vulnerability and where to find security advisories.</p><span class="more">Security →</span></a>
+  </div>
+</section>
+</div>
