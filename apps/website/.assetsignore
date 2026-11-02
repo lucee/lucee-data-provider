@@ -1,0 +1,12 @@
+# Not served: these files only exist for the build and the repository.
+# (_headers and _redirects are read by Workers and are never served either.)
+wrangler.toml
+wrangler.jsonc
+.assetsignore
+build.py
+content
+releases.json
+README.md
+node_modules
+.wrangler
+dist

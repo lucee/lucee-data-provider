@@ -1,0 +1,17 @@
+# lucee.org website on Cloudflare Workers (static assets only, no Worker script).
+# Deployed by Workers Builds (Git integration) with root directory apps/website,
+# no build command and deploy command "npx wrangler deploy".
+# The generated HTML is committed, so no build step is needed.
+name = "lucee-website"
+compatibility_date = "2026-10-01"
+
+[assets]
+# the folder itself; source files are excluded by .assetsignore
+directory = "./"
+# /extensions serves extensions.html, /extensions.html redirects to /extensions
+html_handling = "auto-trailing-slash"
+# unknown paths return 404.html with status 404
+not_found_handling = "404-page"
+
+[observability]
+enabled = true
