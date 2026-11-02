@@ -1,9 +1,7 @@
-# Cloudflare Pages custom headers
-# Keep the *.pages.dev preview URLs (production and per-branch) out of search engines.
+# Cloudflare Workers static assets custom headers
+# Keep the *.workers.dev URLs (production and preview aliases) out of search engines.
 # Does not apply to a custom domain such as lucee.org.
-https://:project.pages.dev/*
-  X-Robots-Tag: noindex
-https://:version.:project.pages.dev/*
+https://:version.:subdomain.workers.dev/*
   X-Robots-Tag: noindex
 
 /*
