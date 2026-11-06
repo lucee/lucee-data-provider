@@ -301,9 +301,12 @@ async function putStreaming(bucket: R2Bucket, key: string, sourceUrl: string, up
  * Files up to `streamMaxBytes` are streamed to the client and stored at the same
  * time (tee). A tee buffers what the slower branch has not read yet, so for larger
  * files a slow client could hold most of the file in memory; those are stored
- * first and then served from R2. Answers without a usable length are streamed
- * without being stored. Null when storing a large file failed. `settle` reports
- * when the object is stored (or that it was not).
+ * first and then served from R2. Answers without a usable length (no
+ * content-length, or a compressed answer the runtime decodes) are read completely
+ * when they stay within `streamMaxBytes`, then stored and served; larger ones are
+ * streamed without being stored. Null when storing a large file failed, or when
+ * reading an answer without a usable length failed. `settle` reports when the
+ * object is stored (or that it was not).
  */
 async function storeAndServe(
 	bucket: R2Bucket,
@@ -322,8 +325,41 @@ async function storeAndServe(
 
 	const length = usableLength(upstream);
 	if (length === undefined) {
-		settle(false);
-		return new Response(upstream.body, { status: 200, headers });
+		// e.g. a gzip answer of the CDN for a .pom: fetch hands over the decoded body, so small
+		// files are read completely and stored with their real length (and no content-encoding)
+		if (!upstream.body) {
+			settle(false);
+			return new Response(null, { status: 200, headers });
+		}
+		let read: ReadResult;
+		try {
+			read = await readUpTo(upstream.body, options.streamMaxBytes);
+		} catch (e) {
+			console.error(`reading [${sourceUrl}] for the R2 fill of [${key}] failed`, e);
+			settle(false);
+			return null;
+		}
+		if (read.stream) {
+			settle(false);
+			return new Response(read.stream, { status: 200, headers });
+		}
+		const bytes = read.bytes!;
+		if (bytes.byteLength === 0) {
+			settle(false);
+			return new Response(null, { status: 200, headers });
+		}
+		headers.set("content-length", String(bytes.byteLength));
+		headers.set("accept-ranges", "bytes");
+		waitUntil(
+			bucket.put(key, bytes, putOptionsFor(key, sourceUrl, upstream)).then(
+				() => settle(true),
+				(e) => {
+					console.error(`R2 fill of [${key}] from [${sourceUrl}] failed`, e);
+					settle(false);
+				}
+			)
+		);
+		return new Response(bytes, { status: 200, headers });
 	}
 
 	if (length > options.streamMaxBytes) {
@@ -348,4 +384,49 @@ async function storeAndServe(
 			)
 	);
 	return new Response(toClient, { status: 200, headers });
+}
+
+interface ReadResult {
+	/** the complete body, when it was not larger than the limit */
+	bytes?: Uint8Array;
+	/** the body (what was read so far, then the rest), when it was larger than the limit */
+	stream?: ReadableStream;
+}
+
+/** Reads `body` up to `maxBytes`; a larger body is handed back as a stream instead. */
+async function readUpTo(body: ReadableStream, maxBytes: number): Promise<ReadResult> {
+	const reader = body.getReader();
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	for (;;) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		const chunk = value as Uint8Array;
+		chunks.push(chunk);
+		total += chunk.byteLength;
+		if (total > maxBytes) {
+			const stream = new ReadableStream({
+				start(controller) {
+					for (const c of chunks) controller.enqueue(c);
+					chunks.length = 0;
+				},
+				async pull(controller) {
+					const next = await reader.read();
+					if (next.done) controller.close();
+					else controller.enqueue(next.value);
+				},
+				cancel(reason) {
+					return reader.cancel(reason);
+				}
+			});
+			return { stream };
+		}
+	}
+	const bytes = new Uint8Array(total);
+	let offset = 0;
+	for (const c of chunks) {
+		bytes.set(c, offset);
+		offset += c.byteLength;
+	}
+	return { bytes };
 }
