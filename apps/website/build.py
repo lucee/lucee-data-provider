@@ -58,12 +58,14 @@ def _line_name(l):
     return l["line"]
 
 def _date(v, row, what):
-    """ISO date -> <time>; unsupported rows -> n/a; unknown -> visible TODO."""
+    """ISO date -> <time>; unsupported rows -> n/a; not-yet-announced -> TBA*; unknown -> visible TODO."""
     if v:
         d = datetime.date.fromisoformat(v)
         return f'<time datetime="{v}">{d.strftime("%b %Y")}</time>'
-    if row.get("unsupported") or row.get("notApplicable"):
+    if row.get("unsupported"):
         return '<span class="muted">n/a</span>'
+    if row.get("notApplicable"):
+        return '<span class="muted">TBA*</span>'
     return f'<span class="todo">TODO {what}</span>'
 
 def _released(row):
