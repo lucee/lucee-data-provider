@@ -1,5 +1,5 @@
 {
-  "_comment": "Source of truth for the release tables on / and /releases.html (rendered by build.py at build time). Dates are ISO (YYYY-MM-DD). null = unknown, shown as a visible TODO. Never put a date here without a source. 'released' = first final release as published on Maven Central (see 'releasedSource').",
+  "_comment": "Source of truth for the release tables on / and /releases.html (rendered by build.py at build time). Dates are ISO (YYYY-MM-DD). null = unknown, shown as a visible TODO. notApplicable = date not yet announced, shown as TBA*. Never put a date here without a source. 'released' = first final release as published on Maven Central (see 'releasedSource').",
   "updated": "2026-11-02",
   "labelsNote": "Labels (latest / LTS / security) are set by the Lucee team for this site. download.lucee.org currently labels the tracks differently (6.2 LTS, 7.1 Stable, 8.0 Edge), as does the docs.lucee.org home page for 6.2 (LTS).",
   "lines": [
