@@ -103,7 +103,8 @@ lucee-header a:hover { text-decoration: none; }
 
 .tracks-grid {
 	display: grid;
-	grid-template-columns: repeat(4, 1fr);
+	/* auto-fit: the cards always share the full width, whether there are 2, 3 or 4 tracks */
+	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 	gap: 24px;
 }
 
@@ -773,15 +774,10 @@ lucee-header a:hover { text-decoration: none; }
 	box-sizing: border-box;
 }
 @media (max-width: 1050px) {
-	.tracks-grid { grid-template-columns: repeat(3, 1fr); }
 	.ext-grid    { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 750px) {
-	.tracks-grid { grid-template-columns: repeat(2, 1fr); }
 	.ext-grid    { grid-template-columns: 1fr; }
-}
-@media (max-width: 500px) {
-	.tracks-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
 	.install-col-grid { grid-template-columns: 1fr; }
