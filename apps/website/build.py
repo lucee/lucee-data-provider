@@ -10,8 +10,8 @@ import pathlib, re, html, json, datetime
 ROOT = pathlib.Path(__file__).parent
 SITE = "https://lucee.org"          # TODO: confirm production origin
 NAV = [("Download", "https://download.lucee.org/"), ("Docs", "https://docs.lucee.org/"),
-       ("Extensions", "/extensions.html"), ("Community", "/community.html"),
-       ("AI", "/ai.html"), ("Support", "/support.html")]
+       ("Extensions", "/extensions"), ("Community", "/community"),
+       ("AI", "/ai"), ("Support", "/support")]
 
 # ---- Lucee 8.0 launch notice (homepage, one plain line above "Get started") ----
 # Hidden by default: while LAUNCH_NOTICE is False nothing is rendered. To switch it on:
@@ -31,9 +31,6 @@ def launch_notice():
             f'{html.escape(LAUNCH_HIGHLIGHTS)}. '
             f'<a href="{html.escape(LAUNCH_CHANGELOG_URL, quote=True)}">Read what\'s new</a></p>\n')
 
-# Applies a saved theme before first paint (no flash). Mirrors shared/header.js.
-THEME_INIT = ('<script>try{var t=localStorage.getItem("lucee-theme");'
-              'if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>')
 
 FOOTER = """<footer class="site-footer">
   <div class="inner">
@@ -152,10 +149,9 @@ def page(meta, body):
 <meta property="og:type" content="website">
 <meta property="og:url" content="{canon}">
 <meta name="theme-color" content="#373b45">
-{THEME_INIT}
-<link rel="stylesheet" href="/shared/theme.css">
-<link rel="stylesheet" href="/assets/site.css">
-<script src="/shared/header.js" defer></script>
+<link rel="stylesheet" href="/shared/theme.css?v=2">
+<link rel="stylesheet" href="/assets/site.css?v=2">
+<script src="/shared/header.js?v=2" defer></script>
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
