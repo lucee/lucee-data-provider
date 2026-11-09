@@ -3,7 +3,7 @@ util = application.util;
 start=getTickCount();
 
 // ── Config ──────────────────────────────────────────────────────────
-LTS_MINOR   = "6.2";
+LTS_MINOR   = "7.1";
 GROUP_ID    = "org.lucee";
 DOCKER_DOCS = "https://docs.lucee.org/recipes/docker.html";
 FORUM_URL   = "https://dev.lucee.org/c/news/release/8";

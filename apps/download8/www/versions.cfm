@@ -1,7 +1,7 @@
 <cfscript>
 util = application.util;
 
-LTS_MINOR   = "6.2";
+LTS_MINOR   = "7.1";
 GROUP_ID    = "org.lucee";
 FORUM_URL   = "https://dev.lucee.org/c/news/release/8";
 
