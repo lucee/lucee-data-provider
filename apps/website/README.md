@@ -51,11 +51,10 @@ Include the header on another site:
 
 ## Theme (light / dark)
 
-Default follows the system (`prefers-color-scheme`). `<lucee-header>` has a system / light / dark switch on its right side.
-The choice is stored in `localStorage` (`lucee-theme`) and applied as `<html data-theme="light|dark">` (no attribute = system).
-`shared/theme.css` (loaded automatically by header.js) maps that attribute to the shared tokens
-(`--bg --bright --text --muted --lines --lines-bright --shadow*`), so sibling sites that use those token names follow the switch.
-Note: localStorage is per origin, so each site remembers the choice separately.
+Follows the system preference (`prefers-color-scheme`). There is no in-header theme switch: a stored choice
+cannot be shared across lucee.org, download.lucee.org, skill.* and mcp.* (different origins).
+`shared/theme.css` (loaded automatically by header.js) maps the media query to the shared tokens
+(`--bg --bright --text --muted --lines --lines-bright --shadow*`).
 
 ## Member logos
 

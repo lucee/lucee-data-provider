@@ -42,14 +42,6 @@ lucee-header:not(:defined) a { color: var(--lh-text); margin-right: 16px; }
 .lh-github { display: grid; place-items: center; width: 34px; height: 34px; color: var(--lh-text); border-radius: 5px; }
 .lh-github:hover { color: #fff; }
 
-.lh-theme { display: flex; border: 1px solid rgba(255,255,255,.18); border-radius: 5px; overflow: hidden; background: rgba(255,255,255,.10); }
-.lh-theme button {
-  width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: none; color: var(--lh-text); cursor: pointer;
-}
-.lh-theme button + button { border-left: 1px solid rgba(255,255,255,.18); }
-.lh-theme button:hover { color: #fff; }
-.lh-theme button[aria-pressed="true"] { background: rgba(255,255,255,.24); color: #fff; }
-
 .lh-toggle { display: none; }
 
 lucee-header a:focus-visible, lucee-header button:focus-visible, lucee-header input:focus-visible {
@@ -78,8 +70,7 @@ lucee-header a:focus-visible, lucee-header button:focus-visible, lucee-header in
   .lh-nav ul { flex-direction: column; gap: 0; }
   .lh-nav a { padding: 12px 4px; border-bottom: 1px solid rgba(255,255,255,.10); font-size: 16px; }
   .lh-nav a[aria-current="page"] { border-bottom-color: var(--lh-primary); }
-  .lh-tools { flex-wrap: wrap; justify-content: space-between; }
-  .lh-theme button { width: 40px; height: 40px; }
+  .lh-tools { flex-wrap: wrap; justify-content: flex-end; }
   .lh-github { width: 40px; height: 40px; }
 }
 @media (prefers-reduced-motion: reduce) { .lh-burger, .lh-burger::before, .lh-burger::after { transition: none; } }

@@ -228,9 +228,12 @@ describe("landing page", () => {
 			expect(html).toContain("Refreshed hourly from docs.lucee.org");
 			expect(html).toContain('<a class="skill-url" href="/main.skill">https://skl.lucee-services.com/main.skill</a>');
 			expect(html).toContain('href="/res/skill.css?v=2"');
-			expect(html).toContain('<link rel="stylesheet" href="/res/lucee-header/theme.css" data-lucee-theme-css>');
-			expect(html).toContain('<link rel="stylesheet" href="/res/lucee-header/header.css" data-lucee-header-css>');
-			expect(html).toContain('<script src="/res/lucee-header/header.js" defer></script>');
+			expect(html).toContain('<link rel="stylesheet" href="/res/lucee-header/theme.css?v=2" data-lucee-theme-css>');
+			expect(html).toContain('<link rel="stylesheet" href="/res/lucee-header/header.css?v=2" data-lucee-header-css>');
+			expect(html).toContain('<script src="/res/lucee-header/header.js?v=2" defer></script>');
+			expect(html).not.toContain('localStorage.getItem("lucee-theme")');
+			expect(html).not.toContain('lh-theme');
+			expect(html).not.toContain('Color theme');
 			expect(html).toContain('<lucee-header home="https://lucee.org/" current="ai">');
 			expect(html).toContain('<a href="https://lucee.org/extensions">Extensions</a>');
 			expect(html).toContain('<a href="https://lucee.org/community">Community</a>');
