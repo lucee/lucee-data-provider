@@ -145,7 +145,7 @@ typeLabels = {
 	<title>#encodeForHTML(pageTitle)# — Lucee Downloads</title>
 	<link rel="icon" type="image/png" href="/res/favicon.png">
 	<cfinclude template="_lucee-head.cfm">
-	<link rel="stylesheet" href="/res/download.css?v=10">
+	<link rel="stylesheet" href="/res/download.css?v=11">
 </head>
 <body>
 
