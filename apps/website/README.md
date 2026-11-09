@@ -5,7 +5,7 @@ Static source of the lucee.org website. Plain HTML/CSS/JS, no framework, no runt
 - `content/*.html` + `build.py`: page sources and the optional generator. `python3 build.py` (Python 3, no dependencies) regenerates the pages and `sitemap.xml`. The generated files are committed, so the folder can also be served as is, without a build step.
 - `releases.json`: data for the release table on `/releases.html`, see "Release info" below.
 - `shared/header.js` + `shared/header.css` + `shared/lucee-logo.svg`: the `<lucee-header>` web component, meant to be included by other Lucee sites from one URL.
-- `assets/site.css`: page styles (design tokens shared with download.lucee.org / skill.lucee.io).
+- `assets/site.css`: page styles (design tokens shared with download.lucee.org / skill.lucee-services.com).
 - `wrangler.toml`, `.assetsignore`, `_headers`, `_redirects`: Cloudflare Workers configuration. `robots.txt`, `sitemap.xml`, `.well-known/security.txt`.
 
 All internal links and assets are root-relative (`/shared/header.js`, `/assets/site.css`), so the site works on any host name at the root of the host, including `*.workers.dev`. Canonical and Open Graph URLs point to `https://lucee.org` on purpose.

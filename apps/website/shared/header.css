@@ -1,5 +1,5 @@
 /* <lucee-header> styles. Self-contained: works without any other stylesheet.
-   Colours follow the design tokens of download.lucee.org / skill.lucee.io. */
+   Colours follow the design tokens of download.lucee.org / skill.lucee-services.com. */
 lucee-header {
   --lh-bg: #373b45;
   --lh-text: rgba(199, 204, 212, 1);

@@ -1,4 +1,4 @@
-/* Shared colour-theme tokens for all Lucee sites (same names as skill.lucee.io / download.lucee.org).
+/* Shared colour-theme tokens for all Lucee sites (same names as skill.lucee-services.com / download.lucee.org).
    Default follows the system (prefers-color-scheme). <lucee-header> sets
    <html data-theme="light|dark"> when the visitor picks a theme; no attribute = system. */
 :root { color-scheme: light dark; }
