@@ -123,40 +123,23 @@ export function renderLanding(skills: SkillInfo[], host: string): string {
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Lucee Skills</title>
 	<link rel="icon" type="image/png" href="/res/favicon.png">
-	<link rel="stylesheet" href="/res/skill.css?v=1">
+	<script>try{var t=localStorage.getItem("lucee-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+	<link rel="stylesheet" href="/res/lucee-header/theme.css" data-lucee-theme-css>
+	<link rel="stylesheet" href="/res/lucee-header/header.css" data-lucee-header-css>
+	<script src="/res/lucee-header/header.js" defer></script>
+	<link rel="stylesheet" href="/res/skill.css?v=2">
 </head>
 <body>
 
-<header class="site-header">
-	<a href="/" class="logo">
-		<img src="/res/lucee-logo.svg" alt="Lucee" height="36">
-		<span class="logo-subtitle">Skills</span>
-	</a>
-	<nav>
-		<a href="https://docs.lucee.org"     target="_blank">Docs</a>
-		<a href="https://dev.lucee.org"      target="_blank">Forum</a>
-		<a href="https://github.com/lucee"   target="_blank">GitHub</a>
-		<a href="https://hub.docker.com/r/lucee/lucee" target="_blank">Docker Hub</a>
-		<a href="https://buymeacoffee.com/luceeorg" target="_blank" class="bmc-link">
-			<img src="/res/byme2.png" class="bmc-icon" alt="Buy me a coffee">
-			<img src="/res/byme.png"  class="bmc-full" alt="Buy me a coffee">
-		</a>
-		<a href="https://opencollective.com/lucee" target="_blank" class="nav-highlight">
-			<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-			Donate
-		</a>
-		<a href="https://mcp.lucee-services.com/" target="_blank" class="nav-highlight">
-			<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-			MCP Server
-		</a>
-		<a href="https://download.lucee.org/" target="_blank" class="nav-highlight">
-			<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-			Downloads
-		</a>
-	</nav>
-</header>
+<lucee-header home="https://lucee.org/" current="ai">
+	<a href="https://lucee.org/" aria-label="Lucee home">Lucee</a><a href="https://download.lucee.org/">Download</a><a href="https://docs.lucee.org/">Docs</a><a href="https://lucee.org/extensions">Extensions</a><a href="https://lucee.org/community">Community</a><a href="https://lucee.org/ai">AI</a><a href="https://lucee.org/support">Support</a>
+</lucee-header>
 
 <div class="container">
+
+<div class="page-title">
+	<h1>Lucee Skills</h1>
+</div>
 
 <section>
 	<h2 class="section-title">What is a Skill?</h2>
@@ -213,7 +196,8 @@ export function renderLanding(skills: SkillInfo[], host: string): string {
 		<a href="https://github.com/lucee" target="_blank">GitHub</a> &middot;
 		<a href="https://dev.lucee.org"    target="_blank">Forum</a> &middot;
 		<a href="https://docs.lucee.org"   target="_blank">Docs</a> &middot;
-		<a href="https://hub.docker.com/r/lucee/lucee" target="_blank">Docker Hub</a>
+		<a href="https://hub.docker.com/r/lucee/lucee" target="_blank">Docker Hub</a> &middot;
+		<a href="https://opencollective.com/lucee" target="_blank">Donate</a>
 	</span>
 </footer>
 
