@@ -14,8 +14,10 @@ Run service stays deployed as a rollback until it is retired. `skill.lucee.io` i
 | `/`, `/index.cfm` | landing page: one card per skill (name, description, size, last update), same HTML as `index.cfm` |
 | `/<file>.skill` | the skill file (`text/plain; charset=utf-8`), only for files listed in `SKILLS` (name matched case-insensitively, like the Cloud Run site) |
 | `/health`, `/health.cfm` | `ok`, or `503 <file> not available` when a skill cannot be loaded |
-| `/res/*` | static assets (`public/res`, copied from `apps/skill/www/res`) |
+| `/res/*` | static assets (`public/res`, kept in sync with `apps/skill/www/res`, including the shared `lucee-header`) |
 | anything else | `404 Not Found`; methods other than `GET`/`HEAD` answer `405` |
+
+The landing page HTML in `src/landing.ts` and the assets under `public/res` are a port of `apps/skill/www`. When the Cloud Run site header or CSS changes, copy `apps/skill/www/res` into `public/res` again and update `renderLanding` to match `index.cfm`.
 
 ### Mirroring
 

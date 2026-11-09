@@ -227,7 +227,18 @@ describe("landing page", () => {
 			expect(html).toContain("Updated Oct 23, 2026");
 			expect(html).toContain("Refreshed hourly from docs.lucee.org");
 			expect(html).toContain('<a class="skill-url" href="/main.skill">https://skl.lucee-services.com/main.skill</a>');
-			expect(html).toContain('href="/res/skill.css?v=1"');
+			expect(html).toContain('href="/res/skill.css?v=2"');
+			expect(html).toContain('<link rel="stylesheet" href="/res/lucee-header/theme.css" data-lucee-theme-css>');
+			expect(html).toContain('<link rel="stylesheet" href="/res/lucee-header/header.css" data-lucee-header-css>');
+			expect(html).toContain('<script src="/res/lucee-header/header.js" defer></script>');
+			expect(html).toContain('<lucee-header home="https://lucee.org/" current="ai">');
+			expect(html).toContain('<a href="https://lucee.org/extensions">Extensions</a>');
+			expect(html).toContain('<a href="https://lucee.org/community">Community</a>');
+			expect(html).toContain('<a href="https://lucee.org/ai">AI</a>');
+			expect(html).toContain('<a href="https://lucee.org/support">Support</a>');
+			expect(html).toContain('<div class="page-title">');
+			expect(html).toContain('<a href="https://opencollective.com/lucee" target="_blank">Donate</a>');
+			expect(html).not.toContain('class="site-header"');
 		}
 	});
 
