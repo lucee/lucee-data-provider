@@ -1,0 +1,47 @@
+# Lucee extension provider on Cloudflare Workers (port of apps/updateserver/rest/ExtensionProvider.cfc).
+# Not deployed yet: no routes and no workers.dev url, see README.md (Deploying) for what a deploy needs.
+name = "lucee-extension-provider"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = false
+preview_urls = false
+# routes = [
+#   { pattern = "extension.lucee.org", custom_domain = true },
+# ]
+
+# /extension/extension-provider.png (the image of the provider info)
+[assets]
+directory = "./public"
+
+# rebuilds the extension index (extension meta, Maven listings, discovery), so requests don't have to
+[triggers]
+crons = ["*/10 * * * *"]
+
+[observability]
+enabled = true
+
+# The extension index, the logos and what the discovery found out. Optional: without the binding every isolate
+# builds the index itself and keeps it in memory. The id is set when the namespace is created (see README.md).
+[[kv_namespaces]]
+binding = "EXT_CACHE"
+
+[vars]
+# the same settings as the environment variables of apps/updateserver/Application.cfc
+S3_EXTENSIONS_CDN_URL = "https://ext.lucee.org/"
+S3_CORE_CDN_URL = "https://cdn.lucee.org/"
+S3_EXTENSIONS_MAVEN_PATH = "org/lucee/"
+# empty: <S3_EXTENSIONS_CDN_URL>extensions.json and extensions-maven.json (what the CFML provider maintains)
+EXTENSIONS_META_URL = ""
+EXTENSIONS_MAVEN_STATE_URL = ""
+EXTENSIONS_MAVEN_REPOS_ENABLED = "true"
+EXTENSIONS_MAVEN_REPOS_RELEASES = "https://repo1.maven.org/maven2/"
+EXTENSIONS_MAVEN_REPOS_SNAPSHOTS = "https://central.sonatype.com/repository/maven-snapshots/"
+EXTENSIONS_MAVEN_REPOS_MIXED = "https://maven.lucee-services.com/"
+EXTENSIONS_MAVEN_TIMEOUT = "20"
+EXTENSIONS_FLAT_S3_FALLBACK = "true"
+EXTENSIONS_MAVEN_ONLY_MIN_CORE = ""
+# extension files of the Maven sources the meta doesn't have yet, read per build (0 = off)
+EXTENSIONS_DISCOVERY_MAX = "10"
+INDEX_TTL_MINUTES = "15"
+METADATA_CACHE_SECONDS = "300"
+# FLUSH_TOKEN is a secret (wrangler secret put FLUSH_TOKEN): flush=true, /updateCache, /reset and /status are disabled without it
