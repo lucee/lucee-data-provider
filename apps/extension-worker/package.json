@@ -1,0 +1,25 @@
+{
+  "name": "lucee-extension-provider-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lucee extension provider (/rest/extension/provider) as a Cloudflare Worker",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "dry-run": "wrangler deploy --dry-run --outdir dist",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "compare": "node scripts/compare.mjs",
+    "record": "node scripts/record-fixtures.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.7",
+    "@cloudflare/workers-types": "^5.20261026.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.152.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
