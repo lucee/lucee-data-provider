@@ -199,25 +199,25 @@ component accessors=true {
 		var result = { artifacts=[], complete=true };
 		var names  = {};
 
+		// mixed-repo group XML (latest/release hints). This is not the full
+		// catalog: Maven Central has extensions (S3, Hibernate, Administrator,
+		// MCP, debugger, ...) that are absent from maven.lucee-services.com's
+		// group metadata, so we always also list every configured repository.
 		if ( IsObject( variables.catalog ?: "" ) ) {
 			try {
 				var rows = variables.catalog.listCatalog();
-				if ( ArrayLen( rows ) ) {
-					for ( var row in rows ) {
-						var name = row.artifact;
-						if ( !StructKeyExists( names, name ) ) {
-							names[ name ] = true;
-							ArrayAppend( result.artifacts, name );
-							variables._artifactGroups[ name ] = row.group;
-							variables._artifactPreferred[ name ] = {
-								  latest  = row.latest  ?: ""
-								, release = row.release ?: ""
-							};
-						}
+				for ( var row in rows ) {
+					var name = row.artifact;
+					if ( !StructKeyExists( names, name ) ) {
+						names[ name ] = true;
+						ArrayAppend( result.artifacts, name );
+						variables._artifactGroups[ name ] = row.group;
+						variables._artifactPreferred[ name ] = {
+							  latest  = row.latest  ?: ""
+							, release = row.release ?: ""
+						};
 					}
-					return result;
 				}
-				result.complete = false;
 			} catch ( any e ) {
 				SystemOutput( "Extension catalog could not be read: #e.message#", true );
 				result.complete = false;
@@ -279,31 +279,40 @@ component accessors=true {
 		return variables._artifactGroups[ arguments.artifact ] ?: variables.group;
 	}
 
+	/**
+	 * Versions to load at startup: the newest of any type (so type=all has
+	 * the overall latest) and the newest final (so type=release still has a
+	 * row when "latest" or the group-XML release is a SNAPSHOT/RC/BETA).
+	 * Group XML latest/release are often stale or themselves a pre-release;
+	 * the merged version list of every repository is the source of truth.
+	 */
 	private array function _latestVersions( required string artifact, required array versions, required array preferred ) {
 		var picked = [];
-		var pref   = variables._artifactPreferred[ arguments.artifact ] ?: {};
-
-		for ( var key in [ "latest", "release" ] ) {
-			var value = pref[ key ] ?: "";
-			if ( Len( value ) && ArrayFind( arguments.versions, value ) && !ArrayFind( picked, value ) ) {
-				ArrayAppend( picked, value );
-			}
-		}
-
-		if ( ArrayLen( picked ) ) {
-			return picked;
-		}
-
-		// no latest/release in the group XML: the numerically newest version
 		var sorted = Duplicate( arguments.versions );
+
 		ArraySort( sorted, function( a, b ) {
 			return Compare( services.VersionUtils::sortableVersionString( b ), services.VersionUtils::sortableVersionString( a ) );
 		} );
+
 		if ( ArrayLen( sorted ) ) {
 			ArrayAppend( picked, sorted[ 1 ] );
 		}
 
+		for ( var version in sorted ) {
+			if ( _isFinalVersion( version ) && !ArrayFind( picked, version ) ) {
+				ArrayAppend( picked, version );
+				break;
+			}
+		}
+
 		return picked;
+	}
+
+	private boolean function _isFinalVersion( required string version ) {
+		return FindNoCase( "-ALPHA",    arguments.version ) == 0
+			&& FindNoCase( "-BETA",     arguments.version ) == 0
+			&& FindNoCase( "-RC",       arguments.version ) == 0
+			&& FindNoCase( "-SNAPSHOT", arguments.version ) == 0;
 	}
 
 	/**
@@ -317,15 +326,15 @@ component accessors=true {
 	private struct function _listVersions( required string artifact ) {
 		var result = { versions={}, complete=true };
 
+		// Catalog (LuceeExtension / mixed-repo cache) is a useful first fill,
+		// but Maven Central often has newer stables than maven.lucee-services.com,
+		// and some artifacts only exist on Central. Always merge every repo.
 		if ( IsObject( variables.catalog ?: "" ) ) {
 			try {
 				var vers = variables.catalog.getExtensionVersions( _groupOf( arguments.artifact ), arguments.artifact );
-				if ( ArrayLen( vers ) ) {
-					var repos = ArrayLen( variables.mixedRepos ) ? variables.mixedRepos : _allRepos();
-					for ( var version in vers ) {
-						result.versions[ version ] = repos;
-					}
-					return result;
+				var repos = ArrayLen( variables.mixedRepos ) ? variables.mixedRepos : _allRepos();
+				for ( var version in vers ) {
+					result.versions[ version ] = repos;
 				}
 			} catch ( any e ) {
 				SystemOutput( "Extension versions for [#arguments.artifact#] from the catalog could not be read: #e.message#", true );
