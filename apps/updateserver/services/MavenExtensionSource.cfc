@@ -100,11 +100,11 @@ component accessors=true {
 	}
 
 	/**
-	 * The url of the extension file of a version, in the first of the repos that has it, the mixed repos
-	 * (the Maven bridge) first with mixedFirst. Returns an empty string when none of the repos can say where the file is.
+	 * The url of the extension file of a version, in the first of the repos that has it.
+	 * Returns an empty string when none of the repos can say where the file is.
 	 */
-	public string function getFileUrl( required string artifact, required string version, required array repos, boolean mixedFirst=false ) {
-		for ( var repo in ( arguments.mixedFirst ? _mixedFirst( arguments.repos ) : arguments.repos ) ) {
+	public string function getFileUrl( required string artifact, required string version, required array repos ) {
+		for ( var repo in arguments.repos ) {
 			var fileName = _fileName( arguments.artifact, arguments.version, repo );
 
 			if ( Len( fileName ) ) {
@@ -148,25 +148,6 @@ component accessors=true {
 	}
 
 // PRIVATE HELPERS
-
-	// the repos, the mixed ones (the Maven bridge) first
-	private array function _mixedFirst( required array repos ) {
-		var sorted = [];
-
-		for ( var repo in arguments.repos ) {
-			if ( ArrayFind( variables.mixedRepos, repo ) ) {
-				ArrayAppend( sorted, repo );
-			}
-		}
-
-		for ( var repo in arguments.repos ) {
-			if ( !ArrayFind( sorted, repo ) ) {
-				ArrayAppend( sorted, repo );
-			}
-		}
-
-		return sorted;
-	}
 
 	/**
 	 * The artifacts are the "<name>-extension" folders of the group folder of the repositories, a repository that

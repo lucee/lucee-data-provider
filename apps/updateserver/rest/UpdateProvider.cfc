@@ -10,8 +10,6 @@ component {
 	variables.jiraChangelogService  = application.jiraChangelogService;
 	// LDEV-6796: the core versions and files, from the Maven layout first, the flat files of S3 as the fallback
 	variables.coreVersions          = application.coreVersions;
-	// STORAGE=maven: a proxy over the Maven repositories only, what needs the flat files of S3 answers 501
-	variables.mavenOnly             = ( application.storageMode ?: "s3" ) == "maven";
 
 	variables.providerLog = "update-provider";
 
@@ -274,8 +272,6 @@ component {
 		boolean light=false restargsource="url")
 		httpmethod="GET" restpath="forgebox/{version}" {
 
-		if ( variables.mavenOnly ) return _notWithoutS3( "The forgebox download" );
-
 		createArtifactIfNecessary(light?"fbl":"fb",version);
 
 		header statuscode="302" statustext="Found";
@@ -423,9 +419,6 @@ component {
 	}
 
 	remote function getExpressTemplates() httpmethod="GET" restpath="expressTemplates" {
-		// the express templates are only in S3 (cdn.lucee.org/express-templates/), there is no Maven artifact of them
-		if ( variables.mavenOnly ) return _notWithoutS3( "The list of the express templates" );
-
 		var s3 = new services.legacy.S3( variables.s3Root );
 		var expressTemplates = duplicate( s3.getExpressTemplates() );
 		loop collection=#expressTemplates# key="local.key" item="local.item"{
@@ -437,8 +430,7 @@ component {
 	remote function reset()
 		httpmethod="GET" restpath="reset" {
 		new services.legacy.MavenRepo().reset();
-		if ( !variables.mavenOnly )
-			new services.legacy.S3(variables.s3Root).reset();
+		new services.legacy.S3(variables.s3Root).reset();
 		variables.coreVersions.reset();
 		jiraChangelogService.updateIssuesAsync(); // async
 	}
@@ -542,14 +534,8 @@ component {
 
 		try {
 
-			// STORAGE=maven: the versions of the Maven layout (the same struct as the one of the flat files)
-			if ( variables.mavenOnly ) {
-				var versions=duplicate(variables.coreVersions.getVersions(flush));
-			}
-			else {
-				var s3=new services.legacy.S3(variables.s3Root);
-				var versions=s3.getVersions(flush);
-			}
+			var s3=new services.legacy.S3(variables.s3Root);
+			var versions=s3.getVersions(flush);
 
 			if(!isNull(url.abc)){
 				return versions;
@@ -622,7 +608,6 @@ component {
 
 	remote function listMissing(boolean inclFB=false restargsource="url")
 		httpmethod="GET" restpath="list-missing" {
-		if ( variables.mavenOnly ) return _notWithoutS3( "The list of the missing flat files" );
 		setting requesttimeout="100";
 		var s3=new services.legacy.S3(variables.s3Root);
 		var versions=s3.getVersions(true);
@@ -648,7 +633,6 @@ component {
 	*/
 	remote function buildLatest()
 		httpmethod="GET" restpath="buildLatest" {
-		if ( variables.mavenOnly ) return _notWithoutS3( "Building the flat files" );
 
 		var indexDir=getDirectoryFromPath(getCurrentTemplatePath())&"index/";
 		if(directoryExists(indexDir)) directoryDelete(indexDir, true);
@@ -845,24 +829,14 @@ component {
 			abort;
 		}
 
-		if(file.source=="flat" && !variables.mavenOnly)
+		if(file.source=="flat")
 			createArtifactIfNecessary(type,version);
 
 		header statuscode="302" statustext="Found";
 		header name="Location" value=file.url;
 	}
 
-	/**
-	* STORAGE=maven: what needs the flat files of S3 (reading, building or writing them) is not there, a 501
-	*/
-	private function _notWithoutS3(required string what) {
-		content type="text/plain";
-		header statuscode="501" statustext="Not Implemented";
-		echo("#what# is not available, this update provider serves from the Maven repositories only (STORAGE=maven), without S3.");
-	}
-
 	private function createArtifactIfNecessary(type,version) {
-		if ( variables.mavenOnly ) return; // never builds or writes flat files
 		var s3=new services.legacy.S3(variables.s3Root);
 		var versions=s3.getVersions();
 		var vs=services.VersionUtils::toVersionSortable(version);
