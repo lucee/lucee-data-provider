@@ -28,7 +28,8 @@ component {
 	*/
 
 	public function getVersions(boolean flush=false) {
-		var cacheDir = services.CacheDir::path( "s3-versions", getDirectoryFromPath( getCurrentTemplatePath() ) & "cache/" );
+		var rootDir = getDirectoryFromPath(getCurrentTemplatePath());
+		var cacheDir=rootDir & "cache/";
 		var cacheFile = "versions.json";
 
 		lock name="check-version-cache" timeout="2" throwOnTimeout="false" {
@@ -71,11 +72,11 @@ component {
 					return false;
 				});
 			} catch (e){
-				systemOutput("error directory listing versions on s3: #e.message#", true);
+				systemOutput("error directory listing versions on s3", true);
 				systemOutput(e, true);
-				if ( !isNull( application.s3VersionData ) )
+				if(isNull(application.s3VersionData))
 					return application.s3VersionData;
-				throw "cannot read versions from s3 directory: #e.message#";
+				throw "cannot read versions from s3 directory";
 			}
 			systemOutput("s3Versions.list [#runId#] FETCHED #numberFormat(getTickCount()-start)#ms, #qry.recordcount# files on s3 found",1,1);
 			//dump(qry);
@@ -161,7 +162,7 @@ component {
 			// sort
 			var _data = sortVersions(data);
 			if ( len(_data) gt 0 ) // only cache good data
-				services.CacheDir::writeAtomic( cacheDir & cacheFile, serializeJSON( _data, false ) );
+				fileWrite(cacheDir & cacheFile, serializeJSON(_data, false) );
 			systemOutput("s3Versions.list [#runId#] END #numberFormat(getTickCount()-start)#ms, #len(_data)# versions found",1,1);
 
 			if ( structCount(_data) eq 0 && !isNull(application.s3VersionData) )

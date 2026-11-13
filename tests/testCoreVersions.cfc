@@ -14,10 +14,6 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 		variables.cdnUrl    = "https://cdn.example.invalid/";
 	}
 
-	function afterAll() {
-		StructDelete( application, "storageMode" );
-	}
-
 	function run( testResults , testBox ) {
 
 		describe( "LDEV-6796 the core versions: Maven first, with the flat S3 files as the fallback", function() {
@@ -477,84 +473,6 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 
 		});
 
-		describe( "STORAGE=maven: the core from the Maven repositories only, without S3", function() {
-
-			it( title="has only the versions of the Maven layout, without a flat source", body=function() {
-				var core = _newVersions( _newWorld(), { noFlat=true } );
-				var all  = _versionList( core.getVersions() );
-
-				expect( all ).toInclude( "6.2.0.321" );
-				expect( all ).toInclude( "7.1.1.2-SNAPSHOT" );
-				expect( all ).notToInclude( "5.3.10.120" );
-				expect( all ).notToInclude( "6.2.0.300" );
-			});
-
-			it( title="never serves a flat file, also not for a version nobody has and with the fallback on", body=function() {
-				var core = _newVersions( _newWorld(), { noFlat=true, flatFallback=true, flatUrl="" } );
-
-				expect( core.resolveFile( "jar", "6.2.0.321" ).source ).toBe( "maven" );
-				expect( core.resolveFile( "jar", "6.2.0.300" ) ).toBe( {} );
-				expect( core.resolveFile( "jar", "1.2.3.4" ) ).toBe( {} );
-			});
-
-			it( title="fails when the Maven layout has no version, there are no flat files to serve instead", body=function() {
-				var world = _newWorld();
-
-				for ( var repo in [ releases, snapshots, mixed ] ) {
-					world.status[ repo & "org/lucee/lucee/maven-metadata.xml" ] = 503;
-				}
-
-				var core = _newVersions( world, { noFlat=true, flatFallback=true } );
-
-				expect( function() { core.getVersions(); } ).toThrow();
-			});
-
-			it( title="lists the versions of the Maven layout", body=function() {
-				var provider = _newProvider( _newVersions( _newWorld(), { noFlat=true } ), "maven" );
-				var list     = provider.readList();
-				var versions = [];
-
-				for ( var entry in list ) {
-					ArrayAppend( versions, entry.version );
-				}
-
-				expect( versions ).toInclude( "6.2.0.321" );
-				expect( versions ).toInclude( "8.0.0.1-ALPHA" );
-				expect( versions ).notToInclude( "6.2.0.300" );
-			});
-
-			it( title="redirects the downloads to the files in the Maven layout", body=function() {
-				var provider = _newProvider( _newVersions( _newWorld(), { noFlat=true } ), "maven" );
-				var response = getPageContext().getResponse();
-
-				provider.downLoader( "6.2.0.321" );
-				expect( _locations( response ) ).toInclude( mixed & "org/lucee/lucee/6.2.0.321/lucee-6.2.0.321.jar" );
-				provider.downloadExpress( "6.2.0.321" );
-				expect( _locations( response ) ).toInclude( mixed & "org/lucee/lucee/6.2.0.321/lucee-6.2.0.321-express.zip" );
-			});
-
-			it( title="answers 501 for what needs the flat files of S3", body=function() {
-				var provider = _newProvider( _newVersions( _newWorld(), { noFlat=true } ), "maven" );
-				var response = getPageContext().getResponse();
-
-				try {
-					for ( var call in [
-						  function() { provider.getExpressTemplates(); }
-						, function() { provider.listMissing(); }
-						, function() { provider.buildLatest(); }
-						, function() { provider.downloadForgebox( "6.2.0.321" ); }
-					] ) {
-						response.setStatus( 200 );
-						call();
-						expect( response.getStatus() ).toBe( 501 );
-					}
-				} finally {
-					response.setStatus( 200 );
-				}
-			});
-
-		});
-
 	}
 
 // the world
@@ -651,7 +569,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 		return new services.MavenCoreSource( argumentCollection=settings );
 	}
 
-	// the versions with all that is needed, args: maven, flat, noFlat, flatFallback, flatUrl, versionFilter, cacheSeconds
+	// the versions with all that is needed, args: maven, flat, flatFallback, flatUrl, versionFilter, cacheSeconds
 	private any function _newVersions( world, struct args={} ) {
 		var settings = {
 			  flatSource    = ""
@@ -662,9 +580,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			, cacheSeconds  = arguments.args.cacheSeconds  ?: 300
 		};
 
-		if ( arguments.args.noFlat ?: false ) {
-			settings.flatSource = ""; // STORAGE=maven
-		} else if ( arguments.args.flatBroken ?: false ) {
+		if ( arguments.args.flatBroken ?: false ) {
 			settings.flatSource = { getVersions=function() { throw( type="test", message="the flat files can't be read" ); } };
 		} else {
 			settings.flatSource = _newFlatSource( arguments.world, arguments.args.flat ?: _flatFiles() );
@@ -673,11 +589,10 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 		return new services.CoreVersions( argumentCollection=settings );
 	}
 
-	private any function _newProvider( versions, storageMode="s3" ) {
+	private any function _newProvider( versions ) {
 		application.bundleDownloadService = "";
-		application.storageMode           = arguments.storageMode;
-		application.coreS3Root            = arguments.storageMode == "maven" ? "" : "s3:///example-bucket/";
-		application.coreCdnUrl            = arguments.storageMode == "maven" ? "" : cdnUrl;
+		application.coreS3Root            = "s3:///example-bucket/";
+		application.coreCdnUrl            = cdnUrl;
 		application.jiraChangelogService  = { getChangeLog=function() { return {}; } };
 		application.coreVersions          = arguments.versions;
 

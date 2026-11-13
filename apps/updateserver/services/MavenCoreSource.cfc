@@ -94,6 +94,24 @@ component extends="MavenExtensionSource" accessors=true {
 		}
 	}
 
+	private array function _mixedFirst( required array repos ) {
+		var sorted = [];
+
+		for ( var repo in arguments.repos ) {
+			if ( ArrayFind( variables.mixedRepos, repo ) ) {
+				ArrayAppend( sorted, repo );
+			}
+		}
+
+		for ( var repo in arguments.repos ) {
+			if ( !ArrayFind( sorted, repo ) ) {
+				ArrayAppend( sorted, repo );
+			}
+		}
+
+		return sorted;
+	}
+
 	/**
 	 * Name of the file of a type of a version in a repository: <artifactId>-<version>[-<classifier>].<extension>.
 	 * The files of a snapshot are timestamped on most repositories, the name of the file is in the maven-metadata.xml of the version.

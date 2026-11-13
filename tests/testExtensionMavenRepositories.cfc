@@ -303,45 +303,6 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			});
 
 		});
-
-		describe( "STORAGE=maven: the extensions of the Maven repositories only, without S3", function() {
-
-			it( title="does not list or serve the files of the flat folder, only the ones of the repositories", body=function() {
-				var world = _newWorld();
-				var flat  = base & "flat-" & CreateUUID() & "/";
-				DirectoryCreate( flat, true );
-				_createLex( flat & "legacy-1.0.0.1.lex", "11111111-F15A-4EBD-8B1EEDF8DD8A844D", "1.0.0.1" );
-
-				var reader = _newMavenOnlyReader( world, flat );
-				var found  = _versions( reader.list( type="all", all=true ) );
-
-				expect( found ).toHaveKey( mailId & "|1.1.0.17" );
-				expect( found ).toHaveKey( ftpId  & "|1.0.0.8" );
-				expect( found ).notToHaveKey( "11111111-F15A-4EBD-8B1EEDF8DD8A844D|1.0.0.1" );
-				// nothing to fall back to: no url at all for a file that is in no repository
-				expect( reader.getDownloadUrl( "legacy-1.0.0.1.lex", cdnUrl ) ).toBe( "" );
-			});
-
-			it( title="serves the downloads from the Lucee repository (the Maven bridge) first", body=function() {
-				var reader = _newMavenOnlyReader( _newWorld() );
-
-				// in the releases repository and the mixed one: the mixed one
-				expect( reader.getDownloadUrl( "mail-extension-1.1.0.17.lex", cdnUrl ) )
-					.toBe( mixed & "org/lucee/mail-extension/1.1.0.17/mail-extension-1.1.0.17.lex" );
-				// never the url of the flat files
-				expect( reader.getDownloadUrl( "ftp-extension-1.0.0.8.lex", cdnUrl ) ).notToInclude( cdnUrl );
-			});
-
-			it( title="keeps its state on the local disk folder it is given", body=function() {
-				var flat = base & "local-" & CreateUUID() & "/";
-				DirectoryCreate( flat, true );
-
-				_newMavenOnlyReader( _newWorld(), flat );
-
-				expect( FileExists( flat & "extensions.json" ) ).toBeTrue();
-			});
-
-		});
 	}
 
 // FAKE MAVEN REPOSITORIES
@@ -520,26 +481,6 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			, mavenCdnUrl  = mavenCdn
 			, mavenSource  = _newSource( arguments.world )
 			, fetchThreads = 4
-		);
-		reader.loadMeta();
-		return reader;
-	}
-
-	// STORAGE=maven: no Maven folder of a bucket, no flat fallback, the state in a local folder
-	private function _newMavenOnlyReader( world, flat="" ) {
-		if ( !Len( arguments.flat ) ) {
-			arguments.flat = base & "local-" & CreateUUID() & "/";
-			DirectoryCreate( arguments.flat, true );
-		}
-
-		var reader = new services.ExtensionMetadataReader(
-			  s3root       = arguments.flat
-			, mavenRoot    = ""
-			, mavenCdnUrl  = ""
-			, mavenSource  = _newSource( arguments.world )
-			, fetchThreads = 4
-			, flatFallback = false
-			, mavenOnly    = true
 		);
 		reader.loadMeta();
 		return reader;

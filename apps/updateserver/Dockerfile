@@ -5,9 +5,9 @@
 # This is separate from devops/Dockerfile.update, which remains the Pixl8 image
 # (nginx, port 8888) and is still built and deployed by ci.yml.
 #
-# Same Lucee version and extensions as the Pixl8 image, except Sentry (this
-# image does not use it). The tomcat-only light tag (no nginx) is used so the
-# listen port can follow $PORT, as download.lucee.org (apps/download8) does.
+# Same Lucee version and extensions as the Pixl8 image, but the tomcat-only
+# light tag (no nginx) so the listen port can follow $PORT, as download.lucee.org
+# (apps/download8) does.
 
 FROM --platform=linux/amd64 lucee/lucee:6.2.0.321-light
 
@@ -17,6 +17,7 @@ ENV LUCEE_SECURITY_LIMITEVALUATION=true
 RUN mkdir -p /opt/lucee/server/lucee-server/deploy \
              /opt/lucee/server/lucee-server/context \
              /var/www/logs \
+ && wget -nv https://ext.lucee.org/sentry-extension-5.5.2.15.lex -O /opt/lucee/server/lucee-server/deploy/sentry-extension.lex \
  && wget -nv https://ext.lucee.org/s3-extension-2.0.2.21.lex -O /opt/lucee/server/lucee-server/deploy/s3-extension-2.0.2.21.lex \
  && wget -nv https://ext.lucee.org/image-extension-2.0.0.29.lex -O /opt/lucee/server/lucee-server/deploy/image-extension-2.0.0.29.lex \
  && wget -nv https://ext.lucee.org/esapi-extension-2.2.4.18.lex -O /opt/lucee/server/lucee-server/deploy/esapi-extension-2.2.4.18.lex \
@@ -29,8 +30,8 @@ RUN mkdir -p /opt/lucee/server/lucee-server/deploy \
 
 COPY apps/updateserver /var/www
 COPY devops/.CFconfig-update.json5 /opt/lucee/server/lucee-server/context/.CFConfig.json
-# Do not copy devops/.CFconfig-sentry.json: Cloud Run does not set SENTRY_DSN, and
-# importing that file configures loggers with the literal "{env.SENTRY_DSN}".
+# Applied on first start by Application.cfc (LDEV-5371 workaround), uses SENTRY_DSN / SENTRY_ENV
+COPY devops/.CFconfig-sentry.json /opt/lucee/server/lucee-server/deploy/.CFconfig-sentry.json
 
 COPY apps/updateserver/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
