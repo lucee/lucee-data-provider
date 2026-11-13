@@ -1,0 +1,1 @@
+<cfscript>#echo("OK")#</cfscript>

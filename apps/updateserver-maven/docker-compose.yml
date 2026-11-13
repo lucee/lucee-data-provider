@@ -1,0 +1,21 @@
+# Local run of the Maven-only Cloud Run image (listens on PORT, default 8080).
+# From this directory: docker compose up --build
+# Then: http://localhost:8080/healthcheck/
+services:
+  update:
+    build:
+      context: ../..
+      dockerfile: apps/updateserver-maven/Dockerfile
+    image: lucee-update-maven:local
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      CACHE_DIR: /storage
+      LUCEE_LOGGING_FORCE_APPENDER: console
+      LISTING_CACHE_SECONDS: "300"
+      ALLOW_RELOAD: "false"
+    volumes:
+      - maven-cache:/storage
+volumes:
+  maven-cache:

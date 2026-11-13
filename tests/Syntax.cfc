@@ -47,6 +47,26 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 					stoponerror="true";
 
 			});
+
+			it(title="compile all Maven-only Cloud Run update CFML/CFC files in CFML", body=function(){
+
+				admin action="updateMapping"
+					type="server"
+					password=request.SERVERADMINPASSWORD
+					virtual="/tmpUpdateMaven"
+					physical=variables.root & "apps/updateserver-maven"
+					archive=""
+					primary="resource";
+
+				expect( len( directoryList("/tmpUpdateMaven") ) ).toBeGT( 0 );
+
+				admin action="compileMapping"
+					type="server"
+					password=request.SERVERADMINPASSWORD
+					virtual="/tmpUpdateMaven"
+					stoponerror="true";
+
+			});
 		});
 	}
 }
