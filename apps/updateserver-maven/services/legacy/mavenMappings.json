@@ -3,6 +3,7 @@
     "PDFRenderer": { "artifact": "PDFRenderer", "group": "PDFRenderer" },
     "activiti-engine": { "artifact": "activiti-engine", "group": "org.activiti" },
     "activiti-osgi": { "artifact": "activiti-osgi", "group": "org.activiti" },
+    "antlr": { "artifact": "antlr", "group": "antlr" },
     "apache.poi.ooxml.schemas": { "artifact": "schemas", "group": "apache.poi.ooxml" },
     "apache.poi.tm.extractors": { "artifact": "extractors", "group": "apache.poi.tm" },
     "apache.ws.axis": { "artifact": "axis", "group": "apache.ws" },

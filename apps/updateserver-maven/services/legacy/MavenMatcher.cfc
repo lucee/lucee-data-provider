@@ -83,24 +83,13 @@
 			, "https://raw.githubusercontent.com/lucee/mvn/master/releases"
 			, "https://oss.sonatype.org/content/repositories/snapshots"
 		];
-		var uri = "";
-
-		if ( StructKeyExists( variables.mavenMappings, arguments.bundleName ) ) {
-			var mvnId = variables.mavenMappings[ arguments.bundleName ];
-			uri = "/" & Replace( mvnId.group, '.', '/', 'all' ) & "/" & mvnId.artifact &
-			      "/" & arguments.bundleVersion &
-			      "/" & mvnId.artifact & "-" & arguments.bundleVersion & ".jar";
-
-		} else {
-			uri = "/" & Replace( arguments.bundleName, '.', '/', 'all' ) &
-			      "/" & arguments.bundleVersion &
-			      "/" & ListLast( arguments.bundleName, '.' ) &
-			      "-" & arguments.bundleVersion & ".jar";
-		}
+		var uris = rawSearchPaths( arguments.bundleName, arguments.bundleVersion );
 
 		for( var rep in repositories ) {
-			if ( FileExists( rep & uri ) ) {
-				return rep & uri;
+			for ( var candidate in uris ) {
+				if ( FileExists( rep & candidate ) ) {
+					return rep & candidate;
+				}
 			}
 		}
 
@@ -121,6 +110,38 @@
 		}
 
 		return "";
+	}
+
+
+	/**
+	 * Maven layout paths to try for a raw Central/OSGi lookup, starting with
+	 * a slash (the repository base is prepended by findBundleUrl).
+	 * A single-segment name like "antlr" is also tried as groupId+artifactId
+	 * (/antlr/antlr/2.7.6/antlr-2.7.6.jar), not only /antlr/2.7.6/antlr-2.7.6.jar.
+	 */
+	public array function rawSearchPaths( required string bundleName, required string bundleVersion ) {
+		var uris = [];
+
+		if ( StructKeyExists( variables.mavenMappings, arguments.bundleName ) ) {
+			var mvnId = variables.mavenMappings[ arguments.bundleName ];
+			ArrayAppend( uris, "/" & Replace( mvnId.group, '.', '/', 'all' ) & "/" & mvnId.artifact
+				& "/" & arguments.bundleVersion
+				& "/" & mvnId.artifact & "-" & arguments.bundleVersion & ".jar" );
+			return uris;
+		}
+
+		ArrayAppend( uris, "/" & Replace( arguments.bundleName, '.', '/', 'all' )
+			& "/" & arguments.bundleVersion
+			& "/" & ListLast( arguments.bundleName, '.' )
+			& "-" & arguments.bundleVersion & ".jar" );
+
+		if ( ListLen( arguments.bundleName, "." ) == 1 ) {
+			ArrayAppend( uris, "/" & arguments.bundleName & "/" & arguments.bundleName
+				& "/" & arguments.bundleVersion
+				& "/" & arguments.bundleName & "-" & arguments.bundleVersion & ".jar" );
+		}
+
+		return uris;
 	}
 
 	private struct function fetchMavenMetaData( required string metaFile, required string baseUrl ){

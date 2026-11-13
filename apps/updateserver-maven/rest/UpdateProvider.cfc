@@ -244,6 +244,20 @@ component {
 	}
 
 	/**
+	* function to download Zero Lucee Loader file (lucee-zero.jar)
+	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
+	*/
+	remote function downZero(
+		required string version restargsource="Path",
+		string ioid="" restargsource="url")
+		httpmethod="GET" restpath="zero/{version}" {
+		_bind();
+
+		redirectToCore("zero",arguments.version);
+		return;
+	}
+
+	/**
 	* only for backward compatibility
 	*/
 	remote function downLoaderAll(
@@ -251,7 +265,9 @@ component {
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="loader-all/{version}" {
 		_bind();
-		return downLoaderNew(version,ioid);
+
+		redirectToCore("jar",arguments.version);
+		return;
 	}
 
 		/**
@@ -262,7 +278,9 @@ component {
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="core/{version}" {
 		_bind();
-		return downloadCoreNew(version,ioid);
+
+		redirectToCore("lco",arguments.version);
+		return;
 	}
 
 	remote function echoGET(
