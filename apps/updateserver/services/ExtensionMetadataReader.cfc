@@ -10,6 +10,9 @@ component accessors=true {
 	// LDEV-6795: serve the extensions that only exist in the flat S3 bucket (no copy in the Maven layout)? Maven is served first
 	// either way. This is the fallback to the old flat files, to be switched off once everything is in the Maven layout.
 	property name="flatFallback"          type="boolean" default=true;
+	// STORAGE=maven: only the Maven repositories, no flat bucket at all (no listing, no fallback, no flat download url).
+	// s3root is then a folder of the local disk, where the extension meta and state files are kept.
+	property name="mavenOnly"             type="boolean" default=false;
 	// LDEV-6795: minimum core version needed to load an extension packaged for Maven (no jars folder, see _probePackaging),
 	// empty: no such minimum, the min core version of the manifest is all there is
 	property name="mavenOnlyMinCore"      type="string" default="";
@@ -232,7 +235,7 @@ component accessors=true {
 	 * else is the fallback to the flat bucket, served from the given default (flat extensions cdn) url.
 	 */
 	public string function getDownloadUrl( required string fileName, required string defaultBaseUrl ) {
-		var mavenPath = variables._mavenPaths[ arguments.fileName ] ?: "";
+		var mavenPath = getMavenOnly() ? "" : ( variables._mavenPaths[ arguments.fileName ] ?: "" );
 
 		if ( Len( mavenPath ) && Len( getMavenCdnUrl() ) ) {
 			return _withTrailingSlash( getMavenCdnUrl() ) & mavenPath;
@@ -241,13 +244,19 @@ component accessors=true {
 		var remote = variables._mavenRemote[ arguments.fileName ] ?: "";
 
 		if ( IsStruct( remote ) ) {
-			var resolved = getMavenSource().getFileUrl( remote.artifact, remote.version, remote.repos );
+			// Maven only: the Lucee repository (the Maven bridge) first, as for the core files
+			var resolved = getMavenSource().getFileUrl( remote.artifact, remote.version, remote.repos, getMavenOnly() );
 
 			if ( Len( resolved ) ) {
 				return resolved;
 			}
 
 			SystemOutput( "Could not resolve the download url of [#arguments.fileName#] in the maven repositories.", true );
+		}
+
+		// Maven only: there is no flat bucket to fall back to, nothing to download from
+		if ( getMavenOnly() ) {
+			return "";
 		}
 
 		_logFlatFallback( arguments.fileName, "download" );
@@ -299,6 +308,11 @@ component accessors=true {
 
 // PRIVATE HELPERS
 	private function _listLexFilesFromBucket() {
+		// Maven only: there is no flat bucket
+		if ( getMavenOnly() ) {
+			return QueryNew( "name,size,type,dateLastModified,attributes,mode,directory" );
+		}
+
 		return DirectoryList(
 			  path     = getS3Root()
 			, sort     = "name"
@@ -676,7 +690,10 @@ component accessors=true {
 		var served   = Duplicate( getExtensionMeta() );
 		var dropFlat = !getFlatFallback();
 
-		if ( dropFlat && !_hasMavenSource() ) {
+		// Maven only: never the flat files, there are none
+		if ( getMavenOnly() ) {
+			dropFlat = true;
+		} else if ( dropFlat && !_hasMavenSource() ) {
 			SystemOutput( "The flat S3 fallback is switched off, but there is no Maven source configured. Ignoring that, the flat files are served.", true );
 			dropFlat = false;
 		}
@@ -751,6 +768,11 @@ component accessors=true {
 	}
 
 	private function _logFallbackSummary( required query meta ) {
+		if ( getMavenOnly() ) {
+			SystemOutput( "Extensions: [#QueryRecordCount( arguments.meta )#] files, served from the Maven repositories only (STORAGE=maven).", true );
+			return;
+		}
+
 		if ( !_hasMavenSource() ) {
 			return;
 		}
@@ -830,6 +852,9 @@ component accessors=true {
 				getMavenSource().download( arguments.candidate.artifact, arguments.candidate.version, arguments.candidate.repos, arguments.target );
 			break;
 			default:
+				if ( getMavenOnly() ) {
+					throw( type="ExtensionMetadataReader", message="[#arguments.candidate.name#] is not in a Maven repository, there is no flat bucket (STORAGE=maven)" );
+				}
 				FileCopy( getS3Root() & "/" & arguments.candidate.name, arguments.target );
 		}
 	}

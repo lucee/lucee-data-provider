@@ -24,8 +24,8 @@ component accessors=true {
 			return bundleInfo;
 		}
 
-		// Get it from bundles s3 bucket directly
-		var bundleUrl = _searchBundleBucket( argumentCollection=arguments, bundleName=arguments.searchName );
+		// Get it from bundles s3 bucket directly (not in the Maven only mode, there is no bucket)
+		var bundleUrl = _hasBucket() ? _searchBundleBucket( argumentCollection=arguments, bundleName=arguments.searchName ) : "";
 		if ( Len( Trim( bundleUrl ) ) ) {
 			return _saveToCache( argumentCollection=arguments, bundleUrl=bundleUrl, cacheExpires="never" );
 		}
@@ -49,7 +49,10 @@ component accessors=true {
 		);
 		if ( Len( Trim( extensionLexFile ) ) ) {
 			bundleUrl = getExtensionMetaReader().getDownloadUrl( extensionLexFile, getExtensionsCdnUrl() );
-			return _saveToCache( argumentCollection=arguments, bundleUrl=bundleUrl, cacheExpires="never" );
+			// empty in the Maven only mode when the file is in no Maven repository
+			if ( Len( bundleUrl ) ) {
+				return _saveToCache( argumentCollection=arguments, bundleUrl=bundleUrl, cacheExpires="never" );
+			}
 		}
 
 		// Fuller maven search
@@ -84,6 +87,11 @@ component accessors=true {
 		  required string directory
 		, required string filename
 	) {
+		// Maven only (no bundle bucket): the jars of the extensions are not copied anywhere, the bundles come from the Maven matcher
+		if ( !_hasBucket() ) {
+			return;
+		}
+
 		var bundleInfo = _getBundleNameAndVersionFromFileName( arguments.fileName );
 		if ( StructIsEmpty( bundleInfo ) ) {
 			return;
@@ -130,7 +138,16 @@ component accessors=true {
 		return bundleInfo;
 	}
 
+	// without a bundle bucket (STORAGE=maven) the lookups are kept in memory only
+	private boolean function _hasBucket() {
+		return Len( getBundleS3Root() ) > 0;
+	}
+
 	private function _s3Lookup( bundleName, bundleVersion ) {
+		if ( !_hasBucket() ) {
+			return {};
+		}
+
 		var filePath = _getS3CacheFilePath( argumentCollection=arguments );
 
 		if ( FileExists( filePath ) ) {
@@ -142,12 +159,20 @@ component accessors=true {
 		return {};
 	}
 	private function _storeToS3( bundleName, bundleVersion, bundleInfo ) {
+		if ( !_hasBucket() ) {
+			return;
+		}
+
 		try {
 			FileWrite( _getS3CacheFilePath( argumentCollection=arguments ), SerializeJson( bundleInfo ) );
 		} catch( any e ) { /* just a cache, failing is fine */ }
 	}
 
 	private function _removeFromS3( bundleName, bundleVersion ) {
+		if ( !_hasBucket() ) {
+			return;
+		}
+
 		try {
 			FileDelete( _getS3CacheFilePath( argumentCollection=arguments ) );
 		} catch( any e ) { /* just a cache, failing is fine */ }

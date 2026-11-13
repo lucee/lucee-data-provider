@@ -102,9 +102,7 @@ component {
 		);
 
 		if ( StructCount( ext ) ) {
-			header statuscode="302" statustext="Found";
-			header name="Location" value=metaReader.getDownloadUrl( ext.filename, variables.cdnURL );
-			return;
+			return _redirectToFile( ext.filename );
 		}
 
 		header statuscode="404" statustext="Not Found";
@@ -134,9 +132,7 @@ component {
 		);
 
 		if ( StructCount( ext ) ) {
-			header statuscode="302" statustext="Found";
-			header name="Location" value=metaReader.getDownloadUrl( ext.filename, variables.cdnURL );
-			return;
+			return _redirectToFile( ext.filename );
 		}
 
 		header statuscode="404" statustext="Not Found";
@@ -168,6 +164,24 @@ component {
 	 */
 	remote function reset() {
 		metaReader.loadMeta();
+	}
+
+	/**
+	 * Redirects to the file of an extension. A 404 when there is no url for it, which can only be in the Maven only
+	 * mode (STORAGE=maven): a file that is in no Maven repository (there is no flat bucket to serve it from).
+	 */
+	private function _redirectToFile( required string fileName ) {
+		var fileUrl = metaReader.getDownloadUrl( arguments.fileName, variables.cdnURL );
+
+		if ( !Len( fileUrl ) ) {
+			content type="text/plain";
+			header statuscode="404" statustext="Not Found";
+			echo( "The extension file [#EncodeForHtml( arguments.fileName )#] is not available from the Maven repositories" );
+			return;
+		}
+
+		header statuscode="302" statustext="Found";
+		header name="Location" value=fileUrl;
 	}
 
 	/**

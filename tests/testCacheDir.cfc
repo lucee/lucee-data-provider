@@ -47,6 +47,27 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( s3 ).notToBe( maven );
 			});
 
+			it( title="prefers CACHE_DIR when both CACHE_DIR and LOCAL_CACHE_DIR are set", body=function() {
+				var cacheDir = variables.work & "storage";
+				var alias    = variables.work & "legacy-alias";
+				var root     = services.CacheDir::envCacheRoot( cacheDir, alias );
+				var path     = services.CacheDir::path( "extensions", variables.work & "unused/", root );
+
+				expect( root ).toBe( cacheDir );
+				expect( path ).toBe( cacheDir & "/extensions/" );
+			});
+
+			it( title="uses LOCAL_CACHE_DIR as a fallback alias when CACHE_DIR is empty", body=function() {
+				var alias = variables.work & "legacy-alias";
+				var root  = services.CacheDir::envCacheRoot( "", alias );
+				var path  = services.CacheDir::path( "jira", variables.work & "unused/", root );
+
+				expect( services.CacheDir::envCacheRoot( "  ", alias ) ).toBe( alias );
+				expect( services.CacheDir::envCacheRoot( "", "" ) ).toBe( "" );
+				expect( root ).toBe( alias );
+				expect( path ).toBe( alias & "/jira/" );
+			});
+
 			it( title="writeAtomic writes the file and can overwrite an existing one", body=function() {
 				var path = variables.work & "atomic/versions.json";
 				services.CacheDir::writeAtomic( path, "{""n"":1}" );

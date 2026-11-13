@@ -12,8 +12,12 @@ component {
 	this.searchImplicitScopes   = false;
 	this.searchResults          = false;
 	this.scopeCascading         = 'strict';
-	this.s3.accessKeyId         = server.system.environment.S3_EXTENSION_ACCESS_KEY_ID;
-	this.s3.awsSecretKey        = server.system.environment.S3_EXTENSION_SECRET_KEY;
+	// STORAGE=maven (or NO_S3=true): a proxy over the Maven repositories only, S3 is not used at all, no credentials needed
+	this.mavenOnly              = _isMavenOnly();
+	if ( !this.mavenOnly ) {
+		this.s3.accessKeyId     = server.system.environment.S3_EXTENSION_ACCESS_KEY_ID;
+		this.s3.awsSecretKey    = server.system.environment.S3_EXTENSION_SECRET_KEY;
+	}
 	this.allowReload            = IsBoolean( server.system.environment.ALLOW_RELOAD ?: "" ) && server.system.environment.ALLOW_RELOAD;
 
 	function onApplicationStart() {
@@ -108,12 +112,37 @@ component {
 		return IsBoolean( value ) ? value : arguments.fallback;
 	}
 
+	/**
+	 * The storage mode: "s3" (the default, the Maven repositories first with the flat files of S3 as the fallback, caches in S3)
+	 * or "maven" (STORAGE=maven, or NO_S3=true): only the Maven repositories, nothing is read from or written to S3,
+	 * no S3 credentials are needed, the caches are kept in memory and on the local disk
+	 * (CACHE_DIR, with LOCAL_CACHE_DIR as a fallback alias).
+	 */
+	private boolean function _isMavenOnly() {
+		var env     = server.system.environment;
+		var storage = LCase( Trim( env.STORAGE ?: "" ) );
+		var noS3    = Trim( env.NO_S3 ?: "" );
+
+		return storage == "maven" || ( IsBoolean( noS3 ) && noS3 );
+	}
+
+	// a folder of the local disk for the caches of the Maven only mode (extension meta, Jira issues).
+	// Uses the same CACHE_DIR root as the other on-disk caches (LOCAL_CACHE_DIR is a fallback alias);
+	// when neither is set, a folder under the Lucee temp directory is used.
+	private string function _localCacheDir( required string name ) {
+		return services.CacheDir::path( arguments.name, GetTempDirectory() & "lucee-update-cache/" );
+	}
+
 	private array function _mavenRepos( required string repos ) {
 		return Trim( arguments.repos ) == "none" ? [] : ListToArray( arguments.repos, "," );
 	}
 
 	function _loadServices() {
 		setting requesttimeout=600;
+
+		if ( _isMavenOnly() ) {
+			return _loadMavenOnlyServices();
+		}
 
 		var coreS3Root   = server.system.environment.S3_CORE_ROOT          ?: "s3:///lucee-downloads/";
 		var coreCdnUrl   = server.system.environment.S3_CORE_CDN_URL       ?: "https://cdn.lucee.org/";
@@ -189,6 +218,72 @@ component {
 		application.extMetaReader         = extMetaReader;
 		application.bundleDownloadService = bundleDownloadService;
 		application.jiraChangelogService  = jiraChangelogService;
+		application.storageMode           = "s3";
+	}
+
+	/**
+	 * STORAGE=maven: the services without S3. The versions, files and extensions come from the Maven repositories only
+	 * (the downloads are redirected to them), the bundles from the Maven matcher, what was read is kept in memory and on
+	 * the local disk. Nothing is read from or written to S3, there is no flat fallback.
+	 */
+	private function _loadMavenOnlyServices() {
+		SystemOutput( "Storage mode [maven]: serving from the Maven repositories only, S3 is not used", true );
+
+		var extMetaReader = new services.ExtensionMetadataReader(
+			  s3root               = _localCacheDir( "extensions" ) // the extension meta and state files, on the local disk
+			, mavenRoot            = ""
+			, mavenCdnUrl          = ""
+			, mavenSource          = _createMavenSource()
+			, fetchThreads         = Val( server.system.environment.EXTENSIONS_MAVEN_FETCH_THREADS ?: 5 )
+			, flatFallback         = false
+			, mavenOnly            = true
+			, mavenOnlyMinCore     = Trim( server.system.environment.EXTENSIONS_MAVEN_ONLY_MIN_CORE ?: "" )
+			, packagingBackfillMax = Val( server.system.environment.EXTENSIONS_PACKAGING_BACKFILL_MAX ?: 200 )
+		);
+
+		var coreVersions = new services.CoreVersions(
+			  flatSource    = ""
+			, mavenSource   = _createCoreMavenSource()
+			, flatUrl       = ""
+			, flatFallback  = false
+			, versionFilter = Trim( server.system.environment.UPDATES_VERSION_FILTER ?: "major" )
+			, cacheSeconds  = Val( server.system.environment.UPDATES_MAVEN_CACHE_SECONDS ?: 300 )
+		);
+
+		try {
+			coreVersions.getVersions();
+		} catch ( any e ) {
+			SystemOutput( "Core versions could not be read at startup: #e.message#", true );
+			SystemOutput( e, true );
+		}
+
+		var jiraChangelogService = new services.JiraChangelogService(
+			s3root = _localCacheDir( "jira" )
+		);
+
+		var bundleDownloadService = new services.BundleDownloadService(
+			  extensionsCdnUrl    = ""
+			, bundleS3Root        = ""
+			, bundleCdnUrl        = ""
+			, extensionMetaReader = extMetaReader
+			, mavenMatcher        = new services.legacy.MavenMatcher()
+		);
+
+		extMetaReader.setBundleDownloadservice( bundleDownloadService );
+		extMetaReader.loadMeta();
+
+		jiraChangelogService.loadIssues();
+		jiraChangelogService.updateIssuesAsync();
+
+		application.coreS3Root            = "";
+		application.coreCdnUrl            = "";
+		application.coreVersions          = coreVersions;
+		application.extensionsCdnUrl      = "";
+		application.extensionsS3Root      = "";
+		application.extMetaReader         = extMetaReader;
+		application.bundleDownloadService = bundleDownloadService;
+		application.jiraChangelogService  = jiraChangelogService;
+		application.storageMode           = "maven";
 	}
 
 }
