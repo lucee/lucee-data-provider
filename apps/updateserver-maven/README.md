@@ -116,13 +116,17 @@ or map domains from CI.
 None. Do not set `S3_EXTENSION_ACCESS_KEY_ID`, `S3_EXTENSION_SECRET_KEY`
 or `SENTRY_DSN`. The image does not install the S3 or Sentry extensions.
 
-### 2. Switch the Cloud Build trigger
+### 2. Cloud Build trigger (optional to switch)
 
 The existing trigger
 [`b40e43f4-fd52-45bf-800e-31657819f623`](https://console.cloud.google.com/cloud-build/triggers;region=global/edit/b40e43f4-fd52-45bf-800e-31657819f623?project=fine-way-396107)
-currently builds `apps/updateserver/Dockerfile`. **Michael switches it**
-to `-f apps/updateserver-maven/Dockerfile` (or to
-`--config apps/updateserver-maven/cloudbuild.yaml`). This repository
+builds `apps/updateserver/Dockerfile`. That file now produces the same
+image as `apps/updateserver-maven/Dockerfile` (it copies
+`apps/updateserver-maven` into the image), so **switching the trigger is
+optional**. Pixl8 does not use `apps/updateserver/Dockerfile`; it builds
+`devops/Dockerfile.update`. If you do want the trigger path to match the
+app directory, change it to `-f apps/updateserver-maven/Dockerfile` (or
+to `--config apps/updateserver-maven/cloudbuild.yaml`). This repository
 does not change the trigger or add a deploy job.
 
 Manual build from the repo root, after this PR is on `main`:
