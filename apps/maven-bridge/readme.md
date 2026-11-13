@@ -1,5 +1,11 @@
 # Extension Provider Maven Bridge
 
+This Lucee container used to be deployed to Google Cloud Run for
+`maven.lucee-services.com` and `mvn.lucee-services.com`. It is no longer
+deployed; those hostnames are served by the Cloudflare Worker in
+[`../maven-bridge-worker`](../maven-bridge-worker). The source is kept here
+for local use until the Cloud Run service is retired.
+
 A small Lucee Docker app that exposes a **Maven repository layout** backed by one or more legacy Lucee **REST extension providers** (`extension.lucee.org`, ForgeBox, or your own update server).
 
 Use it while migrating Lucee 6-style extension providers to the Lucee 7+ Maven GroupId model.
