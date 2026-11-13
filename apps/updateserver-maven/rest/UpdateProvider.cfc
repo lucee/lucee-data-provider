@@ -883,7 +883,7 @@ component {
 			content type="text/plain";
 			header statuscode="404" statustext="Not Found";
 			echo("artifact #encodeForHtml(type)# for version #encodeForHtml(version)# does not exist");
-			abort;
+			return;
 		}
 
 		header statuscode="302" statustext="Found";

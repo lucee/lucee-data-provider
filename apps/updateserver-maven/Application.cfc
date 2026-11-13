@@ -45,6 +45,9 @@ component {
 	}
 
 	function onRequestStart() output=true {
+		// Cold start can take a couple of minutes (Maven metadata). The default
+		// 50s request timeout would otherwise 500 waiting requests.
+		setting requesttimeout=600;
 		header name="Content-Security-Policy" value="sandbox; object-src 'none'; script-src 'none'";
 
 		if ( this.allowReload && StructKeyExists( url, "fwreinit" ) ) {
