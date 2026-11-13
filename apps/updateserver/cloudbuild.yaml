@@ -1,0 +1,13 @@
+# Build the Cloud Run image of the REST update/extension provider.
+# Run from the repository root (see README.md):
+#   gcloud builds submit --project fine-way-396107 \
+#     --config apps/updateserver/cloudbuild.yaml \
+#     --substitutions=_IMAGE=europe-west1-docker.pkg.dev/fine-way-396107/cloud-run-source-deploy/lucee-update:TAG \
+#     .
+substitutions:
+  _IMAGE: europe-west1-docker.pkg.dev/fine-way-396107/cloud-run-source-deploy/lucee-update:latest
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_IMAGE}", "-f", "apps/updateserver/Dockerfile", "."]
+images:
+  - ${_IMAGE}

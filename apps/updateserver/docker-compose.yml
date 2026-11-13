@@ -1,0 +1,18 @@
+# Local run of the Cloud Run image (listens on PORT, default 8080).
+# From this directory: docker compose up --build
+# Then: http://localhost:8080/healthcheck/
+services:
+  update:
+    build:
+      context: ../..
+      dockerfile: apps/updateserver/Dockerfile
+    image: lucee-update:local
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      S3_EXTENSION_ACCESS_KEY_ID: ${S3_EXTENSION_ACCESS_KEY_ID:-}
+      S3_EXTENSION_SECRET_KEY: ${S3_EXTENSION_SECRET_KEY:-}
+      SENTRY_ENV: ${SENTRY_ENV:-local}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      ALLOW_RELOAD: ${ALLOW_RELOAD:-true}
