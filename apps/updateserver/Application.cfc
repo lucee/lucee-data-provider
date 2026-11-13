@@ -21,15 +21,10 @@ component {
 			// workaround for LDEV-5371
 			// if LUCEE_LOGGING_FORCE_APPENDER=console is set, sentry is bypassed
 			var deploy = expandPath( '{lucee-server}/../deploy/' );
-			var sentry_json = deploy & "/.CFconfig-sentry.json";
+			var sentry_json = deploy & "/.CFconfig-sentry.json"; 
 			if ( FileExists( sentry_json ) ){
-				var sentryDsn = Trim( server.system.environment.SENTRY_DSN ?: "" );
-				if ( Len( sentryDsn ) ) {
-					configImport( sentry_json, "server", "admin" );
-					systemOutput("sentry.json loaded via configImport - LDEV-5371", true);
-				} else {
-					systemOutput("skipping sentry.json, SENTRY_DSN is not set", true);
-				}
+				configImport( sentry_json, "server", "admin" );
+				systemOutput("sentry.json loaded via configImport - LDEV-5371", true);
 				fileDelete( sentry_json );
 			}
 		}

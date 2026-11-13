@@ -73,6 +73,10 @@ buckets:
 - `S3_EXTENSION_ACCESS_KEY_ID`
 - `S3_EXTENSION_SECRET_KEY`
 
+Optional, for the Sentry loggers already baked into the image:
+
+- `SENTRY_DSN`
+
 ```sh
 # example: create an empty secret, then add a version from a file you do not commit
 gcloud secrets create S3_EXTENSION_ACCESS_KEY_ID --project=fine-way-396107
@@ -81,11 +85,6 @@ gcloud secrets versions add S3_EXTENSION_ACCESS_KEY_ID --project=fine-way-396107
 
 The Cloud Run runtime service account needs `roles/secretmanager.secretAccessor`
 on those secrets.
-
-The Cloud Run image does not install the Sentry extension or import
-`.CFconfig-sentry.json`. Leave `SENTRY_DSN` unset. The Pixl8 image
-(`devops/Dockerfile.update`) is unchanged and still uses Sentry when
-`SENTRY_DSN` is set.
 
 ### 2. Build and push the image
 
@@ -122,16 +121,16 @@ gcloud run deploy "$SERVICE" \
   --min-instances 1 \
   --max-instances 4 \
   --startup-probe=httpGetPath=/healthcheck/,periodSeconds=10,timeoutSeconds=5,failureThreshold=30,initialDelaySeconds=15 \
-  --set-env-vars=LUCEE_LOGGING_FORCE_APPENDER=console,ALLOW_RELOAD=false,CACHE_DIR=/storage \
+  --set-env-vars=SENTRY_ENV=production,ALLOW_RELOAD=false \
   --set-secrets=S3_EXTENSION_ACCESS_KEY_ID=S3_EXTENSION_ACCESS_KEY_ID:latest,S3_EXTENSION_SECRET_KEY=S3_EXTENSION_SECRET_KEY:latest
 ```
 
-Mount a Cloud Storage bucket at `/storage` so on-disk caches (core version
-lists, Maven indexes, and so on) survive restarts and are shared between
-instances. In the Cloud Run console this is a volume of type Cloud Storage
-FUSE, bucket `lucee_data_provider`, mount path `/storage`. Then set
-`CACHE_DIR=/storage` as above. `cloudbuild.yaml` only builds the image; the
-volume and this variable are set on the service when you deploy or update it.
+If `SENTRY_DSN` was created, add it in a follow-up update:
+
+```sh
+gcloud run services update "$SERVICE" --project "$PROJECT" --region "$REGION" \
+  --set-secrets=SENTRY_DSN=SENTRY_DSN:latest
+```
 
 ### 4. Test the `run.app` URL
 
@@ -174,8 +173,8 @@ Optional (defaults in `Application.cfc` are what production uses today):
 
 | Name | Default |
 |------|---------|
-| `CACHE_DIR` | empty (write caches next to the CFCs, as Pixl8 does). On Cloud Run set this to `/storage`. |
-| `LUCEE_LOGGING_FORCE_APPENDER` | unset. On Cloud Run set this to `console`. |
+| `SENTRY_DSN` | empty (Sentry loggers no-op) |
+| `SENTRY_ENV` | empty (`production` on Cloud Run) |
 | `ALLOW_RELOAD` | unset/false (`?fwreinit` only works when this is true) |
 | `S3_CORE_ROOT` | `s3:///lucee-downloads/` |
 | `S3_CORE_CDN_URL` | `https://cdn.lucee.org/` |
