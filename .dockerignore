@@ -26,6 +26,7 @@
 **/compose.y*ml
 **/Dockerfile*
 !apps/updateserver/Dockerfile
+!apps/updateserver-maven/Dockerfile
 **/node_modules
 **/npm-debug.log
 **/obj

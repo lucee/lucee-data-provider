@@ -1,0 +1,20 @@
+# Build the Cloud Run image of the Maven-only REST update/extension provider.
+# Run from the repository root (see README.md):
+#   gcloud builds submit --project fine-way-396107 \
+#     --config apps/updateserver-maven/cloudbuild.yaml \
+#     --substitutions=_IMAGE=europe-west1-docker.pkg.dev/fine-way-396107/cloud-run-source-deploy/lucee-update:TAG \
+#     .
+#
+# The existing Cloud Build trigger b40e43f4-fd52-45bf-800e-31657819f623 must
+# be switched to `-f apps/updateserver-maven/Dockerfile` (Michael does that).
+# This file does not deploy the service and does not touch the Pixl8 CI jobs.
+substitutions:
+  _IMAGE: europe-west1-docker.pkg.dev/fine-way-396107/cloud-run-source-deploy/lucee-update:latest
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_IMAGE}", "-f", "apps/updateserver-maven/Dockerfile", "."]
+images:
+  - ${_IMAGE}
+# Runtime env (set on the Cloud Run service, not here): CACHE_DIR=/storage,
+# LUCEE_LOGGING_FORCE_APPENDER=console, LISTING_CACHE_SECONDS=300. No secrets.
+# See README.md.
