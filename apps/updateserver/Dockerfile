@@ -17,6 +17,13 @@
 
 FROM --platform=linux/amd64 lucee/lucee:6.2.0.321-light
 
+# Cloud Run memory is 2GiB. The base image defaults to -Xms64m -Xmx512m
+# (LUCEE_JAVA_OPTS, copied into CATALINA_OPTS by Tomcat's setenv.sh).
+# 1200m is a sensible heap for that size and leaves room for metaspace,
+# thread stacks, direct buffers and the GCS FUSE mount at /storage.
+ENV LUCEE_JAVA_OPTS="-Xms256m -Xmx1200m"
+
+
 ENV LUCEE_ADMIN_ENABLED=false
 ENV LUCEE_SECURITY_LIMITEVALUATION=true
 ENV LUCEE_LOGGING_FORCE_APPENDER=console

@@ -176,6 +176,15 @@ listing JSON, Maven indexes and extension meta survive restarts and are
 shared between instances. `cloudbuild.yaml` only builds the image; the
 volume and the environment variables are set on the service.
 
+The image sets `LUCEE_JAVA_OPTS=-Xms256m -Xmx1200m` (Tomcat's `setenv.sh`
+copies that into `CATALINA_OPTS`). The base Lucee image defaults to a
+512m heap, which is tight for a 2GiB service. A cold start reads
+extension `.lex` files with `java.util.zip.ZipFile` so Lucee's `zip://`
+resource does not extract whole archives (including large bundled jars)
+into `{lucee-config}/temp/compress`. That extract folder previously grew
+to several gigabytes and the Cloud Run container was SIGKILL'd with an
+out-of-memory event, even though the JVM heap itself was only 512m.
+
 Recommended probe settings (also in the snippet above):
 
 | Setting | Value | Why |
@@ -211,6 +220,7 @@ Run defaults):
 | `LOCAL_CACHE_DIR` | fallback alias for `CACHE_DIR` when `CACHE_DIR` is not set |
 | `LISTING_CACHE_SECONDS` | `300` (five minutes). TTL for list/info JSON under `CACHE_DIR/listings/`. |
 | `LUCEE_LOGGING_FORCE_APPENDER` | `console` in the image (needed so `ARTIFACT_NOT_FOUND` lines show up in Cloud Logging) |
+| `LUCEE_JAVA_OPTS` | `-Xms256m -Xmx1200m` in the image (a 2GiB Cloud Run container; the base image default is `-Xms64m -Xmx512m`) |
 | `ALLOW_RELOAD` | unset/false (`?fwreinit` only works when this is true) |
 | `PORT` | Cloud Run sets this to `8080` |
 | `EXTENSIONS_MAVEN_REPOS_RELEASES` / `LUCEE_MVN_REPO_RELEASES` | Maven Central |
