@@ -1,15 +1,21 @@
 component {
 
 	/**
-	 * Directory for a named on-disk cache.
-	 * When CACHE_DIR is set (Cloud Run mounts a bucket at /storage and sets
-	 * CACHE_DIR=/storage), files go under CACHE_DIR/<name>/. LOCAL_CACHE_DIR
-	 * is a fallback alias used when CACHE_DIR is empty (the Maven only mode
-	 * introduced that name). When neither is set, the caller-supplied fallback
-	 * is used, so Pixl8 keeps writing next to the component as before.
+	 * Directory for a named on-disk cache that is specific to this app.
+	 *
+	 * Shared download8 keys (luceeVersionsList.json, extArtifacts_*.json, …)
+	 * live in the cache root itself (CACHE_DIRECTORY, default /download).
+	 * This app's own files go under a separate prefix so they cannot collide:
+	 *
+	 *   CACHE_DIR when that env var is set (the image uses /download/provider)
+	 *   otherwise LOCAL_CACHE_DIR
+	 *   otherwise CACHE_DIRECTORY/provider (or /download/provider)
+	 *
+	 * When no root is set, the caller-supplied fallback is used, so Pixl8
+	 * keeps writing next to the component as before.
 	 *
 	 * @name      subfolder under the cache root (ignored when no root is set)
-	 * @fallback  directory used when neither CACHE_DIR nor LOCAL_CACHE_DIR is set, including the trailing slash
+	 * @fallback  directory used when no cache root is set, including the trailing slash
 	 * @cacheRoot override for tests; defaults to envCacheRoot()
 	 */
 	public static string function path( required string name, required string fallback, string cacheRoot ) {
@@ -38,17 +44,21 @@ component {
 	}
 
 	/**
-	 * Preferred cache root: CACHE_DIR, then LOCAL_CACHE_DIR when CACHE_DIR is empty.
+	 * Preferred root for app-specific caches. See path().
 	 *
-	 * @cacheDir      override for tests; defaults to the CACHE_DIR environment variable
-	 * @localCacheDir override for tests; defaults to the LOCAL_CACHE_DIR environment variable
+	 * @cacheDir        override for tests; defaults to CACHE_DIR
+	 * @localCacheDir   override for tests; defaults to LOCAL_CACHE_DIR
+	 * @cacheDirectory  override for tests; defaults to CACHE_DIRECTORY
 	 */
-	public static string function envCacheRoot( string cacheDir, string localCacheDir ) {
+	public static string function envCacheRoot( string cacheDir, string localCacheDir, string cacheDirectory ) {
 		if ( !StructKeyExists( arguments, "cacheDir" ) ) {
 			arguments.cacheDir = server.system.environment.CACHE_DIR ?: "";
 		}
 		if ( !StructKeyExists( arguments, "localCacheDir" ) ) {
 			arguments.localCacheDir = server.system.environment.LOCAL_CACHE_DIR ?: "";
+		}
+		if ( !StructKeyExists( arguments, "cacheDirectory" ) ) {
+			arguments.cacheDirectory = server.system.environment.CACHE_DIRECTORY ?: "";
 		}
 
 		var root = Trim( arguments.cacheDir );
@@ -56,7 +66,25 @@ component {
 			return root;
 		}
 
-		return Trim( arguments.localCacheDir );
+		root = Trim( arguments.localCacheDir );
+		if ( Len( root ) ) {
+			return root;
+		}
+
+		root = Trim( arguments.cacheDirectory );
+		if ( !Len( root ) ) {
+			root = "/download";
+			// only use the /download default when that folder exists (Cloud Run
+			// / local compose). Tests and hosts without the mount fall through.
+			if ( !DirectoryExists( root ) ) {
+				return "";
+			}
+		}
+		if ( Right( root, 1 ) == "/" ) {
+			root = Left( root, Len( root ) - 1 );
+		}
+
+		return root & "/provider";
 	}
 
 	/**

@@ -37,6 +37,10 @@ component accessors=true {
 	variables._served            = "";
 	// LDEV-6795: file name > number of times it was served from the flat bucket although a Maven source is configured
 	variables._flatHits          = StructNew( "sync" );
+	// Maven only: startup lists only latest (and release if different) per artifact
+	variables._wantAllRemoteVersions    = false;
+	variables._allRemoteVersionsLoaded  = false;
+	variables._pendingRemoteFiles       = [];
 
 	reset();
 
@@ -152,7 +156,9 @@ component accessors=true {
 			& "_" & arguments.coreVersion;
 
 		if ( arguments.flush || !StructKeyExists( variables._simpleCache, cacheKey ) ) {
-			if ( !IsQuery( variables.extensionMeta ?: "" ) || arguments.flush ) {
+			if ( arguments.all && getMavenOnly() ) {
+				_ensureAllRemoteVersions();
+			} else if ( !IsQuery( variables.extensionMeta ?: "" ) || arguments.flush ) {
 				loadMeta();
 			}
 
@@ -211,6 +217,10 @@ component accessors=true {
 		if ( StructKeyExists( mapped, arguments.id ) ) {
 			if ( arguments.version == "latest" || isEmpty( arguments.version ) ) {
 				arguments.version = _getLatestVersion( mapped[ arguments.id ], arguments.coreVersion, arguments.type );
+			}
+			if ( !StructKeyExists( mapped[ arguments.id ], arguments.version ) && getMavenOnly() ) {
+				_ensureRemoteVersion( arguments.id, arguments.version );
+				mapped = getExtensionVersions();
 			}
 			if ( StructKeyExists( mapped[ arguments.id ], arguments.version ) ) {
 				var ext = StructCopy( mapped[ arguments.id ][ arguments.version ] );
@@ -399,13 +409,72 @@ component accessors=true {
 		}
 
 		try {
-			result = getMavenSource().listExtensions();
+			// Maven only: at startup only the latest (and release, if different) of each artifact, so a cold start does not download every historical .lex. list(all=true) and a specific version still fetch the rest on demand.
+			result = getMavenSource().listExtensions( latestOnly=getMavenOnly() && !variables._wantAllRemoteVersions );
 		} catch ( any e ) {
 			SystemOutput( "Error listing the maven repositories: #e.message#", true );
 			result = { files=[], complete=false };
 		}
 
+		if ( ArrayLen( variables._pendingRemoteFiles ) ) {
+			for ( var file in variables._pendingRemoteFiles ) {
+				ArrayAppend( result.files, file );
+			}
+			variables._pendingRemoteFiles = [];
+		}
+
 		return result;
+	}
+
+	private void function _ensureAllRemoteVersions() {
+		if ( variables._allRemoteVersionsLoaded && IsQuery( variables.extensionMeta ?: "" ) ) {
+			return;
+		}
+		variables._wantAllRemoteVersions = true;
+		loadMeta();
+		variables._allRemoteVersionsLoaded = true;
+	}
+
+	private void function _ensureRemoteVersion( required string id, required string version ) {
+		if ( !Len( arguments.version ) || arguments.version == "latest" ) {
+			return;
+		}
+		var artifact = _artifactForId( arguments.id );
+		if ( !Len( artifact ) || !IsObject( getMavenSource() ?: "" ) ) {
+			return;
+		}
+		var listed = getMavenSource().listArtifactVersions( artifact );
+		if ( !StructKeyExists( listed.versions ?: {}, arguments.version ) ) {
+			return;
+		}
+		ArrayAppend( variables._pendingRemoteFiles, {
+			  name     = artifact & "-" & arguments.version & ".lex"
+			, artifact = artifact
+			, version  = arguments.version
+			, repos    = listed.versions[ arguments.version ]
+		} );
+		loadMeta();
+	}
+
+	private string function _artifactForId( required string id ) {
+		for ( var artifact in variables._mavenState.artifactIds ) {
+			if ( ( variables._mavenState.artifactIds[ artifact ] ?: "" ) == arguments.id ) {
+				return artifact;
+			}
+		}
+		if ( IsQuery( variables.extensionMeta ?: "" ) ) {
+			for ( var row in variables.extensionMeta ) {
+				if ( ( row.id ?: "" ) == arguments.id && Len( row.filename ?: "" ) ) {
+					// filename is <artifact>-<version>.lex; artifact ends in -extension
+					var base = ReReplaceNoCase( row.filename, "\.lex$", "" );
+					var cut  = FindNoCase( "-extension-", base );
+					if ( cut ) {
+						return Left( base, cut + Len( "extension" ) );
+					}
+				}
+			}
+		}
+		return "";
 	}
 
 	/**

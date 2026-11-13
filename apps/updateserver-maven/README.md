@@ -10,7 +10,11 @@ This app serves the same REST endpoints (`/rest/extension/provider/*`,
 `/rest/update/provider/*` including `info`, `list`, download redirects,
 `update-for`, and `/healthcheck/`) but talks **only** to the Maven
 repositories (Maven Central, Sonatype snapshots, and
-`https://maven.lucee-services.com/`). There is no S3 code path, the
+`https://maven.lucee-services.com/`). The image is Lucee 8 (same tag as
+download8). Core versions come from `LuceeVersionsList()` /
+`LuceeVersionsDetail()`; extensions are listed from the group-level
+`maven-metadata.xml` of `org.lucee` and `io.forgebox` (artifactIds ending
+in `-extension`), with versions and detail from `LuceeExtension()`. There is no S3 code path, the
 image does not install the S3 extension, and the service needs no
 secrets (no S3 credentials, no Sentry).
 
@@ -33,13 +37,38 @@ the Cloud Run startup probe does not wait for Maven metadata to load.
 
 The first health-check request also fires a background warmup of the
 main app (`/warmup/`). Service loading runs in a background thread.
-Once `CACHE_DIR` holds a warm listing cache, list/info endpoints are
+Once `CACHE_DIR` (default `/download/provider`) holds a warm listing cache, list/info endpoints are
 served from those JSON files while services finish starting.
+
+## Shared cache with download8
+
+This service and `download.lucee.org` (`apps/download8`) share the same
+on-disk cache for core versions and extensions. Both write one JSON file
+per key (`luceeVersionsList.json`, `extArtifacts_<groupId>.json`,
+`extver_<groupId>_<artifactId>.json`, `extdata_<groupId>_<artifactId>_<version>.json`,
+`luceeVerDetail_<version>.json`) into the folder named by
+`CACHE_DIRECTORY`, using the same value shapes, stale-while-revalidate
+windows, and never-cache-empty rules as download8's `Util.cfc`
+(`dlCacheGet` / `dlCachePut`).
+
+Both Cloud Run services must mount the same bucket at the same path and
+set `CACHE_DIRECTORY` to that folder:
+
+- bucket: `lucee_downloads`
+- mount path: `/download`
+- `CACHE_DIRECTORY=/download`
+
+Whichever service is warm first fills the cache for the other. Empty
+results are never cached. The image already sets `CACHE_DIRECTORY=/download`.
+
+App-specific files (REST listing JSON, extension meta, Jira issues, Maven
+indexes) go under `CACHE_DIR` (default `/download/provider`) so they cannot
+collide with download8's `{key}.json` files in the shared folder.
 
 ## Listing cache
 
 List and info responses are stored as JSON files under
-`CACHE_DIR/listings/` (on Cloud Run, `/storage/listings/`):
+`CACHE_DIR/listings/` (on Cloud Run, `/download/provider/listings/`):
 
 - `/rest/update/provider/list` (short and extended)
 - `/rest/update/provider/info/{version}`
@@ -100,7 +129,8 @@ From the repository root:
 ```sh
 docker build -f apps/updateserver-maven/Dockerfile -t lucee-update-maven .
 docker run --rm -p 8080:8080 \
-  -e CACHE_DIR=/storage \
+  -e CACHE_DIRECTORY=/download \
+  -e CACHE_DIR=/download/provider \
   -e LUCEE_LOGGING_FORCE_APPENDER=console \
   lucee-update-maven
 ```
@@ -148,8 +178,8 @@ gcloud builds submit --project "$PROJECT" --region "$REGION" \
 
 `/healthcheck/` answers immediately, so the startup probe can stay
 short. The first request that needs Maven metadata can still take a
-couple of minutes when `CACHE_DIR` is empty; later revisions are fast
-because listings and Maven indexes live on the bucket. `--min-instances 0`
+couple of minutes when the cache is empty; later revisions are fast
+because listings, the shared download8 cache and Maven indexes live on the bucket. `--min-instances 0`
 is fine while testing; once the domains point here, `--min-instances 1`
 avoids a cold start on a Lucee "check for updates".
 
@@ -167,14 +197,16 @@ gcloud run deploy "$SERVICE" \
   --min-instances 0 \
   --max-instances 4 \
   --startup-probe=httpGetPath=/healthcheck/,periodSeconds=5,timeoutSeconds=5,failureThreshold=12,initialDelaySeconds=10 \
-  --set-env-vars=CACHE_DIR=/storage,ALLOW_RELOAD=false,LUCEE_LOGGING_FORCE_APPENDER=console,LISTING_CACHE_SECONDS=300
+  --set-env-vars=CACHE_DIRECTORY=/download,CACHE_DIR=/download/provider,ALLOW_RELOAD=false,LUCEE_LOGGING_FORCE_APPENDER=console,LISTING_CACHE_SECONDS=300
 ```
 
-Mount a Cloud Storage bucket at `/storage` (volume type Cloud Storage
-FUSE, bucket `lucee_data_provider`, mount path `/storage`) so the
-listing JSON, Maven indexes and extension meta survive restarts and are
-shared between instances. `cloudbuild.yaml` only builds the image; the
-volume and the environment variables are set on the service.
+Mount Cloud Storage bucket `lucee_downloads` at `/download` (volume type
+Cloud Storage FUSE, the same mapping as the download8 service) so the
+shared version/extension cache, listing JSON, Maven indexes and extension
+meta survive restarts and are shared with download8 and between instances.
+Both services must point `CACHE_DIRECTORY` at that same folder.
+`cloudbuild.yaml` only builds the image; the volume and the environment
+variables are set on the service.
 
 The image sets `LUCEE_JAVA_OPTS=-Xms256m -Xmx1200m` (Tomcat's `setenv.sh`
 copies that into `CATALINA_OPTS`). The base Lucee image defaults to a
@@ -216,7 +248,8 @@ Run defaults):
 
 | Name | Default |
 |------|---------|
-| `CACHE_DIR` | `/storage` in the image. Listing JSON, Maven caches, extension meta and Jira issues go under this folder. |
+| `CACHE_DIRECTORY` | `/download` in the image. Shared with download8 (same keys, same JSON files). Both services must set this to the same folder (the `lucee_downloads` bucket mounted at `/download`). Falls back to `CACHE_DIR`, then `/download`. |
+| `CACHE_DIR` | `/download/provider` in the image. App-specific caches (listing JSON, Maven indexes, extension meta, Jira issues) go under this folder so they cannot collide with download8's shared `{key}.json` files. If unset, defaults to `CACHE_DIRECTORY/provider`. |
 | `LOCAL_CACHE_DIR` | fallback alias for `CACHE_DIR` when `CACHE_DIR` is not set |
 | `LISTING_CACHE_SECONDS` | `300` (five minutes). TTL for list/info JSON under `CACHE_DIR/listings/`. |
 | `LUCEE_LOGGING_FORCE_APPENDER` | `console` in the image (needed so `ARTIFACT_NOT_FOUND` lines show up in Cloud Logging) |
@@ -236,4 +269,4 @@ Run defaults):
 | `UPDATES_MAVEN_CACHE_SECONDS` | `300` |
 
 Jira changelogs are read from the public Jira Cloud API and cached under
-`CACHE_DIR/jira/`; no Jira token is required.
+`CACHE_DIR/jira/` (default `/download/provider/jira/`); no Jira token is required. The live Jira fetch runs in the background after the provider is ready and never blocks startup.

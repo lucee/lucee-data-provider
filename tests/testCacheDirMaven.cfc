@@ -41,6 +41,24 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( DirectoryList( GetDirectoryFromPath( path ), false, "name", "*.tmp.*" ) ).toHaveLength( 0 );
 			});
 
+			it( title="nests app caches under provider/ when only CACHE_DIRECTORY is set", body=function() {
+				var shared = variables.work & "download";
+				var root = services.CacheDir::envCacheRoot( cacheDir="", localCacheDir="", cacheDirectory=shared );
+				expect( root ).toBe( shared & "/provider" );
+
+				var listings = services.CacheDir::path( "listings", variables.work & "unused/", root );
+				expect( listings ).toBe( shared & "/provider/listings/" );
+			});
+
+			it( title="prefers an explicit CACHE_DIR over CACHE_DIRECTORY for app-specific files", body=function() {
+				var root = services.CacheDir::envCacheRoot(
+					  cacheDir       = variables.work & "provider-explicit"
+					, localCacheDir  = ""
+					, cacheDirectory = variables.work & "download"
+				);
+				expect( root ).toBe( variables.work & "provider-explicit" );
+			});
+
 		});
 	}
 

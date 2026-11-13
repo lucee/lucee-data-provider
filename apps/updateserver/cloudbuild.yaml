@@ -11,3 +11,6 @@ steps:
     args: ["build", "-t", "${_IMAGE}", "-f", "apps/updateserver/Dockerfile", "."]
 images:
   - ${_IMAGE}
+# Runtime env (set on the Cloud Run service, not here):
+# CACHE_DIRECTORY=/download (same folder as download8; bucket lucee_downloads
+# mounted at /download), CACHE_DIR=/download/provider. See apps/updateserver-maven/README.md.
