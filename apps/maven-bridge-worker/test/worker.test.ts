@@ -1130,6 +1130,25 @@ describe("health, landing and scheduled", () => {
 		const html = await res.text();
 		expect(html).toContain("org.lucee");
 		expect(html).toContain("io.forgebox");
+		expect(html).toContain("What is the Maven Bridge?");
+		expect(html).toContain('<link rel="stylesheet" href="/res/lucee-header/theme.css?v=2" data-lucee-theme-css>');
+		expect(html).toContain('<link rel="stylesheet" href="/res/lucee-header/header.css?v=2" data-lucee-header-css>');
+		expect(html).toContain('<script src="/res/lucee-header/header.js?v=2" defer></script>');
+		expect(html).toContain('href="/res/maven-bridge.css?v=2"');
+		expect(html).toContain('<lucee-header home="https://lucee.org/" current="extensions">');
+		expect(html).toContain('<a href="https://lucee.org/extensions">Extensions</a>');
+		expect(html).not.toContain('class="site-header"');
+	});
+
+	it("renders directory listings with the shared header", async () => {
+		mockFetch(baseRoutes());
+		const res = await call("/org/lucee/redis-extension/");
+		expect(res.status).toBe(200);
+		expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
+		const html = await res.text();
+		expect(html).toContain('<lucee-header home="https://lucee.org/" current="extensions">');
+		expect(html).toContain('<a href="maven-metadata.xml">maven-metadata.xml</a>');
+		expect(html).not.toContain('class="site-header"');
 	});
 
 	it("answers 404 for unknown paths", async () => {

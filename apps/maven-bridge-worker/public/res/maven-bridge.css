@@ -50,100 +50,30 @@ body {
 a { color: var(--primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-/* ── Site Header ── */
-.site-header {
-	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	z-index: 200;
-	background: var(--chrome-bg);
-	color: var(--chrome-text);
-	padding: 6px 32px 0;
-	display: flex;
-	align-items: flex-end;
-	gap: 16px;
-	height: 100px;
-}
-
-body { padding-top: 100px; }
-
-.site-header .logo {
-	position: relative;
-	display: inline-block;
-	text-decoration: none;
-	flex-shrink: 0;
-	margin-bottom: 10px;
-}
-
-.site-header .logo img {
-	display: block;
-	width: 172px;
-	height: 81px;
-	filter: brightness(0) invert(1);
-}
-
-.site-header .logo .logo-subtitle {
-	position: absolute;
-	bottom: 2px;
-	left: 83px;
-	font-size: 15px;
-	font-weight: 500;
-	color: var(--chrome-text);
-	opacity: 0.75;
-	letter-spacing: 0.04em;
-	white-space: nowrap;
-}
-
-.site-header nav {
-	margin-left: auto;
-	display: flex;
-	gap: 24px;
-	padding-bottom: 14px;
-}
-
-.site-header nav a {
-	color: var(--chrome-text);
-	font-size: 14px;
-	opacity: 0.85;
-}
-
-.site-header nav a:hover { opacity: 1; text-decoration: none; }
-
-.site-header nav a.nav-highlight {
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	background: rgba(255,255,255,0.10);
-	border: 1px solid rgba(255,255,255,0.18);
-	border-radius: 5px;
-	padding: 3px 10px;
-	font-size: 13px;
-	font-weight: 600;
-	opacity: 1;
-	color: #fff;
-	transition: background 0.15s, border-color 0.15s;
-}
-.site-header nav a.nav-highlight:hover {
-	background: rgba(255,255,255,0.18);
-	border-color: rgba(255,255,255,0.32);
-	text-decoration: none;
-}
-.site-header nav a.nav-highlight svg { flex-shrink: 0; }
-
-.bmc-link { display: inline-flex; align-items: center; opacity: 0.9; }
-.bmc-link:hover { opacity: 1; text-decoration: none; }
-.bmc-icon { display: block; height: 30px; width: auto; }
-.bmc-full { display: none; height: 38px; width: auto; }
-.bmc-link:hover .bmc-icon { display: none; }
-.bmc-link:hover .bmc-full { display: block; }
+/* ── Shared header (<lucee-header>, see /res/lucee-header/) ── */
+/* the page-wide link hover underline must not apply inside the shared header */
+lucee-header a:hover { text-decoration: none; }
 
 /* ── Main Container ── */
 .container {
 	max-width: 1100px;
 	margin: 0 auto;
-	padding: 0 24px;
+	padding: 28px 24px 0;
 	flex: 1;
+}
+
+.listing-title {
+	font-size: 28px;
+	font-weight: 700;
+	line-height: 1.25;
+	color: var(--text);
+	margin-bottom: 16px;
+}
+
+.container > pre {
+	font-size: 14px;
+	line-height: 1.7;
+	overflow-x: auto;
 }
 
 /* ── Section Headers ── */
