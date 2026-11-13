@@ -2,10 +2,12 @@
  * LDEV-6789: discovers extensions published to Maven repositories, the same repositories Lucee core uses
  * (releases, snapshots and the "mixed" Lucee repository).
  *
- * - the artifacts (<group>/<artifactId>-extension) are discovered from the html directory listings of the
- *   repositories, the same way core does it. Not every repository can be listed (the snapshot repository
- *   of Sonatype can't), the artifacts those hold are looked up by the name of the artifacts found elsewhere.
- * - the versions of an artifact come from the maven-metadata.xml of the repositories.
+ * - the artifacts (artifactId ending in -extension) are discovered from the group-level
+ *   maven-metadata.xml of the mixed Lucee repository (org.lucee and io.forgebox), or from
+ *   Lucee 8's LuceeExtension(groupId) which already reads that XML first. HTML directory
+ *   listings are only a fallback.
+ * - the versions of an artifact come from LuceeExtension(groupId, artifactId) or the
+ *   artifact-level maven-metadata.xml of the repositories.
  * - the file of a snapshot version is a timestamped one (<artifactId>-<version>-<yyyyMMdd.HHmmss>-<n>.lex),
  *   which is looked up in the maven-metadata.xml of the version.
  *
@@ -31,23 +33,32 @@ component accessors=true {
 		, array   snapshotRepos   = []
 		, array   mixedRepos      = []
 		, string  group           = "org.lucee"
+		, array   groups
 		, numeric timeout         = 20
 		, numeric downloadTimeout = 120
 		, numeric maxThreads      = 10
 		, numeric retries         = 2
 		, numeric retryDelay      = 500
 		, any     httpClient
+		, any     catalog
 	) {
 		variables.releaseRepos    = _normaliseRepos( arguments.releaseRepos );
 		variables.snapshotRepos   = _normaliseRepos( arguments.snapshotRepos );
 		variables.mixedRepos      = _normaliseRepos( arguments.mixedRepos );
 		variables.group           = arguments.group;
+		variables.groups          = arguments.groups ?: [ arguments.group ];
+		if ( !ArrayFind( variables.groups, arguments.group ) ) {
+			ArrayPrepend( variables.groups, arguments.group );
+		}
 		variables.timeout         = arguments.timeout;
 		variables.downloadTimeout = arguments.downloadTimeout;
 		variables.maxThreads      = arguments.maxThreads;
 		variables.retries         = arguments.retries;
 		variables.retryDelay      = arguments.retryDelay;
 		variables.httpClient      = arguments.httpClient ?: _defaultHttpClient();
+		variables.catalog         = arguments.catalog ?: "";
+		variables._artifactGroups = StructNew( "sync" ); // artifactId > groupId
+		variables._artifactPreferred = StructNew( "sync" ); // artifactId > { latest, release }
 		variables._snapshotFiles  = StructNew( "sync" ); // version metadata url > { file, time }, a snapshot is replaced by a newer one at any time
 		variables._snapshotTtl    = 300; // seconds
 
@@ -63,10 +74,10 @@ component accessors=true {
 	 *   { files=[ { name, artifact, version, repos=[ repo urls the version is in, in order of preference ] } ], complete=boolean }
 	 * "complete" is false when a repository or an artifact could not be read.
 	 */
-	public struct function listExtensions() {
+	public struct function listExtensions( boolean latestOnly=false ) {
 		var result = { files=[], complete=true };
 
-		if ( !hasRepos() ) {
+		if ( !hasRepos() && !IsObject( variables.catalog ?: "" ) ) {
 			return result;
 		}
 
@@ -81,16 +92,27 @@ component accessors=true {
 
 		for ( var i=1; i<=ArrayLen( listing.artifacts ); i++ ) {
 			var artifactResult = found[ i ];
+			var artifact       = listing.artifacts[ i ];
+			var group          = _groupOf( artifact );
 
 			if ( !artifactResult.complete ) {
 				result.complete = false;
 			}
 
-			for ( var version in artifactResult.versions ) {
+			var versions = StructKeyArray( artifactResult.versions );
+			if ( arguments.latestOnly ) {
+				versions = _latestVersions( artifact, versions, artifactResult.preferred ?: [] );
+			}
+
+			for ( var version in versions ) {
+				if ( !StructKeyExists( artifactResult.versions, version ) ) {
+					continue;
+				}
 				ArrayAppend( result.files, {
-					  name     = listing.artifacts[ i ] & "-" & version & ".lex"
-					, artifact = listing.artifacts[ i ]
+					  name     = artifact & "-" & version & ".lex"
+					, artifact = artifact
 					, version  = version
+					, group    = group
 					, repos    = artifactResult.versions[ version ]
 				} );
 			}
@@ -169,25 +191,74 @@ component accessors=true {
 	}
 
 	/**
-	 * The artifacts are the "<name>-extension" folders of the group folder of the repositories, a repository that
-	 * can't be read makes the result incomplete. A repository that has no listing at all (no links) is not an error.
+	 * The artifacts whose artifactId ends in -extension, from the group-level
+	 * maven-metadata.xml (org.lucee and io.forgebox) or LuceeExtension(groupId).
+	 * A group that can't be read makes the result incomplete.
 	 */
 	private struct function _listArtifacts() {
 		var result = { artifacts=[], complete=true };
 		var names  = {};
+
+		if ( IsObject( variables.catalog ?: "" ) ) {
+			try {
+				var rows = variables.catalog.listCatalog();
+				if ( ArrayLen( rows ) ) {
+					for ( var row in rows ) {
+						var name = row.artifact;
+						if ( !StructKeyExists( names, name ) ) {
+							names[ name ] = true;
+							ArrayAppend( result.artifacts, name );
+							variables._artifactGroups[ name ] = row.group;
+							variables._artifactPreferred[ name ] = {
+								  latest  = row.latest  ?: ""
+								, release = row.release ?: ""
+							};
+						}
+					}
+					return result;
+				}
+				result.complete = false;
+			} catch ( any e ) {
+				SystemOutput( "Extension catalog could not be read: #e.message#", true );
+				result.complete = false;
+			}
+		}
+
+		for ( var groupId in variables.groups ) {
+			var listed = _listGroupArtifacts( groupId );
+			if ( !listed.complete ) {
+				result.complete = false;
+			}
+			for ( var name in listed.artifacts ) {
+				if ( !StructKeyExists( names, name ) ) {
+					names[ name ] = true;
+					ArrayAppend( result.artifacts, name );
+					variables._artifactGroups[ name ] = groupId;
+				}
+			}
+		}
+
+		return result;
+	}
+
+	private struct function _listGroupArtifacts( required string groupId ) {
+		var result = { artifacts=[], complete=true };
 		var repos  = _allRepos();
-		var pages  = StructNew( "sync" ); // repo index > listing page, the repos are read in parallel
+		var pages  = StructNew( "sync" );
 
 		ArrayEach( repos, function( repo, index ) {
-			pages[ index ] = _get( _groupUrl( arguments.repo ) );
+			pages[ index ] = _get( _groupUrl( arguments.repo, groupId ) );
 		}, true, variables.maxThreads );
 
+		var names = {};
 		for ( var i=1; i<=ArrayLen( repos ); i++ ) {
 			var page = pages[ i ];
 
 			if ( page.status != 200 ) {
-				SystemOutput( "Maven repository [#repos[ i ]#] could not be listed: #page.status# #page.error#", true );
-				result.complete = false;
+				if ( page.status != 404 ) {
+					SystemOutput( "Maven repository [#repos[ i ]#] could not be listed for [#arguments.groupId#]: #page.status# #page.error#", true );
+					result.complete = false;
+				}
 				continue;
 			}
 
@@ -201,18 +272,65 @@ component accessors=true {
 		}
 
 		result.artifacts = StructKeyArray( names );
-		ArraySort( result.artifacts, "textnocase" );
-
 		return result;
 	}
 
+	private string function _groupOf( required string artifact ) {
+		return variables._artifactGroups[ arguments.artifact ] ?: variables.group;
+	}
+
+	private array function _latestVersions( required string artifact, required array versions, required array preferred ) {
+		var picked = [];
+		var pref   = variables._artifactPreferred[ arguments.artifact ] ?: {};
+
+		for ( var key in [ "latest", "release" ] ) {
+			var value = pref[ key ] ?: "";
+			if ( Len( value ) && ArrayFind( arguments.versions, value ) && !ArrayFind( picked, value ) ) {
+				ArrayAppend( picked, value );
+			}
+		}
+
+		if ( ArrayLen( picked ) ) {
+			return picked;
+		}
+
+		// no latest/release in the group XML: the numerically newest version
+		var sorted = Duplicate( arguments.versions );
+		ArraySort( sorted, function( a, b ) {
+			return Compare( services.VersionUtils::sortableVersionString( b ), services.VersionUtils::sortableVersionString( a ) );
+		} );
+		if ( ArrayLen( sorted ) ) {
+			ArrayAppend( picked, sorted[ 1 ] );
+		}
+
+		return picked;
+	}
+
 	/**
-	 * The versions of an artifact from the maven-metadata.xml of every repository. The release repositories
-	 * only hold release versions and the snapshot repositories snapshot versions, the mixed one both.
-	 * Returns { versions={ version=[ repos ] }, complete=boolean }
+	 * Versions of one artifact, from the shared catalog (LuceeExtension) when
+	 * available, otherwise from each repository's maven-metadata.xml.
 	 */
+	public struct function listArtifactVersions( required string artifact ) {
+		return _listVersions( arguments.artifact );
+	}
+
 	private struct function _listVersions( required string artifact ) {
 		var result = { versions={}, complete=true };
+
+		if ( IsObject( variables.catalog ?: "" ) ) {
+			try {
+				var vers = variables.catalog.getExtensionVersions( _groupOf( arguments.artifact ), arguments.artifact );
+				if ( ArrayLen( vers ) ) {
+					var repos = ArrayLen( variables.mixedRepos ) ? variables.mixedRepos : _allRepos();
+					for ( var version in vers ) {
+						result.versions[ version ] = repos;
+					}
+					return result;
+				}
+			} catch ( any e ) {
+				SystemOutput( "Extension versions for [#arguments.artifact#] from the catalog could not be read: #e.message#", true );
+			}
+		}
 
 		for ( var repo in _allRepos() ) {
 			var kind = _repoKind( repo );
@@ -362,12 +480,13 @@ component accessors=true {
 		return "mixed";
 	}
 
-	private string function _groupUrl( required string repo ) {
-		return arguments.repo & Replace( variables.group, ".", "/", "all" ) & "/";
+	private string function _groupUrl( required string repo, string group="" ) {
+		var g = Len( arguments.group ) ? arguments.group : variables.group;
+		return arguments.repo & Replace( g, ".", "/", "all" ) & "/";
 	}
 
 	private string function _artifactUrl( required string repo, required string artifact ) {
-		return _groupUrl( arguments.repo ) & arguments.artifact & "/";
+		return _groupUrl( arguments.repo, _groupOf( arguments.artifact ) ) & arguments.artifact & "/";
 	}
 
 	private string function _versionUrl( required string repo, required string artifact, required string version ) {

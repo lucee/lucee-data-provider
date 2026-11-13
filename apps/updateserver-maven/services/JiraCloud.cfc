@@ -94,7 +94,7 @@ component {
 	) {
 		var fullUrl = variables.config.baseUrl & arguments.path;
 
-		cfhttp( method=arguments.method, url=fullUrl, result="local.result", throwOnError=false ) {
+		cfhttp( method=arguments.method, url=fullUrl, result="local.result", throwOnError=false, timeout=20 ) {
 			// Add Authorization header only if a token is available
 			if ( len( variables.config.baseAuthToken ) ) {
 				cfhttpparam( type="header", name="Authorization", value="Basic " & variables.config.baseAuthToken );

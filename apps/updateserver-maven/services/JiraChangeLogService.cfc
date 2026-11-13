@@ -9,16 +9,22 @@ component accessors=true {
 	variables._simpleCache = {};
 	variables.cacheFile = "/issues.json";
 
+	/**
+	 * Load issues from the on-disk cache only. A live Jira fetch is never done
+	 * here (it used to block startup when the cache was empty and Jira was slow).
+	 * Use updateIssuesAsync() after the provider is ready, or force=true to
+	 * fetch synchronously (tests / an explicit refresh).
+	 */
 	function loadIssues( boolean force=false ) {
 		lock type="exclusive" name="readIssues" timeout=0 {
 			setLastUpdated( now() );
 			var issues = _readExistingIssuesFromS3();
-			if ( !issues.recordcount || arguments.force ){
-				setIssues( issues ); // in case there's a problem, let's ensure there's data
+			setIssues( issues ); // even an empty cache, so callers always have a query
+			if ( arguments.force ){
 				issues = _fetchIssues();
 				_writeIssuesToS3( issues );
+				setIssues( issues );
 			}
-			setIssues( issues );
 		}
 	}
 

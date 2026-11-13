@@ -37,6 +37,10 @@ component accessors=true {
 	variables._served            = "";
 	// LDEV-6795: file name > number of times it was served from the flat bucket although a Maven source is configured
 	variables._flatHits          = StructNew( "sync" );
+	// Maven only: startup lists only latest (and release if different) per artifact
+	variables._wantAllRemoteVersions    = false;
+	variables._allRemoteVersionsLoaded  = false;
+	variables._pendingRemoteFiles       = [];
 
 	reset();
 
@@ -129,6 +133,9 @@ component accessors=true {
 			setExtensionVersions( _createExtensionAndVersionMap() );
 			reset();
 			_logFallbackSummary( meta );
+			// zip:// extracts whole archives under temp/compress and does not
+			// clean them up; any leftover from a fallback path is removed here
+			_cleanupCompressTemp();
 			return meta;
 		}
 
@@ -149,7 +156,9 @@ component accessors=true {
 			& "_" & arguments.coreVersion;
 
 		if ( arguments.flush || !StructKeyExists( variables._simpleCache, cacheKey ) ) {
-			if ( !IsQuery( variables.extensionMeta ?: "" ) || arguments.flush ) {
+			if ( arguments.all && getMavenOnly() ) {
+				_ensureAllRemoteVersions();
+			} else if ( !IsQuery( variables.extensionMeta ?: "" ) || arguments.flush ) {
 				loadMeta();
 			}
 
@@ -208,6 +217,10 @@ component accessors=true {
 		if ( StructKeyExists( mapped, arguments.id ) ) {
 			if ( arguments.version == "latest" || isEmpty( arguments.version ) ) {
 				arguments.version = _getLatestVersion( mapped[ arguments.id ], arguments.coreVersion, arguments.type );
+			}
+			if ( !StructKeyExists( mapped[ arguments.id ], arguments.version ) && getMavenOnly() ) {
+				_ensureRemoteVersion( arguments.id, arguments.version );
+				mapped = getExtensionVersions();
 			}
 			if ( StructKeyExists( mapped[ arguments.id ], arguments.version ) ) {
 				var ext = StructCopy( mapped[ arguments.id ][ arguments.version ] );
@@ -396,13 +409,72 @@ component accessors=true {
 		}
 
 		try {
-			result = getMavenSource().listExtensions();
+			// Maven only: at startup only the latest (and release, if different) of each artifact, so a cold start does not download every historical .lex. list(all=true) and a specific version still fetch the rest on demand.
+			result = getMavenSource().listExtensions( latestOnly=getMavenOnly() && !variables._wantAllRemoteVersions );
 		} catch ( any e ) {
 			SystemOutput( "Error listing the maven repositories: #e.message#", true );
 			result = { files=[], complete=false };
 		}
 
+		if ( ArrayLen( variables._pendingRemoteFiles ) ) {
+			for ( var file in variables._pendingRemoteFiles ) {
+				ArrayAppend( result.files, file );
+			}
+			variables._pendingRemoteFiles = [];
+		}
+
 		return result;
+	}
+
+	private void function _ensureAllRemoteVersions() {
+		if ( variables._allRemoteVersionsLoaded && IsQuery( variables.extensionMeta ?: "" ) ) {
+			return;
+		}
+		variables._wantAllRemoteVersions = true;
+		loadMeta();
+		variables._allRemoteVersionsLoaded = true;
+	}
+
+	private void function _ensureRemoteVersion( required string id, required string version ) {
+		if ( !Len( arguments.version ) || arguments.version == "latest" ) {
+			return;
+		}
+		var artifact = _artifactForId( arguments.id );
+		if ( !Len( artifact ) || !IsObject( getMavenSource() ?: "" ) ) {
+			return;
+		}
+		var listed = getMavenSource().listArtifactVersions( artifact );
+		if ( !StructKeyExists( listed.versions ?: {}, arguments.version ) ) {
+			return;
+		}
+		ArrayAppend( variables._pendingRemoteFiles, {
+			  name     = artifact & "-" & arguments.version & ".lex"
+			, artifact = artifact
+			, version  = arguments.version
+			, repos    = listed.versions[ arguments.version ]
+		} );
+		loadMeta();
+	}
+
+	private string function _artifactForId( required string id ) {
+		for ( var artifact in variables._mavenState.artifactIds ) {
+			if ( ( variables._mavenState.artifactIds[ artifact ] ?: "" ) == arguments.id ) {
+				return artifact;
+			}
+		}
+		if ( IsQuery( variables.extensionMeta ?: "" ) ) {
+			for ( var row in variables.extensionMeta ) {
+				if ( ( row.id ?: "" ) == arguments.id && Len( row.filename ?: "" ) ) {
+					// filename is <artifact>-<version>.lex; artifact ends in -extension
+					var base = ReReplaceNoCase( row.filename, "\.lex$", "" );
+					var cut  = FindNoCase( "-extension-", base );
+					if ( cut ) {
+						return Left( base, cut + Len( "extension" ) );
+					}
+				}
+			}
+		}
+		return "";
 	}
 
 	/**
@@ -870,10 +942,15 @@ component accessors=true {
 
 		QueryAddRow( arguments.meta, extMeta );
 
-		try {
-			_processExtensionJars( arguments.fetched.tmpFile );
-		} catch ( any e ) {
-			SystemOutput( "Error registering the bundles of lex file: [#arguments.fileName#]: #e.message#", true );
+		// Maven only: registerBundleFromExtensionJar() is a no-op without a
+		// bundle bucket, but listing jars via zip:// still extracts the whole
+		// lex (including large bundled jars) into temp/compress.
+		if ( !getMavenOnly() ) {
+			try {
+				_processExtensionJars( arguments.fetched.tmpFile );
+			} catch ( any e ) {
+				SystemOutput( "Error registering the bundles of lex file: [#arguments.fileName#]: #e.message#", true );
+			}
 		}
 
 		_deleteTmpFile( arguments.fetched.tmpFile );
@@ -929,10 +1006,23 @@ component accessors=true {
 	 */
 	private string function _probePackaging( required string lexFile, struct manifest={} ) {
 		try {
-			var zip       = "zip://" & arguments.lexFile & "!";
-			var hasJars   = DirectoryExists( zip & "jars/" ) && ArrayLen( DirectoryList( path=zip & "jars/", filter="*.jar" ) ) > 0;
-			var hasMaven  = DirectoryExists( zip & "maven/" ) || DirectoryExists( zip & "mvn/" );
+			// Read the entry names with ZipFile so the archive is not extracted
+			// to temp/compress (zip:// does that for the whole lex, including jars).
+			var names     = _zipEntryNames( arguments.lexFile );
+			var hasJars   = false;
+			var hasMaven  = false;
 			var hasCoords = Len( arguments.manifest.groupId ?: "" ) && Len( arguments.manifest.artifactId ?: "" );
+
+			for ( var name in names ) {
+				var entry = Replace( name, "\\", "/", "all" );
+
+				if ( ReFindNoCase( "^jars/[^/]+\.jar$", entry ) ) {
+					hasJars = true;
+				}
+				if ( Left( entry, 6 ) == "maven/" || entry == "maven/" || Left( entry, 4 ) == "mvn/" || entry == "mvn/" ) {
+					hasMaven = true;
+				}
+			}
 
 			if ( hasJars ) {
 				return "osgi";
@@ -1029,20 +1119,21 @@ component accessors=true {
 	}
 
 	private function _getLogoThumbnail( lexFile ){
-		var zippedPath = "zip://" & arguments.lexFile & "!/META-INF/logo.png";
+		var logoBytes  = _zipEntryBytes( arguments.lexFile, "META-INF/logo.png" );
 		var logoBase64 = "";
 
-		if( FileExists( zippedPath ) ) {
+		if ( !IsNull( logoBytes ) && Len( logoBytes ) ) {
 			// reduce colour depth to 8 bit by writing to gif
+			var tmpPng      = GetTempFile( GetTempDirectory(), "logo", ".png" );
 			var tmpGifThumb = GetTempFile( GetTempDirectory(), "logo", ".gif" );
 
-			ImageWrite( ImageRead( zippedPath ), tmpGifThumb );
-			logoBase64 = ToBase64( FileReadBinary( tmpGifThumb ) );
-
 			try {
-				FileDelete( tmpGifThumb );
-			} catch( e ) {
-				SystemOutput( e, true ); // ignore file locking
+				FileWrite( tmpPng, logoBytes );
+				ImageWrite( ImageRead( tmpPng ), tmpGifThumb );
+				logoBase64 = ToBase64( FileReadBinary( tmpGifThumb ) );
+			} finally {
+				_deleteTmpFile( tmpPng );
+				_deleteTmpFile( tmpGifThumb );
 			}
 		}
 
@@ -1058,6 +1149,85 @@ component accessors=true {
 		}
 
 		return mapped;
+	}
+
+	/**
+	 * Entry names of a lex/zip, without extracting the archive to disk.
+	 */
+	private array function _zipEntryNames( required string lexFile ) {
+		var names = [];
+		var zip   = CreateObject( "java", "java.util.zip.ZipFile" ).init( arguments.lexFile );
+
+		try {
+			var entries = zip.entries();
+
+			while ( entries.hasMoreElements() ) {
+				ArrayAppend( names, entries.nextElement().getName() );
+			}
+		} finally {
+			zip.close();
+		}
+
+		return names;
+	}
+
+	/**
+	 * The bytes of one zip entry, or null when the entry is not there.
+	 * Does not extract the rest of the archive.
+	 */
+	private any function _zipEntryBytes( required string lexFile, required string entryName ) {
+		var zip = CreateObject( "java", "java.util.zip.ZipFile" ).init( arguments.lexFile );
+
+		try {
+			var wanted = Replace( arguments.entryName, "\\", "/", "all" );
+			var entry  = zip.getEntry( wanted );
+
+			if ( IsNull( entry ) ) {
+				var entries = zip.entries();
+
+				while ( entries.hasMoreElements() ) {
+					var candidate = entries.nextElement();
+					if ( Replace( candidate.getName(), "\\", "/", "all" ) == wanted ) {
+						entry = candidate;
+						break;
+					}
+				}
+			}
+
+			if ( IsNull( entry ) ) {
+				return;
+			}
+
+			var instream = zip.getInputStream( entry );
+
+			try {
+				return instream.readAllBytes();
+			} finally {
+				instream.close();
+			}
+		} finally {
+			zip.close();
+		}
+	}
+
+	/**
+	 * Lucee's zip:// resource extracts archives under {temp}/compress and
+	 * leaves them there. Remove leftovers from this process.
+	 */
+	private void function _cleanupCompressTemp() {
+		var dir = GetTempDirectory();
+		if ( Right( dir, 1 ) != "/" && Right( dir, 1 ) != "\\" ) {
+			dir &= "/";
+		}
+		dir &= "compress";
+
+		if ( DirectoryExists( dir ) ) {
+			try {
+				DirectoryDelete( dir, true );
+			} catch ( any e ) {
+				SystemOutput( "Could not clean Lucee's zip extract folder [#dir#]: #e.message#", true );
+			}
+		}
 	}
 
 	private function _processExtensionJars( lexFile ){
