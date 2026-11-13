@@ -51,13 +51,14 @@ component {
 		try {
 			FileWrite( tmp, arguments.content );
 			try {
-				File action="move" source=tmp destination=arguments.path overwrite=true;
+				FileMove( tmp, arguments.path );
 			} catch ( any moveError ) {
-				// some filesystems (including GCS FUSE) will not overwrite on rename
+				// FileMove will not overwrite an existing file; some filesystems
+				// (including GCS FUSE) also refuse a rename over an existing object
 				if ( FileExists( arguments.path ) ) {
 					FileDelete( arguments.path );
 				}
-				File action="move" source=tmp destination=arguments.path;
+				FileMove( tmp, arguments.path );
 			}
 		} catch ( any e ) {
 			if ( FileExists( tmp ) ) {
