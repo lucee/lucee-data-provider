@@ -89,14 +89,18 @@ served from R2; the redirect is only the fallback.
   time (`waitUntil`).
 - Larger files (core jars, express zips) are stored first and then served from R2, so a slow client
   never makes the worker hold a large file in memory.
+- Answers without a usable length are read completely when they are not larger than
+  `R2_FILL_STREAM_MAX_MB`, then stored with their real length and served. That covers compressed answers:
+  the CDN sends text files such as `.pom` gzip-compressed, without `Content-Length` and with a weak ETag
+  (`W/"..."`); `fetch` hands over the decoded body, which is what is stored (without `Content-Encoding`).
+  Larger answers without a usable length are streamed to the client without being stored.
 - If the source cannot be reached, or the store fails, the request falls back to the redirect.
 
-Only a `200` answer with a known `Content-Length` and no `Content-Encoding`, for a plain `GET` (no `Range`),
-is stored; a `404` (or any other answer) of the source is never stored. `maven-metadata.xml*` and
-`index.html` are never stored. Checksum files (`.sha1`, `.md5`, ...) the source has are stored like any
-other file; checksums the source does not have are computed as before. Stored objects carry
-`customMetadata.source`, `filledAt` and the source's `ETag` / `Last-Modified` (`sourceEtag`,
-`sourceLastModified`).
+Only a `200` answer for a plain `GET` (no `Range`) is stored; a `404` (or any other answer) of the
+source is never stored. `maven-metadata.xml*` and `index.html` are never stored. Checksum files
+(`.sha1`, `.md5`, ...) the source has are stored like any other file; checksums the source does not
+have are computed as before. Stored objects carry `customMetadata.source`, `filledAt` and the
+source's `ETag` / `Last-Modified` (`sourceEtag`, `sourceLastModified`).
 
 A file is fetched from its source once, and only when a client asks for it: a stored file (SNAPSHOT
 files included) is served from R2 and never fetched or revalidated again, no cron or listing
@@ -179,7 +183,7 @@ curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/org/lucee/
 | `R2_HOSTS` | empty | hostnames that use R2, comma separated; empty = all hostnames |
 | `CHECKSUM_MAX_MB` | `128` | checksums the upstream does not have are computed for artifacts up to this size; larger ones answer 404 (`0` = never compute) |
 | `CHECKSUM_INLINE_MAX_MB` | `16` | computed checksums of larger artifacts are hashed in the background and answer 404 until cached (`0` = always in the background) |
-| `R2_FILL_STREAM_MAX_MB` | `32` | fill-on-miss files up to this size are streamed while stored; larger ones are stored first (`0` = always store first) |
+| `R2_FILL_STREAM_MAX_MB` | `32` | fill-on-miss files up to this size are streamed while stored; larger ones are stored first (`0` = always store first). Answers without a usable length (e.g. compressed) are only stored up to this size |
 | `R2_PREFIX` | empty | key prefix in the bucket |
 | `R2_SNAPSHOT_PREFIX` | `snapshots/` | key prefix (after `R2_PREFIX`) of the SNAPSHOT files the worker stores; never empty |
 | `R2_SNAPSHOT_RETENTION_DAYS` | `90` | stored SNAPSHOT files are deleted by an R2 lifecycle rule this many days after they were stored (`0` = never); applied by `scripts/provision.mjs` on deploy |
