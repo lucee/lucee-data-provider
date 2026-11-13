@@ -1,7 +1,6 @@
 # Local run of the Cloud Run image (listens on PORT, default 8080).
 # From this directory: docker compose up --build
 # Then: http://localhost:8080/healthcheck/
-# Without S3 (Maven only, no credentials needed): STORAGE=maven docker compose up --build
 services:
   update:
     build:
@@ -12,9 +11,8 @@ services:
       - "8080:8080"
     environment:
       PORT: "8080"
-      STORAGE: ${STORAGE:-}
       S3_EXTENSION_ACCESS_KEY_ID: ${S3_EXTENSION_ACCESS_KEY_ID:-}
       S3_EXTENSION_SECRET_KEY: ${S3_EXTENSION_SECRET_KEY:-}
-      LUCEE_LOGGING_FORCE_APPENDER: console
-      CACHE_DIR: ${CACHE_DIR:-}
+      SENTRY_ENV: ${SENTRY_ENV:-local}
+      SENTRY_DSN: ${SENTRY_DSN:-}
       ALLOW_RELOAD: ${ALLOW_RELOAD:-true}
