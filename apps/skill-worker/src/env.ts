@@ -9,6 +9,11 @@ export interface Env {
 	 * the first entry without a url uses SKILL_SOURCE_URL, later ones are resolved relative to it.
 	 */
 	SKILLS?: string;
+	/**
+	 * skills.json (LDEV-6552): every topic file it lists is mirrored and served as /skill/<id>.md,
+	 * the manifest itself as /skills.json. Empty disables the topic files.
+	 */
+	SKILL_MANIFEST_URL?: string;
 	/** A cached copy older than this (minutes) is refreshed in the background on request. */
 	REFRESH_MINUTES?: string;
 	/** Timeout in seconds for requests to the source. */

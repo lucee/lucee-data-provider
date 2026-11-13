@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readConfig } from "../src/config";
+import { parseManifest } from "../src/manifest";
 import type { Env } from "../src/env";
 import { encodeForUrl, formatBytes, formatDate, humanizeSlug, parseFrontmatter, skillInfo } from "../src/landing";
 import { SKILL, SOURCE, SOURCE_LAST_MODIFIED } from "./helpers";
@@ -77,5 +78,42 @@ describe("landing helpers (index.cfm)", () => {
 		expect(info.size).toBe(new TextEncoder().encode(SKILL).byteLength);
 		expect(info.sourceHost).toBe("docs.lucee.org");
 		expect(info.displayName).toBe("Lucee Docs");
+	});
+});
+
+describe("readConfig manifest", () => {
+	it("defaults to skills.json next to the source and can be disabled", () => {
+		expect(readConfig(env({})).manifestUrl).toBe("https://docs.lucee.org/skill/skills.json");
+		expect(readConfig(env({ SKILL_MANIFEST_URL: "" })).manifestUrl).toBeNull();
+		expect(readConfig(env({ SKILL_MANIFEST_URL: "https://example.org/s.json" })).manifestUrl).toBe("https://example.org/s.json");
+	});
+});
+
+describe("parseManifest", () => {
+	const URL_ = "https://docs.lucee.org/skill/skills.json";
+	const sha = "a".repeat(64);
+	const doc = (topics: unknown[], extra: object = {}) => JSON.stringify({ name: "lucee", topics, ...extra });
+
+	it("reads topics, resolves relative paths and the router", () => {
+		const m = parseManifest(
+			doc([{ id: "ai", title: "AI", description: "d", path: "skill/ai.md", entries: 9, sha256: sha.toUpperCase(), approxTokens: 626 }], {
+				router: { url: "https://docs.lucee.org/lucee.skill", sha256: sha, approxTokens: 924 }
+			}),
+			URL_
+		);
+		expect(m.topics).toEqual([
+			{ id: "ai", title: "AI", description: "d", url: "https://docs.lucee.org/skill/skill/ai.md", entries: 9, sha256: sha, approxTokens: 626 }
+		]);
+		expect(m.router).toEqual({ url: "https://docs.lucee.org/lucee.skill", sha256: sha, approxTokens: 924 });
+	});
+
+	it("rejects anything unexpected", () => {
+		expect(() => parseManifest("nope", URL_)).toThrow(/not valid JSON/);
+		expect(() => parseManifest("{}", URL_)).toThrow(/no topics array/);
+		expect(() => parseManifest(doc([{ id: "../x", url: "/x.md" }]), URL_)).toThrow(/invalid topic id/);
+		expect(() => parseManifest(doc([{ id: "a", url: "/a.md" }, { id: "a", url: "/b.md" }]), URL_)).toThrow(/listed twice/);
+		expect(() => parseManifest(doc([{ id: "a" }]), URL_)).toThrow(/has no url/);
+		expect(() => parseManifest(doc([{ id: "a", url: "https://example.org/a.md" }]), URL_)).toThrow(/is not on https:\/\/docs\.lucee\.org/);
+		expect(() => parseManifest(doc([{ id: "a", url: "/a.md", sha256: "xyz" }]), URL_)).toThrow(/not a SHA-256/);
 	});
 });

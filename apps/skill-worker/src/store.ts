@@ -32,6 +32,11 @@ export function cacheKey(file: string): string {
 	return `skill:${file}`;
 }
 
+/** our ETag for a body with this SHA-256 (hex) */
+export function etagOf(sha256: string): string {
+	return `"${sha256.slice(0, 32)}"`;
+}
+
 async function sha256Hex(text: string): Promise<string> {
 	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
 	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -48,21 +53,24 @@ export class SkillStore {
 	}
 
 	/** cached copy, or a fresh one from the source when nothing is cached yet; throws when neither works */
-	async getOrFetch(skill: SkillDef): Promise<CachedSkill> {
+	async getOrFetch(skill: SkillDef, check?: (body: string) => void): Promise<CachedSkill> {
 		const cached = await this.get(skill.file);
 		if (cached) return cached;
-		return this.refresh(skill);
+		return this.refresh(skill, check);
 	}
 
 	/**
 	 * Checks the source (conditional GET when a copy exists) and stores the result.
 	 * Throws when the source fails; the cached copy is left untouched in that case.
 	 */
-	async refresh(skill: SkillDef): Promise<CachedSkill> {
+	async refresh(skill: SkillDef, check?: (body: string) => void): Promise<CachedSkill> {
 		const cached = await this.get(skill.file);
 		const headers: Record<string, string> = { "user-agent": USER_AGENT };
-		// only revalidate a copy of the same source (SKILLS may have changed)
-		if (cached && cached.source === skill.source) {
+		// only revalidate a copy of the same source (SKILLS may have changed) that still has the
+		// checksum skills.json expects; otherwise ask for the full body
+		const conditional =
+			cached !== null && cached.source === skill.source && (!skill.sha256 || cached.etag === etagOf(skill.sha256));
+		if (conditional) {
 			if (cached.sourceEtag) headers["if-none-match"] = cached.sourceEtag;
 			if (cached.lastModified) headers["if-modified-since"] = cached.lastModified;
 		}
@@ -72,7 +80,7 @@ export class SkillStore {
 			signal: AbortSignal.timeout(this.timeoutSeconds * 1000)
 		});
 
-		if (res.status === 304 && cached && cached.source === skill.source) {
+		if (res.status === 304 && conditional) {
 			await res.body?.cancel();
 			const next = { ...cached, fetchedAt: Date.now() };
 			await this.kv.put(cacheKey(skill.file), JSON.stringify(next));
@@ -85,8 +93,14 @@ export class SkillStore {
 		const body = await res.text();
 		if (!body.trim()) throw new Error(`${skill.source} answered with an empty body`);
 
+		const hash = await sha256Hex(body);
+		if (skill.sha256 && hash !== skill.sha256) {
+			throw new Error(`${skill.source} does not match the sha256 in skills.json (got ${hash})`);
+		}
+		check?.(body);
+
 		const now = Date.now();
-		const etag = `"${(await sha256Hex(body)).slice(0, 32)}"`;
+		const etag = etagOf(hash);
 		const next: CachedSkill = {
 			body,
 			etag,
@@ -102,12 +116,12 @@ export class SkillStore {
 	}
 
 	/** refreshes every skill; one failing source does not stop the others */
-	async refreshAll(skills: SkillDef[]): Promise<RefreshResult[]> {
+	async refreshAll(skills: SkillDef[], check?: (body: string) => void): Promise<RefreshResult[]> {
 		return Promise.all(
 			skills.map(async (skill): Promise<RefreshResult> => {
 				const before = await this.get(skill.file);
 				try {
-					const after = await this.refresh(skill);
+					const after = await this.refresh(skill, check);
 					const unchanged = before !== null && before.etag === after.etag;
 					return { file: skill.file, ok: true, status: unchanged ? "unchanged" : "updated" };
 				} catch (e) {

@@ -224,6 +224,53 @@ section:first-of-type { padding-top: 20px; }
 	color: var(--primary);
 }
 
+/* ── Topic indexes ── */
+.topic-table-wrap {
+	overflow-x: auto;
+	border: 1px solid var(--lines);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+	background: var(--bg);
+}
+
+.topic-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 14px;
+}
+
+.topic-table th,
+.topic-table td {
+	padding: 10px 14px;
+	text-align: left;
+	vertical-align: top;
+	border-bottom: 1px solid var(--lines);
+}
+
+.topic-table th {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--muted);
+	background: var(--bright);
+}
+
+.topic-table tbody tr:last-child td { border-bottom: none; }
+
+.topic-table .num {
+	text-align: right;
+	white-space: nowrap;
+	color: var(--muted);
+}
+
+.topic-table td a { font-weight: 600; }
+
+.topic-id {
+	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+	font-size: 12px;
+	color: var(--muted);
+	margin-top: 2px;
+}
+
 /* ── Divider ── */
 .section-divider {
 	border: none;

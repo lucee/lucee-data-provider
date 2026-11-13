@@ -11,8 +11,10 @@ Run service stays deployed as a rollback until it is retired. `skill.lucee.io` i
 
 | Path | Answer |
 |------|--------|
-| `/`, `/index.cfm` | landing page: one card per skill (name, description, size, last update), same HTML as `index.cfm` |
-| `/<file>.skill` | the skill file (`text/plain; charset=utf-8`), only for files listed in `SKILLS` (name matched case-insensitively, like the Cloud Run site) |
+| `/`, `/index.cfm` | landing page: one card per skill (name, description, size, last update) and a table of the topic indexes from `skills.json` (title, id, description, entries, size, approximate tokens), same HTML as `index.cfm` |
+| `/<file>.skill` | the skill file (`text/plain; charset=utf-8`), only for files listed in `SKILLS` (name matched case-insensitively, like the Cloud Run site). `/main.skill` is the router of the Lucee skill (`https://docs.lucee.org/lucee.skill`), so existing installs keep working |
+| `/skills.json` | the mirrored manifest (`application/json; charset=utf-8`) |
+| `/skill/<id>.md` | a topic index listed in `skills.json` (`text/markdown; charset=utf-8`); ids not in the manifest answer `404` |
 | `/health`, `/health.cfm` | `ok`, or `503 <file> not available` when a skill cannot be loaded |
 | `/res/*` | static assets (`public/res`, kept in sync with `apps/skill/www/res`, including the shared `lucee-header`) |
 | anything else | `404 Not Found`; methods other than `GET`/`HEAD` answer `405` |
@@ -24,7 +26,20 @@ The landing page HTML in `src/landing.ts` and the assets under `public/res` are 
 The skill files are mirrored from their source (`https://docs.lucee.org/lucee.skill`) into the KV
 namespace `SKILL_CACHE` (key `skill:<file>`: body, ETag, source ETag, Last-Modified, fetch time).
 
-- An hourly cron (`0 * * * *`) checks every source with a conditional GET
+Since LDEV-6552 the Lucee skill is a short router plus one index file per topic. The manifest
+`https://docs.lucee.org/skill/skills.json` lists them, and it drives the mirror: every topic it lists is
+mirrored as `skill:skill/<id>.md` and served as `/skill/<id>.md`, so a new topic needs no change here.
+
+- Each topic file, and the router when it is the manifest's `router.url`, is checked against the
+  `sha256` in the manifest. A file that does not match is not stored (the last good copy stays). A copy
+  that no longer matches the manifest is fetched in full, not with a conditional GET.
+- The manifest is only stored when it is valid JSON with valid topic ids, and every topic URL is on the
+  manifest's own origin. Otherwise the last good copy keeps driving the mirror.
+- The landing page uses the mirrored manifest. A router or topic copy that does not match it (or is
+  missing) is refreshed in the background right away, so the page does not show an outdated size until
+  the next cron run.
+
+- An hourly cron (`0 * * * *`) refreshes `skills.json` first, then checks every source with a conditional GET
   (`If-None-Match` / `If-Modified-Since`). `304` only updates the fetch time; `200` with a non-empty
   body replaces the copy.
 - When the source fails, the last good copy is kept and served. The cron run is marked as failed
@@ -50,7 +65,8 @@ The landing page is `cache-control: public, max-age=300`; the health check is `n
 | Var | Default | Meaning |
 |-----|---------|---------|
 | `SKILL_SOURCE_URL` | `https://docs.lucee.org/lucee.skill` | source of the first skill file |
-| `SKILLS` | `main.skill` | comma separated files served as `/<file>`. `file\|url` sets the source; other files are resolved relative to `SKILL_SOURCE_URL` (`extensions.skill` → `https://docs.lucee.org/extensions.skill`), which is ready for more skill files (LDEV-6552) |
+| `SKILLS` | `main.skill` | comma separated files served as `/<file>`. `file\|url` sets the source; other files are resolved relative to `SKILL_SOURCE_URL` (`extensions.skill` → `https://docs.lucee.org/extensions.skill`). The topic files of the router come from `SKILL_MANIFEST_URL`, not from here |
+| `SKILL_MANIFEST_URL` | `https://docs.lucee.org/skill/skills.json` | manifest of the topic files (LDEV-6552); empty disables `/skills.json` and `/skill/*` |
 | `REFRESH_MINUTES` | `60` | age after which a requested copy is refreshed in the background |
 | `TIMEOUT` | `60` | timeout in seconds for requests to the source |
 

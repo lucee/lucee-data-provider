@@ -12,6 +12,19 @@ export interface SkillInfo {
 	sourceHost: string;
 }
 
+/** a topic file from skills.json, as listed on the landing page */
+export interface TopicInfo {
+	id: string;
+	title: string;
+	description: string;
+	entries: number;
+	approxTokens: number;
+	/** where this site serves it, e.g. /skill/ai.md */
+	path: string;
+	/** bytes of the mirrored copy, null when it is not mirrored yet (or out of date) */
+	size: number | null;
+}
+
 export function encodeForHtml(value: string): string {
 	return String(value)
 		.replace(/&/g, "&amp;")
@@ -115,7 +128,41 @@ function skillCard(skill: SkillInfo, host: string): string {
 			</article>`;
 }
 
-export function renderLanding(skills: SkillInfo[], host: string): string {
+function topicRow(topic: TopicInfo): string {
+	const size = topic.size === null ? "" : formatBytes(topic.size);
+	const tokens = topic.approxTokens ? `~${topic.approxTokens.toLocaleString("en-US")} tokens` : "";
+	return `
+				<tr>
+					<td><a href="${encodeForHtml(topic.path)}">${encodeForHtml(topic.title)}</a><div class="topic-id">${encodeForHtml(topic.id)}</div></td>
+					<td>${encodeForHtml(topic.description)}</td>
+					<td class="num">${topic.entries}</td>
+					<td class="num">${[size, tokens].filter(Boolean).join("<br>")}</td>
+				</tr>`;
+}
+
+function topicSection(topics: TopicInfo[]): string {
+	if (!topics.length) return "";
+	return `
+
+<section>
+	<h2 class="section-title">Topic Indexes</h2>
+	<p class="section-intro">
+		The skill above is a short router. For each question the assistant loads the matching topic index and then fetches
+		only the docs it needs. The indexes are mirrored from docs.lucee.org and listed in <a href="/skills.json">skills.json</a>.
+	</p>
+	<div class="topic-table-wrap">
+		<table class="topic-table">
+			<thead>
+				<tr><th>Topic</th><th>Covers</th><th class="num">Entries</th><th class="num">Size</th></tr>
+			</thead>
+			<tbody>${topics.map(topicRow).join("")}
+			</tbody>
+		</table>
+	</div>
+</section>`;
+}
+
+export function renderLanding(skills: SkillInfo[], host: string, topics: TopicInfo[] = []): string {
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -126,7 +173,7 @@ export function renderLanding(skills: SkillInfo[], host: string): string {
 	<link rel="stylesheet" href="/res/lucee-header/theme.css?v=2" data-lucee-theme-css>
 	<link rel="stylesheet" href="/res/lucee-header/header.css?v=2" data-lucee-header-css>
 	<script src="/res/lucee-header/header.js?v=2" defer></script>
-	<link rel="stylesheet" href="/res/skill.css?v=2">
+	<link rel="stylesheet" href="/res/skill.css?v=3">
 </head>
 <body>
 
@@ -144,8 +191,8 @@ export function renderLanding(skills: SkillInfo[], host: string): string {
 	<h2 class="section-title">What is a Skill?</h2>
 	<p class="section-intro">
 		A <strong>skill</strong> is a small, structured text file that gives an AI assistant on-demand access to accurate,
-		up-to-date reference material instead of relying on what it memorized during training. Each Lucee skill bundles an
-		index of recipes, guides, and technical specs with instructions for the assistant on when and how to fetch the
+		up-to-date reference material instead of relying on what it memorized during training. The Lucee skill points the
+		assistant to topic indexes of recipes, guides, and technical specs, with instructions on when and how to fetch the
 		relevant page before answering — so you get working CFML code and correct API details instead of confident guesses.
 	</p>
 </section>
@@ -154,7 +201,7 @@ export function renderLanding(skills: SkillInfo[], host: string): string {
 	<h2 class="section-title">Available Skills</h2>
 	<div class="skill-grid">${skills.map((s) => skillCard(s, host)).join("")}
 	</div>
-</section>
+</section>${topicSection(topics)}
 
 <hr class="section-divider">
 
