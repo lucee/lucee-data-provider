@@ -33,9 +33,13 @@ The app runs in one of two modes, chosen with the `STORAGE` environment variable
     file, `maven.lucee-services.com` first. A file that is in no Maven repository is a 404.
   - bundles (`download/{name}/{version}`) come from the Maven matcher only (no
     `bundle.lucee.org` bucket); lookups are cached in memory.
-  - the extension meta and the Jira issues are cached on the local disk
-    (`LOCAL_CACHE_DIR`, default the Lucee temp directory), so a new instance builds
-    them again on its first start (about two minutes for ~1000 extension files).
+  - the extension meta and the Jira issues are cached on the local disk under
+    `CACHE_DIR` (`LOCAL_CACHE_DIR` is a fallback alias; the default is the Lucee
+    temp directory), so a new instance builds them again on its first start unless
+    `CACHE_DIR` points at a persistent volume (about two minutes for ~1000 extension
+    files when the cache is empty). The same `CACHE_DIR` also holds the Maven
+    index, detail and artifact caches (`maven-index/`, `maven-detail/`,
+    `maven-artifacts/`).
   - what only exists in S3 answers **501**: `expressTemplates` (there is no Maven
     artifact of the express templates), `forgebox/{version}`, `list-missing` and
     `buildLatest`. Versions and files that are only in the flat S3 files (old 4.x/5.x
@@ -67,8 +71,10 @@ docker run --rm -p 8080:8080 -e STORAGE=maven \
   lucee-update
 ```
 
-Without a `SENTRY_DSN`, set `LUCEE_LOGGING_FORCE_APPENDER=console`, otherwise the
-Sentry appender fails on the empty DSN.
+The Cloud Run image does not install Sentry. Set
+`LUCEE_LOGGING_FORCE_APPENDER=console` as in the example (`docker compose`
+already does). The Pixl8 image (`devops/Dockerfile.update`) still uses Sentry
+when `SENTRY_DSN` is set.
 
 The first start can take well over a minute: `Application.cfc` loads extension
 metadata and core versions before it serves traffic.
@@ -101,10 +107,10 @@ None. The Cloud Run service runs with `STORAGE=maven` (see
 [Storage modes](#storage-modes)): it only proxies the Maven repositories, so it
 needs no S3 credentials and no secrets.
 
-Optional, for the Sentry loggers already baked into the image: a `SENTRY_DSN`
-secret in Secret Manager (the runtime service account then needs
-`roles/secretmanager.secretAccessor` on it). Without it, set
-`LUCEE_LOGGING_FORCE_APPENDER=console` (below).
+The Cloud Run image does not install the Sentry extension or import
+`.CFconfig-sentry.json`. Leave `SENTRY_DSN` unset. The Pixl8 image
+(`devops/Dockerfile.update`) is unchanged and still uses Sentry when
+`SENTRY_DSN` is set.
 
 ### 2. Build and push the image
 
@@ -124,10 +130,11 @@ gcloud builds submit --project "$PROJECT" --region "$REGION" \
 ### 3. Create or update the service
 
 The first start is slow (it reads the core versions and every extension file from
-the Maven repositories, about two minutes), so the startup probe allows several
-minutes. `--min-instances 0` is fine while testing; once the domains point here,
-`--min-instances 1` avoids that cold start on a Lucee "check for updates".
-Adjust CPU and memory if the first revision is tight.
+the Maven repositories, about two minutes when the on-disk cache is empty), so
+the startup probe allows several minutes. `--min-instances 0` is fine while
+testing; once the domains point here, `--min-instances 1` avoids that cold start
+on a Lucee "check for updates". Adjust CPU and memory if the first revision is
+tight.
 
 ```sh
 gcloud run deploy "$SERVICE" \
@@ -143,16 +150,15 @@ gcloud run deploy "$SERVICE" \
   --min-instances 0 \
   --max-instances 4 \
   --startup-probe=httpGetPath=/healthcheck/,periodSeconds=10,timeoutSeconds=5,failureThreshold=30,initialDelaySeconds=15 \
-  --set-env-vars=STORAGE=maven,SENTRY_ENV=production,ALLOW_RELOAD=false,LUCEE_LOGGING_FORCE_APPENDER=console
+  --set-env-vars=STORAGE=maven,ALLOW_RELOAD=false,LUCEE_LOGGING_FORCE_APPENDER=console,CACHE_DIR=/storage
 ```
 
-If a `SENTRY_DSN` secret was created, use it instead of the console appender:
-
-```sh
-gcloud run services update "$SERVICE" --project "$PROJECT" --region "$REGION" \
-  --remove-env-vars=LUCEE_LOGGING_FORCE_APPENDER \
-  --set-secrets=SENTRY_DSN=SENTRY_DSN:latest
-```
+Mount a Cloud Storage bucket at `/storage` so on-disk caches (extension meta,
+Jira issues, Maven indexes, artifacts, and so on) survive restarts and are
+shared between instances. In the Cloud Run console this is a volume of type
+Cloud Storage FUSE, bucket `lucee_data_provider`, mount path `/storage`. Then
+set `CACHE_DIR=/storage` as above. `cloudbuild.yaml` only builds the image; the
+volume and this variable are set on the service when you deploy or update it.
 
 ### 4. Test the `run.app` URL
 
@@ -201,9 +207,9 @@ and `*_FLAT_S3_FALLBACK` ones are ignored with `STORAGE=maven`):
 | Name | Default |
 |------|---------|
 | `STORAGE` | `s3`; `maven` for the Maven only mode without S3 (`NO_S3=true` does the same) |
-| `LOCAL_CACHE_DIR` | Lucee temp directory; `STORAGE=maven` only, where the extension meta and Jira issues are cached |
-| `SENTRY_DSN` | empty (set `LUCEE_LOGGING_FORCE_APPENDER=console` then) |
-| `SENTRY_ENV` | empty (`production` on Cloud Run) |
+| `CACHE_DIR` | empty (write caches next to the CFCs, as Pixl8 does; in Maven only mode, extension meta and Jira issues go under the Lucee temp directory). On Cloud Run set this to `/storage`. Subfolders: `s3-versions/`, `maven-index/`, `maven-detail/`, `maven-artifacts/`, and in Maven only mode also `extensions/` and `jira/`. |
+| `LOCAL_CACHE_DIR` | fallback alias for `CACHE_DIR` when `CACHE_DIR` is not set |
+| `LUCEE_LOGGING_FORCE_APPENDER` | unset. On Cloud Run set this to `console`. |
 | `ALLOW_RELOAD` | unset/false (`?fwreinit` only works when this is true) |
 | `S3_CORE_ROOT` | `s3:///lucee-downloads/` |
 | `S3_CORE_CDN_URL` | `https://cdn.lucee.org/` |
@@ -229,7 +235,7 @@ and `*_FLAT_S3_FALLBACK` ones are ignored with `STORAGE=maven`):
 | `UPDATES_MAVEN_CACHE_SECONDS` | `300` |
 
 Jira changelogs are read from the public Jira Cloud API and cached under
-`S3_CORE_ROOT` (`LOCAL_CACHE_DIR` with `STORAGE=maven`); no Jira token is required.
+`S3_CORE_ROOT` (or under `CACHE_DIR/jira/` with `STORAGE=maven`); no Jira token is required.
 
 `S3_DOWNLOAD_ACCESS_KEY_ID` and `S3_DOWNLOAD_SECRET_KEY` are used only by
 `apps/download`, not by this app.

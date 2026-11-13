@@ -46,7 +46,7 @@ component {
 			throw "provided type [#type#] is invalid, valid types are [all,snapshots,releases,abc]";
 
 		curr = getDirectoryFromPath(getCurrentTemplatePath());
-		dir= curr & "cache/mavenIndex/";
+		dir= services.CacheDir::path( "maven-index", curr & "cache/mavenIndex/" );
 		if (!directoryExists(dir)) directoryCreate(dir);
 
 		// collect the size of the index=
@@ -67,7 +67,7 @@ component {
 			
 			//directoryDelete(dir,true);
 			//directoryCreate(dir);
-			fileWrite(fi,info.totalCount);
+			services.CacheDir::writeAtomic(fi,info.totalCount);
 			application.mavenInfo[infoURL]=info;
 		}
 		else info=application.mavenInfo[infoURL];
@@ -111,7 +111,7 @@ component {
 				if(fileExists(file.file) && fileRead(file.file)==res.fileContent) {
 					update=false;
 				}
-				else fileWrite(file.file,res.fileContent);
+				else services.CacheDir::writeAtomic(file.file,res.fileContent);
 			}
 			extractData(repos,data,raw,dir,type,extended);
 		}
@@ -205,7 +205,7 @@ component {
 
 					// now we store a txt file cntaining this link info
 					local.trg3=dir&data.name&"-"&data.version&".json";
-					if(!fileExists(trg3)) fileWrite(trg3,serializeJson(dep));
+					if(!fileExists(trg3)) services.CacheDir::writeAtomic(trg3,serializeJson(dep));
 				}
 				catch(e){
 					arrayAppend(rtn,trg);
@@ -255,7 +255,7 @@ component {
 	}
 
 	private function getArtifactDirectory(){
-		local.dir=getDirectoryFromPath(getCurrentTemplatePath())&"artifacts/";
+		local.dir=services.CacheDir::path( "maven-artifacts", getDirectoryFromPath(getCurrentTemplatePath())&"artifacts/" );
 		if(!directoryExists(dir)) directoryCreate(dir);
 		return dir;
 	}
@@ -794,7 +794,7 @@ component {
 
 	public string function getDetailFile(version) {
 		curr=getDirectoryFromPath(getCurrentTemplatePath());
-		dir=curr&"cache/mavenDetail/";
+		dir=services.CacheDir::path( "maven-detail", curr&"cache/mavenDetail/" );
 		if(!directoryExists(dir)) directoryCreate(dir);
 
 		return dir&version&".json";
@@ -915,7 +915,7 @@ component {
 			catch(e){}
 		}
 		
-		fileWrite(file,SerializeJson(sources));
+		services.CacheDir::writeAtomic(file,SerializeJson(sources));
 		application.detail[base]=sources;
 		return sources;
 	}

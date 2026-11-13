@@ -25,10 +25,15 @@ component {
 			// workaround for LDEV-5371
 			// if LUCEE_LOGGING_FORCE_APPENDER=console is set, sentry is bypassed
 			var deploy = expandPath( '{lucee-server}/../deploy/' );
-			var sentry_json = deploy & "/.CFconfig-sentry.json"; 
+			var sentry_json = deploy & "/.CFconfig-sentry.json";
 			if ( FileExists( sentry_json ) ){
-				configImport( sentry_json, "server", "admin" );
-				systemOutput("sentry.json loaded via configImport - LDEV-5371", true);
+				var sentryDsn = Trim( server.system.environment.SENTRY_DSN ?: "" );
+				if ( Len( sentryDsn ) ) {
+					configImport( sentry_json, "server", "admin" );
+					systemOutput("sentry.json loaded via configImport - LDEV-5371", true);
+				} else {
+					systemOutput("skipping sentry.json, SENTRY_DSN is not set", true);
+				}
 				fileDelete( sentry_json );
 			}
 		}
@@ -110,7 +115,8 @@ component {
 	/**
 	 * The storage mode: "s3" (the default, the Maven repositories first with the flat files of S3 as the fallback, caches in S3)
 	 * or "maven" (STORAGE=maven, or NO_S3=true): only the Maven repositories, nothing is read from or written to S3,
-	 * no S3 credentials are needed, the caches are kept in memory and on the local disk (LOCAL_CACHE_DIR).
+	 * no S3 credentials are needed, the caches are kept in memory and on the local disk
+	 * (CACHE_DIR, with LOCAL_CACHE_DIR as a fallback alias).
 	 */
 	private boolean function _isMavenOnly() {
 		var env     = server.system.environment;
@@ -120,16 +126,11 @@ component {
 		return storage == "maven" || ( IsBoolean( noS3 ) && noS3 );
 	}
 
-	// a folder of the local disk for the caches of the Maven only mode, created when it is not there
+	// a folder of the local disk for the caches of the Maven only mode (extension meta, Jira issues).
+	// Uses the same CACHE_DIR root as the other on-disk caches (LOCAL_CACHE_DIR is a fallback alias);
+	// when neither is set, a folder under the Lucee temp directory is used.
 	private string function _localCacheDir( required string name ) {
-		var root = Trim( server.system.environment.LOCAL_CACHE_DIR ?: "" );
-		var dir  = _withTrailingSlash( Len( root ) ? root : GetTempDirectory() & "lucee-update-cache" ) & arguments.name & "/";
-
-		if ( !DirectoryExists( dir ) ) {
-			DirectoryCreate( dir, true, true );
-		}
-
-		return dir;
+		return services.CacheDir::path( arguments.name, GetTempDirectory() & "lucee-update-cache/" );
 	}
 
 	private array function _mavenRepos( required string repos ) {

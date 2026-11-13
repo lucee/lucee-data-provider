@@ -11,3 +11,5 @@ steps:
     args: ["build", "-t", "${_IMAGE}", "-f", "apps/updateserver/Dockerfile", "."]
 images:
   - ${_IMAGE}
+# Runtime env (set on the Cloud Run service, not here): STORAGE=maven,
+# CACHE_DIR=/storage, LUCEE_LOGGING_FORCE_APPENDER=console. See README.md.
