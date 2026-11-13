@@ -6,6 +6,7 @@ import { isUpstreamNotFound } from "./errors";
 import { fetchAndFill, fillOnly, isImmutableArtifact, isStorableFile, serveFromR2, type FillOptions } from "./r2";
 import type { BridgeRegistry } from "./registry";
 import { USER_AGENT } from "./store";
+import { renderListingPage } from "./chrome";
 import type { BridgeSupport, ParsedPath, ParsedType } from "./support";
 
 const TEXT = "text/plain; charset=utf-8";
@@ -342,17 +343,12 @@ export function buildGroupPrefixIndexHtml(registry: BridgeRegistry, path: string
 	if (!children.size) return "";
 	const names = [...children.values()].sort(compareNoCase);
 	const title = path.slice(1);
-	const html = [
-		"<!DOCTYPE html>",
-		`<html><head><title>${encodeForHtml(title)}</title></head><body>`,
-		`<h1>${encodeForHtml(title)}</h1>`,
-		"<pre>"
-	];
+	const lines: string[] = [];
 	for (const name of names) {
-		html.push(`<a href="${encodeForHtml(path)}/${encodeForHtml(name)}/">${encodeForHtml(name)}/</a>\n`);
+		lines.push(`<a href="${encodeForHtml(path)}/${encodeForHtml(name)}/">${encodeForHtml(name)}/</a>\n`);
 	}
-	html.push("</pre></body></html>");
-	return html.join("\n");
+	const heading = encodeForHtml(title);
+	return renderListingPage(heading, heading, lines);
 }
 
 export async function healthResponse(registry: BridgeRegistry, flushed: boolean): Promise<Response> {

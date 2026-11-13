@@ -5,6 +5,7 @@ import { DEFAULT_GITHUB_RELEASES_URL, normalizeUpstreamUrl, val } from "./config
 import { BridgeError, isUpstreamNotFound } from "./errors";
 import type { RestIndex } from "./rest-index";
 import { sortVersions } from "./rest-index";
+import { renderListingPage } from "./chrome";
 import { childText, select, textOf } from "./xml";
 
 export const SNAPSHOT_SUFFIX = "-SNAPSHOT";
@@ -309,31 +310,18 @@ export class BridgeSupport {
 	async buildGroupIndexHtml(): Promise<string> {
 		const index = await this.getIndex();
 		const artifactIds = index.artifacts.keys().sort(compareNoCase);
-		const html = [
-			"<!DOCTYPE html>",
-			`<html><head><title>${encodeForHtml(this.groupId)}</title></head><body>`,
-			`<h1>${encodeForHtml(this.groupId)}</h1>`,
-			"<pre>",
-			'<a href="maven-metadata.xml">maven-metadata.xml</a>\n'
-		];
-		for (const id of artifactIds) html.push(`<a href="${encodeForHtml(id)}/">${encodeForHtml(id)}/</a>\n`);
-		html.push("</pre></body></html>");
-		return html.join("\n");
+		const lines = ['<a href="maven-metadata.xml">maven-metadata.xml</a>\n'];
+		for (const id of artifactIds) lines.push(`<a href="${encodeForHtml(id)}/">${encodeForHtml(id)}/</a>\n`);
+		const title = encodeForHtml(this.groupId);
+		return renderListingPage(title, title, lines);
 	}
 
 	async buildArtifactIndexHtml(artifactId: string, versions?: string[]): Promise<string> {
 		const versionList = versions ?? (await this.listVersions(artifactId));
 		const title = `${encodeForHtml(this.groupId)}:${encodeForHtml(artifactId)}`;
-		const html = [
-			"<!DOCTYPE html>",
-			`<html><head><title>${title}</title></head><body>`,
-			`<h1>${title}</h1>`,
-			"<pre>",
-			'<a href="maven-metadata.xml">maven-metadata.xml</a>\n'
-		];
-		for (const v of versionList) html.push(`<a href="${encodeForHtml(v)}/">${encodeForHtml(v)}/</a>\n`);
-		html.push("</pre></body></html>");
-		return html.join("\n");
+		const lines = ['<a href="maven-metadata.xml">maven-metadata.xml</a>\n'];
+		for (const v of versionList) lines.push(`<a href="${encodeForHtml(v)}/">${encodeForHtml(v)}/</a>\n`);
+		return renderListingPage(title, title, lines);
 	}
 
 	/**
@@ -359,29 +347,23 @@ export class BridgeSupport {
 		}
 		if (!files.length) files = [baseName + ".lex"];
 
-		const html = [
-			"<!DOCTYPE html>",
-			`<html><head><title>${encodeForHtml(baseName)}</title></head><body>`,
-			`<h1>${encodeForHtml(baseName)}</h1>`,
-			"<pre>"
-		];
+		const lines: string[] = [];
 		if (hasVersionMetadata || containsNoCase(version, SNAPSHOT_SUFFIX)) {
-			html.push('<a href="maven-metadata.xml">maven-metadata.xml</a>\n');
+			lines.push('<a href="maven-metadata.xml">maven-metadata.xml</a>\n');
 		}
-		for (const f of files) html.push(`<a href="${encodeForHtml(f)}">${encodeForHtml(f)}</a>\n`);
-		html.push("</pre></body></html>");
-		return html.join("\n");
+		for (const f of files) lines.push(`<a href="${encodeForHtml(f)}">${encodeForHtml(f)}</a>\n`);
+		const title = encodeForHtml(baseName);
+		return renderListingPage(title, title, lines);
 	}
 
 	buildVersionIndexHtml(artifactId: string, version: string): string {
 		const baseName = `${artifactId}-${version}`;
 		const b = encodeForHtml(baseName);
-		const html = ["<!DOCTYPE html>", `<html><head><title>${b}</title></head><body>`, `<h1>${b}</h1>`, "<pre>"];
-		if (containsNoCase(version, SNAPSHOT_SUFFIX)) html.push('<a href="maven-metadata.xml">maven-metadata.xml</a>\n');
-		html.push(`<a href="${b}.lex">${b}.lex</a>\n`);
-		html.push(`<a href="${b}.pom">${b}.pom</a>\n`);
-		html.push("</pre></body></html>");
-		return html.join("\n");
+		const lines: string[] = [];
+		if (containsNoCase(version, SNAPSHOT_SUFFIX)) lines.push('<a href="maven-metadata.xml">maven-metadata.xml</a>\n');
+		lines.push(`<a href="${b}.lex">${b}.lex</a>\n`);
+		lines.push(`<a href="${b}.pom">${b}.pom</a>\n`);
+		return renderListingPage(b, b, lines);
 	}
 
 	async buildArtifactMetadata(artifactId: string, now = new Date()): Promise<string> {
