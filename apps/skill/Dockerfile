@@ -8,7 +8,8 @@ COPY www/ /var/www/
 COPY lucee-config.json /opt/lucee/server/lucee-server/context/.CFConfig.json
 
 # Route .skill requests through Lucee so Application.cfc can set Content-Type.
-RUN sed -i '/<url-pattern>\*\.cfml<\/url-pattern>/a\        <url-pattern>*.skill</url-pattern>' /usr/local/tomcat/conf/web.xml
+# .md and .json too: /skill/<id>.md and /skills.json are served from the mirror (LDEV-6552).
+RUN sed -i '/<url-pattern>\*\.cfml<\/url-pattern>/a\        <url-pattern>*.skill</url-pattern>\n        <url-pattern>*.md</url-pattern>\n        <url-pattern>*.json</url-pattern>' /usr/local/tomcat/conf/web.xml
 
 RUN mkdir -p /var/www/logs \
  && ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/application.log \

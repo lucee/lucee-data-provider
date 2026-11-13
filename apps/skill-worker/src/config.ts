@@ -5,10 +5,14 @@ export interface SkillDef {
 	file: string;
 	/** where the file is mirrored from */
 	source: string;
+	/** expected SHA-256 (hex) of the body, from skills.json; a copy that does not match is not stored */
+	sha256?: string;
 }
 
 export interface Config {
 	skills: SkillDef[];
+	/** skills.json listing the topic files mirrored under /skill/, null when disabled */
+	manifestUrl: string | null;
 	refreshMinutes: number;
 	timeoutSeconds: number;
 }
@@ -49,8 +53,13 @@ export function readConfig(env: Env): Config {
 		skills.push({ file, source: new URL(source).toString() });
 	}
 
+	// unset: the manifest next to the default source; empty: no topic files
+	const manifestSetting = env.SKILL_MANIFEST_URL === undefined ? new URL("skill/skills.json", sourceUrl).toString() : env.SKILL_MANIFEST_URL.trim();
+	const manifestUrl = manifestSetting ? new URL(manifestSetting).toString() : null;
+
 	return {
 		skills,
+		manifestUrl,
 		refreshMinutes: positiveNumber("REFRESH_MINUTES", env.REFRESH_MINUTES, 60),
 		timeoutSeconds: positiveNumber("TIMEOUT", env.TIMEOUT, 60)
 	};

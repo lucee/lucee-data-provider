@@ -32,6 +32,9 @@ SKILL_SOURCE_URL = "https://docs.lucee.org/lucee.skill"
 # comma separated skill files served as /<file>; "file|url" sets the source explicitly,
 # other files without a url are resolved relative to SKILL_SOURCE_URL
 SKILLS = "main.skill"
+# skills.json (LDEV-6552): every topic file it lists is mirrored and served as /skill/<id>.md (checked
+# against its sha256), the manifest itself as /skills.json; empty disables the topic files
+SKILL_MANIFEST_URL = "https://docs.lucee.org/skill/skills.json"
 # a cached copy older than this is refreshed in the background on request (the cron refreshes hourly)
 REFRESH_MINUTES = "60"
 # timeout in seconds for requests to the source

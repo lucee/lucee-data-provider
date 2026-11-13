@@ -18,9 +18,10 @@ import {
 	testEnv
 } from "./helpers";
 
-async function runCron() {
+// the router tests run without skills.json; the topic files have their own tests (topics.test.ts)
+async function runCron(overrides: Parameters<typeof testEnv>[0] = { SKILL_MANIFEST_URL: "" }) {
 	const ctx = createExecutionContext();
-	const p = worker.scheduled(createScheduledController({ cron: "0 * * * *" }) as never, testEnv(), ctx);
+	const p = worker.scheduled(createScheduledController({ cron: "0 * * * *" }) as never, testEnv(overrides), ctx);
 	await waitOnExecutionContext(ctx);
 	return p;
 }
@@ -227,7 +228,7 @@ describe("landing page", () => {
 			expect(html).toContain("Updated Oct 23, 2026");
 			expect(html).toContain("Refreshed hourly from docs.lucee.org");
 			expect(html).toContain('<a class="skill-url" href="/main.skill">https://skl.lucee-services.com/main.skill</a>');
-			expect(html).toContain('href="/res/skill.css?v=2"');
+			expect(html).toContain('href="/res/skill.css?v=3"');
 			expect(html).toContain('<link rel="stylesheet" href="/res/lucee-header/theme.css?v=2" data-lucee-theme-css>');
 			expect(html).toContain('<link rel="stylesheet" href="/res/lucee-header/header.css?v=2" data-lucee-header-css>');
 			expect(html).toContain('<script src="/res/lucee-header/header.js?v=2" defer></script>');

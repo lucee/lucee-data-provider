@@ -6,6 +6,8 @@ component {
 
 	variables.skillSourceUrl = "https://docs.lucee.org/lucee.skill";
 	variables.skillFileName = "main.skill";
+	// LDEV-6552: every topic file listed in skills.json is mirrored and served as /skill/<id>.md
+	variables.manifestUrl = "https://docs.lucee.org/skill/skills.json";
 	variables.refreshAfterMinutes = 60;
 	variables.downloadsDirectory = "";
 
@@ -25,6 +27,17 @@ component {
 		if (ext == "skill") {
 			serveSkillFile(arguments.targetPage);
 			return false;
+		}
+
+		// *.md and *.json are routed through Lucee (Dockerfile) for the topic files and the manifest
+		if (ext == "md" || ext == "json") {
+			serveMirroredFile(arguments.targetPage, ext);
+			return false;
+		}
+
+		// SkillMirror.cfc is not meant to be called over HTTP
+		if (ext == "cfc") {
+			notFound();
 		}
 
 		var contentType = getContentTypeForExtension(ext);
@@ -47,6 +60,16 @@ component {
 		return dir;
 	}
 
+	private function getMirror() {
+		return new SkillMirror(
+			downloadsDirectory = getDownloadsDirectory(),
+			skillSourceUrl = variables.skillSourceUrl,
+			skillFileName = variables.skillFileName,
+			manifestUrl = variables.manifestUrl
+		);
+	}
+
+	/** mirrors the router, skills.json and the topic files at most once per refreshAfterMinutes */
 	private void function syncSkillFile() {
 		var targetFile = getDownloadsDirectory() & server.separator.file & variables.skillFileName;
 
@@ -58,21 +81,8 @@ component {
 			if (isSkillFileFresh(targetFile)) {
 				return;
 			}
-
-			cfhttp(
-				url=variables.skillSourceUrl,
-				method="GET",
-				result="local.result",
-				throwOnError=false,
-				timeout=60
-			) {}
-
-			if (left(local.result.statusCode, 3) != "200") {
-				log type="error" text="Failed to download skill file from #variables.skillSourceUrl#: #local.result.statusCode#";
-				return;
-			}
-
-			fileWrite(targetFile, local.result.fileContent, "utf-8");
+			// errors are logged by the mirror; the last good copies stay in place
+			getMirror().sync();
 		}
 	}
 
@@ -96,13 +106,41 @@ component {
 		switch (lcase(arguments.ext)) {
 			case "json":
 				return "application/json; charset=utf-8";
-			case "txt":
 			case "md":
+				return "text/markdown; charset=utf-8";
+			case "txt":
 			case "skill":
 				return "text/plain; charset=utf-8";
 			default:
 				return "";
 		}
+	}
+
+	private void function notFound() {
+		header statuscode="404" statustext="Not Found";
+		writeOutput("Not Found");
+		abort;
+	}
+
+	/** /skills.json and /skill/<id>.md from the mirror; other .md/.json files from the webroot */
+	private void function serveMirroredFile(required string targetPage, required string ext) {
+		var page = lCase(arguments.targetPage);
+		var file = "";
+		if (page == "/skills.json") {
+			file = getDownloadsDirectory() & "/skills.json";
+		} else {
+			var m = reFind("^/skill/([a-z0-9][a-z0-9-]*)\.md$", page, 1, true);
+			if (arrayLen(m.pos) >= 2 && m.pos[2] > 0) {
+				var id = mid(page, m.pos[2], m.len[2]);
+				// only topics the mirrored manifest lists
+				if (getMirror().isTopic(id)) file = getMirror().topicPath(id);
+			} else if (fileExists(expandPath(arguments.targetPage))) {
+				// e.g. /res/lucee-header/README.md, served as it was before *.md went through Lucee
+				file = expandPath(arguments.targetPage);
+			}
+		}
+		if (!len(file) || !fileExists(file)) notFound();
+		content type=getContentTypeForExtension(arguments.ext) file=file deletefile="no";
 	}
 
 	private void function serveSkillFile(required string targetPage) {

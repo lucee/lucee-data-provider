@@ -67,6 +67,22 @@ function loadSkill(filename) {
 
 // ── Skills we currently publish ──
 skills = [ loadSkill("main.skill") ];
+
+// ── Topic indexes from the mirrored skills.json (LDEV-6552) ──
+mirror = new SkillMirror(downloadsDirectory = downloadsDirectory);
+manifest = mirror.readManifest();
+topics = [];
+for (topic in manifest.topics ?: []) {
+	topicFile = mirror.topicPath(topic.id);
+	arrayAppend(topics, {
+		id: topic.id,
+		title: topic.title,
+		description: topic.description,
+		entries: topic.entries,
+		approxTokens: topic.approxTokens,
+		size: fileExists(topicFile) ? getFileInfo(topicFile).size : -1
+	});
+}
 </cfscript>
 <!DOCTYPE html>
 <html lang="en">
@@ -78,7 +94,7 @@ skills = [ loadSkill("main.skill") ];
 	<link rel="stylesheet" href="/res/lucee-header/theme.css?v=2" data-lucee-theme-css>
 	<link rel="stylesheet" href="/res/lucee-header/header.css?v=2" data-lucee-header-css>
 	<script src="/res/lucee-header/header.js?v=2" defer></script>
-	<link rel="stylesheet" href="/res/skill.css?v=2">
+	<link rel="stylesheet" href="/res/skill.css?v=3">
 </head>
 <body>
 <cfoutput>
@@ -100,8 +116,8 @@ skills = [ loadSkill("main.skill") ];
 	<h2 class="section-title">What is a Skill?</h2>
 	<p class="section-intro">
 		A <strong>skill</strong> is a small, structured text file that gives an AI assistant on-demand access to accurate,
-		up-to-date reference material instead of relying on what it memorized during training. Each Lucee skill bundles an
-		index of recipes, guides, and technical specs with instructions for the assistant on when and how to fetch the
+		up-to-date reference material instead of relying on what it memorized during training. The Lucee skill points the
+		assistant to topic indexes of recipes, guides, and technical specs, with instructions on when and how to fetch the
 		relevant page before answering — so you get working CFML code and correct API details instead of confident guesses.
 	</p>
 </section>
@@ -138,6 +154,34 @@ skills = [ loadSkill("main.skill") ];
 		</cfloop>
 	</div>
 </section>
+
+<!--- ── Topic indexes (skills.json) ── --->
+<cfif arrayLen(topics)>
+<section>
+	<h2 class="section-title">Topic Indexes</h2>
+	<p class="section-intro">
+		The skill above is a short router. For each question the assistant loads the matching topic index and then fetches
+		only the docs it needs. The indexes are mirrored from docs.lucee.org and listed in <a href="/skills.json">skills.json</a>.
+	</p>
+	<div class="topic-table-wrap">
+		<table class="topic-table">
+			<thead>
+				<tr><th>Topic</th><th>Covers</th><th class="num">Entries</th><th class="num">Size</th></tr>
+			</thead>
+			<tbody>
+			<cfloop array="#topics#" item="topic">
+				<tr>
+					<td><a href="/skill/#encodeForURL(topic.id)#.md">#encodeForHTML(topic.title)#</a><div class="topic-id">#encodeForHTML(topic.id)#</div></td>
+					<td>#encodeForHTML(topic.description)#</td>
+					<td class="num">#topic.entries#</td>
+					<td class="num"><cfif topic.size GTE 0>#formatBytes(topic.size)#<cfif topic.approxTokens><br></cfif></cfif><cfif topic.approxTokens>~#numberFormat(topic.approxTokens, ",")# tokens</cfif></td>
+				</tr>
+			</cfloop>
+			</tbody>
+		</table>
+	</div>
+</section>
+</cfif>
 
 <hr class="section-divider">
 
