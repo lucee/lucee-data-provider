@@ -7,6 +7,7 @@
  *   versions and files that are only in there are served from there, so nothing old disappears. Every time
  *   that happens it is logged and counted, see getFlatFallbackHits(). With the fallback off the flat files are not used.
  *   Without a Maven source, or when no version could be read from it, the flat files are served even with the fallback off.
+ * - without a flat source (an empty flatSource, the Maven only mode, STORAGE=maven) the flat files are never used, whatever happens.
  * - the versions that are shown to a calling Lucee are limited to the ones it can load, see filterForCaller().
  */
 component accessors=true {
@@ -17,7 +18,7 @@ component accessors=true {
 	property name="cacheSeconds"       type="numeric" default=300;
 
 	/**
-	 * @flatSource    something with getVersions( flush ), the flat S3 files (services.legacy.S3)
+	 * @flatSource    something with getVersions( flush ), the flat S3 files (services.legacy.S3), empty for none (Maven only)
 	 * @mavenSource   a MavenCoreSource, empty for none
 	 * @flatUrl       the url the flat files are served from (the cdn)
 	 * @flatFallback  serve what is not in the Maven layout from the flat files
@@ -205,9 +206,14 @@ component accessors=true {
 		return IsObject( variables.mavenSource ) && variables.mavenSource.hasRepos();
 	}
 
-	// flat files are used with the fallback on, or when the Maven layout has no versions at all (nothing to serve otherwise)
+	// flat files are used with the fallback on, or when the Maven layout has no versions at all (nothing to serve otherwise),
+	// never without a flat source (Maven only)
 	private boolean function _flatAllowed() {
-		return variables.flatFallback || !( IsStruct( variables.cache ) && variables.cache.mavenCount > 0 );
+		return _hasFlat() && ( variables.flatFallback || !( IsStruct( variables.cache ) && variables.cache.mavenCount > 0 ) );
+	}
+
+	private boolean function _hasFlat() {
+		return !IsSimpleValue( variables.flatSource );
 	}
 
 	/**
@@ -244,7 +250,7 @@ component accessors=true {
 			}
 		}
 
-		var useFlat = variables.flatFallback || StructCount( mavenVersions ) == 0;
+		var useFlat = _hasFlat() && ( variables.flatFallback || StructCount( mavenVersions ) == 0 );
 
 		if ( !variables.flatFallback && useFlat ) {
 			SystemOutput( "Flat S3 fallback is off but the Maven layout has no core versions: serving the flat files", true );
@@ -305,7 +311,7 @@ component accessors=true {
 		}
 
 		if ( StructCount( sorted ) == 0 ) {
-			throw( type="CoreVersions", message="No core versions found, in the Maven layout or in the flat files" );
+			throw( type="CoreVersions", message=_hasFlat() ? "No core versions found, in the Maven layout or in the flat files" : "No core versions found in the Maven layout" );
 		}
 
 		var flatOnly = 0;
@@ -316,7 +322,7 @@ component accessors=true {
 			}
 		}
 
-		SystemOutput( "Core versions loaded: [#StructCount( sorted )#] in total, [#StructCount( mavenVersions )#] in the Maven layout, [#flatOnly#] only in the flat S3 files (flat S3 fallback #variables.flatFallback ? 'on' : 'off'#)", true );
+		SystemOutput( "Core versions loaded: [#StructCount( sorted )#] in total, [#StructCount( mavenVersions )#] in the Maven layout, [#flatOnly#] only in the flat S3 files (flat S3 fallback #!_hasFlat() ? 'not used, Maven only' : ( variables.flatFallback ? 'on' : 'off' )#)", true );
 
 		variables.sources = sources;
 		variables.cache   = {

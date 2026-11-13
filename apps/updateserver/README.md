@@ -15,29 +15,60 @@ entrypoint listens on `$PORT` (Cloud Run sets this to 8080). Use it to stand up 
 new Cloud Run service so the two hostnames can later move from Pixl8 to Google.
 Do not change DNS until that service has been tested on its `run.app` URL.
 
+## Storage modes
+
+The app runs in one of two modes, chosen with the `STORAGE` environment variable:
+
+- **`s3`** (the default, what Pixl8 runs): the Maven repositories first, the old flat
+  files of S3 as the fallback, caches (extension meta, bundle lookups, Jira issues)
+  kept in S3. Needs the S3 credentials.
+- **`maven`** (`STORAGE=maven`, or `NO_S3=true`): a proxy over the Maven repositories
+  only (Maven Central, Sonatype snapshots and `https://maven.lucee-services.com/`).
+  Nothing is read from or written to S3 and no S3 credentials are needed:
+  - core versions and `/rest/update/provider/list` come from the `maven-metadata.xml`
+    of `org.lucee:lucee`; downloads (`loader`, `light`, `download`, `war`, `express`,
+    `latest/.../redirect`) are 302s to the Maven file, `maven.lucee-services.com` first.
+  - extensions are listed from the Maven repositories (each `.lex` is read once per
+    instance for its manifest); `full/{id}` and `trial/{id}` redirect to the Maven
+    file, `maven.lucee-services.com` first. A file that is in no Maven repository is a 404.
+  - bundles (`download/{name}/{version}`) come from the Maven matcher only (no
+    `bundle.lucee.org` bucket); lookups are cached in memory.
+  - the extension meta and the Jira issues are cached on the local disk
+    (`LOCAL_CACHE_DIR`, default the Lucee temp directory), so a new instance builds
+    them again on its first start (about two minutes for ~1000 extension files).
+  - what only exists in S3 answers **501**: `expressTemplates` (there is no Maven
+    artifact of the express templates), `forgebox/{version}`, `list-missing` and
+    `buildLatest`. Versions and files that are only in the flat S3 files (old 4.x/5.x
+    releases, old snapshots) are not offered.
+
 A Cloudflare Worker port of the extension endpoints only lives in
 `apps/extension-worker`; it is not deployed and is not used here.
 
 ## Local
 
-From this directory, with the same S3 credentials the Pixl8 service uses:
+From this directory, without S3 (no credentials needed):
 
 ```sh
-docker compose up --build
+STORAGE=maven docker compose up --build
 # http://localhost:8080/healthcheck/  (should be "OK")
 # http://localhost:8080/rest/extension/provider/info
 # http://localhost:8080/rest/update/provider/list
 ```
 
+With S3 (as Pixl8), export `S3_EXTENSION_ACCESS_KEY_ID` and `S3_EXTENSION_SECRET_KEY`
+and run `docker compose up --build` without `STORAGE`.
+
 From the repository root:
 
 ```sh
 docker build -f apps/updateserver/Dockerfile -t lucee-update .
-docker run --rm -p 8080:8080 \
-  -e S3_EXTENSION_ACCESS_KEY_ID \
-  -e S3_EXTENSION_SECRET_KEY \
+docker run --rm -p 8080:8080 -e STORAGE=maven \
+  -e LUCEE_LOGGING_FORCE_APPENDER=console \
   lucee-update
 ```
+
+Without a `SENTRY_DSN`, set `LUCEE_LOGGING_FORCE_APPENDER=console`, otherwise the
+Sentry appender fails on the empty DSN.
 
 The first start can take well over a minute: `Application.cfc` loads extension
 metadata and core versions before it serves traffic.
@@ -66,25 +97,14 @@ CI; run the following from a machine that is already signed into that GCP projec
 
 ### 1. Secrets
 
-Create these in Secret Manager (names only; reuse the values already set on the
-Pixl8 service). They are required for the app to reach the extension and core
-buckets:
+None. The Cloud Run service runs with `STORAGE=maven` (see
+[Storage modes](#storage-modes)): it only proxies the Maven repositories, so it
+needs no S3 credentials and no secrets.
 
-- `S3_EXTENSION_ACCESS_KEY_ID`
-- `S3_EXTENSION_SECRET_KEY`
-
-Optional, for the Sentry loggers already baked into the image:
-
-- `SENTRY_DSN`
-
-```sh
-# example: create an empty secret, then add a version from a file you do not commit
-gcloud secrets create S3_EXTENSION_ACCESS_KEY_ID --project=fine-way-396107
-gcloud secrets versions add S3_EXTENSION_ACCESS_KEY_ID --project=fine-way-396107 --data-file=...
-```
-
-The Cloud Run runtime service account needs `roles/secretmanager.secretAccessor`
-on those secrets.
+Optional, for the Sentry loggers already baked into the image: a `SENTRY_DSN`
+secret in Secret Manager (the runtime service account then needs
+`roles/secretmanager.secretAccessor` on it). Without it, set
+`LUCEE_LOGGING_FORCE_APPENDER=console` (below).
 
 ### 2. Build and push the image
 
@@ -103,8 +123,10 @@ gcloud builds submit --project "$PROJECT" --region "$REGION" \
 
 ### 3. Create or update the service
 
-The first start is slow, so the startup probe allows several minutes, and
-`--min-instances=1` avoids a cold start on every Lucee "check for updates".
+The first start is slow (it reads the core versions and every extension file from
+the Maven repositories, about two minutes), so the startup probe allows several
+minutes. `--min-instances 0` is fine while testing; once the domains point here,
+`--min-instances 1` avoids that cold start on a Lucee "check for updates".
 Adjust CPU and memory if the first revision is tight.
 
 ```sh
@@ -118,17 +140,17 @@ gcloud run deploy "$SERVICE" \
   --memory 2Gi \
   --timeout 300 \
   --cpu-boost \
-  --min-instances 1 \
+  --min-instances 0 \
   --max-instances 4 \
   --startup-probe=httpGetPath=/healthcheck/,periodSeconds=10,timeoutSeconds=5,failureThreshold=30,initialDelaySeconds=15 \
-  --set-env-vars=SENTRY_ENV=production,ALLOW_RELOAD=false \
-  --set-secrets=S3_EXTENSION_ACCESS_KEY_ID=S3_EXTENSION_ACCESS_KEY_ID:latest,S3_EXTENSION_SECRET_KEY=S3_EXTENSION_SECRET_KEY:latest
+  --set-env-vars=STORAGE=maven,SENTRY_ENV=production,ALLOW_RELOAD=false,LUCEE_LOGGING_FORCE_APPENDER=console
 ```
 
-If `SENTRY_DSN` was created, add it in a follow-up update:
+If a `SENTRY_DSN` secret was created, use it instead of the console appender:
 
 ```sh
 gcloud run services update "$SERVICE" --project "$PROJECT" --region "$REGION" \
+  --remove-env-vars=LUCEE_LOGGING_FORCE_APPENDER \
   --set-secrets=SENTRY_DSN=SENTRY_DSN:latest
 ```
 
@@ -142,7 +164,11 @@ curl -fsS "$URL/rest/update/provider/list" | head
 ```
 
 Compare those answers with `https://extension.lucee.org` and
-`https://update.lucee.org` before touching DNS.
+`https://update.lucee.org` before touching DNS. Expected differences in the Maven
+only mode: `/rest/update/provider/list` has the versions of the Maven layout (no
+4.x, fewer old snapshots, but the newest releases), extension downloads redirect to
+`maven.lucee-services.com` or Maven Central instead of `cdn.lucee.org`, and the
+endpoints listed under [Storage modes](#storage-modes) answer 501.
 
 ### 5. Custom domains (later, not part of standing the service up)
 
@@ -162,18 +188,21 @@ been switched and old caches have expired.
 
 ## Environment variables
 
-Required:
+Required with `STORAGE=s3` (the default), not used with `STORAGE=maven`:
 
 | Name | |
 |------|--|
 | `S3_EXTENSION_ACCESS_KEY_ID` | AWS key used for every `s3://` path (`this.s3` in `Application.cfc`) |
 | `S3_EXTENSION_SECRET_KEY` | Matching secret |
 
-Optional (defaults in `Application.cfc` are what production uses today):
+Optional (defaults in `Application.cfc` are what production uses today; the `S3_*`
+and `*_FLAT_S3_FALLBACK` ones are ignored with `STORAGE=maven`):
 
 | Name | Default |
 |------|---------|
-| `SENTRY_DSN` | empty (Sentry loggers no-op) |
+| `STORAGE` | `s3`; `maven` for the Maven only mode without S3 (`NO_S3=true` does the same) |
+| `LOCAL_CACHE_DIR` | Lucee temp directory; `STORAGE=maven` only, where the extension meta and Jira issues are cached |
+| `SENTRY_DSN` | empty (set `LUCEE_LOGGING_FORCE_APPENDER=console` then) |
 | `SENTRY_ENV` | empty (`production` on Cloud Run) |
 | `ALLOW_RELOAD` | unset/false (`?fwreinit` only works when this is true) |
 | `S3_CORE_ROOT` | `s3:///lucee-downloads/` |
@@ -200,7 +229,7 @@ Optional (defaults in `Application.cfc` are what production uses today):
 | `UPDATES_MAVEN_CACHE_SECONDS` | `300` |
 
 Jira changelogs are read from the public Jira Cloud API and cached under
-`S3_CORE_ROOT`; no Jira token is required.
+`S3_CORE_ROOT` (`LOCAL_CACHE_DIR` with `STORAGE=maven`); no Jira token is required.
 
 `S3_DOWNLOAD_ACCESS_KEY_ID` and `S3_DOWNLOAD_SECRET_KEY` are used only by
 `apps/download`, not by this app.
