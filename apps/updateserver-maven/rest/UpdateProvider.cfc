@@ -244,6 +244,20 @@ component {
 	}
 
 	/**
+	* function to download Zero Lucee Loader file (lucee-zero.jar)
+	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
+	*/
+	remote function downZero(
+		required string version restargsource="Path",
+		string ioid="" restargsource="url")
+		httpmethod="GET" restpath="zero/{version}" {
+		_bind();
+
+		redirectToCore("zero",arguments.version);
+		return;
+	}
+
+	/**
 	* only for backward compatibility
 	*/
 	remote function downLoaderAll(
@@ -251,7 +265,9 @@ component {
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="loader-all/{version}" {
 		_bind();
-		return downLoaderNew(version,ioid);
+
+		redirectToCore("jar",arguments.version);
+		return;
 	}
 
 		/**
@@ -262,7 +278,9 @@ component {
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="core/{version}" {
 		_bind();
-		return downloadCoreNew(version,ioid);
+
+		redirectToCore("lco",arguments.version);
+		return;
 	}
 
 	remote function echoGET(
@@ -878,7 +896,9 @@ component {
 		_bind();
 		var file=variables.coreVersions.resolveFile(type,version);
 
-		if(structIsEmpty(file)) {
+		// the Maven layout fallback always builds a URL; 5.4.x has no zero jar, so
+		// confirm the file is really there before sending the client to it
+		if(structIsEmpty(file) || !_remoteArtifactExists(file.url ?: "")) {
 			_artifactNotFound( type="core", version=arguments.version, qualifier=arguments.type );
 			content type="text/plain";
 			header statuscode="404" statustext="Not Found";
@@ -888,6 +908,21 @@ component {
 
 		header statuscode="302" statustext="Found";
 		header name="Location" value=file.url;
+	}
+
+	private boolean function _remoteArtifactExists(required string artifactUrl) {
+		if(!Len(arguments.artifactUrl)) {
+			return false;
+		}
+		try {
+			http method="head" url=arguments.artifactUrl timeout=10 redirect=true throwonerror=false result="local.res";
+			var code = Val(ListFirst(res.statuscode ?: (res.status_code ?: "0"), " "));
+			return code >= 200 && code < 400;
+		}
+		catch(any e) {
+			// if the check itself fails, still redirect rather than hide a real file
+			return true;
+		}
 	}
 
 	/**

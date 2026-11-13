@@ -24,7 +24,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( found.versions ).toHaveKey( "6.2.0.321" );
 				expect( found.versions[ "6.2.0.321" ] ).toBe( [ "lucee-versions" ] );
 				expect( source.hasType( "lco" ) ).toBeTrue();
+				expect( source.hasType( "zero" ) ).toBeTrue();
 				expect( source.getCoreFileName( "light", "6.2.0.321", "" ) ).toBe( "lucee-6.2.0.321-light.jar" );
+				expect( source.getCoreFileName( "zero", "6.2.0.321", "" ) ).toBe( "lucee-6.2.0.321-zero.jar" );
 			});
 
 			it( title="prefers LuceeVersionsDetail URLs and falls back to the Maven layout for other classifiers", body=function() {
@@ -44,6 +46,8 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 					.toBe( "https://maven.lucee-services.com/org/lucee/lucee/6.2.0.321/lucee-6.2.0.321-light.jar" );
 				expect( source.getCoreFileUrl( "war", "6.2.0.321", [] ) )
 					.toBe( "https://maven.lucee-services.com/org/lucee/lucee/6.2.0.321/lucee-6.2.0.321.war" );
+				expect( source.getCoreFileUrl( "zero", "6.2.0.321", [] ) )
+					.toBe( "https://maven.lucee-services.com/org/lucee/lucee/6.2.0.321/lucee-6.2.0.321-zero.jar" );
 			});
 
 		});
