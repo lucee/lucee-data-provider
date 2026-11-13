@@ -43,7 +43,7 @@ RUN mkdir -p /opt/lucee/server/lucee-server/deploy \
              /download \
              /download/provider \
  && wget -nv https://ext.lucee.org/image-extension-2.0.0.29.lex -O /opt/lucee/server/lucee-server/deploy/image-extension-2.0.0.29.lex \
- && wget -nv https://ext.lucee.org/esapi-extension-2.2.4.18.lex -O /opt/lucee/server/lucee-server/deploy/esapi-extension-2.2.4.18.lex \
+ && wget -nv https://maven.lucee-services.com/org/lucee/esapi-extension/3.1.0.7/esapi-extension-3.1.0.7.lex -O /opt/lucee/server/lucee-server/deploy/esapi-extension-3.1.0.7.lex \
  && wget -nv https://ext.lucee.org/compress-extension-1.0.0.15.lex -O /opt/lucee/server/lucee-server/deploy/compress-extension-1.0.0.15.lex \
  && ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/application.log \
  && ln -sf /proc/1/fd/1 /opt/lucee/server/lucee-server/context/logs/exception.log \
