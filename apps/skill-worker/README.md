@@ -1,11 +1,18 @@
 # Skill worker
 
-Cloudflare Worker port of [`apps/skill`](../skill), the site behind `skill.lucee-services.com` that
-serves the Lucee skill file for AI assistants. It serves the same paths with the same answers,
-without a container and without Cloud Run.
+Cloudflare Worker port of [`apps/skill`](../skill), the site that serves the Lucee skill file for AI
+assistants. It serves the same paths with the same answers, without a container and without Cloud Run.
 
-It serves **`skill.lucee-services.com`** and the test hostname **`skl.lucee-services.com`**. The Cloud
-Run service stays deployed as a rollback until it is retired. `skill.lucee.io` is not touched by this worker.
+It serves:
+
+| Hostname | Role |
+|----------|------|
+| `skill.lucee-services.com` | production custom domain on this worker |
+| `skl.lucee-services.com` | test custom domain on this worker |
+| `skill.lucee.io` | production; Cloudflare for SaaS custom hostname on the `lucee-services.com` zone, with the Worker route `skill.lucee.io/*`. In Route 53 it is a CNAME to `skill.lucee-services.com` |
+| `skills.lucee.io` | same as `skill.lucee.io`, with the Worker route `skills.lucee.io/*` |
+
+The old Cloud Run service is left running until it is retired; it is no longer deployed to.
 
 ## What it does
 
@@ -19,7 +26,7 @@ Run service stays deployed as a rollback until it is retired. `skill.lucee.io` i
 | `/res/*` | static assets (`public/res`, kept in sync with `apps/skill/www/res`, including the shared `lucee-header`) |
 | anything else | `404 Not Found`; methods other than `GET`/`HEAD` answer `405` |
 
-The landing page HTML in `src/landing.ts` and the assets under `public/res` are a port of `apps/skill/www`. When the Cloud Run site header or CSS changes, copy `apps/skill/www/res` into `public/res` again and update `renderLanding` to match `index.cfm`.
+The landing page HTML in `src/landing.ts` and the assets under `public/res` are a port of `apps/skill/www`. When the header or CSS in `apps/skill/www` changes, copy `apps/skill/www/res` into `public/res` again and update `renderLanding` to match `index.cfm`.
 
 ### Mirroring
 
@@ -93,7 +100,8 @@ and push that touches the worker. Pushes to `main` (and manual runs on `main`) a
 1. `scripts/provision.mjs` creates the KV namespace `lucee-skill-cache` if it does not exist yet and
    writes its id into `wrangler.toml` (in CI only, nothing is committed).
 2. `wrangler deploy` deploys the worker `lucee-skill` with the custom domains `skill.lucee-services.com`
-   and `skl.lucee-services.com`.
+   and `skl.lucee-services.com`. `skill.lucee.io` and `skills.lucee.io` are not in `wrangler.toml`; they
+   are Cloudflare for SaaS custom hostnames plus Worker routes, as in the table above.
 
 It uses the organization secrets `CLOUDFLARE_API_TOKEN` (Workers Scripts, Workers KV Storage and
 Workers Routes edit, DNS edit for the zone) and `CLOUDFLARE_ACCOUNT_ID`; they are only passed to the
@@ -126,15 +134,12 @@ npm run compare -- --paths my-paths.txt --strict
 - The landing page HTML-encodes fewer characters (e.g. `:`, `/`, `(`, `—` stay as they are); the
   rendered page is the same.
 
-## Cutover
+## Hostnames and the old Cloud Run service
 
-1. Merge; the workflow deploys to `skl.lucee-services.com`.
-2. Compare both hosts (above) and watch the cron runs in the worker logs for a few hours.
-3. Add `skill.lucee-services.com` as a second custom domain in `wrangler.toml`
-   (`routes = [{ pattern = "skl.lucee-services.com", custom_domain = true }, { pattern = "skill.lucee-services.com", custom_domain = true }]`).
-   Cloudflare creates the DNS record of each custom domain. A deploy from CI (non-interactive) replaces an
-   existing DNS record on that hostname; an interactive `wrangler deploy` asks first.
-4. Once traffic has moved, retire the Cloud Run service and `apps/skill`.
+The cutover is done. `skill.lucee-services.com`, `skill.lucee.io` and `skills.lucee.io` are served by
+this worker. Do not deploy [`apps/skill`](../skill) to Google Cloud Run any more; that service stays
+as it is until it is deleted by hand.
 
-Rollback for `skill.lucee-services.com`: remove it from `routes` and deploy (this removes the custom domain
-and its record), then restore the DNS-only CNAME `skill` → `ghs.googlehosted.com` (Cloud Run).
+`skill.lucee.io` and `skills.lucee.io` must keep their Cloudflare for SaaS records in Route 53
+(`_acme-challenge.*` CNAME and `_cf-custom-hostname.*` TXT) and the matching custom hostnames and
+Worker routes on the `lucee-services.com` zone, or the certificates will not renew.
