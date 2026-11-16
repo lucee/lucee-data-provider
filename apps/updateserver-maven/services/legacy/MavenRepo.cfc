@@ -122,14 +122,27 @@ component {
 	}
 
 	public function readDependenciesFromPOM(string pom, boolean extended=false,string specifivDep=""){
+		// fileRead() of a remote URL uses the HTTP(S) resource provider, which
+		// on the Cloud Run image can fail (403/431 or no remote file access)
+		// for the same POM that the http tag in getSources() already fetched.
+		// Always parse a local copy.
+		if (findNoCase("http", arguments.pom) == 1) {
+			local.localPom = getArtifactDirectory() & "pom-" & hash(arguments.pom, "md5") & ".pom";
+			if (!fileExists(localPom) || fileSize(localPom) == 0) {
+				_fileCopy(arguments.pom, localPom);
+			}
+			arguments.pom = localPom;
+		}
 		local.content=fileRead(pom);
 		local.xml=xmlParse(content);
 
 		// custom repositories
-		local.repos=[defaultRepo];
-		local.xmlRepos=xml.xmlRoot.repositories.xmlChildren;
-		loop array=xmlRepos item="local.xmlRepo" {
-			arrayAppend(repos,xmlRepo.url.xmlText);
+		local.repos=[defaultRepo, "https://maven.lucee-services.com"];
+		if (structKeyExists(xml.xmlRoot, "repositories")) {
+			local.xmlRepos=xml.xmlRoot.repositories.xmlChildren;
+			loop array=xmlRepos item="local.xmlRepo" {
+				arrayAppend(repos,xmlRepo.url.xmlText);
+			}
 		}
 		// dependencies
 		local.dependencies=xml.xmlRoot.dependencies.xmlChildren;
@@ -884,12 +897,18 @@ component {
 		}
 	}
 
-	public string function getDetailFile(version) {
+	public string function getDetailFile(version, string group="", string artifact="") {
+		if(len(arguments.group)==0) arguments.group=variables.group;
+		if(len(arguments.artifact)==0) arguments.artifact=variables.artifact;
 		curr=getDirectoryFromPath(getCurrentTemplatePath());
 		dir=services.CacheDir::path( "maven-detail", curr&"cache/mavenDetail/" );
 		if(!directoryExists(dir)) directoryCreate(dir);
 
-		return dir&version&".json";
+		// include group and artifact: a key of only the version reused the
+		// sources of a different artifact that happened to share that version
+		// (log4j-api:2.26.0 returned the jar of log4j-core:2.26.0).
+		var safe = rereplace(arguments.group & "-" & arguments.artifact & "-" & arguments.version, "[^a-zA-Z0-9._-]", "_", "all");
+		return dir&safe&".json";
 	}
 
 	private function isOK(statusCode) {
@@ -910,7 +929,7 @@ component {
 		if(!isNull(application.detail[base]) && !isNull(application.detail[base].sources.pom.date) && !isDefined("url.abc"))
 			return application.detail[base];
 
-		var file=getDetailFile(version);
+		var file=getDetailFile(version, arguments.group, arguments.artifact);
 
 		if(fileExists(file) && fileSize(file)>10) {
 			var data=deSerializeJson(fileRead(file));
@@ -1035,12 +1054,16 @@ component {
 			
 		if(isSimpleValue(src) && findNoCase("http",src)==1) {
 			// we do this because of 302 the function cannot handle
-			http url=src result="local.res";
+			http url=src result="local.res" timeout=60 {
+				httpparam type="header" name="User-Agent" value="lucee-update-provider";
+			}
 			if(!isNull(url.ttzz)) throw serializeJson(res)&":"&src;
 			if(isNull(res.status_code) || !isOK(res.status_code)) {
 				if(findNoCase("https://",src)) {
 					src=replaceNoCase(src,"https://","http://");
-					http url=src result="local.res";
+					http url=src result="local.res" timeout=60 {
+						httpparam type="header" name="User-Agent" value="lucee-update-provider";
+					}
 				}
 
 			}
