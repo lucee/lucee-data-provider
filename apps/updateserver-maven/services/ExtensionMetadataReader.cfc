@@ -41,6 +41,8 @@ component accessors=true {
 	variables._wantAllRemoteVersions    = false;
 	variables._allRemoteVersionsLoaded  = false;
 	variables._pendingRemoteFiles       = [];
+	// artifact > { version = [ repo urls ] } from the last Maven listing, used to fill `older`
+	variables._mavenVersions            = {};
 
 	reset();
 
@@ -191,6 +193,10 @@ component accessors=true {
 				_stripExtensionLogos( extensions );
 			}
 
+			if ( !arguments.all ) {
+				_fillOlderFromMavenVersions( extensions, arguments.type );
+			}
+
 			variables._simpleCache[ cacheKey ] = extensions;
 		}
 		return variables._simpleCache[ cacheKey ];
@@ -257,8 +263,8 @@ component accessors=true {
 		var remote = variables._mavenRemote[ arguments.fileName ] ?: "";
 
 		if ( IsStruct( remote ) ) {
-			// Maven only: the Lucee repository (the Maven bridge) first, as for the core files
-			var resolved = getMavenSource().getFileUrl( remote.artifact, remote.version, remote.repos, getMavenOnly() );
+			// Central first, then lucee-services. getFileUrl HEADs the file and only returns a URL that exists.
+			var resolved = getMavenSource().getFileUrl( remote.artifact, remote.version, remote.repos );
 
 			if ( Len( resolved ) ) {
 				return resolved;
@@ -411,6 +417,7 @@ component accessors=true {
 		try {
 			// Maven only: at startup only the latest (and release, if different) of each artifact, so a cold start does not download every historical .lex. list(all=true) and a specific version still fetch the rest on demand.
 			result = getMavenSource().listExtensions( latestOnly=getMavenOnly() && !variables._wantAllRemoteVersions );
+			variables._mavenVersions = result.versions ?: {};
 		} catch ( any e ) {
 			SystemOutput( "Error listing the maven repositories: #e.message#", true );
 			result = { files=[], complete=false };
@@ -1239,6 +1246,62 @@ component accessors=true {
 					getBundleDownloadService().registerBundleFromExtensionJar( jar.directory, jar.name );
 				}
 			}
+		}
+	}
+
+	/**
+	 * Adds versions known from Maven Central and lucee-services metadata to `older`, without downloading
+	 * every historical .lex at listing time. A version asked for later is still fetched on demand.
+	 */
+	private function _fillOlderFromMavenVersions( required query extensions, required string type ) {
+		if ( StructIsEmpty( variables._mavenVersions ?: {} ) ) {
+			return;
+		}
+
+		for ( var i=1; i<=QueryRecordCount( arguments.extensions ); i++ ) {
+			var artifact = _artifactForId( arguments.extensions.id[ i ] );
+			if ( !Len( artifact ) || !StructKeyExists( variables._mavenVersions, artifact ) ) {
+				continue;
+			}
+
+			var current = arguments.extensions.version[ i ];
+			var known   = {};
+			var older   = IsArray( arguments.extensions.older[ i ] ) ? Duplicate( arguments.extensions.older[ i ] ) : [];
+			var names   = IsArray( arguments.extensions.olderName[ i ] ) ? Duplicate( arguments.extensions.olderName[ i ] ) : [];
+			var dates   = IsArray( arguments.extensions.olderDate[ i ] ) ? Duplicate( arguments.extensions.olderDate[ i ] ) : [];
+
+			for ( var version in older ) {
+				known[ version ] = true;
+			}
+
+			var extra = [];
+			for ( var version in StructKeyArray( variables._mavenVersions[ artifact ] ) ) {
+				if ( version == current || StructKeyExists( known, version ) ) {
+					continue;
+				}
+				if ( !_matchesReleaseType( version, arguments.type ) ) {
+					continue;
+				}
+				ArrayAppend( extra, version );
+			}
+
+			if ( !ArrayLen( extra ) ) {
+				continue;
+			}
+
+			ArraySort( extra, function( a, b ) {
+				return Compare( services.VersionUtils::sortableVersionString( b ), services.VersionUtils::sortableVersionString( a ) );
+			} );
+
+			for ( var version in extra ) {
+				ArrayAppend( older, version );
+				ArrayAppend( names, artifact & "-" & version & ".lex" );
+				ArrayAppend( dates, "" );
+			}
+
+			arguments.extensions.older    [ i ] = older;
+			arguments.extensions.olderName[ i ] = names;
+			arguments.extensions.olderDate[ i ] = dates;
 		}
 	}
 

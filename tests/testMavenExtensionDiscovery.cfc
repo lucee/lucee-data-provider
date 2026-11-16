@@ -151,7 +151,10 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			  mixedRepos = [ "https://maven.lucee-services.com/" ]
 			, groups     = [ "org.lucee", "io.forgebox" ]
 			, catalog    = arguments.catalog
-			, httpClient = { get=function( address, timeout ) { return { status=404, content="", error="" }; } }
+			, httpClient = {
+				  get  = function( address, timeout ) { return { status=404, content="", error="" }; }
+				, head = function( address, timeout ) { return { status=200, error="" }; }
+			}
 		);
 	}
 
