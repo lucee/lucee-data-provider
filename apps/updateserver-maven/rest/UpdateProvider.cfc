@@ -447,20 +447,22 @@ component {
 		httpmethod="GET" restpath="changelog/{versionFrom}/{versionTo}" {
 		_bind();
 
-		return jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo );
+		return variables.jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo );
 	}
 
 	remote struct function getChangeLogExtended(
 		required string versionFrom restargsource="Path",
 		required string versionTo restargsource="Path")
 		httpmethod="GET" restpath="changelogDetailed/{versionFrom}/{versionTo}" {
+		_bind();
 
-		return jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo, detailed=true );
+		return variables.jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo, detailed=true );
 	}
 	remote string function getChangeLogLastUpdated()
 		httpmethod="GET" restpath="changelogLastUpdated" {
+		_bind();
 		// systemOutput("jiraChangelogService.getChangeLogUpdated():" & jiraChangelogService.getChangeLogUpdated(), true);
-		return DateTimeFormat(jiraChangelogService.getChangeLogUpdated());
+		return DateTimeFormat(variables.jiraChangelogService.getChangeLogUpdated());
 	}
 
 	/**
@@ -471,6 +473,7 @@ component {
 		required string version restargsource="Path",
 		string ioid="" restargsource="url")
 		httpmethod="GET" restpath="dependencies/{version}" {
+		_bind();
 
 		setting requesttimeout="1000";
 		local.mr=new services.legacy.MavenRepo();

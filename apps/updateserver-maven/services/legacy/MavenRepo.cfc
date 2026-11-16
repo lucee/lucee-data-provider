@@ -718,17 +718,109 @@ component {
 
 	public function get(required string version, boolean extended=false) localmode=true {
 		var s = getTickCount();
-		arr=list();
-		var checks=[];
-		loop array=arr item="sct" {
-			arrayAppend(checks, sct.version);
-			if(sct.version==arguments.version) {
-				if(extended) sct.sources=getSources(sct.repository,sct.version);
-				// systemOutput("maven.get() took " & numberFormat(getTickCount()-s) & "ms", true);
-				return sct;
+		// The Sonatype OSS lucene index (list()) no longer covers current
+		// versions and often returns an empty body, which DeserializeJSON rejects.
+		// Use it when it works, then fall back to the Maven layout repositories.
+		try {
+			arr=list();
+			loop array=arr item="sct" {
+				if(sct.version==arguments.version) {
+					if(extended) sct.sources=getSources(sct.repository,sct.version);
+					// systemOutput("maven.get() took " & numberFormat(getTickCount()-s) & "ms", true);
+					return sct;
+				}
 			}
 		}
+		catch(e){
+			systemOutput("Maven.get() could not use the Sonatype index for #arguments.version#: #e.message#", true);
+		}
+
+		var resolved = _resolveFromMavenLayout(arguments.version);
+		if (structCount(resolved)) {
+			if (extended && (isNull(resolved.sources) || structIsEmpty(resolved.sources))) {
+				resolved.sources=getSources(resolved.repository,resolved.version);
+			}
+			if (!extended) {
+				structDelete(resolved, "sources");
+			}
+			return resolved;
+		}
+
 		throw "Maven.get() version [#arguments.version#] is not available";// [#arrayToList(checks)#]";
+	}
+
+	/**
+	 * Look the version up in the Maven layout (lucee-services, Central, Sonatype
+	 * snapshots) when the legacy Sonatype OSS index does not have it.
+	 */
+	private struct function _resolveFromMavenLayout(required string version) {
+		loop array=_mavenLayoutRepos(arguments.version) item="local.repo" {
+			try {
+				var sources = getSources(repo, arguments.version);
+				if (structCount(sources) && (structKeyExists(sources, "pom") || structKeyExists(sources, "jar"))) {
+					return {
+						  groupId    : variables.group
+						, artifactId : variables.artifact
+						, version    : arguments.version
+						, vs         : services.VersionUtils::toVersionSortable(arguments.version)
+						, repository : repo
+						, sources    : sources
+					};
+				}
+			}
+			catch(e){
+				systemOutput("Maven.get() could not read #arguments.version# from #repo#: #e.message#", true);
+			}
+		}
+		return {};
+	}
+
+	private array function _mavenLayoutRepos(required string version) {
+		var mixed     = "https://maven.lucee-services.com";
+		var releases  = "https://repo1.maven.org/maven2";
+		var snapshots = "https://central.sonatype.com/repository/maven-snapshots";
+		var isPre     = reFindNoCase("-(SNAPSHOT|ALPHA|BETA|RC)$", arguments.version);
+
+		// Prefer the catalog's file URL when the Maven-only app has loaded it,
+		// so we hit the same host as loader/ and info/.
+		var preferred = _repoFromCatalog(arguments.version);
+		var repos = isPre ? [ mixed, snapshots, releases ] : [ releases, mixed ];
+		if (len(preferred)) {
+			var ordered = [ preferred ];
+			loop array=repos item="local.repo" {
+				if (compareNoCase(rereplace(repo, "/$", ""), rereplace(preferred, "/$", "")) != 0) {
+					arrayAppend(ordered, repo);
+				}
+			}
+			return ordered;
+		}
+		return repos;
+	}
+
+	private string function _repoFromCatalog(required string version) {
+		if (!structKeyExists(application, "catalog") || isNull(application.catalog)) {
+			return "";
+		}
+		try {
+			var detail = application.catalog.getVersionDetail(arguments.version);
+			loop array=[ "pom", "jar", "lco" ] item="local.key" {
+				if (structKeyExists(detail, key) && isSimpleValue(detail[key]) && len(detail[key]) && findNoCase("http", detail[key]) == 1) {
+					return _repoBaseFromArtifactUrl(detail[key], arguments.version);
+				}
+			}
+		}
+		catch(e){}
+		return "";
+	}
+
+	private string function _repoBaseFromArtifactUrl(required string artifactUrl, required string version) {
+		// https://host/.../org/lucee/lucee/{version}/lucee-... -> https://host/...
+		var marker = "/org/lucee/lucee/" & arguments.version;
+		var pos = findNoCase(marker, arguments.artifactUrl);
+		if (pos <= 1) {
+			return "";
+		}
+		return rereplace(left(arguments.artifactUrl, pos-1), "/$", "");
 	}
 
 	private function extractRepos(repos,raw) {
