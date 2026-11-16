@@ -61,6 +61,9 @@ component accessors=true {
 		variables._artifactPreferred = StructNew( "sync" ); // artifactId > { latest, release }
 		variables._snapshotFiles  = StructNew( "sync" ); // version metadata url > { file, time }, a snapshot is replaced by a newer one at any time
 		variables._snapshotTtl    = 300; // seconds
+		variables._existing       = StructNew( "sync" ); // file url > { exists, time }
+		variables._existsTtl      = 86400; // seconds, a file that is there stays there
+		variables._missingTtl     = 300;   // seconds, a missing file is only cached briefly
 
 		return this;
 	}
@@ -75,7 +78,7 @@ component accessors=true {
 	 * "complete" is false when a repository or an artifact could not be read.
 	 */
 	public struct function listExtensions( boolean latestOnly=false ) {
-		var result = { files=[], complete=true };
+		var result = { files=[], complete=true, versions={} };
 
 		if ( !hasRepos() && !IsObject( variables.catalog ?: "" ) ) {
 			return result;
@@ -98,6 +101,8 @@ component accessors=true {
 			if ( !artifactResult.complete ) {
 				result.complete = false;
 			}
+
+			result.versions[ artifact ] = artifactResult.versions;
 
 			var versions = StructKeyArray( artifactResult.versions );
 			if ( arguments.latestOnly ) {
@@ -122,15 +127,22 @@ component accessors=true {
 	}
 
 	/**
-	 * The url of the extension file of a version, in the first of the repos that has it, the mixed repos
-	 * (the Maven bridge) first with mixedFirst. Returns an empty string when none of the repos can say where the file is.
+	 * The url of the extension file of a version, in the first of the repos that actually has the file
+	 * (HEAD, cached: long for a hit, briefly for a miss). Release repos (Maven Central) are tried first
+	 * unless mixedFirst is set. Returns an empty string when none of the repos has the file.
 	 */
 	public string function getFileUrl( required string artifact, required string version, required array repos, boolean mixedFirst=false ) {
 		for ( var repo in ( arguments.mixedFirst ? _mixedFirst( arguments.repos ) : arguments.repos ) ) {
 			var fileName = _fileName( arguments.artifact, arguments.version, repo );
 
-			if ( Len( fileName ) ) {
-				return _versionUrl( repo, arguments.artifact, arguments.version ) & fileName;
+			if ( !Len( fileName ) ) {
+				continue;
+			}
+
+			var fileUrl = _versionUrl( repo, arguments.artifact, arguments.version ) & fileName;
+
+			if ( _fileExists( fileUrl ) ) {
+				return fileUrl;
 			}
 		}
 
@@ -500,6 +512,44 @@ component accessors=true {
 
 	private string function _versionUrl( required string repo, required string artifact, required string version ) {
 		return _artifactUrl( arguments.repo, arguments.artifact ) & arguments.version & "/";
+	}
+
+	/**
+	 * Does the repository have the file. A redirect (the Maven bridge points to where the file is) counts as
+	 * the file, a 404 as no file. Anything else (the repository can't be reached or is failing) can't tell,
+	 * that is logged and counts as no file, but it is not remembered.
+	 */
+	private boolean function _fileExists( required string fileUrl ) {
+		var cached = variables._existing[ arguments.fileUrl ] ?: "";
+
+		if ( IsStruct( cached ) && DateDiff( "s", cached.time, Now() ) < ( cached.exists ? variables._existsTtl : variables._missingTtl ) ) {
+			return cached.exists;
+		}
+
+		var result = {};
+
+		for ( var attempt=0; attempt<=variables.retries; attempt++ ) {
+			_waitForRetry( attempt );
+			result = variables.httpClient.head( arguments.fileUrl, variables.timeout );
+
+			if ( !_isTemporaryFailure( result.status ) ) {
+				break;
+			}
+		}
+
+		if ( result.status >= 200 && result.status < 400 ) {
+			variables._existing[ arguments.fileUrl ] = { exists=true, time=Now() };
+			return true;
+		}
+
+		if ( result.status == 404 ) {
+			variables._existing[ arguments.fileUrl ] = { exists=false, time=Now() };
+			return false;
+		}
+
+		SystemOutput( "Maven extension file [#arguments.fileUrl#] could not be checked: #result.status# #result.error#", true );
+
+		return false;
 	}
 
 	private array function _normaliseRepos( required array repos ) {
