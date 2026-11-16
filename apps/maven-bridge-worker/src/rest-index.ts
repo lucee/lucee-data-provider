@@ -1,5 +1,5 @@
 // Port of the REST provider index loading of BridgeSupport.cfc (loadIndex and helpers).
-import { NoCaseMap, compare, isNumeric, urlEncodedFormat } from "./cfml";
+import { NoCaseMap, urlEncodedFormat } from "./cfml";
 import { BridgeError } from "./errors";
 
 export interface VersionEntry {
@@ -173,16 +173,5 @@ function resolveDownloadUrl(ext: Row, providerUrl: string): string {
 	return "";
 }
 
-export function versionSortKey(version: string): string {
-	let key = "";
-	for (const part of version.split(/[.-]/).filter((p) => p.length)) {
-		if (part.toLowerCase() === "snapshot") key += ".999999";
-		else if (isNumeric(part)) key += "." + String(Math.round(Number(part))).padStart(5, "0");
-		else key += "." + part;
-	}
-	return key;
-}
-
-export function sortVersions(versions: string[]): string[] {
-	return [...versions].sort((a, b) => compare(versionSortKey(a), versionSortKey(b)));
-}
+/** Maven version order (ComparableVersion), oldest first; see maven-version.ts */
+export { sortVersions } from "./maven-version";

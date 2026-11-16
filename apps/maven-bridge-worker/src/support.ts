@@ -317,7 +317,8 @@ export class BridgeSupport {
 	}
 
 	async buildArtifactIndexHtml(artifactId: string, versions?: string[]): Promise<string> {
-		const versionList = versions ?? (await this.listVersions(artifactId));
+		// upstream maven-metadata.xml lists versions in publish order (older writers appended), the listing is by version
+		const versionList = versions ? sortVersions(versions) : await this.listVersions(artifactId);
 		const title = `${encodeForHtml(this.groupId)}:${encodeForHtml(artifactId)}`;
 		const lines = ['<a href="maven-metadata.xml">maven-metadata.xml</a>\n'];
 		for (const v of versionList) lines.push(`<a href="${encodeForHtml(v)}/">${encodeForHtml(v)}/</a>\n`);
