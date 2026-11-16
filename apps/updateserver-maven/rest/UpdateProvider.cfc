@@ -481,7 +481,8 @@ component {
 			local.path=mr.getDependencies(version);
 		}
 		catch(e){
-			//return e;
+			systemOutput("dependencies/#version# failed: #e.message#", true);
+			logger(text="dependencies/#version#: #e.message#", exception=e, type="error");
 			return {"type":"error","message":"The version #version# is not available."};
 		}
 
@@ -506,6 +507,8 @@ component {
 			return mr.getOSGiDependencies(version,true);
 		}
 		catch(e){
+			systemOutput("dependencies-read/#version# failed: #e.message#", true);
+			logger(text="dependencies-read/#version#: #e.message#", exception=e, type="error");
 			return {"type":"error","message":"The version #version# is not available."};
 		}
 	}
