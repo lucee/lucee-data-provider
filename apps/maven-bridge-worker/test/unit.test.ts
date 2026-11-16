@@ -5,6 +5,7 @@ import { parseProviders, readConfig } from "../src/config";
 import type { Env } from "../src/env";
 import { isImmutableArtifact } from "../src/r2";
 import { buildIndex, sortVersions } from "../src/rest-index";
+import { compareVersions } from "../src/maven-version";
 import { normalizeRequestPath, r2KeyFor, r2KeysFor } from "../src/proxy";
 import {
 	SNAPSHOT_RULE_ID,
@@ -203,8 +204,8 @@ describe("ForgeBox ids and metadata", () => {
 		const s = restSupport();
 		const versions = await s.listVersions("ortus-mongodb-cache-extension");
 		expect(versions).toContain("1.1.2.3893");
-		// same key-based order as the CFML bridge: "-snapshot" sorts after the build number
-		expect(versions.slice(-2)).toEqual(["1.2.0.5291", "1.2.0-snapshot"]);
+		// Maven order: 1.2.0-SNAPSHOT is older than 1.2.0.5291 (the old key-based sort put "-snapshot" last)
+		expect(versions.slice(-2)).toEqual(["1.2.0-snapshot", "1.2.0.5291"]);
 		expect(await s.getDownloadUrl("ortus-mongodb-cache-extension", "1.1.2.3893")).toBe(
 			"https://www.forgebox.io/rest/extension/provider/full/6A03159F-C6DC-4FCC-95A068B1E1A903FA?version=1%2E1%2E2%2E3893"
 		);
@@ -246,7 +247,27 @@ describe("helpers", () => {
 		expect(urlEncodedFormat("1.0.0-SNAPSHOT")).toBe("1%2E0%2E0%2DSNAPSHOT");
 	});
 	it("sorts versions numerically", () => {
-		expect(sortVersions(["1.10.0", "1.2.0", "1.2.0-SNAPSHOT", "1.9.1"])).toEqual(["1.2.0", "1.2.0-SNAPSHOT", "1.9.1", "1.10.0"]);
+		expect(sortVersions(["1.10.0", "1.2.0", "1.2.0-SNAPSHOT", "1.9.1"])).toEqual(["1.2.0-SNAPSHOT", "1.2.0", "1.9.1", "1.10.0"]);
+	});
+	it("sorts versions like Maven ComparableVersion", () => {
+		const order = ["1.0-alpha", "1.0-beta", "1.0-milestone", "1.0-rc", "1.0-SNAPSHOT", "1.0", "1.0-sp"];
+		expect(sortVersions([...order].reverse())).toEqual(order);
+		expect(compareVersions("1.0-cr", "1.0-RC")).toBe(0);
+		expect(compareVersions("1.0-final", "1.0")).toBe(0);
+		expect(compareVersions("1.0-a1", "1.0-b1")).toBeLessThan(0);
+		expect(compareVersions("1.0-rc1", "1.0-rc2")).toBeLessThan(0);
+		expect(compareVersions("9.0.0.1435-ALPHA", "9.0.0.999-ALPHA")).toBeGreaterThan(0);
+		expect(compareVersions("1.0.123456", "1.0.99999")).toBeGreaterThan(0);
+		expect(compareVersions("7.1.3.0-SNAPSHOT", "7.1.2.191")).toBeGreaterThan(0);
+		expect(
+			sortVersions([
+				"5.0.0.252", "5.0.0.60-BETA", "5.2.2.71", "5.2.2.71-RC", "5.3.10.97", "5.3.2.77", "9.0.0.624-ALPHA",
+				"8.0.0.304", "7.1.2.191", "8.0.0.304-RC", "7.1.3.0-SNAPSHOT", "6.2.10.1-SNAPSHOT", "7.1.2.194-RC", "8.0.0.307-RC"
+			])
+		).toEqual([
+			"5.0.0.60-BETA", "5.0.0.252", "5.2.2.71-RC", "5.2.2.71", "5.3.2.77", "5.3.10.97", "6.2.10.1-SNAPSHOT",
+			"7.1.2.191", "7.1.2.194-RC", "7.1.3.0-SNAPSHOT", "8.0.0.304-RC", "8.0.0.304", "8.0.0.307-RC", "9.0.0.624-ALPHA"
+		]);
 	});
 	it("normalizes request paths", () => {
 		expect(normalizeRequestPath("//org//lucee/")).toBe("/org/lucee");

@@ -32,6 +32,24 @@ describe("upstream mirror (org.lucee)", () => {
 		expect(await res.text()).toBe(REDIS_METADATA);
 	});
 
+	it("lists an artifact's versions in Maven version order, not in the publish order of the upstream metadata", async () => {
+		const metadata = `<metadata><groupId>org.lucee</groupId><artifactId>lucee</artifactId><versioning><versions>
+      <version>5.0.0.252</version>
+      <version>5.0.0.60-BETA</version>
+      <version>8.0.0.304</version>
+      <version>7.1.3.0-SNAPSHOT</version>
+      <version>8.0.0.304-RC</version>
+      <version>7.1.2.194-RC</version>
+    </versions></versioning></metadata>`;
+		mockFetch({ ...baseRoutes(), [`${CDN}org/lucee/lucee/maven-metadata.xml`]: metadata });
+		const res = await call("/org/lucee/lucee/");
+		expect(res.status).toBe(200);
+		const listed = [...(await res.text()).matchAll(/<a href="(\d[^"]*)\/">/g)].map((m) => m[1]);
+		expect(listed).toEqual(["5.0.0.60-BETA", "5.0.0.252", "7.1.2.194-RC", "7.1.3.0-SNAPSHOT", "8.0.0.304-RC", "8.0.0.304"]);
+		// the metadata file itself is passed through as the upstream has it
+		expect(await (await call("/org/lucee/lucee/maven-metadata.xml")).text()).toBe(metadata);
+	});
+
 	it("caches group-level upstream files in KV", async () => {
 		mockFetch(baseRoutes());
 		await call("/org/lucee/maven-metadata.xml");
