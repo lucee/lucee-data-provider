@@ -31,9 +31,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			it( title="redirects to Central when the file is there", body=function() {
 				var world  = _newWorld();
 				var source = _newSource( world );
-				var url    = source.getFileUrl( "mail-extension", "1.1.0.17", [ releases, mixed ] );
+				var fileUrl = source.getFileUrl( "mail-extension", "1.1.0.17", [ releases, mixed ] );
 
-				expect( url ).toBe( releases & "org/lucee/mail-extension/1.1.0.17/mail-extension-1.1.0.17.lex" );
+				expect( fileUrl ).toBe( releases & "org/lucee/mail-extension/1.1.0.17/mail-extension-1.1.0.17.lex" );
 				expect( world.heads ).toInclude( releases & "org/lucee/mail-extension/1.1.0.17/mail-extension-1.1.0.17.lex" );
 				expect( world.heads ).notToInclude( mixed & "org/lucee/mail-extension/1.1.0.17/mail-extension-1.1.0.17.lex" );
 			});
@@ -45,9 +45,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				world.headStatus[ centralUrl ] = 404;
 
 				var source = _newSource( world );
-				var url    = source.getFileUrl( "hsqldb-jdbc-extension", "2.7.2.jdk8", [ releases, mixed ] );
+				var fileUrl = source.getFileUrl( "hsqldb-jdbc-extension", "2.7.2.jdk8", [ releases, mixed ] );
 
-				expect( url ).toBe( mixedUrl );
+				expect( fileUrl ).toBe( mixedUrl );
 				expect( world.heads ).toInclude( centralUrl );
 				expect( world.heads ).toInclude( mixedUrl );
 			});
