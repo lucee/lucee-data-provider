@@ -27,6 +27,11 @@ component accessors=true {
 	property name="retryDelay"     type="numeric" default=500;  // milliseconds, times the number of the retry
 	// something that does the http requests: .get( url ) and .download( url, file ), see _defaultHttpClient()
 	property name="httpClient"     type="any";
+	// a folder shared by the instances (Cloud Run: /download/provider/maven/), where the maven-metadata.xml reads and
+	// the HEAD results are kept, empty: in memory only
+	property name="cacheDir"       type="string"  default="";
+	// seconds a maven-metadata.xml read (or the HTML listing of a group) is used before it is read again, 0: always read
+	property name="metadataTtl"    type="numeric" default=0;
 
 	function init(
 		  array   releaseRepos    = []
@@ -41,6 +46,8 @@ component accessors=true {
 		, numeric retryDelay      = 500
 		, any     httpClient
 		, any     catalog
+		, string  cacheDir        = ""
+		, numeric metadataTtl     = 0
 	) {
 		variables.releaseRepos    = _normaliseRepos( arguments.releaseRepos );
 		variables.snapshotRepos   = _normaliseRepos( arguments.snapshotRepos );
@@ -65,6 +72,15 @@ component accessors=true {
 		variables._existsTtl      = 86400; // seconds, a file that is there stays there
 		variables._missingTtl     = 300;   // seconds, a missing file is only cached briefly
 		variables._lastVersions   = StructNew( "sync" ); // artifact metadata url > versions of the last good read of it
+		variables.metadataTtl     = Max( 0, Val( arguments.metadataTtl ) );
+		variables.cacheDir        = Trim( arguments.cacheDir );
+		if ( Len( variables.cacheDir ) && Right( variables.cacheDir, 1 ) != "/" ) {
+			variables.cacheDir &= "/";
+		}
+		variables._pages          = StructNew( "sync" ); // url > { status, content, time } of the metadata reads
+		variables._existingSaved  = 0;                   // GetTickCount() of the last write of the HEAD results
+		variables._existingDirty  = false;
+		_loadExisting();
 
 		return this;
 	}
@@ -268,7 +284,7 @@ component accessors=true {
 		var pages  = StructNew( "sync" );
 
 		ArrayEach( repos, function( repo, index ) {
-			pages[ index ] = _get( _groupUrl( arguments.repo, groupId ) );
+			pages[ index ] = _getMetadata( _groupUrl( arguments.repo, groupId ) );
 		}, true, variables.maxThreads );
 
 		var names = {};
@@ -357,6 +373,66 @@ component accessors=true {
 	}
 
 	/**
+	 * The repos of one version of an artifact, for a version asked for explicitly (/full/{id}?version=):
+	 * { found, repos }. A final that Maven Central's metadata lists is taken from there, lucee-services' metadata
+	 * is not read for it (it stays the download fallback, see getFileUrl). Anything else reads the metadata of
+	 * every repository, see listArtifactVersions(). Nothing else of the artifact is loaded.
+	 */
+	public struct function findVersion( required string artifact, required string version ) {
+		if ( _releaseTypeOf( arguments.version ) == "release" ) {
+			for ( var repo in variables.releaseRepos ) {
+				var page = _getMetadata( _artifactUrl( repo, arguments.artifact ) & "maven-metadata.xml" );
+
+				if ( page.status == 200 && _metadataHasVersion( page.content, arguments.version ) ) {
+					var repos = [ repo ];
+					for ( var other in _allRepos() ) {
+						if ( !ArrayFind( repos, other ) && _repoKind( other ) != "snapshots" ) {
+							ArrayAppend( repos, other );
+						}
+					}
+					return { found=true, repos=repos };
+				}
+			}
+		}
+
+		var listed = _listVersions( arguments.artifact );
+
+		if ( StructKeyExists( listed.versions, arguments.version ) ) {
+			return { found=true, repos=listed.versions[ arguments.version ] };
+		}
+
+		return { found=false, repos=[] };
+	}
+
+	/**
+	 * Writes the HEAD results to the shared cache folder when they changed (also done every 30s while they change).
+	 */
+	public void function saveState() {
+		if ( !Len( variables.cacheDir ) || !variables._existingDirty ) {
+			return;
+		}
+
+		var data = {};
+		var now  = Now();
+
+		for ( var fileUrl in variables._existing ) {
+			var entry = variables._existing[ fileUrl ] ?: "";
+
+			if ( IsStruct( entry ) && DateDiff( "s", entry.time, now ) < ( entry.exists ? variables._existsTtl : variables._missingTtl ) ) {
+				data[ fileUrl ] = { exists=entry.exists, time=DateTimeFormat( entry.time, "iso" ) };
+			}
+		}
+
+		try {
+			services.CacheDir::writeAtomic( variables.cacheDir & "maven-head.json", SerializeJson( data ) );
+			variables._existingDirty = false;
+			variables._existingSaved = GetTickCount();
+		} catch ( any e ) {
+			SystemOutput( "Maven HEAD results could not be written: #e.message#", true );
+		}
+	}
+
+	/**
 	 * Versions of one artifact, from the shared catalog (LuceeExtension) when
 	 * available, otherwise from each repository's maven-metadata.xml.
 	 */
@@ -386,12 +462,17 @@ component accessors=true {
 		for ( var repo in _allRepos() ) {
 			var kind = _repoKind( repo );
 			var metaUrl  = _artifactUrl( repo, arguments.artifact ) & "maven-metadata.xml";
-			var page = _get( metaUrl );
+			var page = _getMetadata( metaUrl );
 			var repoVersions = [];
 
 			if ( page.status == 404 ) {
 				StructDelete( variables._lastVersions, metaUrl );
 				continue; // the repo doesn't have the artifact
+			}
+
+			if ( page.status == 200 && ( page.stale ?: false ) ) {
+				// the repository could not be read now, this is the shared copy of an earlier read
+				result.complete = false;
 			}
 
 			if ( page.status == 200 ) {
@@ -442,6 +523,125 @@ component accessors=true {
 		return result;
 	}
 
+	private boolean function _metadataHasVersion( required string xml, required string version ) {
+		try {
+			for ( var node in XmlSearch( XmlParse( Trim( arguments.xml ) ), "/metadata/versioning/versions/version" ) ) {
+				if ( Trim( node.xmlText ) == arguments.version ) {
+					return true;
+				}
+			}
+		} catch ( any e ) {}
+
+		return false;
+	}
+
+	/**
+	 * A maven-metadata.xml (or group listing) read, shared for metadataTtl seconds: in memory, and with a cacheDir
+	 * in a file all the instances read, so they don't each ask every repository for every artifact. Only a 200 or a
+	 * 404 is kept. When the repository can not be read, the last 200 is returned (also after the TTL), with stale=true.
+	 */
+	private struct function _getMetadata( required string address ) {
+		var ttlMs = variables.metadataTtl * 1000;
+		var nowMs = Now().getTime();
+		var entry = variables._pages[ arguments.address ] ?: "";
+
+		if ( Len( variables.cacheDir ) && ( !IsStruct( entry ) || ( nowMs - entry.time ) >= ttlMs ) ) {
+			var shared = _readPage( arguments.address );
+			if ( IsStruct( shared ) && ( !IsStruct( entry ) || shared.time > entry.time ) ) {
+				entry = shared;
+			}
+		}
+
+		if ( IsStruct( entry ) && ttlMs > 0 && ( nowMs - entry.time ) < ttlMs ) {
+			variables._pages[ arguments.address ] = entry;
+			return { status=entry.status, content=entry.content, error="" };
+		}
+
+		var page = _get( arguments.address );
+
+		if ( page.status == 200 || page.status == 404 ) {
+			if ( ttlMs > 0 || Len( variables.cacheDir ) ) {
+				var fresh = { status=page.status, content=( page.status == 200 ? page.content : "" ), time=nowMs };
+				variables._pages[ arguments.address ] = fresh;
+				_writePage( arguments.address, fresh );
+			}
+			return page;
+		}
+
+		if ( IsStruct( entry ) && entry.status == 200 ) {
+			SystemOutput( "Maven metadata [#arguments.address#] could not be read (#page.status# #page.error#), the copy of #DateTimeFormat( DateAdd( 'l', entry.time - nowMs, Now() ), 'yyyy-mm-dd HH:nn:ss' )# is used", true );
+			return { status=200, content=entry.content, error="", stale=true };
+		}
+
+		return page;
+	}
+
+	private string function _pagePath( required string address ) {
+		return variables.cacheDir & "metadata/" & LCase( Hash( arguments.address, "MD5" ) ) & ".json";
+	}
+
+	private any function _readPage( required string address ) {
+		var path = _pagePath( arguments.address );
+
+		try {
+			if ( FileExists( path ) ) {
+				var entry = DeserializeJson( FileRead( path ) );
+				if ( IsStruct( entry ) && ( entry.url ?: "" ) == arguments.address && IsNumeric( entry.time ?: "" ) ) {
+					return { status=Val( entry.status ), content=entry.content ?: "", time=entry.time };
+				}
+			}
+		} catch ( any e ) {
+			SystemOutput( "Maven metadata cache [#path#] could not be read: #e.message#", true );
+		}
+
+		return "";
+	}
+
+	private void function _writePage( required string address, required struct entry ) {
+		if ( !Len( variables.cacheDir ) ) {
+			return;
+		}
+
+		try {
+			services.CacheDir::writeAtomic( _pagePath( arguments.address ), SerializeJson( {
+				  url     = arguments.address
+				, status  = arguments.entry.status
+				, content = arguments.entry.content
+				, time    = arguments.entry.time
+			} ) );
+		} catch ( any e ) {
+			SystemOutput( "Maven metadata cache for [#arguments.address#] could not be written: #e.message#", true );
+		}
+	}
+
+	// the HEAD results of an earlier instance, so a cold start does not HEAD every file again
+	private void function _loadExisting() {
+		if ( !Len( variables.cacheDir ) || !FileExists( variables.cacheDir & "maven-head.json" ) ) {
+			return;
+		}
+
+		try {
+			var data = DeserializeJson( FileRead( variables.cacheDir & "maven-head.json" ) );
+
+			for ( var fileUrl in data ) {
+				var entry = data[ fileUrl ];
+				if ( IsStruct( entry ) && IsBoolean( entry.exists ?: "" ) && IsDate( entry.time ?: "" ) ) {
+					variables._existing[ fileUrl ] = { exists=entry.exists, time=ParseDateTime( entry.time ) };
+				}
+			}
+		} catch ( any e ) {
+			SystemOutput( "Maven HEAD results could not be read: #e.message#", true );
+		}
+	}
+
+	private void function _existingChanged() {
+		variables._existingDirty = true;
+
+		if ( GetTickCount() - variables._existingSaved > 30000 ) {
+			saveState();
+		}
+	}
+
 	private array function _sortRepos( required array repos, required boolean snapshot ) {
 		var order = _allRepos( arguments.snapshot );
 		var sorted = [];
@@ -475,7 +675,7 @@ component accessors=true {
 			return cached.file;
 		}
 
-		var page = _get( metaUrl );
+		var page = _getMetadata( metaUrl );
 
 		if ( page.status == 404 ) {
 			return plain; // a repository that has no metadata for the version
@@ -582,11 +782,13 @@ component accessors=true {
 
 		if ( result.status >= 200 && result.status < 400 ) {
 			variables._existing[ arguments.fileUrl ] = { exists=true, time=Now() };
+			_existingChanged();
 			return true;
 		}
 
 		if ( result.status == 404 ) {
 			variables._existing[ arguments.fileUrl ] = { exists=false, time=Now() };
+			_existingChanged();
 			return false;
 		}
 

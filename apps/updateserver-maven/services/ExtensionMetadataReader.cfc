@@ -32,7 +32,7 @@ component accessors=true {
 	// LDEV-6789: what was found out about the maven files, kept in <s3root>/extensions-maven.json so it survives a restart
 	//   skipped:     maven files found to be known already (same id and version), not downloaded again
 	//   artifactIds: artifact > extension id, so known versions can be skipped without downloading the file
-	variables._mavenState        = { skipped={}, artifactIds={} };
+	variables._mavenState        = { skipped={}, artifactIds={}, versions={} };
 	variables._mavenStateLoaded  = false;
 	variables._mavenStateChanged = false;
 	variables._fetchBatchSize    = 20;
@@ -52,6 +52,10 @@ component accessors=true {
 	variables._metaRefreshStarted       = 0;
 	variables._metaRefreshMaxMs         = 900000; // a refresh that has not finished after this is not waited for any longer
 	variables._lockId                   = "ext-meta-" & CreateUUID();
+	// single flight: only one loadMeta() lists the repositories at a time, the others wait for its result
+	variables._loadInFlight             = false;
+	variables._loadStarted              = 0;
+	variables._lastListedAll            = false;
 
 	reset();
 
@@ -78,7 +82,42 @@ component accessors=true {
 		return Duplicate( variables._flatHits );
 	}
 
+	/**
+	 * (Re)builds the extension meta. Single flight: a call while another one runs (a cold start, the background
+	 * refresh, a flush and a version that is asked for, all at once) waits for that one and gets its result, rather
+	 * than listing every repository again.
+	 */
 	function loadMeta( query srcMeta ) {
+		if ( !IsNull( arguments.srcMeta ) ) {
+			return _loadMeta( arguments.srcMeta );
+		}
+
+		var leader = false;
+
+		lock name="#variables._lockId#-flight" type="exclusive" timeout=10 throwOnTimeout=false {
+			if ( !variables._loadInFlight || ( GetTickCount() - variables._loadStarted ) > variables._metaRefreshMaxMs ) {
+				variables._loadInFlight = true;
+				variables._loadStarted  = GetTickCount();
+				leader = true;
+			}
+		}
+
+		if ( !leader ) {
+			var deadline = GetTickCount() + variables._metaRefreshMaxMs;
+			while ( variables._loadInFlight && GetTickCount() < deadline ) {
+				sleep( 50 );
+			}
+			return variables.extensionMeta ?: _getEmptyExtensionsQuery();
+		}
+
+		try {
+			return _loadMeta();
+		} finally {
+			variables._loadInFlight = false;
+		}
+	}
+
+	private function _loadMeta( query srcMeta ) {
 		lock type="exclusive" name="readExtMeta" timeout=0 {
 			var meta           = isQuery( arguments.srcMeta ) ? arguments.srcMeta : _readExistingMetaFileFromS3();
 			_ensureColumns( meta );
@@ -146,6 +185,13 @@ component accessors=true {
 			setExtensionVersions( _createExtensionAndVersionMap() );
 			reset();
 			variables._metaLoadedAt = GetTickCount();
+			if ( IsObject( getMavenSource() ?: "" ) ) {
+				try {
+					getMavenSource().saveState();
+				} catch ( any e ) {
+					SystemOutput( "Maven source state could not be saved: #e.message#", true );
+				}
+			}
 			if ( !remoteFiles.complete && getMetaTtl() > 60 ) {
 				// part of the repositories could not be read: try again in a minute, not only after the full TTL
 				variables._metaLoadedAt -= ( getMetaTtl() - 60 ) * 1000;
@@ -491,11 +537,23 @@ component accessors=true {
 
 		try {
 			// Maven only: at startup only the latest (and release, if different) of each artifact, so a cold start does not download every historical .lex. list(all=true) and a specific version still fetch the rest on demand.
-			result = getMavenSource().listExtensions( latestOnly=getMavenOnly() && !variables._wantAllRemoteVersions );
-			variables._mavenVersions = result.versions ?: {};
+			var latestOnly = getMavenOnly() && !variables._wantAllRemoteVersions;
+			result = getMavenSource().listExtensions( latestOnly=latestOnly );
+			variables._lastListedAll = !latestOnly;
+			if ( !StructIsEmpty( result.versions ?: {} ) ) {
+				variables._mavenVersions = result.versions;
+				// kept with the maven state (see _saveMavenState), so a cold start that can't list the repositories
+				// still knows the versions
+				variables._mavenStateChanged = true;
+			}
 		} catch ( any e ) {
 			SystemOutput( "Error listing the maven repositories: #e.message#", true );
 			result = { files=[], complete=false };
+		}
+
+		if ( StructIsEmpty( variables._mavenVersions ) ) {
+			_loadMavenState( false );
+			variables._mavenVersions = variables._mavenState.versions ?: {};
 		}
 
 		if ( ArrayLen( variables._pendingRemoteFiles ) ) {
@@ -514,9 +572,18 @@ component accessors=true {
 		}
 		variables._wantAllRemoteVersions = true;
 		loadMeta();
+		if ( !variables._lastListedAll ) {
+			// that was a load that was running already (latest only), this one lists every version
+			loadMeta();
+		}
 		variables._allRemoteVersionsLoaded = true;
 	}
 
+	/**
+	 * A version that is asked for explicitly but not in the meta (Maven only lists the newest ones at startup):
+	 * only that version is looked up (see MavenExtensionSource.findVersion) and, when it is not known yet, its file
+	 * is read and added to the meta. The rest of the meta is left as it is, nothing else is listed or downloaded.
+	 */
 	private void function _ensureRemoteVersion( required string id, required string version ) {
 		if ( !Len( arguments.version ) || arguments.version == "latest" ) {
 			return;
@@ -525,17 +592,53 @@ component accessors=true {
 		if ( !Len( artifact ) || !IsObject( getMavenSource() ?: "" ) ) {
 			return;
 		}
-		var listed = getMavenSource().listArtifactVersions( artifact );
-		if ( !StructKeyExists( listed.versions ?: {}, arguments.version ) ) {
+		var found = getMavenSource().findVersion( artifact, arguments.version );
+		if ( !( found.found ?: false ) ) {
 			return;
 		}
-		ArrayAppend( variables._pendingRemoteFiles, {
-			  name     = artifact & "-" & arguments.version & ".lex"
-			, artifact = artifact
-			, version  = arguments.version
-			, repos    = listed.versions[ arguments.version ]
-		} );
-		loadMeta();
+
+		var name = artifact & "-" & arguments.version & ".lex";
+
+		lock type="exclusive" name="readExtMeta" timeout=120 {
+			var meta     = IsQuery( variables.extensionMeta ?: "" ) ? variables.extensionMeta : _getEmptyExtensionsQuery();
+			var fileName = "";
+
+			for ( var i=1; i<=QueryRecordCount( meta ); i++ ) {
+				if ( meta.filename[ i ] == name || ( meta.id[ i ] == arguments.id && meta.version[ i ] == arguments.version ) ) {
+					fileName = meta.filename[ i ];
+					break;
+				}
+			}
+
+			if ( !Len( fileName ) ) {
+				var fetched = _fetchLexFile(
+					  { name=name, artifact=artifact, version=arguments.version, source="repo", repos=found.repos }
+					, ListToArray( meta.columnList )
+				);
+
+				if ( StructKeyExists( fetched, "error" ) ) {
+					SystemOutput( "Error processing lex file: [#name#]: #fetched.error#", true );
+					return;
+				}
+				if ( fetched.extMeta.id != arguments.id || fetched.extMeta.version != arguments.version ) {
+					SystemOutput( "Extension file [#name#] is [#fetched.extMeta.id#] [#fetched.extMeta.version#], not [#arguments.id#] [#arguments.version#], ignoring it.", true );
+					_deleteTmpFile( fetched.tmpFile );
+					return;
+				}
+
+				_storeLexFile( meta, name, fetched );
+				QuerySort( meta, "id,versionSortable", "asc,desc" );
+				_writeMetaFileToS3( meta );
+				fileName = name;
+			}
+
+			variables._mavenRemote[ fileName ] = { artifact=artifact, version=arguments.version, repos=found.repos };
+
+			setExtensionMeta( meta );
+			_buildServed();
+			setExtensionVersions( _createExtensionAndVersionMap() );
+			reset();
+		}
 	}
 
 	private string function _artifactForId( required string id ) {
@@ -779,7 +882,7 @@ component accessors=true {
 	private function _loadMavenState( required boolean rebuild ) {
 		if ( arguments.rebuild ) {
 			// the extension meta is built from scratch, so is what we know about the files
-			variables._mavenState = { skipped={}, artifactIds={} };
+			variables._mavenState = { skipped={}, artifactIds={}, versions={} };
 			variables._mavenStateChanged = true;
 			variables._mavenStateLoaded  = true;
 		} else if ( !variables._mavenStateLoaded ) {
@@ -788,7 +891,7 @@ component accessors=true {
 			if ( FileExists( stateFile ) ) {
 				var state = DeserializeJson( FileRead( stateFile ), false );
 
-				variables._mavenState = { skipped=state.skipped ?: {}, artifactIds=state.artifactIds ?: {} };
+				variables._mavenState = { skipped=state.skipped ?: {}, artifactIds=state.artifactIds ?: {}, versions=state.versions ?: {} };
 			}
 			variables._mavenStateLoaded = true;
 		}
@@ -796,7 +899,10 @@ component accessors=true {
 
 	private function _saveMavenState() {
 		if ( variables._mavenStateChanged ) {
-			FileWrite( getS3Root() & "/extensions-maven.json", SerializeJson( variables._mavenState ) );
+			if ( !StructIsEmpty( variables._mavenVersions ) ) {
+				variables._mavenState.versions = variables._mavenVersions;
+			}
+			services.CacheDir::writeAtomic( getS3Root() & "/extensions-maven.json", SerializeJson( variables._mavenState ) );
 			variables._mavenStateChanged = false;
 		}
 	}
@@ -833,7 +939,8 @@ component accessors=true {
 	private function _writeMetaFileToS3( meta ) {
 		var metaFile = getS3Root() & "/extensions.json";
 
-		FileWrite( metaFile, SerializeJson( meta ) );
+		// atomic: the instances share the folder (Cloud Run: /download/provider/extensions/)
+		services.CacheDir::writeAtomic( metaFile, SerializeJson( meta ) );
 	}
 
 	private function _getEmptyExtensionsQuery() {

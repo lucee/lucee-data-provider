@@ -138,6 +138,96 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( reader.getDownloadUrl( "mail-extension-1.1.0.17.lex", "" ) ).toBe( releases & "org/lucee/mail-extension/1.1.0.17/mail-extension-1.1.0.17.lex" );
 			} );
 		} );
+
+		describe( "Load: what a request and a cold start ask the repositories for", function() {
+			it( "loads only the version that is asked for, without listing every artifact again", function() {
+				var world = _newWorld();
+				var reader = _newReader( world );
+				_addRepoVersion( world, "mail-extension", "1.0.0.1", mailId, mixed );
+				ArrayClear( world.requests );
+				ArrayClear( world.downloads );
+
+				var ext = reader.getExtensionDetail( id=mailId, version="1.0.0.1" );
+
+				expect( ext.version ).toBe( "1.0.0.1" );
+				expect( world.downloads ).toBe( [ mixed & "org/lucee/mail-extension/1.0.0.1/mail-extension-1.0.0.1.lex" ] );
+				expect( world.requests ).notToInclude( releases & "org/lucee/" ); // no group listing, no loadMeta
+				expect( _metadataReads( world ).filter( function( r ) { return !r.contains( "mail-extension" ); } ) ).toHaveLength( 0 );
+				expect( _row( reader.list( type="release" ), mailId ).version ).toBe( "1.1.0.17" );
+			} );
+
+			it( "does not read lucee-services metadata for a final Central lists", function() {
+				var world = _newWorld();
+				var found = _newSource( world ).findVersion( "mail-extension", "1.1.0.17" );
+
+				expect( found.found ).toBeTrue();
+				expect( found.repos[ 1 ] ).toBe( releases );
+				expect( found.repos ).toInclude( mixed ); // the download fallback
+				expect( world.requests ).toBe( [ releases & "org/lucee/mail-extension/maven-metadata.xml" ] );
+			} );
+
+			it( "shares maven-metadata.xml reads between instances through the cache folder, within the TTL", function() {
+				var dir = base & "shared-" & CreateUUID() & "/";
+				var first = _newWorld();
+				_newSource( first, dir, 300 ).listExtensions();
+				expect( _metadataReads( first ) ).notToBeEmpty();
+
+				var second = _newWorld();
+				_newSource( second, dir, 300 ).listExtensions();
+				expect( _metadataReads( second ) ).toHaveLength( 0 );
+			} );
+
+			it( "uses the shared copy of a maven-metadata.xml when the repository can not be read after the TTL", function() {
+				var dir = base & "stale-" & CreateUUID() & "/";
+				var world = _newWorld();
+				_addToMetadata( world, mixed, "mail-extension", "1.0.0.1" );
+				_newSource( world, dir, 1 ).listExtensions();
+				sleep( 1100 );
+
+				var later = _newWorld();
+				later.status[ mixed & "org/lucee/mail-extension/maven-metadata.xml" ] = 503;
+				var found = _newSource( later, dir, 1 ).listExtensions();
+
+				expect( found.versions[ "mail-extension" ] ).toHaveKey( "1.0.0.1" );
+				expect( found.complete ).toBeFalse();
+			} );
+
+			it( "keeps the HEAD results for the next instance", function() {
+				var dir = base & "head-" & CreateUUID() & "/";
+				var first = _newWorld();
+				var source = _newSource( first, dir, 300 );
+				expect( source.getFileUrl( "mail-extension", "1.1.0.17", [ releases, mixed ] ) ).notToBe( "" );
+				source.saveState();
+
+				var second = _newWorld();
+				expect( _newSource( second, dir, 300 ).getFileUrl( "mail-extension", "1.1.0.17", [ releases, mixed ] ) )
+					.toBe( releases & "org/lucee/mail-extension/1.1.0.17/mail-extension-1.1.0.17.lex" );
+				expect( second.heads ).toHaveLength( 0 );
+			} );
+
+			it( "runs one loadMeta at a time, the calls that come in meanwhile get its result", function() {
+				var world = _newWorld();
+				var reader = _newReader( world );
+				ArrayClear( world.requests );
+				reader.loadMeta();
+				var once = ArrayLen( world.requests );
+				ArrayClear( world.requests );
+				world.delay = 20;
+
+				var names = [];
+				for ( var i=1; i<=3; i++ ) {
+					var name = "single-flight-#i#-#CreateUUID()#";
+					ArrayAppend( names, name );
+					thread name=name r=reader {
+						attributes.r.loadMeta();
+					}
+				}
+				thread action="join" name=ArrayToList( names );
+				world.delay = 0;
+
+				expect( ArrayLen( world.requests ) ).toBeLT( once * 3 );
+			} );
+		} );
 	}
 
 	private struct function _row( required query rows, required string id ) {
@@ -217,14 +307,20 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 		return html & "</body></html>";
 	}
 
-	private any function _newSource( world ) {
+	private any function _newSource( world, string cacheDir="", numeric metadataTtl=0 ) {
 		return new services.MavenExtensionSource(
 			  releaseRepos  = [ releases ]
 			, snapshotRepos = [ snapshots ]
 			, mixedRepos    = [ mixed ]
 			, retryDelay    = 0
 			, httpClient    = _newClient( arguments.world )
+			, cacheDir      = arguments.cacheDir
+			, metadataTtl   = arguments.metadataTtl
 		);
+	}
+
+	private array function _metadataReads( world ) {
+		return arguments.world.requests.filter( function( r ) { return r.endsWith( "maven-metadata.xml" ); } );
 	}
 
 	private struct function _newClient( world ) {
@@ -233,6 +329,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 		return {
 			get = function( required string url, required numeric timeout ) {
 				ArrayAppend( world.requests, arguments.url );
+				if ( ( world.delay ?: 0 ) > 0 ) {
+					sleep( world.delay );
+				}
 				if ( ( world.failTimes[ arguments.url ] ?: 0 ) > 0 ) {
 					world.failTimes[ arguments.url ]--;
 					return { status=503, error="forced burst failure", content="" };

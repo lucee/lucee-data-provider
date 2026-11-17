@@ -136,7 +136,10 @@ component {
 			, mixedRepos      = _mavenRepos( env.EXTENSIONS_MAVEN_REPOS_MIXED     ?: env.LUCEE_MVN_REPO_MIXED     ?: "https://maven.lucee-services.com/" )
 			, timeout         = Val( env.EXTENSIONS_MAVEN_TIMEOUT          ?: 20  )
 			, downloadTimeout = Val( env.EXTENSIONS_MAVEN_DOWNLOAD_TIMEOUT ?: 120 )
-			, maxThreads      = Val( env.EXTENSIONS_MAVEN_THREADS          ?: 10  )
+			, maxThreads      = Val( env.EXTENSIONS_MAVEN_THREADS          ?: 4   )
+			// shared by the instances: maven-metadata.xml reads (MAVEN_METADATA_CACHE_SECONDS) and HEAD results
+			, cacheDir        = services.CacheDir::path( "maven", GetTempDirectory() & "lucee-update-cache/maven/" )
+			, metadataTtl     = Val( env.MAVEN_METADATA_CACHE_SECONDS      ?: 300 )
 		};
 	}
 
