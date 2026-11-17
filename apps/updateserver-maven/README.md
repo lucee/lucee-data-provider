@@ -81,6 +81,15 @@ copy is still served and a background thread refreshes it. A miss (or
 file + rename) so a shared Cloud Storage FUSE mount is not left with a
 half-written file.
 
+The extension listings are built from the extension meta, which is
+rebuilt in the background once it is older than
+`EXTENSIONS_META_CACHE_SECONDS` (default `LISTING_CACHE_SECONDS`): the
+listing cache's refresh brings it up to date first, so a refreshed
+listing has the versions published since. The maven-metadata.xml reads
+behind it are shared by the instances under `CACHE_DIR/maven/` for
+`MAVEN_METADATA_CACHE_SECONDS` (default 300), with the HEAD results of
+the download redirects (`maven-head.json`).
+
 Other on-disk caches also live under `CACHE_DIR`: `maven-index/`,
 `maven-detail/`, `maven-artifacts/`, `extensions/`, `jira/`.
 
@@ -261,7 +270,9 @@ Run defaults):
 | `EXTENSIONS_MAVEN_REPOS_MIXED` / `LUCEE_MVN_REPO_MIXED` | `https://maven.lucee-services.com/` |
 | `EXTENSIONS_MAVEN_TIMEOUT` | `20` |
 | `EXTENSIONS_MAVEN_DOWNLOAD_TIMEOUT` | `120` |
-| `EXTENSIONS_MAVEN_THREADS` | `10` |
+| `EXTENSIONS_MAVEN_THREADS` | `4` |
+| `EXTENSIONS_META_CACHE_SECONDS` | `LISTING_CACHE_SECONDS` (300). Age at which the extension meta is rebuilt in the background |
+| `MAVEN_METADATA_CACHE_SECONDS` | `300`. maven-metadata.xml reads shared under `CACHE_DIR/maven/` |
 | `EXTENSIONS_MAVEN_FETCH_THREADS` | `5` |
 | `EXTENSIONS_MAVEN_ONLY_MIN_CORE` | empty |
 | `EXTENSIONS_PACKAGING_BACKFILL_MAX` | `200` |

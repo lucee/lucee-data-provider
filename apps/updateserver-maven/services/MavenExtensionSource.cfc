@@ -154,10 +154,15 @@ component accessors=true {
 	/**
 	 * The url of the extension file of a version, in the first of the repos that actually has the file
 	 * (HEAD, cached: long for a hit, briefly for a miss). Release repos (Maven Central) are tried first
-	 * unless mixedFirst is set. Returns an empty string when none of the repos has the file.
+	 * unless mixedFirst is set, then the other repos of the given list. A version that the listing only
+	 * knows from one repository (because another one could not be read at the time) is still looked for in
+	 * the other configured repositories that can hold it (lucee-services last), so the answer is never a
+	 * redirect to a file that is not there: an empty string when none of them has it.
 	 */
 	public string function getFileUrl( required string artifact, required string version, required array repos, boolean mixedFirst=false ) {
-		for ( var repo in ( arguments.mixedFirst ? _mixedFirst( arguments.repos ) : arguments.repos ) ) {
+		var tried = {};
+
+		for ( var repo in _withFallbackRepos( arguments.mixedFirst ? _mixedFirst( arguments.repos ) : arguments.repos, arguments.version ) ) {
 			var fileName = _fileName( arguments.artifact, arguments.version, repo );
 
 			if ( !Len( fileName ) ) {
@@ -165,6 +170,11 @@ component accessors=true {
 			}
 
 			var fileUrl = _versionUrl( repo, arguments.artifact, arguments.version ) & fileName;
+
+			if ( StructKeyExists( tried, fileUrl ) ) {
+				continue;
+			}
+			tried[ fileUrl ] = true;
 
 			if ( _fileExists( fileUrl ) ) {
 				return fileUrl;
@@ -181,7 +191,7 @@ component accessors=true {
 	public void function download( required string artifact, required string version, required array repos, required string target ) {
 		var errors = [];
 
-		for ( var repo in arguments.repos ) {
+		for ( var repo in _withFallbackRepos( arguments.repos, arguments.version ) ) {
 			var fileName = _fileName( arguments.artifact, arguments.version, repo );
 
 			if ( !Len( fileName ) ) {
@@ -207,6 +217,24 @@ component accessors=true {
 	}
 
 // PRIVATE HELPERS
+
+	// the given repos, then the other configured ones that can hold the version (no snapshot repo for a final, no
+	// release repo for a snapshot), the mixed ones (lucee-services) last
+	private array function _withFallbackRepos( required array repos, required string version ) {
+		var result   = Duplicate( arguments.repos );
+		var snapshot = isSnapshot( arguments.version );
+
+		for ( var repo in _allRepos( snapshot ) ) {
+			var kind = _repoKind( repo );
+
+			if ( ArrayFind( result, repo ) || ( snapshot && kind == "releases" ) || ( !snapshot && kind == "snapshots" ) ) {
+				continue;
+			}
+			ArrayAppend( result, repo );
+		}
+
+		return result;
+	}
 
 	// the repos, the mixed ones (the Maven bridge) first
 	private array function _mixedFirst( required array repos ) {

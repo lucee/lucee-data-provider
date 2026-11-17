@@ -139,6 +139,8 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			} );
 		} );
 
+		_downloadFallbackSpecs();
+
 		describe( "Load: what a request and a cold start ask the repositories for", function() {
 			it( "loads only the version that is asked for, without listing every artifact again", function() {
 				var world = _newWorld();
@@ -226,6 +228,39 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				world.delay = 0;
 
 				expect( ArrayLen( world.requests ) ).toBeLT( once * 3 );
+			} );
+		} );
+	}
+
+	private function _downloadFallbackSpecs() {
+		describe( "Downloads only redirect to a file that is there", function() {
+			it( "falls back to lucee-services for a version the listing only had from Central (Ajax 1.0.0.5)", function() {
+				var world = _newWorld();
+				var centralUrl = releases & "org/lucee/ajax-extension/1.0.0.5/ajax-extension-1.0.0.5.lex";
+				var mixedUrl   = mixed    & "org/lucee/ajax-extension/1.0.0.5/ajax-extension-1.0.0.5.lex";
+				world.headStatus[ centralUrl ] = 404;
+				world.files[ mixedUrl ] = "x";
+
+				expect( _newSource( world ).getFileUrl( "ajax-extension", "1.0.0.5", [ releases ] ) ).toBe( mixedUrl );
+				expect( world.heads ).toBe( [ centralUrl, mixedUrl ] );
+			} );
+
+			it( "never answers with a url nobody has, and does not look in the snapshot repository for a final", function() {
+				var world = _newWorld();
+				var centralUrl = releases & "org/lucee/ajax-extension/1.0.0.5/ajax-extension-1.0.0.5.lex";
+
+				expect( _newSource( world ).getFileUrl( "ajax-extension", "1.0.0.5", [ releases ] ) ).toBe( "" );
+				expect( world.heads ).toBe( [ centralUrl, mixed & "org/lucee/ajax-extension/1.0.0.5/ajax-extension-1.0.0.5.lex" ] );
+			} );
+
+			it( "a /full/ download of a listed version that Central does not have goes to lucee-services", function() {
+				var world = _newWorld();
+				var reader = _newReader( world );
+				var centralUrl = releases & "org/lucee/mail-extension/1.1.0.17/mail-extension-1.1.0.17.lex";
+				world.headStatus[ centralUrl ] = 404;
+
+				expect( reader.getDownloadUrl( "mail-extension-1.1.0.17.lex", "" ) )
+					.toBe( mixed & "org/lucee/mail-extension/1.1.0.17/mail-extension-1.1.0.17.lex" );
 			} );
 		} );
 	}
