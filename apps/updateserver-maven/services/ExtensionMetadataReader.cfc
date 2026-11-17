@@ -408,42 +408,78 @@ component accessors=true {
 		var exts = _mapExtensionQueryByFilename( getExtensionMeta() );
 
 		if ( arguments.bundleVersion == "latest" ) {
-			var allMatches = [];
-			for ( var lexFile in exts ) {
-				if ( lexFile.startsWith( arguments.bundleName & "-" ) ) {
-					return lexFile;
-				}
-				if ( lexFile.startsWith( Replace( arguments.bundleName, '-', '.', 'all' ) & "-" ) ) {
-					return lexFile;
-				}
-				if ( lexFile.startsWith( Replace( arguments.bundleName, '.', '-', 'all' ) & "-" ) ) {
-					return lexFile;
-				}
-				if ( lexFile.startsWith( Replace( arguments.bundleName, '-', '.', 'all' ) & "." ) ) {
-					return lexFile;
+			for ( var prefix in _bundleLexNamePrefixes( arguments.bundleName ) ) {
+				for ( var lexFile in exts ) {
+					if ( lexFile.startsWith( prefix & "-" ) || lexFile.startsWith( prefix & "." ) ) {
+						return lexFile;
+					}
 				}
 			}
 			return "";
 		}
 
-		var tries = [
-		      arguments.bundleName & "-" & arguments.bundleVersion & ".lex"
-			, Replace( arguments.bundleName,'.','-','all' ) & "-" & arguments.bundleVersion & ".lex"
-			, arguments.bundleName & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex"
-			, Replace( arguments.bundleName, '.', '-', 'all' ) & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex"
-			, Replace( arguments.bundleName, '.', '-', 'all' ) & "-" & Replace( arguments.bundleVersion,'-','.','all') & ".lex"
-			, Replace( arguments.bundleName, '-', '.', 'all' ) & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex"
-			, Replace( arguments.bundleName, '-', '.', 'all' ) & "-" & Replace( arguments.bundleVersion,'-','.','all') & ".lex"
-			, Replace( arguments.bundleName, '-', '.', 'all' ) & "." & Replace( arguments.bundleVersion,'-','.','all') & ".lex"
-		];
-
-		for( var name in tries ) {
+		for ( var name in extensionFileNamesForBundle( arguments.bundleName, arguments.bundleVersion ) ) {
 			if ( StructKeyExists( exts, name ) ) {
 				return name;
 			}
 		}
 
 		return "";
+	}
+
+	/**
+	 * Filenames to try when an OSGi bundle name should match an extension .lex.
+	 * org.lucee.chart.extension / 2.0.0.1 also tries chart-extension-2.0.0.1.lex.
+	 */
+	public array function extensionFileNamesForBundle( required string bundleName, required string bundleVersion ) {
+		var names = [];
+		var seen  = {};
+		var versions = [
+			  arguments.bundleVersion
+			, Replace( arguments.bundleVersion, ".", "-", "all" )
+			, Replace( arguments.bundleVersion, "-", ".", "all" )
+		];
+
+		for ( var prefix in _bundleLexNamePrefixes( arguments.bundleName ) ) {
+			for ( var version in versions ) {
+				for ( var sep in [ "-", "." ] ) {
+					var name = prefix & sep & version & ".lex";
+					if ( !StructKeyExists( seen, name ) ) {
+						seen[ name ] = true;
+						ArrayAppend( names, name );
+					}
+				}
+			}
+		}
+
+		return names;
+	}
+
+	private array function _bundleLexNamePrefixes( required string bundleName ) {
+		var prefixes = [
+			  arguments.bundleName
+			, Replace( arguments.bundleName, ".", "-", "all" )
+			, Replace( arguments.bundleName, "-", ".", "all" )
+		];
+
+		// org.lucee.chart.extension -> chart-extension (the Maven artifact / lex filename)
+		if ( Left( arguments.bundleName, 10 ) == "org.lucee." ) {
+			var shortName = Mid( arguments.bundleName, 11 );
+			ArrayAppend( prefixes, shortName );
+			ArrayAppend( prefixes, Replace( shortName, ".", "-", "all" ) );
+			ArrayAppend( prefixes, Replace( shortName, "-", ".", "all" ) );
+		}
+
+		var out  = [];
+		var seen = {};
+		for ( var prefix in prefixes ) {
+			if ( Len( prefix ) && !StructKeyExists( seen, prefix ) ) {
+				seen[ prefix ] = true;
+				ArrayAppend( out, prefix );
+			}
+		}
+
+		return out;
 	}
 
 // PRIVATE HELPERS
