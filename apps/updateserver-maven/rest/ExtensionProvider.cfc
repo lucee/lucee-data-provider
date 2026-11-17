@@ -37,19 +37,16 @@ component {
 	}
 
 	private any function _cachedListing( required string key, required any producer, boolean flush=false ) {
-		var cache = application.listingCache;
-
-		if ( !arguments.flush && !_servicesReady() ) {
-			var hit = cache.peek( arguments.key );
-			if ( !IsSimpleValue( hit ) || Len( hit ) ) {
-				return hit;
-			}
-			_ensureServices();
-		} else {
-			_ensureServices();
-		}
-
-		return cache.get( arguments.key, arguments.producer, arguments.flush );
+		// Wait for services, then serve or rebuild this revision's listing.
+		// Do not peek() a previous revision's JSON while startup is still running.
+		// /healthcheck/ is a separate application and does not go through this method.
+		return services.ListingCache::getWhenReady(
+			  cache       = application.listingCache
+			, key         = arguments.key
+			, producer    = arguments.producer
+			, ensureReady = function() { _ensureServices(); }
+			, flush       = arguments.flush
+		);
 	}
 
 	private void function _artifactNotFound( required string type, string version="", string qualifier="", string id="" ) {

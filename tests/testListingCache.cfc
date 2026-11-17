@@ -106,6 +106,106 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			});
 
 		});
+
+		describe( "ListingCache: revision generation and startup", function() {
+
+			it( title="processGeneration uses K_REVISION when set, otherwise reuses or creates a boot id", body=function() {
+				expect( services.ListingCache::processGeneration( revision="lucee-update-00026-gpd" ) ).toBe( "lucee-update-00026-gpd" );
+				expect( services.ListingCache::processGeneration( revision="", existing="boot-abc" ) ).toBe( "boot-abc" );
+				// a bare boot id is unique and stable only when existing is passed back in
+				var first  = services.ListingCache::processGeneration();
+				var second = services.ListingCache::processGeneration( existing=first );
+				expect( first ).toInclude( "boot-" );
+				expect( second ).toBe( first );
+				expect( services.ListingCache::processGeneration() ).notToBe( first );
+			});
+
+			it( title="a generation writes under a subdirectory and does not see another generation's listings", body=function() {
+				var root = variables.work & "gens/";
+				var prev = new services.ListingCache( cacheDir=root, ttlSeconds=300, generation="lucee-update-00025-abc" );
+				prev.put( "extension-info-all-nologo", { n="old-revision" } );
+
+				var next = new services.ListingCache( cacheDir=root, ttlSeconds=300, generation="lucee-update-00026-gpd" );
+
+				expect( next.getGeneration() ).toBe( "lucee-update-00026-gpd" );
+				expect( next.getCacheDir() ).toInclude( "lucee-update-00026-gpd" );
+				expect( next.getRootDir() ).toBe( prev.getRootDir() );
+				expect( next.has( "extension-info-all-nologo" ) ).toBeFalse();
+				expect( FileExists( prev.pathFor( "extension-info-all-nologo" ) ) ).toBeTrue();
+
+				var produced = { n=0 };
+				var served = next.get( "extension-info-all-nologo", function() {
+					produced.n++;
+					return { n="new-revision" };
+				} );
+
+				expect( produced.n ).toBe( 1 );
+				expect( served.n ).toBe( "new-revision" );
+				expect( prev.peek( "extension-info-all-nologo" ).n ).toBe( "old-revision" );
+			});
+
+			it( title="clearLegacyRoot removes flat listings/*.json and leaves generation subdirectories alone", body=function() {
+				var root = variables.work & "legacy/";
+				DirectoryCreate( root, true );
+				FileWrite( root & "extension-info-release-nologo.json", SerializeJSON( { cachedAt=Now(), data={ n="legacy" } } ) );
+				FileWrite( root & "extension-info-all-nologo.json", SerializeJSON( { cachedAt=Now(), data={ n="legacy-all" } } ) );
+
+				var prev = new services.ListingCache( cacheDir=root, ttlSeconds=300, generation="lucee-update-00025-abc" );
+				prev.put( "extension-info-all-nologo", { n="keep-me" } );
+
+				var next = new services.ListingCache( cacheDir=root, ttlSeconds=300, generation="lucee-update-00026-gpd" );
+				expect( next.clearLegacyRoot() ).toBe( 2 );
+
+				expect( FileExists( root & "extension-info-release-nologo.json" ) ).toBeFalse();
+				expect( FileExists( root & "extension-info-all-nologo.json" ) ).toBeFalse();
+				expect( prev.peek( "extension-info-all-nologo" ).n ).toBe( "keep-me" );
+			});
+
+			it( title="clearLegacyRoot is a no-op when the cache has no generation", body=function() {
+				var cache = new services.ListingCache( cacheDir=variables.work & "nogen/", ttlSeconds=300 );
+				cache.put( "list", { a=1 } );
+
+				expect( cache.getGeneration() ).toBe( "" );
+				expect( cache.clearLegacyRoot() ).toBe( 0 );
+				expect( cache.peek( "list" ).a ).toBe( 1 );
+			});
+
+			it( title="getWhenReady always waits for services and does not return a peeked hit if they are not ready", body=function() {
+				var cache = new services.ListingCache( cacheDir=variables.work & "ready/", ttlSeconds=300 );
+				cache.put( "extension-info-all-nologo", { n="pre-boot" } );
+
+				var readyCalls = { n=0 };
+				expect( function() {
+					services.ListingCache::getWhenReady(
+						  cache       = cache
+						, key         = "extension-info-all-nologo"
+						, producer    = function() { return { n="rebuilt" }; }
+						, ensureReady = function() {
+							readyCalls.n++;
+							throw( message="Maven provider services are still starting, try again in a moment" );
+						}
+					);
+				} ).toThrow();
+
+				expect( readyCalls.n ).toBe( 1 );
+				expect( cache.peek( "extension-info-all-nologo" ).n ).toBe( "pre-boot" );
+			});
+
+			it( title="getWhenReady calls ensureReady first and then serves or rebuilds the listing", body=function() {
+				var cache = new services.ListingCache( cacheDir=variables.work & "rebuild/", ttlSeconds=300 );
+				var readyCalls = { n=0 };
+				var served = services.ListingCache::getWhenReady(
+					  cache       = cache
+					, key         = "extension-info-release-nologo"
+					, producer    = function() { return { n="built-after-ready" }; }
+					, ensureReady = function() { readyCalls.n++; }
+				);
+
+				expect( readyCalls.n ).toBe( 1 );
+				expect( served.n ).toBe( "built-after-ready" );
+			});
+
+		});
 	}
 
 }

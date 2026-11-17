@@ -8,14 +8,22 @@
  * A background refresh that has not finished after maxRefreshSeconds (a thread
  * that died or hangs) no longer blocks the next one, so a key cannot stay stale
  * for good. A producer that throws leaves the cached copy as it is.
+ *
+ * When a generation is set (Cloud Run K_REVISION, or a per-process boot id),
+ * files are stored under listings/{generation}/ so a new revision never
+ * serves another revision's JSON. clearLegacyRoot() removes leftover
+ * listings/*.json from the pre-generation layout.
  */
 component {
 
-	public function init( required string cacheDir, numeric ttlSeconds=300, numeric maxRefreshSeconds=900 ) {
-		variables.cacheDir = arguments.cacheDir;
-		if ( Right( variables.cacheDir, 1 ) != "/" ) {
-			variables.cacheDir &= "/";
+	public function init( required string cacheDir, numeric ttlSeconds=300, numeric maxRefreshSeconds=900, string generation="" ) {
+		variables.rootDir = arguments.cacheDir;
+		if ( Right( variables.rootDir, 1 ) != "/" ) {
+			variables.rootDir &= "/";
 		}
+		var gen = Trim( arguments.generation );
+		variables.generation = Len( gen ) ? _safeKey( gen ) : "";
+		variables.cacheDir = Len( variables.generation ) ? variables.rootDir & variables.generation & "/" : variables.rootDir;
 		if ( !DirectoryExists( variables.cacheDir ) ) {
 			DirectoryCreate( variables.cacheDir, true );
 		}
@@ -26,12 +34,83 @@ component {
 		return this;
 	}
 
+	/**
+	 * Cloud Run K_REVISION when set, otherwise the existing boot id, otherwise a new boot-{uuid}.
+	 * A new process without K_REVISION never reuses another process's listing files.
+	 */
+	public static string function processGeneration( string revision="", string existing="" ) {
+		var rev = Trim( arguments.revision );
+		if ( Len( rev ) ) {
+			return rev;
+		}
+		var prev = Trim( arguments.existing );
+		if ( Len( prev ) ) {
+			return prev;
+		}
+
+		return "boot-" & Replace( CreateUUID(), "-", "", "all" );
+	}
+
+	/**
+	 * Wait until services are ready, then read or rebuild the listing.
+	 * Never peek a cached copy first: a previous revision's JSON (or this
+	 * revision's still-starting catalog) must not be returned while startup runs.
+	 * /healthcheck/ is a separate application and must not call this.
+	 */
+	public static any function getWhenReady(
+		  required any     cache
+		, required string  key
+		, required any     producer
+		, required any     ensureReady
+		,          boolean flush = false
+	) {
+		arguments.ensureReady();
+
+		return arguments.cache.get( arguments.key, arguments.producer, arguments.flush );
+	}
+
 	public numeric function getTtlSeconds() {
 		return variables.ttlSeconds;
 	}
 
 	public string function getCacheDir() {
 		return variables.cacheDir;
+	}
+
+	public string function getRootDir() {
+		return variables.rootDir;
+	}
+
+	public string function getGeneration() {
+		return variables.generation;
+	}
+
+	/**
+	 * Remove listings/*.json left by the pre-generation layout. Generation
+	 * subdirectories (including this revision and any overlapping old revision)
+	 * are left alone so a rolling deploy does not wipe a still-serving revision.
+	 * No-op when this cache writes at the root (no generation).
+	 */
+	public numeric function clearLegacyRoot() {
+		if ( !Len( variables.generation ) || !DirectoryExists( variables.rootDir ) ) {
+			return 0;
+		}
+
+		var removed = 0;
+		for ( var name in DirectoryList( variables.rootDir, false, "name", "*.json" ) ) {
+			var path = variables.rootDir & name;
+			if ( !FileExists( path ) ) {
+				continue;
+			}
+			try {
+				FileDelete( path );
+				removed++;
+			} catch ( any e ) {
+				SystemOutput( "Listing cache could not remove legacy file [#path#]: #e.message#", true );
+			}
+		}
+
+		return removed;
 	}
 
 	public string function pathFor( required string key ) {

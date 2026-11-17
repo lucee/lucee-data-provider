@@ -82,10 +82,24 @@ component {
 			seconds = 300;
 		}
 
-		return new services.ListingCache(
-			  cacheDir   = services.CacheDir::path( "listings", GetTempDirectory() & "lucee-update-cache/listings/" )
-			, ttlSeconds = seconds
+		// Cloud Run: isolate by K_REVISION so a new revision never serves the previous
+		// revision's listings/*.json. Elsewhere: a per-process boot id, reused for
+		// the life of this application scope.
+		var generation = services.ListingCache::processGeneration(
+			  revision = server.system.environment.K_REVISION ?: ""
+			, existing = application.listingCacheGeneration ?: ""
 		);
+		application.listingCacheGeneration = generation;
+
+		var cache = new services.ListingCache(
+			  cacheDir    = services.CacheDir::path( "listings", GetTempDirectory() & "lucee-update-cache/listings/" )
+			, ttlSeconds  = seconds
+			, generation  = generation
+		);
+		// drop leftover extension-info-*.json from the pre-generation layout
+		cache.clearLegacyRoot();
+
+		return cache;
 	}
 
 	// seconds the extension meta (Maven listing) is used before it is rebuilt in the background, see ExtensionMetadataReader

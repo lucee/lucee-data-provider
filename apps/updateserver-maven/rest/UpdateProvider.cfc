@@ -4,8 +4,9 @@
  */
 component {
 
-	// Maven-only Cloud Run app: services are loaded in a background thread and
-	// bound lazily so a request can be served from the listing cache first.
+	// Maven-only Cloud Run app: services are loaded in a background thread.
+	// List/info requests wait for readiness, then use this revision's listing cache.
+	// /healthcheck/ is a separate application and returns immediately.
 	variables.mavenOnly   = true;
 	variables.providerLog = "update-provider";
 	variables.bound       = false;
@@ -57,19 +58,16 @@ component {
 	}
 
 	private any function _cachedListing( required string key, required any producer, boolean flush=false ) {
-		var cache = application.listingCache;
-
-		if ( !arguments.flush && !_servicesReady() ) {
-			var hit = cache.peek( arguments.key );
-			if ( !IsSimpleValue( hit ) || Len( hit ) ) {
-				return hit;
-			}
-			_ensureServices();
-		} else {
-			_ensureServices();
-		}
-
-		return cache.get( arguments.key, arguments.producer, arguments.flush );
+		// Wait for services, then serve or rebuild this revision's listing.
+		// Do not peek() a previous revision's JSON while startup is still running.
+		// /healthcheck/ is a separate application and does not go through this method.
+		return services.ListingCache::getWhenReady(
+			  cache       = application.listingCache
+			, key         = arguments.key
+			, producer    = arguments.producer
+			, ensureReady = function() { _ensureServices(); }
+			, flush       = arguments.flush
+		);
 	}
 
 	private void function _artifactNotFound( required string type, string version="", string qualifier="", string id="" ) {
