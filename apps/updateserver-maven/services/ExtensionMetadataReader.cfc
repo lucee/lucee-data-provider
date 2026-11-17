@@ -285,10 +285,6 @@ component accessors=true {
 
 			var extensions = Duplicate( _getServed() );
 
-			if ( len( arguments.coreVersion ) ) {
-				extensions = _filterByCoreVersion( extensions, arguments.coreVersion );
-			}
-
 			// LDEV-6789: filter by release type first, so the version an extension is listed with is the newest one of
 			// that type (the newest final for "release"), and its older versions are of that type too
 			if ( arguments.type != "all" ) {
@@ -306,14 +302,21 @@ component accessors=true {
 					if ( row1.versionSortable < row2.versionSortable ) return 1;
 					return 0;
 				} );
+				_fillOlderFromMavenVersions( extensions, arguments.type );
+			}
+
+			// After older versions are attached (and only then): keep a row
+			// when an older version fits the core, even if the latest does not.
+			if ( len( arguments.coreVersion ) ) {
+				if ( arguments.all ) {
+					extensions = _filterByCoreVersion( extensions, arguments.coreVersion );
+				} else {
+					extensions = filterCollapsedByCoreVersion( extensions, arguments.coreVersion );
+				}
 			}
 
 			if ( !arguments.withLogo ) {
 				_stripExtensionLogos( extensions );
-			}
-
-			if ( !arguments.all ) {
-				_fillOlderFromMavenVersions( extensions, arguments.type );
 			}
 
 			variables._simpleCache[ cacheKey ] = extensions;
@@ -1533,15 +1536,22 @@ component accessors=true {
 				return Compare( services.VersionUtils::sortableVersionString( b ), services.VersionUtils::sortableVersionString( a ) );
 			} );
 
+			var cores = ( ListFindNoCase( QueryColumnList( arguments.extensions ), "coreVersion" ) && IsArray( arguments.extensions.coreVersion[ i ] ) )
+				? Duplicate( arguments.extensions.coreVersion[ i ] ) : [];
+
 			for ( var version in extra ) {
 				ArrayAppend( older, version );
 				ArrayAppend( names, artifact & "-" & version & ".lex" );
 				ArrayAppend( dates, "" );
+				ArrayAppend( cores, "" );
 			}
 
 			arguments.extensions.older    [ i ] = older;
 			arguments.extensions.olderName[ i ] = names;
 			arguments.extensions.olderDate[ i ] = dates;
+			if ( ListFindNoCase( QueryColumnList( arguments.extensions ), "coreVersion" ) ) {
+				arguments.extensions.coreVersion[ i ] = cores;
+			}
 		}
 	}
 
@@ -1639,6 +1649,86 @@ component accessors=true {
 		}
 
 		return changed;
+	}
+
+	/**
+	 * For a collapsed listing (latest + older[]), keep the row when any
+	 * version fits the running core. If the latest does not fit, promote
+	 * the newest older version that does. Used by list() when all=false.
+	 */
+	public query function filterCollapsedByCoreVersion( required query extensions, required string coreVersion ) {
+		for ( var i=QueryRecordCount( arguments.extensions ); i>=1; i-- ) {
+			var chosen = _versionsFittingCore( arguments.extensions, i, arguments.coreVersion );
+			if ( !ArrayLen( chosen ) ) {
+				QueryDeleteRow( arguments.extensions, i );
+				continue;
+			}
+
+			var current = chosen[ 1 ];
+			if ( current.version != arguments.extensions.version[ i ] ) {
+				arguments.extensions.version        [ i ] = current.version;
+				arguments.extensions.filename       [ i ] = current.filename;
+				arguments.extensions.minCoreVersion [ i ] = current.minCore;
+				if ( ListFindNoCase( QueryColumnList( arguments.extensions ), "created" ) ) {
+					arguments.extensions.created[ i ] = current.created;
+				}
+				if ( ListFindNoCase( QueryColumnList( arguments.extensions ), "versionSortable" ) ) {
+					arguments.extensions.versionSortable[ i ] = services.VersionUtils::sortableVersionString( current.version );
+				}
+			}
+
+			var older     = [];
+			var olderName = [];
+			var olderDate = [];
+			var cores     = [];
+			for ( var j=2; j<=ArrayLen( chosen ); j++ ) {
+				ArrayAppend( older,     chosen[ j ].version );
+				ArrayAppend( olderName, chosen[ j ].filename );
+				ArrayAppend( olderDate, chosen[ j ].created );
+				ArrayAppend( cores,     chosen[ j ].minCore );
+			}
+			arguments.extensions.older    [ i ] = older;
+			arguments.extensions.olderName[ i ] = olderName;
+			arguments.extensions.olderDate[ i ] = olderDate;
+			if ( ListFindNoCase( QueryColumnList( arguments.extensions ), "coreVersion" ) ) {
+				arguments.extensions.coreVersion[ i ] = cores;
+			}
+		}
+
+		return arguments.extensions;
+	}
+
+	private array function _versionsFittingCore( required query extensions, required numeric row, required string coreVersion ) {
+		var fits = [];
+		var i    = arguments.row;
+		if ( _fitsCoreVersion( arguments.extensions.minCoreVersion[ i ], arguments.coreVersion ) ) {
+			ArrayAppend( fits, {
+				  version  = arguments.extensions.version[ i ]
+				, filename = arguments.extensions.filename[ i ]
+				, minCore  = arguments.extensions.minCoreVersion[ i ]
+				, created  = ListFindNoCase( QueryColumnList( arguments.extensions ), "created" ) ? arguments.extensions.created[ i ] : ""
+			} );
+		}
+
+		var older   = IsArray( arguments.extensions.older[ i ] ) ? arguments.extensions.older[ i ] : [];
+		var names   = IsArray( arguments.extensions.olderName[ i ] ) ? arguments.extensions.olderName[ i ] : [];
+		var dates   = IsArray( arguments.extensions.olderDate[ i ] ) ? arguments.extensions.olderDate[ i ] : [];
+		var cores   = ( ListFindNoCase( QueryColumnList( arguments.extensions ), "coreVersion" ) && IsArray( arguments.extensions.coreVersion[ i ] ) )
+			? arguments.extensions.coreVersion[ i ] : [];
+
+		for ( var j=1; j<=ArrayLen( older ); j++ ) {
+			var minCore = ArrayLen( cores ) >= j ? cores[ j ] : "";
+			if ( _fitsCoreVersion( minCore, arguments.coreVersion ) ) {
+				ArrayAppend( fits, {
+					  version  = older[ j ]
+					, filename = ArrayLen( names ) >= j ? names[ j ] : ""
+					, minCore  = minCore
+					, created  = ArrayLen( dates ) >= j ? dates[ j ] : ""
+				} );
+			}
+		}
+
+		return fits;
 	}
 
 	private function _filterByCoreVersion( required query extensions, required string coreVersion ) {
