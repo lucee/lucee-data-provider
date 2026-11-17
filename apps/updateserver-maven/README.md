@@ -68,11 +68,19 @@ collide with download8's `{key}.json` files in the shared folder.
 ## Listing cache
 
 List and info responses are stored as JSON files under
-`CACHE_DIR/listings/` (on Cloud Run, `/download/provider/listings/`):
+`CACHE_DIR/listings/{generation}/` (on Cloud Run,
+`/download/provider/listings/<K_REVISION>/`):
 
 - `/rest/update/provider/list` (short and extended)
 - `/rest/update/provider/info/{version}`
 - `/rest/extension/provider/info`
+
+The generation is Cloud Run's `K_REVISION` when that env var is set, or a
+per-process boot id otherwise. A new revision therefore never serves
+another revision's listing JSON. On boot, leftover `listings/*.json`
+files from the earlier (flat) layout are removed; other generation
+subdirectories are left alone so a rolling deploy does not wipe a
+revision that is still serving traffic.
 
 `LISTING_CACHE_SECONDS` (default **300**, five minutes) is the TTL.
 While an entry is fresh it is served as-is. When it is stale, the stale
@@ -80,6 +88,11 @@ copy is still served and a background thread refreshes it. A miss (or
 `?flush=true`) is refreshed on the request. Writes are atomic (temp
 file + rename) so a shared Cloud Storage FUSE mount is not left with a
 half-written file.
+
+List and info requests wait until Maven services are ready and then
+rebuild a missing listing. They do not return a cached copy while
+startup is still running. `GET /healthcheck/` is a separate application
+and still returns `OK` immediately.
 
 The extension listings are built from the extension meta, which is
 rebuilt in the background once it is older than
