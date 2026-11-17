@@ -71,28 +71,35 @@ component {
 	) {
 		var hostName = cgi.HTTP_HOST;
 		var listType = ReFindNoCase( "^beta\.", hostName ) ? "abc" : arguments.type;
-		var cacheKey = "extension-info-" & listType & "-" & ( arguments.withLogo ? "logo" : "nologo" ) & "-" & arguments.coreVersion;
+		var cacheKey = "extension-list-" & listType & "-" & ( arguments.withLogo ? "logo" : "nologo" ) & "-" & arguments.coreVersion;
 
 		try {
-			return _cachedListing( cacheKey, function() {
-				var retVal = { meta={
-					  title       = "Lucee Association Switzerland Extension Store (#hostName#)"
-					, description = ""
-					, image       = "https://#hostName#/extension/extension-provider.png"
-					, url         = "https://#hostName#"
-					, mode        = "production"
-				} };
+			// Cache only the extension list. META (title, image, url) is built
+			// from the current hostName on every request, because the cache key
+			// has no host: a listing first built for the run.app hostname would
+			// otherwise be served on extension.lucee.org, and a background
+			// refresh would keep the hostname the closure captured.
+			var extensions = _cachedListing( cacheKey, function() {
 				// the listing cache runs this in the background once its copy is stale: the meta it is built from
 				// is brought up to date first, otherwise the refresh would only serialise the same old meta again
 				variables.metaReader.refreshIfStale( wait=true );
-				retVal.extensions = variables.metaReader.list(
+				return variables.metaReader.list(
 					  type        = listType
 					, flush       = flush
 					, withLogo    = withLogo
 					, coreVersion = coreVersion
 				);
-				return retVal;
 			}, arguments.flush );
+			return {
+				  meta       = {
+					  title       = "Lucee Association Switzerland Extension Store (#hostName#)"
+					, description = ""
+					, image       = "https://#hostName#/extension/extension-provider.png"
+					, url         = "https://#hostName#"
+					, mode        = "production"
+				  }
+				, extensions = extensions
+			};
 		} catch ( any e ) {
 			// not cached: the next request tries again
 			return e;
