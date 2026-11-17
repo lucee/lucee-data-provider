@@ -64,6 +64,7 @@ component accessors=true {
 		variables._existing       = StructNew( "sync" ); // file url > { exists, time }
 		variables._existsTtl      = 86400; // seconds, a file that is there stays there
 		variables._missingTtl     = 300;   // seconds, a missing file is only cached briefly
+		variables._lastVersions   = StructNew( "sync" ); // artifact metadata url > versions of the last good read of it
 
 		return this;
 	}
@@ -92,6 +93,14 @@ component accessors=true {
 		ArrayEach( listing.artifacts, function( artifact, index ) {
 			found[ index ] = _listVersions( arguments.artifact );
 		}, true, variables.maxThreads );
+
+		// an artifact a repository could not be read for (mostly a timeout or a 429/5xx in the parallel burst) is
+		// tried once more, one at a time, before the last good copy of that repository's metadata is all there is
+		for ( var i=1; i<=ArrayLen( listing.artifacts ); i++ ) {
+			if ( !found[ i ].complete ) {
+				found[ i ] = _listVersions( listing.artifacts[ i ] );
+			}
+		}
 
 		for ( var i=1; i<=ArrayLen( listing.artifacts ); i++ ) {
 			var artifactResult = found[ i ];
@@ -366,7 +375,8 @@ component accessors=true {
 				var vers = variables.catalog.getExtensionVersions( _groupOf( arguments.artifact ), arguments.artifact );
 				var repos = ArrayLen( variables.mixedRepos ) ? variables.mixedRepos : _allRepos();
 				for ( var version in vers ) {
-					result.versions[ version ] = repos;
+					// a copy: arrays are references in Lucee, the repos of other versions are appended to it below
+					result.versions[ version ] = Duplicate( repos );
 				}
 			} catch ( any e ) {
 				SystemOutput( "Extension versions for [#arguments.artifact#] from the catalog could not be read: #e.message#", true );
@@ -377,27 +387,40 @@ component accessors=true {
 			var kind = _repoKind( repo );
 			var metaUrl  = _artifactUrl( repo, arguments.artifact ) & "maven-metadata.xml";
 			var page = _get( metaUrl );
+			var repoVersions = [];
 
 			if ( page.status == 404 ) {
+				StructDelete( variables._lastVersions, metaUrl );
 				continue; // the repo doesn't have the artifact
 			}
 
+			if ( page.status == 200 ) {
+				try {
+					for ( var node in XmlSearch( XmlParse( Trim( page.content ) ), "/metadata/versioning/versions/version" ) ) {
+						ArrayAppend( repoVersions, Trim( node.xmlText ) );
+					}
+					variables._lastVersions[ metaUrl ] = repoVersions;
+				} catch ( any e ) {
+					SystemOutput( "Maven metadata [#metaUrl#] is not valid: #e.message#", true );
+					page = { status=0, error="invalid xml: " & e.message };
+				}
+			}
+
 			if ( page.status != 200 ) {
-				SystemOutput( "Maven metadata [#metaUrl#] could not be read: #page.status# #page.error#", true );
+				// LDEV-6789: a repository that could not be read used to be left out, so every version only it has
+				// (most older lucee-services versions and its pre-releases) was missing from the listing until the
+				// next restart. Its last good copy is used instead, and the listing is marked as incomplete.
 				result.complete = false;
-				continue;
+				if ( StructKeyExists( variables._lastVersions, metaUrl ) ) {
+					repoVersions = variables._lastVersions[ metaUrl ];
+					SystemOutput( "Maven metadata [#metaUrl#] could not be read (#page.status# #page.error#), using the last good copy of it", true );
+				} else {
+					SystemOutput( "Maven metadata [#metaUrl#] could not be read: #page.status# #page.error#", true );
+					continue;
+				}
 			}
 
-			try {
-				var nodes = XmlSearch( XmlParse( Trim( page.content ) ), "/metadata/versioning/versions/version" );
-			} catch ( any e ) {
-				SystemOutput( "Maven metadata [#metaUrl#] is not valid: #e.message#", true );
-				result.complete = false;
-				continue;
-			}
-
-			for ( var node in nodes ) {
-				var version = Trim( node.xmlText );
+			for ( var version in repoVersions ) {
 
 				if ( !Len( version ) || ( kind == "releases" && isSnapshot( version ) ) || ( kind == "snapshots" && !isSnapshot( version ) ) ) {
 					continue;

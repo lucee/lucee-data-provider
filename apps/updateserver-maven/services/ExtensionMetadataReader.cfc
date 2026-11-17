@@ -112,7 +112,9 @@ component accessors=true {
 
 			if ( StructCount( candidates ) ) {
 				metaChanged = _addMavenCandidates( meta, candidates, knownNames, timeoutSecs, rebuild ) || metaChanged;
-				_setMavenLocations( candidates, mavenFiles.complete, remoteFiles.complete, meta );
+				// every version the repositories list, not only the ones downloaded now (Maven only: the newest of
+				// each type), so the older rows of the meta are still served and can be downloaded
+				_setMavenLocations( _withListedVersions( candidates ), mavenFiles.complete, remoteFiles.complete, meta );
 				for ( var name in candidates ) {
 					knownNames[ name ] = true;
 				}
@@ -144,6 +146,10 @@ component accessors=true {
 			setExtensionVersions( _createExtensionAndVersionMap() );
 			reset();
 			variables._metaLoadedAt = GetTickCount();
+			if ( !remoteFiles.complete && getMetaTtl() > 60 ) {
+				// part of the repositories could not be read: try again in a minute, not only after the full TTL
+				variables._metaLoadedAt -= ( getMetaTtl() - 60 ) * 1000;
+			}
 			_logFallbackSummary( meta );
 			// zip:// extracts whole archives under temp/compress and does not
 			// clean them up; any leftover from a fallback path is removed here
@@ -571,6 +577,28 @@ component accessors=true {
 		}
 
 		return candidates;
+	}
+
+	/**
+	 * The candidates plus every version of the last Maven listing (variables._mavenVersions) that is not one of them,
+	 * as a "repo" candidate. Only used to know where a file can be had from, nothing is downloaded for them.
+	 */
+	private struct function _withListedVersions( required struct candidates ) {
+		var all = StructCopy( arguments.candidates );
+
+		for ( var artifact in variables._mavenVersions ) {
+			var versions = variables._mavenVersions[ artifact ];
+
+			for ( var version in versions ) {
+				var name = artifact & "-" & version & ".lex";
+
+				if ( !StructKeyExists( all, name ) ) {
+					all[ name ] = { name=name, artifact=artifact, version=version, source="repo", repos=versions[ version ] };
+				}
+			}
+		}
+
+		return all;
 	}
 
 	/**

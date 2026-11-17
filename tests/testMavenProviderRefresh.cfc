@@ -81,6 +81,63 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( cache.peek( "release" ).version ).toBe( "new" );
 			} );
 		} );
+
+		describe( "Older versions from Central and lucee-services", function() {
+			it( "retries a lucee-services metadata read that failed in the parallel pass, so its versions are listed", function() {
+				var world = _newWorld();
+				var metaUrl = mixed & "org/lucee/mail-extension/maven-metadata.xml";
+				_addToMetadata( world, mixed, "mail-extension", "1.0.0.1" );
+				_addToMetadata( world, mixed, "mail-extension", "1.1.0.18-RC" );
+				world.failTimes[ metaUrl ] = 3; // the first attempt and its two retries fail
+				var found = _newSource( world ).listExtensions( latestOnly=true );
+
+				expect( found.complete ).toBeTrue();
+				expect( found.versions[ "mail-extension" ] ).toHaveKey( "1.0.0.1" );
+				expect( found.versions[ "mail-extension" ] ).toHaveKey( "1.1.0.18-RC" );
+			} );
+
+			it( "keeps the versions of the last good read when lucee-services can not be read now", function() {
+				var world = _newWorld();
+				var metaUrl = mixed & "org/lucee/mail-extension/maven-metadata.xml";
+				_addToMetadata( world, mixed, "mail-extension", "1.0.0.1" );
+				var source = _newSource( world );
+				source.listExtensions();
+				world.status[ metaUrl ] = 503;
+				var found = source.listExtensions();
+
+				expect( found.complete ).toBeFalse();
+				expect( found.versions[ "mail-extension" ] ).toHaveKey( "1.0.0.1" );
+				expect( found.versions[ "mail-extension" ][ "1.0.0.1" ] ).toBe( [ mixed ] );
+			} );
+
+			it( "lists every Central and lucee-services version of an artifact in older for type=all", function() {
+				var world = _newWorld();
+				_addToMetadata( world, releases, "mail-extension", "1.0.0.9" );
+				_addToMetadata( world, mixed, "mail-extension", "1.0.0.1" );
+				_addToMetadata( world, mixed, "mail-extension", "1.1.0.16-RC" );
+				_addToMetadata( world, snapshots, "mail-extension", "1.1.0.18-SNAPSHOT" );
+				var older = _row( _newReader( world ).list( type="all" ), mailId ).older;
+
+				expect( older ).toInclude( "1.0.0.9" );
+				expect( older ).toInclude( "1.0.0.1" );
+				expect( older ).toInclude( "1.1.0.16-RC" );
+			} );
+
+			it( "keeps serving the older rows of the meta after a newer version was published", function() {
+				var world = _newWorld();
+				var reader = _newReader( world );
+				_addRepoVersion( world, "mail-extension", "1.1.0.18", mailId, mixed );
+				reader.setMetaTtl( 0.001 );
+				sleep( 10 );
+				reader.refreshIfStale( wait=true );
+				reader.setMetaTtl( 0 );
+				var versions = reader.getExtensionVersions()[ mailId ];
+
+				expect( versions ).toHaveKey( "1.1.0.18" );
+				expect( versions ).toHaveKey( "1.1.0.17" );
+				expect( reader.getDownloadUrl( "mail-extension-1.1.0.17.lex", "" ) ).toBe( releases & "org/lucee/mail-extension/1.1.0.17/mail-extension-1.1.0.17.lex" );
+			} );
+		} );
 	}
 
 	private struct function _row( required query rows, required string id ) {
@@ -96,6 +153,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			, files      = {}
 			, status     = {}
 			, headStatus = {}
+			, failTimes  = {}
 			, requests   = ArrayNew( 1, true )
 			, heads      = ArrayNew( 1, true )
 			, downloads  = ArrayNew( 1, true )
@@ -175,6 +233,10 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 		return {
 			get = function( required string url, required numeric timeout ) {
 				ArrayAppend( world.requests, arguments.url );
+				if ( ( world.failTimes[ arguments.url ] ?: 0 ) > 0 ) {
+					world.failTimes[ arguments.url ]--;
+					return { status=503, error="forced burst failure", content="" };
+				}
 				if ( StructKeyExists( world.status, arguments.url ) ) {
 					return { status=world.status[ arguments.url ], error="forced", content="" };
 				}
