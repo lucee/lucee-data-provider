@@ -292,15 +292,17 @@ component accessors=true {
 	}
 
 	/**
-	 * Versions to load at startup: the newest of any type (so type=all has
-	 * the overall latest) and the newest final (so type=release still has a
-	 * row when "latest" or the group-XML release is a SNAPSHOT/RC/BETA).
+	 * Versions to load at startup: the newest of any type (so type=all has the overall latest) and the newest of
+	 * every release type: final (type=release), alpha/beta/RC (type=abc) and snapshot (type=snapshot). type=abc and
+	 * type=snapshot are filtered from the same meta as type=all, so without their newest version an extension
+	 * whose overall latest is of another type would be missing from them.
 	 * Group XML latest/release are often stale or themselves a pre-release;
 	 * the merged version list of every repository is the source of truth.
 	 */
 	private array function _latestVersions( required string artifact, required array versions, required array preferred ) {
 		var picked = [];
 		var sorted = Duplicate( arguments.versions );
+		var types  = {};
 
 		ArraySort( sorted, function( a, b ) {
 			return Compare( services.VersionUtils::sortableVersionString( b ), services.VersionUtils::sortableVersionString( a ) );
@@ -311,13 +313,31 @@ component accessors=true {
 		}
 
 		for ( var version in sorted ) {
-			if ( _isFinalVersion( version ) && !ArrayFind( picked, version ) ) {
+			var type = _releaseTypeOf( version );
+
+			if ( StructKeyExists( types, type ) ) {
+				continue;
+			}
+			types[ type ] = true;
+
+			if ( !ArrayFind( picked, version ) ) {
 				ArrayAppend( picked, version );
-				break;
 			}
 		}
 
 		return picked;
+	}
+
+	// "release", "abc" or "snapshot", the same types as the type= of the listings
+	private string function _releaseTypeOf( required string version ) {
+		if ( FindNoCase( "-SNAPSHOT", arguments.version ) ) {
+			return "snapshot";
+		}
+		if ( FindNoCase( "-ALPHA", arguments.version ) || FindNoCase( "-BETA", arguments.version ) || FindNoCase( "-RC", arguments.version ) ) {
+			return "abc";
+		}
+
+		return "release";
 	}
 
 	private boolean function _isFinalVersion( required string version ) {

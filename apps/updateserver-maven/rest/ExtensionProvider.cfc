@@ -76,26 +76,30 @@ component {
 		var listType = ReFindNoCase( "^beta\.", hostName ) ? "abc" : arguments.type;
 		var cacheKey = "extension-info-" & listType & "-" & ( arguments.withLogo ? "logo" : "nologo" ) & "-" & arguments.coreVersion;
 
-		return _cachedListing( cacheKey, function() {
-			var retVal = { meta={
-				  title       = "Lucee Association Switzerland Extension Store (#hostName#)"
-				, description = ""
-				, image       = "https://#hostName#/extension/extension-provider.png"
-				, url         = "https://#hostName#"
-				, mode        = "production"
-			} };
-			try {
+		try {
+			return _cachedListing( cacheKey, function() {
+				var retVal = { meta={
+					  title       = "Lucee Association Switzerland Extension Store (#hostName#)"
+					, description = ""
+					, image       = "https://#hostName#/extension/extension-provider.png"
+					, url         = "https://#hostName#"
+					, mode        = "production"
+				} };
+				// the listing cache runs this in the background once its copy is stale: the meta it is built from
+				// is brought up to date first, otherwise the refresh would only serialise the same old meta again
+				variables.metaReader.refreshIfStale( wait=true );
 				retVal.extensions = variables.metaReader.list(
 					  type        = listType
 					, flush       = flush
 					, withLogo    = withLogo
 					, coreVersion = coreVersion
 				);
-			} catch ( e ) {
-				return e;
-			}
-			return retVal;
-		}, arguments.flush );
+				return retVal;
+			}, arguments.flush );
+		} catch ( any e ) {
+			// not cached: the next request tries again
+			return e;
+		}
 	}
 
 	/**

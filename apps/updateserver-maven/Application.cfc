@@ -88,6 +88,14 @@ component {
 		);
 	}
 
+	// seconds the extension meta (Maven listing) is used before it is rebuilt in the background, see ExtensionMetadataReader
+	private numeric function _metaTtl() {
+		var env     = server.system.environment;
+		var seconds = Val( env.EXTENSIONS_META_CACHE_SECONDS ?: ( env.LISTING_CACHE_SECONDS ?: 300 ) );
+
+		return seconds > 0 ? seconds : 300;
+	}
+
 	private function _createCatalog() {
 		var env  = server.system.environment;
 		var args = _mavenSourceArguments();
@@ -186,6 +194,7 @@ component {
 			, mavenOnly            = true
 			, mavenOnlyMinCore     = Trim( server.system.environment.EXTENSIONS_MAVEN_ONLY_MIN_CORE ?: "" )
 			, packagingBackfillMax = Val( server.system.environment.EXTENSIONS_PACKAGING_BACKFILL_MAX ?: 200 )
+			, metaTtl              = _metaTtl()
 		);
 		_stepEnd( "extension metadata reader", t );
 

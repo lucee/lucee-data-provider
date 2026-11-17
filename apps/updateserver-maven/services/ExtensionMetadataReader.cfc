@@ -18,6 +18,9 @@ component accessors=true {
 	property name="mavenOnlyMinCore"      type="string" default="";
 	// LDEV-6795: how many extension files without a known packaging are read per load, only done when mavenOnlyMinCore is set
 	property name="packagingBackfillMax"  type="numeric" default=200;
+	// seconds the loaded extension meta (and the Maven listing it is built from) is served before it is rebuilt in the
+	// background, stale data is served while that runs. 0: only rebuilt by loadMeta() / flush (the old behaviour)
+	property name="metaTtl"               type="numeric" default=0;
 	property name="extensionMeta"         type="query";
 	property name="extensionVersions"     type="struct";
 	property name="bundleDownloadService" type="any";
@@ -43,6 +46,12 @@ component accessors=true {
 	variables._pendingRemoteFiles       = [];
 	// artifact > { version = [ repo urls ] } from the last Maven listing, used to fill `older`
 	variables._mavenVersions            = {};
+	// when the meta was last loaded (GetTickCount), and the background refresh of it, see refreshIfStale()
+	variables._metaLoadedAt             = 0;
+	variables._metaRefreshing           = false;
+	variables._metaRefreshStarted       = 0;
+	variables._metaRefreshMaxMs         = 900000; // a refresh that has not finished after this is not waited for any longer
+	variables._lockId                   = "ext-meta-" & CreateUUID();
 
 	reset();
 
@@ -134,6 +143,7 @@ component accessors=true {
 			_buildServed();
 			setExtensionVersions( _createExtensionAndVersionMap() );
 			reset();
+			variables._metaLoadedAt = GetTickCount();
 			_logFallbackSummary( meta );
 			// zip:// extracts whole archives under temp/compress and does not
 			// clean them up; any leftover from a fallback path is removed here
@@ -142,6 +152,58 @@ component accessors=true {
 		}
 
 		variables.extensionMeta ?: _getEmptyExtensionsQuery();
+	}
+
+	/**
+	 * Is the loaded meta older than metaTtl? Never with metaTtl=0 or when nothing is loaded yet.
+	 */
+	public boolean function isMetaStale() {
+		if ( getMetaTtl() <= 0 || !IsQuery( variables.extensionMeta ?: "" ) ) {
+			return false;
+		}
+
+		return ( GetTickCount() - variables._metaLoadedAt ) >= getMetaTtl() * 1000;
+	}
+
+	/**
+	 * Rebuilds the meta when it is stale (see metaTtl): in a background thread (the stale meta is served in the
+	 * meantime), or with wait=true on this request (the listing cache does that, it refreshes in the background
+	 * itself). Only one background refresh runs at a time.
+	 */
+	public void function refreshIfStale( boolean wait=false ) {
+		if ( !isMetaStale() ) {
+			return;
+		}
+
+		if ( arguments.wait ) {
+			loadMeta();
+			return;
+		}
+
+		var start = false;
+
+		lock name="#variables._lockId#-refresh" type="exclusive" timeout=5 throwOnTimeout=false {
+			if ( !variables._metaRefreshing || ( GetTickCount() - variables._metaRefreshStarted ) > variables._metaRefreshMaxMs ) {
+				variables._metaRefreshing     = true;
+				variables._metaRefreshStarted = GetTickCount();
+				start = true;
+			}
+		}
+
+		if ( !start ) {
+			return;
+		}
+
+		thread name="ext-meta-refresh-#CreateUUID()#" action="run" {
+			try {
+				setting requesttimeout=600;
+				loadMeta();
+			} catch ( any e ) {
+				SystemOutput( "Extension meta refresh failed: #e.message#", true );
+			} finally {
+				variables._metaRefreshing = false;
+			}
+		}
 	}
 
 	public function list(
@@ -156,6 +218,11 @@ component accessors=true {
 			& "_" & arguments.type
 			& ( arguments.all ? "_all" : "" )
 			& "_" & arguments.coreVersion;
+
+		if ( !arguments.flush ) {
+			// stale: served as it is, rebuilt in the background
+			refreshIfStale();
+		}
 
 		if ( arguments.flush || !StructKeyExists( variables._simpleCache, cacheKey ) ) {
 			if ( arguments.all && getMavenOnly() ) {
@@ -217,6 +284,8 @@ component accessors=true {
 	) {
 		if ( !IsQuery( variables.extensionMeta ?: "" ) || arguments.flush ) {
 			loadMeta();
+		} else {
+			refreshIfStale();
 		}
 		var mapped = getExtensionVersions();
 

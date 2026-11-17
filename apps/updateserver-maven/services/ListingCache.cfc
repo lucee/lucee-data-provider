@@ -5,10 +5,13 @@
  * are served as-is. Stale entries are still served, and a background thread
  * refreshes them. A miss (or flush=true) is refreshed on the request.
  * Writes are atomic (temp file + move) via CacheDir.writeAtomic.
+ * A background refresh that has not finished after maxRefreshSeconds (a thread
+ * that died or hangs) no longer blocks the next one, so a key cannot stay stale
+ * for good. A producer that throws leaves the cached copy as it is.
  */
 component {
 
-	public function init( required string cacheDir, numeric ttlSeconds=300 ) {
+	public function init( required string cacheDir, numeric ttlSeconds=300, numeric maxRefreshSeconds=900 ) {
 		variables.cacheDir = arguments.cacheDir;
 		if ( Right( variables.cacheDir, 1 ) != "/" ) {
 			variables.cacheDir &= "/";
@@ -17,7 +20,8 @@ component {
 			DirectoryCreate( variables.cacheDir, true );
 		}
 		variables.ttlSeconds = Max( 1, Int( Val( arguments.ttlSeconds ) ) );
-		variables.refreshing = {};
+		variables.maxRefreshMs = Max( 1, Val( arguments.maxRefreshSeconds ) ) * 1000;
+		variables.refreshing = {}; // name > GetTickCount() of the start of the running refresh, 0 when none runs
 
 		return this;
 	}
@@ -46,6 +50,13 @@ component {
 
 	public boolean function has( required string key ) {
 		return IsStruct( _read( arguments.key ) );
+	}
+
+	// is a background refresh of the key running (and not given up on)?
+	public boolean function isRefreshing( required string key ) {
+		var started = Val( variables.refreshing[ "listing-cache-" & _safeKey( arguments.key ) ] ?: 0 );
+
+		return started > 0 && ( GetTickCount() - started ) <= variables.maxRefreshMs;
 	}
 
 	public boolean function isFresh( required string key, date now=Now() ) {
@@ -105,15 +116,22 @@ component {
 	private void function _refreshAsync( required string key, required any producer ) {
 		var name = "listing-cache-" & _safeKey( arguments.key );
 
+		var start = false;
+
 		lock name="listing-cache-refresh-#name#" type="exclusive" timeout=1 throwOnTimeout=false {
-			if ( StructKeyExists( variables.refreshing, name ) && variables.refreshing[ name ] ) {
-				return;
+			var started = Val( variables.refreshing[ name ] ?: 0 );
+			if ( started <= 0 || ( GetTickCount() - started ) > variables.maxRefreshMs ) {
+				variables.refreshing[ name ] = GetTickCount();
+				start = true;
 			}
-			variables.refreshing[ name ] = true;
+		}
+
+		if ( !start ) {
+			return;
 		}
 
 		thread
-			name     = name
+			name     = name & "-" & CreateUUID()
 			key      = arguments.key
 			producer = arguments.producer
 			action   = "run"
@@ -125,7 +143,7 @@ component {
 				SystemOutput( "Listing cache refresh failed for [#key#]: #e.message#", true );
 			} finally {
 				lock name="listing-cache-refresh-listing-cache-#_safeKey( key )#" type="exclusive" timeout=1 throwOnTimeout=false {
-					variables.refreshing[ "listing-cache-" & _safeKey( key ) ] = false;
+					variables.refreshing[ "listing-cache-" & _safeKey( key ) ] = 0;
 				}
 			}
 		}
