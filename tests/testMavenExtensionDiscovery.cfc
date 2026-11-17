@@ -79,7 +79,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( names ).toHaveKey( "debugger-extension-3.0.0.8.lex" );
 			});
 
-			it( title="latestOnly loads the newest final version even when group XML latest and release are pre-releases", body=function() {
+			it( title="latestOnly loads the newest version of each release type even when group XML latest and release are pre-releases", body=function() {
 				var catalog = _catalogWithRows( [
 					{ group="org.lucee", artifact="s3-extension", latest="2.2.0.5-SNAPSHOT", release="2.2.0.3-RC" }
 				] );
@@ -102,7 +102,8 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				var latest = source.listExtensions( latestOnly=true );
 				expect( _names( latest.files ) ).toHaveKey( "s3-extension-2.2.0.5-SNAPSHOT.lex" );
 				expect( _names( latest.files ) ).toHaveKey( "s3-extension-2.1.0.15.lex" );
-				expect( _names( latest.files ) ).notToHaveKey( "s3-extension-2.2.0.3-RC.lex" );
+				// the newest RC too, so type=abc has a row (built from the same meta as type=all)
+				expect( _names( latest.files ) ).toHaveKey( "s3-extension-2.2.0.3-RC.lex" );
 				expect( _names( latest.files ) ).notToHaveKey( "s3-extension-2.0.3.6.lex" );
 			});
 

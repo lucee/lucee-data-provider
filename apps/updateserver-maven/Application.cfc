@@ -88,6 +88,14 @@ component {
 		);
 	}
 
+	// seconds the extension meta (Maven listing) is used before it is rebuilt in the background, see ExtensionMetadataReader
+	private numeric function _metaTtl() {
+		var env     = server.system.environment;
+		var seconds = Val( env.EXTENSIONS_META_CACHE_SECONDS ?: ( env.LISTING_CACHE_SECONDS ?: 300 ) );
+
+		return seconds > 0 ? seconds : 300;
+	}
+
 	private function _createCatalog() {
 		var env  = server.system.environment;
 		var args = _mavenSourceArguments();
@@ -128,7 +136,10 @@ component {
 			, mixedRepos      = _mavenRepos( env.EXTENSIONS_MAVEN_REPOS_MIXED     ?: env.LUCEE_MVN_REPO_MIXED     ?: "https://maven.lucee-services.com/" )
 			, timeout         = Val( env.EXTENSIONS_MAVEN_TIMEOUT          ?: 20  )
 			, downloadTimeout = Val( env.EXTENSIONS_MAVEN_DOWNLOAD_TIMEOUT ?: 120 )
-			, maxThreads      = Val( env.EXTENSIONS_MAVEN_THREADS          ?: 10  )
+			, maxThreads      = Val( env.EXTENSIONS_MAVEN_THREADS          ?: 4   )
+			// shared by the instances: maven-metadata.xml reads (MAVEN_METADATA_CACHE_SECONDS) and HEAD results
+			, cacheDir        = services.CacheDir::path( "maven", GetTempDirectory() & "lucee-update-cache/maven/" )
+			, metadataTtl     = Val( env.MAVEN_METADATA_CACHE_SECONDS      ?: 300 )
 		};
 	}
 
@@ -186,6 +197,7 @@ component {
 			, mavenOnly            = true
 			, mavenOnlyMinCore     = Trim( server.system.environment.EXTENSIONS_MAVEN_ONLY_MIN_CORE ?: "" )
 			, packagingBackfillMax = Val( server.system.environment.EXTENSIONS_PACKAGING_BACKFILL_MAX ?: 200 )
+			, metaTtl              = _metaTtl()
 		);
 		_stepEnd( "extension metadata reader", t );
 
