@@ -200,6 +200,23 @@ describe("ForgeBox ids and metadata", () => {
 		expect(ids).toContain("ortus-orm-extension-extension");
 	});
 
+	it("overlays S3-only cfspreadsheet versions missing from ForgeBox", async () => {
+		const s = restSupport();
+		const versions = await s.listVersions("cfspreadsheet-extension");
+		expect(versions).toEqual(["3.0.3", "3.0.4", "3.0.5"]);
+		expect(await s.getDownloadUrl("cfspreadsheet-extension", "3.0.3")).toBe(
+			"https://www.forgebox.io/rest/extension/provider/full/037A27FF-0B80-4CBA-B954BEBD790B460E?version=3%2E0%2E3"
+		);
+		expect(await s.getDownloadUrl("cfspreadsheet-extension", "3.0.5")).toBe(
+			"https://cdn.lucee.org/org/lucee/spreadsheet-extension/3.0.5/spreadsheet-extension-3.0.5.lex"
+		);
+		const xml = await s.buildArtifactMetadata("cfspreadsheet-extension");
+		expect(xml).toContain("<latest>3.0.5</latest>");
+		expect(xml).toContain("<release>3.0.5</release>");
+		expect(xml).toContain("<version>3.0.4</version>");
+		expect(xml).toContain("<version>3.0.5</version>");
+	});
+
 	it("includes older versions with REST download urls", async () => {
 		const s = restSupport();
 		const versions = await s.listVersions("ortus-mongodb-cache-extension");

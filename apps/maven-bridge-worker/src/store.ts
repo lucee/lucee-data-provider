@@ -6,6 +6,7 @@ import type { BridgeConfig } from "./config";
 import type { Env } from "./env";
 import { BridgeError, UPSTREAM_NOT_FOUND } from "./errors";
 import { buildIndex, deserializeIndex, serializeIndex, type RestIndex, type StoredIndex } from "./rest-index";
+import { applyRestVersionOverlays } from "./rest-overlays";
 import { contentTypeForPath, type BridgeSupport, type SupportIo, type UpstreamContent } from "./support";
 
 const GENERATION_KEY = "cache-generation";
@@ -317,7 +318,7 @@ export class RuntimeIo implements SupportIo {
 	async getIndex(support: BridgeSupport): Promise<RestIndex> {
 		const stored = await this.env.BRIDGE_CACHE.get<StoredIndex>(indexKey(support), "json");
 		if (stored) {
-			const index = deserializeIndex(stored);
+			const index = applyRestVersionOverlays(deserializeIndex(stored));
 			if (Date.now() - index.cachedAt.getTime() >= support.cacheTtlMinutes * 60 * 1000 + GRACE_MS) {
 				this.background(this.refreshIndex(support));
 			}

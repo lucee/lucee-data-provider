@@ -1,5 +1,6 @@
 // Port of the REST provider index loading of BridgeSupport.cfc (loadIndex and helpers).
 import { NoCaseMap, urlEncodedFormat } from "./cfml";
+import { applyRestVersionOverlays } from "./rest-overlays";
 import { BridgeError } from "./errors";
 
 export interface VersionEntry {
@@ -64,7 +65,7 @@ export function buildIndex(payload: unknown, providerUrl: string, groupId: strin
 		addVersionEntry(artifacts, ext, providerUrl);
 		addOlderVersions(artifacts, ext, providerUrl);
 	}
-	return { cachedAt: now, provider: providerUrl, groupId, artifacts };
+	return applyRestVersionOverlays({ cachedAt: now, provider: providerUrl, groupId, artifacts });
 }
 
 function lowerKeys(obj: Record<string, unknown>): Row {
