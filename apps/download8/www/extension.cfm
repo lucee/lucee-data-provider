@@ -27,7 +27,8 @@ if (!arrayIsEmpty(allVersions)) {
 	detailCache = util.dlCacheGet(detailKey);
 	detailAge   = structKeyExists(detailCache, "cachedAt") ? dateDiff("n", detailCache.cachedAt, now()) : 999;
 
-	if (!isEmpty(detailCache) && structKeyExists(detailCache, "extName")) {
+	// an entry without an extension id was cached from a failed metadata read; refetch it
+	if (!isEmpty(detailCache) && structKeyExists(detailCache, "extName") && len(detailCache.extId ?: "")) {
 		extName           = detailCache.extName;
 		extDescription    = detailCache.extDescription;
 		extImage          = detailCache.extImage;
@@ -38,15 +39,20 @@ if (!arrayIsEmpty(allVersions)) {
 				gid=groupId aid=artifactId ckey=detailKey ver=allVersions[1] slug=extName {
 				try {
 					local.meta = util.getLuceeExtension(attributes.gid, attributes.aid, attributes.ver, true).metadata ?: {};
-					util.dlCachePut(attributes.ckey, {
-						extName:           len(local.meta.name           ?: "") ? local.meta.name           : attributes.slug,
-						extDescription:    local.meta.description    ?: "",
-						extImage:          local.meta.image          ?: "",
-						extId:             local.meta.id             ?: "",
-						extMinCoreVersion: local.meta.MinCoreVersion ?: "",
-						cachedAt:          now()
-					});
-				} catch(e) {}
+					// keep the cached detail if the read failed, never overwrite it with an empty one
+					if (!isEmpty(local.meta)) {
+						util.dlCachePut(attributes.ckey, {
+							extName:           len(local.meta.name           ?: "") ? local.meta.name           : attributes.slug,
+							extDescription:    local.meta.description    ?: "",
+							extImage:          local.meta.image          ?: "",
+							extId:             local.meta.id             ?: "",
+							extMinCoreVersion: local.meta.MinCoreVersion ?: "",
+							cachedAt:          now()
+						});
+					}
+				} catch(e) {
+					cflog(log:"application",exception:e,type:"error");
+				}
 			}
 		}
 	} else {
@@ -58,15 +64,20 @@ if (!arrayIsEmpty(allVersions)) {
 			extImage          = meta.image          ?: "";
 			extId             = meta.id             ?: "";
 			extMinCoreVersion = meta.MinCoreVersion ?: "";
-			util.dlCachePut(detailKey, {
-				extName:           extName,
-				extDescription:    extDescription,
-				extImage:          extImage,
-				extId:             extId,
-				extMinCoreVersion: extMinCoreVersion,
-				cachedAt:          now()
-			});
-		} catch(e) {}
+			// do not cache a failed metadata read, so the next request tries again
+			if (!isEmpty(meta)) {
+				util.dlCachePut(detailKey, {
+					extName:           extName,
+					extDescription:    extDescription,
+					extImage:          extImage,
+					extId:             extId,
+					extMinCoreVersion: extMinCoreVersion,
+					cachedAt:          now()
+				});
+			}
+		} catch(e) {
+			cflog(log:"application",exception:e,type:"error");
+		}
 	}
 }
 
@@ -132,6 +143,13 @@ for (ver in allVersions) {
 		}
 		verMap[ver]  = verEntry;
 		verMapDirty  = true;
+	}
+	// the latest version's minCore may have been cached empty by an earlier failed metadata
+	// read; fill it from the extension detail
+	if (ver == allVersions[1] && !len(verEntry.minCore ?: "") && len(extMinCoreVersion)) {
+		verEntry.minCore = extMinCoreVersion;
+		verMap[ver]      = verEntry;
+		verMapDirty      = true;
 	}
 	arrayAppend(groups[groupKey], verEntry);
 }
