@@ -313,7 +313,7 @@ component accessors=true {
 			}
 
 			if ( !arguments.all ) {
-				_fillOlderFromMavenVersions( extensions, arguments.type );
+				_fillOlderFromMavenVersions( extensions, arguments.type, arguments.coreVersion );
 			}
 
 			variables._simpleCache[ cacheKey ] = extensions;
@@ -1456,11 +1456,18 @@ component accessors=true {
 	/**
 	 * Adds versions known from Maven Central and lucee-services metadata to `older`, without downloading
 	 * every historical .lex at listing time. A version asked for later is still fetched on demand.
+	 *
+	 * With a core version, only versions that core can load are added, as /full/{id} answers a 404 for the others:
+	 * a version that is in the meta is added when its minimum core version fits, a version that is not in the meta
+	 * (its minimum core version is not known) only when it is older than the version the extension is listed with,
+	 * that is the newest one of the meta that fits the core. Older Administrators (Lucee 5.4) offer every version of
+	 * `older`, newest first, so a newer version that only fits newer cores was offered to them and failed.
 	 */
-	private function _fillOlderFromMavenVersions( required query extensions, required string type ) {
+	private function _fillOlderFromMavenVersions( required query extensions, required string type, string coreVersion="" ) {
 		if ( StructIsEmpty( variables._mavenVersions ?: {} ) ) {
 			return;
 		}
+		var mapped = Len( arguments.coreVersion ) ? ( getExtensionVersions() ?: {} ) : {};
 
 		for ( var i=1; i<=QueryRecordCount( arguments.extensions ); i++ ) {
 			var artifact = _artifactForId( arguments.extensions.id[ i ] );
@@ -1485,6 +1492,16 @@ component accessors=true {
 				}
 				if ( !_matchesReleaseType( version, arguments.type ) ) {
 					continue;
+				}
+				if ( Len( arguments.coreVersion ) ) {
+					var knownVersions = mapped[ arguments.extensions.id[ i ] ] ?: {};
+					if ( StructKeyExists( knownVersions, version ) && version != "_latest" ) {
+						if ( !_fitsCoreVersion( knownVersions[ version ].minCoreVersion, arguments.coreVersion ) ) {
+							continue;
+						}
+					} else if ( Compare( services.VersionUtils::sortableVersionString( version ), services.VersionUtils::sortableVersionString( current ) ) > 0 ) {
+						continue;
+					}
 				}
 				ArrayAppend( extra, version );
 			}
