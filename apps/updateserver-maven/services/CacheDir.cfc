@@ -37,7 +37,13 @@ component {
 		}
 
 		if ( !DirectoryExists( root ) ) {
-			DirectoryCreate( root, true );
+			try {
+				DirectoryCreate( root, true );
+			} catch ( any e ) {
+				// a storage error here must not stop the services from loading: a
+				// read from the folder is then a cache miss and a write is skipped
+				SystemOutput( "Cache folder [#root#] could not be created: #e.message#", true );
+			}
 		}
 
 		return root;
@@ -88,28 +94,72 @@ component {
 	}
 
 	/**
-	 * Read a cache file. A missing file, or a file that cannot be read (for
-	 * example "Stale file handle" when another instance replaced it on a shared
-	 * Cloud Storage FUSE mount), is a cache miss: an empty string is returned
-	 * and the caller rebuilds. A failed read is tried once more, as the error
-	 * usually clears once the file is opened again.
+	 * Read a cache file. A file that cannot be read (for example "Stale file
+	 * handle" when another instance replaced the object on the shared Cloud
+	 * Storage FUSE mount while it was open) is read again, each time with a
+	 * fresh open, after 100, 400 and 1000 ms. When it still fails:
+	 *   - with mirror=true, the last good copy this instance read or wrote is
+	 *     used (a local file under the temp directory, see mirrorPath())
+	 *   - otherwise it is a cache miss: an empty string is returned and the
+	 *     caller rebuilds the data
+	 * A missing file is a cache miss right away. The normal path does the same
+	 * work as FileExists() + FileRead(), plus a local copy when mirror=true.
+	 *
+	 * @mirror keep / use a local copy of the last good content
+	 * @reader for tests: a function( path ) used instead of FileRead()
 	 */
-	public static string function readText( required string path ) {
-		for ( var attempt = 1; attempt <= 2; attempt++ ) {
+	public static string function readText( required string path, boolean mirror=false, any reader ) {
+		var delays    = [ 100, 400, 1000 ];
+		var lastError = "";
+
+		for ( var attempt = 1; attempt <= ArrayLen( delays ) + 1; attempt++ ) {
 			try {
 				if ( !FileExists( arguments.path ) ) {
 					return "";
 				}
-				return FileRead( arguments.path );
-			} catch ( any e ) {
-				if ( attempt == 2 ) {
-					SystemOutput( "Cache file [#arguments.path#] could not be read, treated as a cache miss: #e.message#", true );
-					return "";
+				var content = IsNull( arguments.reader ) ? FileRead( arguments.path ) : arguments.reader( arguments.path );
+				if ( arguments.mirror ) {
+					writeMirror( arguments.path, content );
 				}
-				sleep( 200 );
+				return content;
+			} catch ( any e ) {
+				lastError = e.message;
+				if ( attempt <= ArrayLen( delays ) ) {
+					sleep( delays[ attempt ] );
+				}
 			}
 		}
+
+		if ( arguments.mirror ) {
+			var localCopy = mirrorPath( arguments.path );
+			try {
+				if ( FileExists( localCopy ) ) {
+					SystemOutput( "Cache file [#arguments.path#] could not be read (#lastError#), the local copy is used", true );
+					return FileRead( localCopy );
+				}
+			} catch ( any ignore ) {}
+		}
+
+		SystemOutput( "Cache file [#arguments.path#] could not be read, treated as a cache miss: #lastError#", true );
 		return "";
+	}
+
+	/**
+	 * Local copy (in the container, not on the shared mount) of a cache file.
+	 */
+	public static string function mirrorPath( required string path ) {
+		return GetTempDirectory() & "lucee-provider-mirror/" & LCase( Hash( arguments.path, "MD5" ) ) & "-" & GetFileFromPath( arguments.path );
+	}
+
+	/**
+	 * Keep the last good content of a cache file locally. Never throws.
+	 */
+	public static void function writeMirror( required string path, required any content ) {
+		try {
+			writeAtomic( mirrorPath( arguments.path ), arguments.content );
+		} catch ( any e ) {
+			SystemOutput( "Local copy of [#arguments.path#] could not be written: #e.message#", true );
+		}
 	}
 
 	/**
@@ -117,7 +167,12 @@ component {
 	 * CACHE_DIR (several Cloud Run instances on one bucket) is not left with a
 	 * half-written file.
 	 */
-	public static void function writeAtomic( required string path, required any content ) {
+	public static void function writeAtomic( required string path, required any content, boolean mirror=false ) {
+		if ( arguments.mirror ) {
+			// the local copy first, so it is there even when the shared write fails
+			writeMirror( arguments.path, arguments.content );
+		}
+
 		var dir = GetDirectoryFromPath( arguments.path );
 		if ( !DirectoryExists( dir ) ) {
 			DirectoryCreate( dir, true );

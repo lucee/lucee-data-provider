@@ -152,7 +152,7 @@ component accessors=true {
 	}
 
 	private function _readExistingIssuesFromS3() {
-		var raw = services.CacheDir::readText( getS3Root() & variables.cacheFile );
+		var raw = services.CacheDir::readText( getS3Root() & variables.cacheFile, true );
 		if ( Len( raw ) ) {
 			systemOutput("jira._readExistingIssuesFromS3", true);
 			try {
@@ -170,7 +170,11 @@ component accessors=true {
 
 	private function _writeIssuesToS3( issues ) {
 		var issuesFile = getS3Root() & variables.cacheFile;
-		services.CacheDir::writeAtomic( issuesFile, SerializeJson( issues ) );
+		try {
+			services.CacheDir::writeAtomic( issuesFile, SerializeJson( issues ), true );
+		} catch ( any e ) {
+			systemOutput( "Jira issues cache could not be saved: #e.message#", true );
+		}
 	}
 
 	private function _getEmptyIssuesQuery() {

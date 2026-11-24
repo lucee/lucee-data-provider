@@ -886,7 +886,7 @@ component accessors=true {
 			variables._mavenStateChanged = true;
 			variables._mavenStateLoaded  = true;
 		} else if ( !variables._mavenStateLoaded ) {
-			var raw = services.CacheDir::readText( getS3Root() & "/extensions-maven.json" );
+			var raw = services.CacheDir::readText( getS3Root() & "/extensions-maven.json", true );
 
 			if ( Len( raw ) ) {
 				try {
@@ -906,8 +906,13 @@ component accessors=true {
 			if ( !StructIsEmpty( variables._mavenVersions ) ) {
 				variables._mavenState.versions = variables._mavenVersions;
 			}
-			services.CacheDir::writeAtomic( getS3Root() & "/extensions-maven.json", SerializeJson( variables._mavenState ) );
-			variables._mavenStateChanged = false;
+			try {
+				services.CacheDir::writeAtomic( getS3Root() & "/extensions-maven.json", SerializeJson( variables._mavenState ), true );
+				variables._mavenStateChanged = false;
+			} catch ( any e ) {
+				// only a cache: kept in memory and written again with the next change
+				SystemOutput( "Extension Maven state could not be saved: #e.message#", true );
+			}
 		}
 	}
 
@@ -918,7 +923,7 @@ component accessors=true {
 	// this happens once at startup / init
 	private function _readExistingMetaFileFromS3() {
 		// a missing or unreadable file is a cache miss: the meta is rebuilt from the sources and written again
-		var raw = services.CacheDir::readText( getS3Root() & "/extensions.json" );
+		var raw = services.CacheDir::readText( getS3Root() & "/extensions.json", true );
 		if ( Len( raw ) ) {
 			try {
 				return _updateExtensionSorting( DeserializeJson( raw, false ) );
@@ -948,7 +953,12 @@ component accessors=true {
 		var metaFile = getS3Root() & "/extensions.json";
 
 		// atomic: the instances share the folder (Cloud Run: /download/provider/extensions/)
-		services.CacheDir::writeAtomic( metaFile, SerializeJson( meta ) );
+		try {
+			services.CacheDir::writeAtomic( metaFile, SerializeJson( meta ), true );
+		} catch ( any e ) {
+			// only a cache: the meta in memory is served, a storage error must not fail the load
+			SystemOutput( "Extension meta could not be saved: #e.message#", true );
+		}
 	}
 
 	private function _getEmptyExtensionsQuery() {

@@ -35,7 +35,12 @@ component {
 			dir = "/download";
 		}
 		if ( !DirectoryExists( dir ) ) {
-			DirectoryCreate( dir, true );
+			try {
+				DirectoryCreate( dir, true );
+			} catch ( any e ) {
+				// reads are then a cache miss and writes are skipped, see dlCacheGet / dlCachePut
+				SystemOutput( "SharedDownloadCache could not create [#dir#]: #e.message#", true );
+			}
 		}
 		variables.cacheDir = dir;
 
@@ -55,9 +60,10 @@ component {
 		}
 
 		var file = getCacheDirectory() & arguments.key & ".json";
-		if ( FileExists( file ) ) {
+		var raw = services.CacheDir::readText( file );
+		if ( Len( raw ) ) {
 			try {
-				var val = DeserializeJson( FileRead( file ) );
+				var val = DeserializeJson( raw );
 				if ( !IsStruct( val ) ) {
 					return {};
 				}

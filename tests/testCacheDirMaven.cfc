@@ -54,6 +54,44 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( services.CacheDir::readText( dir ) ).toBe( "" );
 			});
 
+			it( title="readText reads again with a fresh open when a read fails", body=function() {
+				var path = variables.work & "retry/meta.json";
+				services.CacheDir::writeAtomic( path, "{""n"":3}" );
+				var calls = { n=0 };
+				var reader = function( p ) {
+					calls.n++;
+					if ( calls.n < 3 ) {
+						throw( type="java.io.IOException", message="Stale file handle" );
+					}
+					return FileRead( arguments.p );
+				};
+				expect( services.CacheDir::readText( path, false, reader ) ).toBe( "{""n"":3}" );
+				expect( calls.n ).toBe( 3 );
+			});
+
+			it( title="readText uses the local copy when the shared file cannot be read", body=function() {
+				var path = variables.work & "mirror/extensions.json";
+				services.CacheDir::writeAtomic( path, "{""good"":true}", true );
+				expect( FileExists( services.CacheDir::mirrorPath( path ) ) ).toBeTrue();
+
+				var failing = function( p ) {
+					throw( type="java.io.IOException", message="Stale file handle" );
+				};
+				expect( services.CacheDir::readText( path, true, failing ) ).toBe( "{""good"":true}" );
+				// without the local copy it is a cache miss
+				expect( services.CacheDir::readText( path, false, failing ) ).toBe( "" );
+
+				FileDelete( services.CacheDir::mirrorPath( path ) );
+			});
+
+			it( title="readText refreshes the local copy after a good read", body=function() {
+				var path = variables.work & "mirror2/issues.json";
+				services.CacheDir::writeAtomic( path, "v1" );
+				expect( services.CacheDir::readText( path, true ) ).toBe( "v1" );
+				expect( FileRead( services.CacheDir::mirrorPath( path ) ) ).toBe( "v1" );
+				FileDelete( services.CacheDir::mirrorPath( path ) );
+			});
+
 			it( title="nests app caches under provider/ when only CACHE_DIRECTORY is set", body=function() {
 				var shared = variables.work & "download";
 				var root = services.CacheDir::envCacheRoot( cacheDir="", localCacheDir="", cacheDirectory=shared );
