@@ -94,6 +94,12 @@ rebuild a missing listing. They do not return a cached copy while
 startup is still running. `GET /healthcheck/` is a separate application
 and still returns `OK` immediately.
 
+A cache file that is missing or cannot be read (for example "Stale file
+handle" after another instance replaced it on the shared mount) is a
+cache miss and is rebuilt. If loading the services fails, the instance
+starts a new load after `SERVICES_RETRY_SECONDS` instead of keeping the
+error until it is restarted.
+
 The extension listings are built from the extension meta, which is
 rebuilt in the background once it is older than
 `EXTENSIONS_META_CACHE_SECONDS` (default `LISTING_CACHE_SECONDS`): the
@@ -277,6 +283,7 @@ Run defaults):
 | `LUCEE_LOGGING_FORCE_APPENDER` | `console` in the image (needed so `ARTIFACT_NOT_FOUND` lines show up in Cloud Logging) |
 | `LUCEE_JAVA_OPTS` | `-Xms256m -Xmx1200m` in the image (a 2GiB Cloud Run container; the base image default is `-Xms64m -Xmx512m`) |
 | `ALLOW_RELOAD` | unset/false (`?fwreinit` only works when this is true) |
+| `SERVICES_RETRY_SECONDS` | `30`. When loading the provider services fails (for example an IO error on the shared cache folder), the next request after this many seconds starts a new load. The failure is never kept for the life of the instance. |
 | `PORT` | Cloud Run sets this to `8080` |
 | `EXTENSIONS_MAVEN_REPOS_RELEASES` / `LUCEE_MVN_REPO_RELEASES` | Maven Central |
 | `EXTENSIONS_MAVEN_REPOS_SNAPSHOTS` / `LUCEE_MVN_REPO_SNAPSHOTS` | Sonatype snapshots |

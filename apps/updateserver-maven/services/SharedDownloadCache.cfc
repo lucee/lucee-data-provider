@@ -84,7 +84,7 @@ component {
 
 		lock name="dlCachePut_#arguments.key#" type="exclusive" timeout="5" {
 			try {
-				FileWrite( file, json );
+				services.CacheDir::writeAtomic( file, json );
 			} catch ( any e ) {
 				SystemOutput( "SharedDownloadCache could not write [#file#]: #e.message#", true );
 			}

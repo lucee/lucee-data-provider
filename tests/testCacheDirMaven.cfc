@@ -41,6 +41,19 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( DirectoryList( GetDirectoryFromPath( path ), false, "name", "*.tmp.*" ) ).toHaveLength( 0 );
 			});
 
+			it( title="readText treats a missing or unreadable cache file as a cache miss", body=function() {
+				var path = variables.work & "read/list.json";
+				expect( services.CacheDir::readText( path ) ).toBe( "" );
+
+				services.CacheDir::writeAtomic( path, "{""n"":1}" );
+				expect( services.CacheDir::readText( path ) ).toBe( "{""n"":1}" );
+
+				// a path that exists but cannot be read as a file
+				var dir = variables.work & "read/folder.json";
+				DirectoryCreate( dir, true );
+				expect( services.CacheDir::readText( dir ) ).toBe( "" );
+			});
+
 			it( title="nests app caches under provider/ when only CACHE_DIRECTORY is set", body=function() {
 				var shared = variables.work & "download";
 				var root = services.CacheDir::envCacheRoot( cacheDir="", localCacheDir="", cacheDirectory=shared );

@@ -36,7 +36,7 @@ component {
 		var started = GetTickCount();
 		while ( !_servicesReady() && ( GetTickCount() - started ) < arguments.timeoutMs ) {
 			if ( Len( application.servicesError ?: "" ) ) {
-				throw( message="Maven provider services failed to load: #application.servicesError#" );
+				throw( message="Maven provider services failed to load, retrying shortly: #application.servicesError#" );
 			}
 			sleep( 100 );
 		}

@@ -34,9 +34,32 @@ component {
 		application.extensionsS3Root      = "";
 		application.servicesReady         = false;
 		application.servicesError         = "";
+		application.servicesFailedAt      = 0;
+		application.servicesLoading       = false;
 		application.listingCache          = _createListingCache();
 
-		thread action="run" name="lucee-provider-maven-load-services" {
+		_startServicesLoad();
+	}
+
+	/**
+	 * Load the services in a background thread. A failure (for example an IO
+	 * error on the shared cache folder) is not kept: the next request after
+	 * SERVICES_RETRY_SECONDS starts a new load, see _retryFailedServicesLoad().
+	 */
+	private function _startServicesLoad() {
+		var start = false;
+		lock name="lucee-provider-maven-load-services" type="exclusive" timeout=5 throwOnTimeout=false {
+			if ( !( application.servicesLoading ?: false ) ) {
+				application.servicesLoading = true;
+				application.servicesError   = "";
+				start = true;
+			}
+		}
+		if ( !start ) {
+			return;
+		}
+
+		thread action="run" name="lucee-provider-maven-load-services-#CreateUUID()#" {
 			try {
 				setting requesttimeout=600;
 				_loadServices();
@@ -45,11 +68,30 @@ component {
 				// Jira is filled in the background and must never gate readiness
 				_refreshJiraAsync();
 			} catch ( any e ) {
-				application.servicesError = e.message;
-				SystemOutput( "Maven provider services failed to load: #e.message#", true );
+				application.servicesFailedAt = GetTickCount();
+				application.servicesError    = e.message;
+				SystemOutput( "Maven provider services failed to load, retrying in #_servicesRetrySeconds()#s: #e.message#", true );
 				SystemOutput( e, true );
+			} finally {
+				application.servicesLoading = false;
 			}
 		}
+	}
+
+	private function _retryFailedServicesLoad() {
+		if ( !Len( application.servicesError ?: "" ) ) {
+			return;
+		}
+		if ( ( GetTickCount() - Val( application.servicesFailedAt ?: 0 ) ) < _servicesRetrySeconds() * 1000 ) {
+			return;
+		}
+		_startServicesLoad();
+	}
+
+	private numeric function _servicesRetrySeconds() {
+		var seconds = Val( server.system.environment.SERVICES_RETRY_SECONDS ?: 30 );
+
+		return seconds > 0 ? seconds : 30;
 	}
 
 	function onRequestStart() output=true {
@@ -61,8 +103,14 @@ component {
 		if ( this.allowReload && StructKeyExists( url, "fwreinit" ) ) {
 			application.servicesReady = false;
 			_loadServices();
+			application.servicesError = "";
 			application.servicesReady = true;
 			_refreshJiraAsync();
+		}
+
+		// only while the services are not ready: a failed load is started again
+		if ( !( application.servicesReady ?: false ) ) {
+			_retryFailedServicesLoad();
 		}
 
 		var allowedPaths = [ "rest", "healthcheck", "index.cfm", "warmup" ];

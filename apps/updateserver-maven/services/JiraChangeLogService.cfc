@@ -152,17 +152,25 @@ component accessors=true {
 	}
 
 	private function _readExistingIssuesFromS3() {
-		var issues = getS3Root() & variables.cacheFile;
-		if ( FileExists( issues ) ) {
+		var raw = services.CacheDir::readText( getS3Root() & variables.cacheFile );
+		if ( Len( raw ) ) {
 			systemOutput("jira._readExistingIssuesFromS3", true);
-			return DeserializeJson( FileRead( issues ), false );
+			try {
+				var issues = DeserializeJson( raw, false );
+				if ( IsQuery( issues ) ) {
+					return issues;
+				}
+			} catch ( any e ) {
+				// just a cache, the background refresh writes it again
+				systemOutput( "Jira issues cache could not be parsed: #e.message#", true );
+			}
 		}
 		return _getEmptyIssuesQuery();
 	}
 
 	private function _writeIssuesToS3( issues ) {
 		var issuesFile = getS3Root() & variables.cacheFile;
-		FileWrite( issuesFile, SerializeJson( issues ) );
+		services.CacheDir::writeAtomic( issuesFile, SerializeJson( issues ) );
 	}
 
 	private function _getEmptyIssuesQuery() {

@@ -88,6 +88,31 @@ component {
 	}
 
 	/**
+	 * Read a cache file. A missing file, or a file that cannot be read (for
+	 * example "Stale file handle" when another instance replaced it on a shared
+	 * Cloud Storage FUSE mount), is a cache miss: an empty string is returned
+	 * and the caller rebuilds. A failed read is tried once more, as the error
+	 * usually clears once the file is opened again.
+	 */
+	public static string function readText( required string path ) {
+		for ( var attempt = 1; attempt <= 2; attempt++ ) {
+			try {
+				if ( !FileExists( arguments.path ) ) {
+					return "";
+				}
+				return FileRead( arguments.path );
+			} catch ( any e ) {
+				if ( attempt == 2 ) {
+					SystemOutput( "Cache file [#arguments.path#] could not be read, treated as a cache miss: #e.message#", true );
+					return "";
+				}
+				sleep( 200 );
+			}
+		}
+		return "";
+	}
+
+	/**
 	 * Write a cache file via a unique temp file and rename, so a shared
 	 * CACHE_DIR (several Cloud Run instances on one bucket) is not left with a
 	 * half-written file.

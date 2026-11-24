@@ -886,12 +886,16 @@ component accessors=true {
 			variables._mavenStateChanged = true;
 			variables._mavenStateLoaded  = true;
 		} else if ( !variables._mavenStateLoaded ) {
-			var stateFile = getS3Root() & "/extensions-maven.json";
+			var raw = services.CacheDir::readText( getS3Root() & "/extensions-maven.json" );
 
-			if ( FileExists( stateFile ) ) {
-				var state = DeserializeJson( FileRead( stateFile ), false );
-
-				variables._mavenState = { skipped=state.skipped ?: {}, artifactIds=state.artifactIds ?: {}, versions=state.versions ?: {} };
+			if ( Len( raw ) ) {
+				try {
+					var state = DeserializeJson( raw, false );
+					variables._mavenState = { skipped=state.skipped ?: {}, artifactIds=state.artifactIds ?: {}, versions=state.versions ?: {} };
+				} catch ( any e ) {
+					// unreadable state is a cache miss, it is rebuilt and saved again
+					SystemOutput( "Extension Maven state could not be parsed, rebuilding it: #e.message#", true );
+				}
 			}
 			variables._mavenStateLoaded = true;
 		}
@@ -913,10 +917,14 @@ component accessors=true {
 
 	// this happens once at startup / init
 	private function _readExistingMetaFileFromS3() {
-		var metaFile = getS3Root() & "/extensions.json";
-		if ( FileExists( metaFile  ) ) {
-			var meta = DeserializeJson( FileRead( metaFile ), false );
-			return _updateExtensionSorting( meta );
+		// a missing or unreadable file is a cache miss: the meta is rebuilt from the sources and written again
+		var raw = services.CacheDir::readText( getS3Root() & "/extensions.json" );
+		if ( Len( raw ) ) {
+			try {
+				return _updateExtensionSorting( DeserializeJson( raw, false ) );
+			} catch ( any e ) {
+				SystemOutput( "Extension meta could not be parsed, rebuilding it: #e.message#", true );
+			}
 		}
 		return _getEmptyExtensionsQuery();
 	}

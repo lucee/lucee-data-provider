@@ -97,7 +97,14 @@ component {
 		}
 
 		var removed = 0;
-		for ( var name in DirectoryList( variables.rootDir, false, "name", "*.json" ) ) {
+		var names   = [];
+		try {
+			names = DirectoryList( variables.rootDir, false, "name", "*.json" );
+		} catch ( any e ) {
+			// only housekeeping, it must never stop the application from starting
+			SystemOutput( "Listing cache could not list [#variables.rootDir#]: #e.message#", true );
+		}
+		for ( var name in names ) {
 			var path = variables.rootDir & name;
 			if ( !FileExists( path ) ) {
 				continue;
