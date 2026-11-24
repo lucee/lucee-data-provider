@@ -25,7 +25,12 @@ component {
 		variables.generation = Len( gen ) ? _safeKey( gen ) : "";
 		variables.cacheDir = Len( variables.generation ) ? variables.rootDir & variables.generation & "/" : variables.rootDir;
 		if ( !DirectoryExists( variables.cacheDir ) ) {
-			DirectoryCreate( variables.cacheDir, true );
+			try {
+				DirectoryCreate( variables.cacheDir, true );
+			} catch ( any e ) {
+				// reads are then a miss and the listing is produced on the request
+				SystemOutput( "Listing cache could not create [#variables.cacheDir#]: #e.message#", true );
+			}
 		}
 		variables.ttlSeconds = Max( 1, Int( Val( arguments.ttlSeconds ) ) );
 		variables.maxRefreshMs = Max( 1, Val( arguments.maxRefreshSeconds ) ) * 1000;
@@ -97,7 +102,14 @@ component {
 		}
 
 		var removed = 0;
-		for ( var name in DirectoryList( variables.rootDir, false, "name", "*.json" ) ) {
+		var names   = [];
+		try {
+			names = DirectoryList( variables.rootDir, false, "name", "*.json" );
+		} catch ( any e ) {
+			// only housekeeping, it must never stop the application from starting
+			SystemOutput( "Listing cache could not list [#variables.rootDir#]: #e.message#", true );
+		}
+		for ( var name in names ) {
 			var path = variables.rootDir & name;
 			if ( !FileExists( path ) ) {
 				continue;
@@ -187,7 +199,12 @@ component {
 	private any function _refreshSync( required string key, required any producer ) {
 		var data = arguments.producer();
 
-		put( arguments.key, data );
+		try {
+			put( arguments.key, data );
+		} catch ( any e ) {
+			// the listing is still served, it is written again with the next refresh
+			SystemOutput( "Listing cache could not write [#arguments.key#]: #e.message#", true );
+		}
 
 		return data;
 	}

@@ -94,6 +94,27 @@ rebuild a missing listing. They do not return a cached copy while
 startup is still running. `GET /healthcheck/` is a separate application
 and still returns `OK` immediately.
 
+Storage errors on the shared mount (for example "Stale file handle"
+after another instance replaced a file while it was open) never leave
+the service broken:
+
+- A cache file that cannot be read is read again with a fresh open
+  (after 100, 400 and 1000 ms). The extension meta, the extension Maven
+  state and the Jira issues also keep a local copy of the last good
+  content under the container's temp directory, which is used when the
+  shared file still cannot be read. Otherwise it is a cache miss and is
+  rebuilt from Maven / Jira.
+- Writing a cache file is best effort: a failed write is logged and
+  never fails the services load or a request.
+- A failed services load is tried again right away (3 attempts), then
+  by the next request after `SERVICES_RETRY_SECONDS`. Services that were
+  loaded before are kept and still served.
+- `/healthcheck/` answers `503` once the services have been failing for
+  `HEALTH_FAIL_AFTER_SECONDS` (default 300). It never fails during the
+  first load. Add a liveness probe so Cloud Run replaces such a
+  container (the startup probe alone only runs at startup):
+  `--liveness-probe=httpGetPath=/healthcheck/,periodSeconds=30,timeoutSeconds=5,failureThreshold=3`
+
 The extension listings are built from the extension meta, which is
 rebuilt in the background once it is older than
 `EXTENSIONS_META_CACHE_SECONDS` (default `LISTING_CACHE_SECONDS`): the
@@ -219,6 +240,7 @@ gcloud run deploy "$SERVICE" \
   --min-instances 0 \
   --max-instances 4 \
   --startup-probe=httpGetPath=/healthcheck/,periodSeconds=5,timeoutSeconds=5,failureThreshold=12,initialDelaySeconds=10 \
+  --liveness-probe=httpGetPath=/healthcheck/,periodSeconds=30,timeoutSeconds=5,failureThreshold=3 \
   --set-env-vars=CACHE_DIRECTORY=/download,CACHE_DIR=/download/provider,ALLOW_RELOAD=false,LUCEE_LOGGING_FORCE_APPENDER=console,LISTING_CACHE_SECONDS=300
 ```
 
@@ -277,6 +299,8 @@ Run defaults):
 | `LUCEE_LOGGING_FORCE_APPENDER` | `console` in the image (needed so `ARTIFACT_NOT_FOUND` lines show up in Cloud Logging) |
 | `LUCEE_JAVA_OPTS` | `-Xms256m -Xmx1200m` in the image (a 2GiB Cloud Run container; the base image default is `-Xms64m -Xmx512m`) |
 | `ALLOW_RELOAD` | unset/false (`?fwreinit` only works when this is true) |
+| `HEALTH_FAIL_AFTER_SECONDS` | `300`. `/healthcheck/` answers `503` once the services have been failing to load this long, so a liveness probe replaces the container. `0` disables it. |
+| `SERVICES_RETRY_SECONDS` | `30`. When loading the provider services fails (for example an IO error on the shared cache folder), the next request after this many seconds starts a new load. The failure is never kept for the life of the instance. |
 | `PORT` | Cloud Run sets this to `8080` |
 | `EXTENSIONS_MAVEN_REPOS_RELEASES` / `LUCEE_MVN_REPO_RELEASES` | Maven Central |
 | `EXTENSIONS_MAVEN_REPOS_SNAPSHOTS` / `LUCEE_MVN_REPO_SNAPSHOTS` | Sonatype snapshots |
