@@ -339,7 +339,8 @@ component accessors=true {
 		var types = {};
 
 		for ( var key in arguments.entry ) {
-			if ( key != "version" && IsSimpleValue( arguments.entry[ key ] ) ) {
+			// date-* / size-* are metadata on the version struct, not artifact file types
+			if ( key != "version" && Left( key, 5 ) != "date-" && Left( key, 5 ) != "size-" && IsSimpleValue( arguments.entry[ key ] ) ) {
 				types[ key ] = arguments.entry[ key ];
 			}
 		}
