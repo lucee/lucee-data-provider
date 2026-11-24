@@ -12,6 +12,84 @@ component {
 		structDelete( application, "expressTemplates", false );
 	}
 
+	/**
+	 * Lists, and optionally deletes, every file at the bucket root whose name starts
+	 * with "forgebox" and ends with "-SNAPSHOT.zip" (case-insensitive). Does not
+	 * recurse and does not touch any other object. After one or more deletes, the
+	 * in-memory and on-disk versions cache is cleared (no second listing).
+	 * @return struct with dryRun, count, deleted (file names) and errors
+	 */
+	public struct function cleanupForgeboxSnapshots(boolean dryRun=false) {
+		setting requesttimeout="1000";
+
+		if (!len(trim(variables.s3Root))) {
+			throw "S3 root is not configured";
+		}
+
+		var root = variables.s3Root;
+		if (right(root, 1) != "/" && right(root, 1) != chr(92)) {
+			root &= "/";
+		}
+
+		var result = {
+			"dryRun": arguments.dryRun,
+			"count": 0,
+			"deleted": [],
+			"errors": []
+		};
+		var deletedAny = false;
+
+		// one listing of the bucket root only
+		var qry = directoryList(path:root, listInfo:"query", recurse:false);
+
+		loop query=qry {
+			var name = qry.name;
+			if (!isForgeboxSnapshotZip(name)) {
+				continue;
+			}
+			if (structKeyExists(qry, "type") && listFindNoCase("dir,directory", qry.type)) {
+				continue;
+			}
+
+			if (arguments.dryRun) {
+				arrayAppend(result.deleted, name);
+				continue;
+			}
+
+			try {
+				fileDelete(root & name);
+				arrayAppend(result.deleted, name);
+				deletedAny = true;
+			}
+			catch (e) {
+				arrayAppend(result.errors, {"name": name, "message": e.message});
+			}
+		}
+
+		result.count = arrayLen(result.deleted);
+		if (deletedAny) {
+			invalidateVersionCache();
+		}
+		return result;
+	}
+
+	private boolean function isForgeboxSnapshotZip(required string name) {
+		if (find("/", arguments.name) || find(chr(92), arguments.name) || find("..", arguments.name)) {
+			return false;
+		}
+		var n = lCase(arguments.name);
+		return left(n, 8) == "forgebox" && right(n, len("-snapshot.zip")) == "-snapshot.zip";
+	}
+
+	// clear the versions cache without listing the bucket again
+	private void function invalidateVersionCache() {
+		structDelete(application, "s3VersionData", false);
+		var cacheFile = getDirectoryFromPath(getCurrentTemplatePath()) & "cache/versions.json";
+		if (fileExists(cacheFile)) {
+			fileDelete(cacheFile);
+		}
+	}
+
 	private function logger( string text, any exception, type="info" ){
 		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
 		if ( !isNull(arguments.exception ) ){

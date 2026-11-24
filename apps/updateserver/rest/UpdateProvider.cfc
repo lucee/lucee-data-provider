@@ -435,6 +435,105 @@ component {
 		jiraChangelogService.updateIssuesAsync(); // async
 	}
 
+	/**
+	 * Deletes forgebox*-SNAPSHOT.zip files at the core bucket root. Requires the
+	 * CLEANUP_TOKEN environment variable; if it is unset the endpoint returns 403.
+	 * Pass dryRun=true to list matching names without deleting. The token is accepted
+	 * as ?token=, an X-Cleanup-Token header, or Authorization: Bearer.
+	 */
+	remote struct function cleanupForgeboxSnapshots(
+		string token="" restargsource="url",
+		boolean dryRun=false restargsource="url"
+	) httpmethod="GET" restpath="cleanupForgeboxSnapshots" {
+		return _cleanupForgeboxSnapshots(argumentCollection=arguments);
+	}
+
+	remote struct function cleanupForgeboxSnapshotsPost(
+		string token="" restargsource="url",
+		boolean dryRun=false restargsource="url"
+	) httpmethod="POST" restpath="cleanupForgeboxSnapshots" {
+		return _cleanupForgeboxSnapshots(argumentCollection=arguments);
+	}
+
+	private struct function _cleanupForgeboxSnapshots(string token="", boolean dryRun=false) {
+		setting requesttimeout="1000";
+
+		var expected = trim(server.system.environment.CLEANUP_TOKEN ?: "");
+		if (!len(expected)) {
+			forbidden("cleanup is not enabled");
+		}
+
+		var provided = requestCleanupToken(arguments.token);
+		if (!tokensEqual(provided, expected)) {
+			forbidden("forbidden");
+		}
+
+		if (!arguments.dryRun && structKeyExists(form, "dryRun") && isBoolean(form.dryRun) && form.dryRun) {
+			arguments.dryRun = true;
+		}
+
+		var s3 = new services.legacy.S3(variables.s3Root);
+		var result = s3.cleanupForgeboxSnapshots(arguments.dryRun);
+
+		if (!result.dryRun && structKeyExists(application, "exists")) {
+			loop array=result.deleted item="local.name" {
+				structDelete(application.exists, name, false);
+			}
+		}
+
+		systemOutput("cleanupForgeboxSnapshots dryRun=" & result.dryRun & " count=" & result.count & " errors=" & arrayLen(result.errors), true);
+		return result;
+	}
+
+	private string function requestCleanupToken(string token="") {
+		if (len(trim(arguments.token))) {
+			return trim(arguments.token);
+		}
+		if (structKeyExists(form, "token") && len(trim(form.token))) {
+			return trim(form.token);
+		}
+
+		var data = getHTTPRequestData(false);
+		if (!isNull(data) && structKeyExists(data, "headers")) {
+			loop collection=data.headers index="local.k" item="local.v" {
+				if (lCase(k) == "x-cleanup-token") {
+					return trim(v);
+				}
+				if (lCase(k) == "authorization") {
+					var headerVal = trim(v);
+					if (len(headerVal) >= 7 && lCase(left(headerVal, 7)) == "bearer ") {
+						return trim(mid(headerVal, 8, len(headerVal)));
+					}
+				}
+			}
+		}
+		return "";
+	}
+
+	private boolean function tokensEqual(required string provided, required string expected) {
+		if (!len(arguments.provided) || !len(arguments.expected)) {
+			return false;
+		}
+		// compare HMACs so the check is constant-time in the token length
+		var leftMac = hmac(arguments.provided, arguments.expected, "HmacSHA256");
+		var rightMac = hmac(arguments.expected, arguments.expected, "HmacSHA256");
+		var diff = 0;
+		var i = 1;
+		var n = len(rightMac);
+		while (i <= n) {
+			diff = bitOr(diff, bitXor(asc(mid(leftMac, i, 1)), asc(mid(rightMac, i, 1))));
+			i++;
+		}
+		return diff == 0;
+	}
+
+	private void function forbidden(required string message) {
+		content type="application/json";
+		header statuscode="403" statustext="Forbidden";
+		echo(serializeJSON({"error": arguments.message}));
+		abort;
+	}
+
 	remote function getLatest(
 			string version restargsource="path",
 			string type restargsource="path", // stable rc beta snapshot all
