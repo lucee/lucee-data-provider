@@ -78,7 +78,7 @@ component {
 			return false;
 		}
 		var n = lCase(arguments.name);
-		return left(n, 8) == "forgebox" && right(n, 14) == "-snapshot.zip";
+		return left(n, 8) == "forgebox" && right(n, len("-snapshot.zip")) == "-snapshot.zip";
 	}
 
 	// clear the versions cache without listing the bucket again
