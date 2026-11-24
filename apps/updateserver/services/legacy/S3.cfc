@@ -155,6 +155,8 @@ component {
 				//if(isNull(data[version])) data[version]={};
 				data[vs]['version']=version;
 				data[vs][type]=name;
+				// date-jar comes from the directory listing (no extra S3 call). Other date-/size- fields stay unused.
+				if ( type == "jar" ) data[vs]['date-jar']=qry.dateLastModified;
 				//data[version]['date-'&type]=qry.dateLastModified;
 				//data[version]['size-'&type]=qry.size;
 			}
@@ -314,6 +316,17 @@ component {
 		}
 	}
 
+	/**
+	 * ForgeBox zips (fb / fbl) are built for final releases and for versions whose
+	 * jar is no older than 24 hours. A non-release without a usable date-jar is skipped.
+	 */
+	public boolean function shouldBuildForgeBox(required struct s3) {
+		// a release has no qualifier (SNAPSHOT, RC, BETA, ALPHA)
+		if ( find("-", s3.version ?: "") == 0 ) return true;
+		if ( !structKeyExists(s3, "date-jar") || !isDate(s3["date-jar"]) ) return false;
+		return dateDiff("n", s3["date-jar"], now()) <= 24 * 60;
+	}
+
 	/*
 		MARK: Create Artifacts
 	*/
@@ -331,7 +344,8 @@ component {
 				try {
 					// check and if necessary create other artifacts
 					var list="lco,war,light,express";
-					if(includingForgeBox)list&=",fb,fbl";
+					// ForgeBox zips only for releases, or for jars not older than 24 hours
+					if(includingForgeBox && shouldBuildForgeBox(s3))list&=",fb,fbl";
 
 					systemOutput("createArtifacts() Starting ( #s3.version# )",1,1);
 					var c= 0;

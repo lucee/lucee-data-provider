@@ -52,7 +52,11 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		directoryCreate( buildDir & "express-templates", true );
 
 		var srcJar = fetch( arguments.version  & ".jar" );
-		FileCopy( srcJar, buildDir & listLast( srcJar, "/\" ) );
+		var destJar = buildDir & listLast( srcJar, "/\" );
+		FileCopy( srcJar, destJar );
+		// FileCopy may keep the source last-modified; a cached jar older than 24h
+		// would otherwise skip ForgeBox zips for SNAPSHOT versions
+		createObject( "java", "java.io.File" ).init( destJar ).setLastModified( now().getTime() );
 
 		/* 
 		could use https://update.lucee.org/rest/update/provider/expressTemplates for now rely on these existing on s3
