@@ -645,7 +645,8 @@ component {
 				}
 			}
 
-			if ( extended ) return versions;
+			// lower case keys, as the legacy provider answers them
+			if ( extended ) return services.LowerKeys::copy( versions );
 			var arr=[];
 			loop struct=versions index="local.vs" item="local.data" {
 				arrayAppend(arr,{'vs':vs,'version':data.version});
@@ -687,7 +688,7 @@ component {
 
 		local.mr=new services.legacy.MavenRepo();
 		try {
-			return mr.get(arguments.version,arguments.extended);
+			return services.LowerKeys::copy( mr.get(arguments.version,arguments.extended) );
 		}
 		catch(e){
 			return {"type":"error","message":e.message};
