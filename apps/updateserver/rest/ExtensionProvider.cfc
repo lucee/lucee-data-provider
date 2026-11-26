@@ -21,7 +21,7 @@ component {
 		var retVal   = { meta={
 			  title       = "Lucee Association Switzerland Extension Store (#hostName#)"
 			, description = ""
-			, image       = "https://#hostName#/extension/extension-provider.png"
+			, image       = "https://#hostName#/extension-provider.png"
 			, url         = "https://#hostName#"
 			, mode        = "production"
 		} };

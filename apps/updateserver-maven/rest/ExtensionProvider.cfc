@@ -144,7 +144,7 @@ component {
 		return {
 			  title       = "Lucee Association Switzerland Extension Store (#arguments.hostName#)"
 			, description = ""
-			, image       = "https://#arguments.hostName#/extension/extension-provider.png"
+			, image       = "https://#arguments.hostName#/extension-provider.png"
 			, url         = "https://#arguments.hostName#"
 			, mode        = "production"
 		};
