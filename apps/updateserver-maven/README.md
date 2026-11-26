@@ -25,10 +25,11 @@ Expected differences versus Pixl8 (`https://update.lucee.org` /
   4.x, fewer old snapshots, but the newest releases)
 - core and extension downloads redirect to `maven.lucee-services.com` or
   Maven Central instead of `cdn.lucee.org` / `ext.lucee.org`
-- endpoints that only exist against S3 answer **501**: `expressTemplates`,
-  `list-missing` and `buildLatest`
+- `expressTemplates` only exists against S3 and answers **501**
 - `forgebox/{version}` (`?light=true` for Lucee Light) redirects to the CommandBox
   engine package of that version (`FORGEBOX_ENGINE_URL`) instead of building one
+- `buildLatest` and `cleanupForgeboxSnapshots` answer **200** and do nothing,
+  `list-missing` answers **200** with `{}` (there are no flat files)
 
 ## Health check
 
