@@ -13,10 +13,17 @@
  * files are stored under listings/{generation}/ so a new revision never
  * serves another revision's JSON. clearLegacyRoot() removes leftover
  * listings/*.json from the pre-generation layout.
+ *
+ * Every entry is also kept in memory (up to maxMemoryEntries), so a request never reads the cache folder: the
+ * file is only read when this instance has no copy yet (a cold start can take what another instance built), and
+ * only written when the listing changed. On a shared Cloud Storage mount every file access is a billed
+ * operation, so with this an /info request does no storage operation at all.
  */
 component {
 
-	public function init( required string cacheDir, numeric ttlSeconds=300, numeric maxRefreshSeconds=900, string generation="" ) {
+	public function init( required string cacheDir, numeric ttlSeconds=300, numeric maxRefreshSeconds=900, string generation="", numeric maxMemoryEntries=2000 ) {
+		variables.memory           = StructNew( "synchronized" ); // key > { data, cachedAt, hash }
+		variables.maxMemoryEntries = Max( 0, Int( Val( arguments.maxMemoryEntries ) ) );
 		variables.rootDir = arguments.cacheDir;
 		if ( Right( variables.rootDir, 1 ) != "/" ) {
 			variables.rootDir &= "/";
@@ -185,15 +192,36 @@ component {
 	}
 
 	public any function put( required string key, required any data, date cachedAt=Now() ) {
-		var path = pathFor( arguments.key );
-		var payload = {
-			  cachedAt = DateTimeFormat( arguments.cachedAt, "iso" )
-			, data     = arguments.data
-		};
+		var hash = Hash( SerializeJSON( arguments.data ), "MD5" );
+		var known = variables.memory[ arguments.key ] ?: "";
 
-		services.CacheDir::writeAtomic( path, SerializeJSON( payload ) );
+		// unchanged: only the time in memory moves on, the file is not written again
+		if ( !IsStruct( known ) || known.hash != hash ) {
+			var payload = {
+				  cachedAt = DateTimeFormat( arguments.cachedAt, "iso" )
+				, data     = arguments.data
+			};
+			services.CacheDir::writeAtomic( pathFor( arguments.key ), SerializeJSON( payload ) );
+		}
+		_remember( arguments.key, arguments.data, arguments.cachedAt, hash );
 
 		return arguments.data;
+	}
+
+	// number of entries kept in memory
+	public numeric function memorySize() {
+		return StructCount( variables.memory );
+	}
+
+	private void function _remember( required string key, required any data, required date cachedAt, string hash="" ) {
+		if ( !StructKeyExists( variables.memory, arguments.key ) && StructCount( variables.memory ) >= variables.maxMemoryEntries ) {
+			return; // full: this key is served from the file
+		}
+		variables.memory[ arguments.key ] = {
+			  data     = arguments.data
+			, cachedAt = arguments.cachedAt
+			, hash     = Len( arguments.hash ) ? arguments.hash : Hash( SerializeJSON( arguments.data ), "MD5" )
+		};
 	}
 
 	/**
@@ -250,6 +278,11 @@ component {
 	}
 
 	private any function _read( required string key ) {
+		var mem = variables.memory[ arguments.key ] ?: "";
+		if ( IsStruct( mem ) ) {
+			return mem;
+		}
+
 		var path = pathFor( arguments.key );
 
 		if ( !FileExists( path ) ) {
@@ -268,6 +301,8 @@ component {
 					return "";
 				}
 			}
+			// from now on served from memory
+			_remember( arguments.key, parsed.data, parsed.cachedAt );
 
 			return parsed;
 		} catch ( any e ) {
