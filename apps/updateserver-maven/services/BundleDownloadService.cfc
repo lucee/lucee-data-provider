@@ -20,7 +20,7 @@ component accessors=true {
 		// Get it from cache (eventually everything will end up here)
 		var bundleInfo = _cacheLookup( argumentCollection=arguments );
 
-		if ( StructCount( bundleInfo ) && ( Len( bundleInfo.file ?: "" ) || Len( bundleInfo.url ?: "" ) ) ) {
+		if ( StructCount( bundleInfo ) ) {
 			return bundleInfo;
 		}
 
@@ -130,31 +130,54 @@ component accessors=true {
 		var key       = _getCacheKey( argumentCollection=arguments );
 		var fromCache = StructKeyExists( _lookupCache, key ) ? _lookupCache[ key ] : {};
 
-		if ( StructIsEmpty( fromCache ) || ( !Len( fromCache.file ?: "" ) && !Len( fromCache.url ?: "" ) ) ) {
-			var disk = _cachedJarPath( arguments.bundleName, arguments.bundleVersion );
-			if ( Len( disk ) && FileExists( disk ) ) {
-				fromCache = _createBundleInfo( argumentCollection=arguments, bundleUrl="", file=disk, cacheExpires="never" );
-				_lookupCache[ key ] = fromCache;
-				return fromCache;
+		// A jar that was extracted from a lex lives in the temp folder of this instance, when it is gone (the folder
+		// is not kept) it is looked up again. An entry from an earlier version of this cache that points to a
+		// .lex is not an OSGi bundle either. Both checks are local, nothing goes to the storage.
+		if ( StructCount( fromCache ) ) {
+			var staleFile = Len( fromCache.file ?: "" ) && !FileExists( fromCache.file );
+			var lexUrl    = Len( fromCache.url ?: "" ) && _isLex( fromCache.url );
+			if ( staleFile || lexUrl ) {
+				fromCache = {};
+				StructDelete( _lookupCache, key );
 			}
 		}
 
 		if ( StructIsEmpty( fromCache ) ) {
-			_lookupCache[ key ] = fromCache = _s3Lookup( argumentCollection=arguments );
+			var disk = _cachedJarPath( arguments.bundleName, arguments.bundleVersion );
+			if ( FileExists( disk ) ) {
+				fromCache = _createBundleInfo( argumentCollection=arguments, bundleUrl="", file=disk, cacheExpires="never" );
+				_put( key, fromCache );
+				return fromCache;
+			}
+
+			fromCache = _s3Lookup( argumentCollection=arguments );
+			if ( StructCount( fromCache ) && Len( fromCache.url ?: "" ) && _isLex( fromCache.url ) ) {
+				fromCache = {};
+			}
+			_put( key, fromCache );
 		}
 
 		if ( IsDate( fromCache.cacheExpires ?: "" ) && Now() > fromCache.cacheExpires ) {
-			_lookupCache[ key ] = fromCache = {};
+			_put( _getCacheKey( argumentCollection=arguments ), {} );
+			fromCache = {};
 			_removeFromS3( argumentCollection=arguments );
 		}
 
 		return fromCache;
 	}
 
+	// the lookups are kept in memory, bounded so a stream of made up bundle names cannot grow it without end
+	private void function _put( required string key, required struct info ) {
+		if ( StructCount( _lookupCache ) >= 20000 ) {
+			variables._lookupCache = {};
+		}
+		_lookupCache[ arguments.key ] = arguments.info;
+	}
+
 	private function _saveToCache( bundleName, bundleVersion, bundleUrl, cacheExpires ) {
 		var bundleInfo = _createBundleInfo( argumentCollection=arguments );
 
-		_lookupCache[ _getCacheKey( argumentCollection=arguments ) ] = bundleInfo;
+		_put( _getCacheKey( argumentCollection=arguments ), bundleInfo );
 		_storeToS3( argumentCollection=arguments, bundleInfo=bundleInfo );
 
 		return bundleInfo;
@@ -296,60 +319,116 @@ component accessors=true {
 
 	/**
 	 * Download or open a .lex, extract every jars/*.jar, index them by
-	 * Bundle-SymbolicName and Bundle-Version under CACHE_DIRECTORY, and
-	 * return the jar that matches the requested bundle (never the lex).
+	 * Bundle-SymbolicName and Bundle-Version in the temp folder of this instance
+	 * (never on the shared storage mount: reading or listing there is a billed
+	 * storage operation per request), and return the jar that matches the
+	 * requested bundle (never the lex). The lex itself is not kept, the lookups
+	 * are in memory and the jars are served from the local disk.
 	 */
 	private struct function _bundlesFromLex( string lexUrl="", string lexName="", required string bundleName, required string bundleVersion ) {
-		var lexFile = "";
-
 		if ( Len( arguments.lexUrl ) && !_isLex( arguments.lexUrl ) ) {
 			return {};
 		}
 
-		if ( Len( arguments.lexUrl ) && FileExists( arguments.lexUrl ) && !ReFindNoCase( "^https?://", arguments.lexUrl ) ) {
-			lexFile = arguments.lexUrl;
-		} else if ( Len( arguments.lexUrl ) ) {
-			lexFile = _downloadLex( arguments.lexUrl, arguments.lexName );
+		// one download per lex at a time, the ones waiting find the jars indexed by the first
+		lock name="lucee-bundle-lex-#Hash( arguments.lexName & "|" & arguments.lexUrl, "MD5" )#" type="exclusive" timeout="120" {
+			var known = _cacheLookup( arguments.bundleName, arguments.bundleVersion );
+			if ( Len( known.file ?: "" ) ) {
+				return known;
+			}
+
+			var lexFile    = "";
+			var downloaded = false;
+
+			if ( Len( arguments.lexUrl ) && FileExists( arguments.lexUrl ) && !ReFindNoCase( "^https?://", arguments.lexUrl ) ) {
+				lexFile = arguments.lexUrl;
+			} else if ( Len( arguments.lexUrl ) ) {
+				lexFile    = _downloadLex( arguments.lexUrl );
+				downloaded = Len( lexFile ) > 0;
+			}
+
+			if ( !Len( lexFile ) || !FileExists( lexFile ) ) {
+				return {};
+			}
+
+			var indexed = [];
+			try {
+				indexed = _indexJarsFromLex( lexFile );
+			} finally {
+				if ( downloaded && FileExists( lexFile ) ) {
+					try { FileDelete( lexFile ); } catch ( any ignore ) {}
+				}
+			}
+
+			return _pickIndexed( indexed, arguments.bundleName, arguments.bundleVersion );
+		}
+	}
+
+	/**
+	 * The jar of a lex for the requested bundle. An exact name and version is found by the lookup, "latest" is the
+	 * newest version of that name in the lex. The result is remembered under the requested name and version too.
+	 */
+	private struct function _pickIndexed( required array indexed, required string bundleName, required string bundleVersion ) {
+		var found = _cacheLookup( arguments.bundleName, arguments.bundleVersion );
+		if ( Len( found.file ?: "" ) ) {
+			return found;
 		}
 
-		if ( !Len( lexFile ) || !FileExists( lexFile ) ) {
+		var wanted = _normalizeBundleName( arguments.bundleName );
+		var best   = {};
+		for ( var jar in arguments.indexed ) {
+			if ( _normalizeBundleName( jar.bundleName ) != wanted ) {
+				continue;
+			}
+			if ( arguments.bundleVersion != "latest" && jar.bundleVersion != arguments.bundleVersion ) {
+				continue;
+			}
+			if ( StructIsEmpty( best ) || Compare( VersionUtils::sortableVersionString( jar.bundleVersion ), VersionUtils::sortableVersionString( best.bundleVersion ) ) > 0 ) {
+				best = jar;
+			}
+		}
+
+		if ( StructIsEmpty( best ) ) {
 			return {};
 		}
 
-		_indexJarsFromLex( lexFile );
-
+		var expires = arguments.bundleVersion == "latest" ? DateAdd( "h", 1, Now() ) : "never";
+		_rememberJar( arguments.bundleName, arguments.bundleVersion, best.file, expires );
 		return _cacheLookup( arguments.bundleName, arguments.bundleVersion );
 	}
 
-	private string function _downloadLex( required string lexUrl, string lexName="" ) {
-		var name = Len( arguments.lexName ) ? ListLast( arguments.lexName, "/\\" ) : ListLast( ListFirst( arguments.lexUrl, "?" ), "/" );
-		if ( !Len( name ) || ListLast( name, "." ) != "lex" ) {
-			name = "bundle.lex";
-		}
-		var dest = _bundleJarDir() & "lex-" & ReReplace( name, "[^A-Za-z0-9._-]", "_", "all" );
-		if ( FileExists( dest ) ) {
-			return dest;
-		}
+	private string function _normalizeBundleName( required string name ) {
+		return LCase( Replace( arguments.name, "-", ".", "all" ) );
+	}
 
+	// the lex is downloaded to a temp file, the caller deletes it once the jars are extracted
+	private string function _downloadLex( required string lexUrl ) {
 		var tmp = GetTempFile( GetTempDirectory(), "bundlelex", ".lex" );
 		try {
 			http url=arguments.lexUrl file=tmp getasbinary=true timeout=60;
 			if ( !FileExists( tmp ) || Val( GetFileInfo( tmp ).size ) == 0 ) {
+				if ( FileExists( tmp ) ) {
+					try { FileDelete( tmp ); } catch ( any ignore ) {}
+				}
 				return "";
 			}
-			FileCopy( tmp, dest );
-			return dest;
+			return tmp;
 		} catch ( any e ) {
 			SystemOutput( "Could not download the extension lex [#arguments.lexUrl#]: #e.message#", true );
-			return "";
-		} finally {
 			if ( FileExists( tmp ) ) {
 				try { FileDelete( tmp ); } catch ( any ignore ) {}
 			}
+			return "";
 		}
 	}
 
-	private void function _indexJarsFromLex( required string lexFile ) {
+	private array function _indexJarsFromLex( required string lexFile ) {
+		var indexed = [];
+		var dir     = _bundleJarDir();
+		if ( !DirectoryExists( dir ) ) {
+			DirectoryCreate( dir, true );
+		}
+
 		var zipFile = CreateObject( "java", "java.util.zip.ZipFile" ).init( arguments.lexFile );
 		try {
 			var entries = zipFile.entries();
@@ -367,6 +446,7 @@ component accessors=true {
 						var dest = _cachedJarPath( info.bundleName, info.bundleVersion );
 						FileCopy( tmp, dest );
 						_rememberJar( info.bundleName, info.bundleVersion, dest );
+						ArrayAppend( indexed, { bundleName=info.bundleName, bundleVersion=info.bundleVersion, file=dest } );
 					}
 				} catch ( any e ) {
 					SystemOutput( "Could not index [#name#] from [#arguments.lexFile#]: #e.message#", true );
@@ -379,6 +459,8 @@ component accessors=true {
 		} finally {
 			zipFile.close();
 		}
+
+		return indexed;
 	}
 
 	private void function _copyZipEntry( required any zipFile, required any entry, required string dest ) {
@@ -435,14 +517,14 @@ component accessors=true {
 		};
 	}
 
-	private void function _rememberJar( required string bundleName, required string bundleVersion, required string file ) {
-		_lookupCache[ _getCacheKey( arguments.bundleName, arguments.bundleVersion ) ] = _createBundleInfo(
+	private void function _rememberJar( required string bundleName, required string bundleVersion, required string file, any cacheExpires="never" ) {
+		_put( _getCacheKey( arguments.bundleName, arguments.bundleVersion ), _createBundleInfo(
 			  bundleName    = arguments.bundleName
 			, bundleVersion = arguments.bundleVersion
 			, bundleUrl     = ""
 			, file          = arguments.file
-			, cacheExpires  = "never"
-		);
+			, cacheExpires  = arguments.cacheExpires
+		) );
 	}
 
 	private string function _cachedJarPath( required string bundleName, required string bundleVersion ) {
@@ -451,14 +533,9 @@ component accessors=true {
 		return _bundleJarDir() & safeName & "-" & safeVer & ".jar";
 	}
 
+	// the temp folder of this instance, see _bundlesFromLex()
 	private string function _bundleJarDir() {
-		if ( !StructKeyExists( variables, "_bundleJarDir" ) ) {
-			variables._bundleJarDir = services.CacheDir::path( "bundle-jars", GetTempDirectory() & "lucee-update-cache/bundle-jars/" );
-			if ( Right( variables._bundleJarDir, 1 ) != "/" ) {
-				variables._bundleJarDir &= "/";
-			}
-		}
-		return variables._bundleJarDir;
+		return GetTempDirectory() & "lucee-update-cache/bundle-jars/";
 	}
 
 }

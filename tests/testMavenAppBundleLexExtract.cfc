@@ -49,6 +49,26 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( jfreeMf.bundleVersion ).toBe( "1.0.19.0001L" );
 			});
 
+			it( title="findBundle resolves 'latest' to the newest jar of the lex, and a jar that is gone is extracted again", body=function() {
+				var lexFile = _createLexWithBundles();
+				var svc = new services.BundleDownloadService(
+					  extensionsCdnUrl    = ""
+					, bundleS3Root        = ""
+					, bundleCdnUrl        = ""
+					, extensionMetaReader = new ldev6953.LDEV6953MetaStub()
+					, mavenMatcher        = new ldev6953.LDEV6953MatcherStub( lexFile )
+				);
+
+				var latest = svc.findBundle( "org.lucee.chart.extension", "latest" );
+				expect( FileExists( latest.file ?: "" ) ).toBeTrue();
+				expect( _bundleManifest( latest.file ).bundleVersion ).toBe( "2.0.0.1" );
+
+				// the temp folder was cleaned: the next lookup does not serve a path that does not exist
+				FileDelete( latest.file );
+				var again = svc.findBundle( "org.lucee.chart.extension", "latest" );
+				expect( FileExists( again.file ?: "" ) ).toBeTrue();
+			});
+
 		});
 	}
 

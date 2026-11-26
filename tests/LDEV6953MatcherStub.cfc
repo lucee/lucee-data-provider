@@ -6,7 +6,7 @@ component {
 	}
 
 	public function findBundleUrl( required string bundleName, string bundleVersion="latest", boolean rawSearch=false ) {
-		if ( arguments.rawSearch && arguments.bundleName == "org.lucee.chart.extension" && arguments.bundleVersion == "2.0.0.1" ) {
+		if ( arguments.rawSearch && arguments.bundleName == "org.lucee.chart.extension" && ( arguments.bundleVersion == "2.0.0.1" || arguments.bundleVersion == "latest" ) ) {
 			return variables.lexFile;
 		}
 		return "";
