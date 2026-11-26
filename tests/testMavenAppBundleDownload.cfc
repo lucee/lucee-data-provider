@@ -38,6 +38,24 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				] );
 			});
 
+			it( title="rawSearchPaths for org.lucee.chart.extension also tries the dashed .lex", body=function() {
+				var matcher = new services.legacy.MavenMatcher();
+				var paths = matcher.rawSearchPaths( "org.lucee.chart.extension", "2.0.0.1" );
+
+				expect( paths ).toInclude( "/org/lucee/chart-extension/2.0.0.1/chart-extension-2.0.0.1.lex" );
+				expect( paths ).toInclude( "/org/lucee/chart-extension/2.0.0.1/chart-extension-2.0.0.1.jar" );
+				// the naive dots-to-slashes guess is still first, but is not enough on its own
+				expect( paths ).toInclude( "/org/lucee/chart/extension/2.0.0.1/extension-2.0.0.1.jar" );
+			});
+
+			it( title="extensionFileNamesForBundle maps org.lucee.chart.extension to chart-extension-2.0.0.1.lex", body=function() {
+				var reader = new services.ExtensionMetadataReader();
+				var names = reader.extensionFileNamesForBundle( "org.lucee.chart.extension", "2.0.0.1" );
+
+				expect( names ).toInclude( "chart-extension-2.0.0.1.lex" );
+				expect( names ).toInclude( "org.lucee.chart.extension-2.0.0.1.lex" );
+			});
+
 		});
 	}
 
