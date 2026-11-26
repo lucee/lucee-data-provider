@@ -16,6 +16,10 @@ component {
 	MIN_NEW_CHANGELOG_VERSION="5.3.0.0";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
 
+	// forgebox/{version} redirects to the CommandBox engine package of that version
+	variables.forgeboxEngineUrl = server.system.environment.FORGEBOX_ENGINE_URL ?: "https://downloads.ortussolutions.com/lucee/lucee/";
+	if ( Right( variables.forgeboxEngineUrl, 1 ) != "/" ) variables.forgeboxEngineUrl &= "/";
+
 	private function logger( string text, any exception, type="info" ){
 		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
 		if ( !isNull(arguments.exception ) )
@@ -360,8 +364,35 @@ component {
 		string ioid="" restargsource="url",
 		boolean light=false restargsource="url")
 		httpmethod="GET" restpath="forgebox/{version}" {
-		_bind();
-		return _notWithoutS3( "The forgebox download" );
+		// a plain redirect, it needs no services and no storage
+		var redirect = forgeboxEngineLocation( arguments.version, arguments.light );
+
+		if ( !Len( redirect ) ) {
+			content reset=true type="text/plain";
+			header statuscode="404" statustext="Not Found";
+			echo( "version [#arguments.version#] is not a Lucee version" );
+			return;
+		}
+
+		header statuscode="302" statustext="Found";
+		header name="Location" value=redirect;
+		// a published version does not change
+		header name="Cache-Control" value="public, max-age=86400";
+		return;
+	}
+
+	/**
+	 * Location of the CommandBox engine package of a Lucee version, "" if [version] is not a Lucee version.
+	 * The qualifier is upper case, as in the version list (5.3.4.54-rc is 5.3.4.54-RC).
+	 */
+	public string function forgeboxEngineLocation( required string version, boolean light=false ) {
+		var v = UCase( Trim( arguments.version ) );
+
+		if ( !REFind( "^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(-[A-Z]+)?$", v ) ) {
+			return "";
+		}
+
+		return variables.forgeboxEngineUrl & v & "/cf-engine-" & v & ( arguments.light ? "-light" : "" ) & ".zip";
 	}
 
 	/**
