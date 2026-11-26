@@ -270,11 +270,12 @@ component {
 		);
 
 		if ( StructCount( ext ) ) {
-			return _redirectToFile( ext.filename );
+			return _redirectToFile( ext.filename, arguments.version );
 		}
 
 		_artifactNotFound( type="extension", id=arguments.id, version=arguments.version, qualifier="lex" );
 		header statuscode="404" statustext="Not Found";
+		header name="Cache-Control" value=services.DownloadCaching::forNotFound();
 	}
 
 	/**
@@ -301,11 +302,12 @@ component {
 		);
 
 		if ( StructCount( ext ) ) {
-			return _redirectToFile( ext.filename );
+			return _redirectToFile( ext.filename, arguments.version );
 		}
 
 		_artifactNotFound( type="extension", id=arguments.id, version=arguments.version, qualifier="lex" );
 		header statuscode="404" statustext="Not Found";
+		header name="Cache-Control" value=services.DownloadCaching::forNotFound();
 	}
 
 
@@ -342,19 +344,22 @@ component {
 	 * Redirects to the file of an extension. A 404 when there is no url for it, which can only be in the Maven only
 	 * mode (STORAGE=maven): a file that is in no Maven repository (there is no flat bucket to serve it from).
 	 */
-	private function _redirectToFile( required string fileName ) {
+	private function _redirectToFile( required string fileName, string version="" ) {
 		var fileUrl = variables.metaReader.getDownloadUrl( arguments.fileName, variables.cdnURL );
 
 		if ( !Len( fileUrl ) ) {
 			_artifactNotFound( type="extension", id=arguments.fileName, qualifier="lex" );
 			content type="text/plain";
 			header statuscode="404" statustext="Not Found";
+			header name="Cache-Control" value=services.DownloadCaching::forNotFound();
 			echo( "The extension file [#EncodeForHtml( arguments.fileName )#] is not available from the Maven repositories" );
 			return;
 		}
 
 		header statuscode="302" statustext="Found";
 		header name="Location" value=fileUrl;
+		// a client (or a cache in between) can follow the same redirect again without asking, see DownloadCaching
+		header name="Cache-Control" value=services.DownloadCaching::forRedirect( arguments.version );
 	}
 
 	/**
