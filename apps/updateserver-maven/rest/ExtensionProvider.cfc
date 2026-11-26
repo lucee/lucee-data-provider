@@ -38,19 +38,6 @@ component {
 		_ensureServices();
 	}
 
-	private any function _cachedListing( required string key, required any producer, boolean flush=false ) {
-		// Wait for services, then serve or rebuild this revision's listing.
-		// Do not peek() a previous revision's JSON while startup is still running.
-		// /healthcheck/ is a separate application and does not go through this method.
-		return services.ListingCache::getWhenReady(
-			  cache       = application.listingCache
-			, key         = arguments.key
-			, producer    = arguments.producer
-			, ensureReady = function() { _ensureServices(); }
-			, flush       = arguments.flush
-		);
-	}
-
 	private void function _artifactNotFound( required string type, string version="", string qualifier="", string id="" ) {
 		services.ArtifactNotFound::log(
 			  type      = arguments.type
@@ -65,7 +52,7 @@ component {
 	 * @httpmethod GET
 	 * @restPath   info
 	 */
-	remote struct function getInfo(
+	remote function getInfo(
 		  required boolean withLogo     = true      restargsource="url"
 		, required string  type         = 'release' restargsource="url"
 		, required boolean flush        = false     restargsource="url"
@@ -73,31 +60,21 @@ component {
 	) {
 		var hostName = cgi.HTTP_HOST;
 		var listType = ReFindNoCase( "^beta\.", hostName ) ? "abc" : arguments.type;
-		var cacheKey = "extension-list-" & listType & "-" & ( arguments.withLogo ? "logo" : "nologo" ) & "-" & arguments.coreVersion;
+		var logo     = arguments.withLogo;
+		var core     = arguments.coreVersion;
 
 		try {
-			// Cache only the extension list. META (title, image, url) is built
-			// from the current hostName on every request, because the cache key
-			// has no host: a listing first built for the run.app hostname would
-			// otherwise be served on extension.lucee.org, and a background
-			// refresh would keep the hostname the closure captured.
+			_bind();
 			// flush only rebuilds this listing from the loaded meta and starts a background refresh of the meta,
-			// the meta is never rebuilt on the request (that can take longer than the request may run)
-			if ( arguments.flush ) {
-				variables.metaReader.refreshIfStale( force=true );
-			}
-			var extensions = _cachedListing( cacheKey, function( boolean background=false ) {
-				// in the background refresh of a stale copy, the meta it is built from is brought up to date first,
-				// otherwise the refresh would only serialise the same old meta again. On a request (no cached copy
-				// yet) the loaded meta is used and a stale one is refreshed in the background.
-				variables.metaReader.refreshIfStale( wait=arguments.background );
-				return variables.metaReader.list(
-					  type        = listType
-					, withLogo    = withLogo
-					, coreVersion = coreVersion
-				);
-			}, arguments.flush );
-			return {
+			// the meta is never rebuilt on the request (that can take longer than the request may run). Otherwise
+			// a stale meta is refreshed in the background, the listing below is rebuilt once that changed it.
+			variables.metaReader.refreshIfStale( force=arguments.flush );
+
+			var entry = _listingJson( listType, logo, core, arguments.flush );
+
+			// META (title, image, url) is built from the current hostName on every request, it is small; the
+			// cached listing is put in as it is, so the response is the same as serialising the whole struct
+			var body = Replace( SerializeJSON( {
 				  meta       = {
 					  title       = "Lucee Association Switzerland Extension Store (#hostName#)"
 					, description = ""
@@ -105,12 +82,42 @@ component {
 					, url         = "https://#hostName#"
 					, mode        = "production"
 				  }
-				, extensions = extensions
-			};
+				, extensions = variables.listingPlaceholder
+			}, "row" ), '"' & variables.listingPlaceholder & '"', entry.json, "one" );
+
+			RestSetResponse( {
+				  status  = 200
+				, content = body
+				, headers = { "Content-Type" = "application/json;charset=UTF-8" }
+			} );
 		} catch ( any e ) {
 			// not cached: the next request tries again
 			return e;
 		}
+	}
+
+	variables.listingPlaceholder = "__LUCEE_PROVIDER_EXTENSIONS_" & Replace( CreateUUID(), "-", "", "all" ) & "__";
+
+	/**
+	 * The serialised extension listing, from memory. Keyed by the bucket of the core version (core versions that
+	 * get the same listing share one entry, see ExtensionMetadataReader.coreVersionBucket()), rebuilt in the
+	 * background once the meta changed.
+	 */
+	private struct function _listingJson( required string listType, required boolean withLogo, required string coreVersion, boolean force=false ) {
+		var reader = variables.metaReader;
+		var type   = arguments.listType;
+		var logo   = arguments.withLogo;
+		var core   = arguments.coreVersion;
+		var key    = type & "|" & ( logo ? "logo" : "nologo" ) & "|" & reader.coreVersionBucket( core );
+
+		return application.infoListingCache.get(
+			  key        = key
+			, generation = reader.getMetaGeneration()
+			, producer   = function() {
+				return SerializeJSON( reader.list( type=type, withLogo=logo, coreVersion=core ), "row" );
+			}
+			, force      = arguments.force
+		);
 	}
 
 	/**
