@@ -57,7 +57,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( variables.src ).toInclude( "DEPENDENCIES_WAIT_SECONDS" );
 				expect( variables.src ).toInclude( "DEPENDENCIES_WAIT_SECONDS ?: 180" );
 				expect( variables.src ).notToInclude( "DEPENDENCIES_WAIT_SECONDS ?: 10" );
-				expect( variables.src ).toInclude( 'thread name="#threadName#"' );
+				expect( variables.src ).toInclude( 'thread name="##threadName##"' );
 				expect( variables.src ).toInclude( 'header name="Retry-After" value="30"' );
 				// no request builds the dependencies itself anymore
 				var fn = Mid( variables.src, Find( 'restpath="dependencies/{version}"', variables.src ), 600 );
