@@ -376,10 +376,6 @@ component accessors=true {
 
 			var extensions = Duplicate( _getServed() );
 
-			if ( len( arguments.coreVersion ) ) {
-				extensions = _filterByCoreVersion( extensions, arguments.coreVersion );
-			}
-
 			// LDEV-6789: filter by release type first, so the version an extension is listed with is the newest one of
 			// that type (the newest final for "release"), and its older versions are of that type too
 			if ( arguments.type != "all" ) {
@@ -397,6 +393,16 @@ component accessors=true {
 					if ( row1.versionSortable < row2.versionSortable ) return 1;
 					return 0;
 				} );
+			}
+
+			// Keep a row when an older version of the meta fits the core, even if the latest does not (that version
+			// is then the one listed). Maven-only versions are attached after this, see _fillOlderFromMavenVersions.
+			if ( len( arguments.coreVersion ) ) {
+				if ( arguments.all ) {
+					extensions = _filterByCoreVersion( extensions, arguments.coreVersion );
+				} else {
+					extensions = filterCollapsedByCoreVersion( extensions, arguments.coreVersion );
+				}
 			}
 
 			if ( !arguments.withLogo ) {
@@ -504,42 +510,78 @@ component accessors=true {
 		var exts = _mapExtensionQueryByFilename( getExtensionMeta() );
 
 		if ( arguments.bundleVersion == "latest" ) {
-			var allMatches = [];
-			for ( var lexFile in exts ) {
-				if ( lexFile.startsWith( arguments.bundleName & "-" ) ) {
-					return lexFile;
-				}
-				if ( lexFile.startsWith( Replace( arguments.bundleName, '-', '.', 'all' ) & "-" ) ) {
-					return lexFile;
-				}
-				if ( lexFile.startsWith( Replace( arguments.bundleName, '.', '-', 'all' ) & "-" ) ) {
-					return lexFile;
-				}
-				if ( lexFile.startsWith( Replace( arguments.bundleName, '-', '.', 'all' ) & "." ) ) {
-					return lexFile;
+			for ( var prefix in _bundleLexNamePrefixes( arguments.bundleName ) ) {
+				for ( var lexFile in exts ) {
+					if ( lexFile.startsWith( prefix & "-" ) || lexFile.startsWith( prefix & "." ) ) {
+						return lexFile;
+					}
 				}
 			}
 			return "";
 		}
 
-		var tries = [
-		      arguments.bundleName & "-" & arguments.bundleVersion & ".lex"
-			, Replace( arguments.bundleName,'.','-','all' ) & "-" & arguments.bundleVersion & ".lex"
-			, arguments.bundleName & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex"
-			, Replace( arguments.bundleName, '.', '-', 'all' ) & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex"
-			, Replace( arguments.bundleName, '.', '-', 'all' ) & "-" & Replace( arguments.bundleVersion,'-','.','all') & ".lex"
-			, Replace( arguments.bundleName, '-', '.', 'all' ) & "-" & Replace( arguments.bundleVersion,'.','-','all') & ".lex"
-			, Replace( arguments.bundleName, '-', '.', 'all' ) & "-" & Replace( arguments.bundleVersion,'-','.','all') & ".lex"
-			, Replace( arguments.bundleName, '-', '.', 'all' ) & "." & Replace( arguments.bundleVersion,'-','.','all') & ".lex"
-		];
-
-		for( var name in tries ) {
+		for ( var name in extensionFileNamesForBundle( arguments.bundleName, arguments.bundleVersion ) ) {
 			if ( StructKeyExists( exts, name ) ) {
 				return name;
 			}
 		}
 
 		return "";
+	}
+
+	/**
+	 * Filenames to try when an OSGi bundle name should match an extension .lex.
+	 * org.lucee.chart.extension / 2.0.0.1 also tries chart-extension-2.0.0.1.lex.
+	 */
+	public array function extensionFileNamesForBundle( required string bundleName, required string bundleVersion ) {
+		var names = [];
+		var seen  = {};
+		var versions = [
+			  arguments.bundleVersion
+			, Replace( arguments.bundleVersion, ".", "-", "all" )
+			, Replace( arguments.bundleVersion, "-", ".", "all" )
+		];
+
+		for ( var prefix in _bundleLexNamePrefixes( arguments.bundleName ) ) {
+			for ( var version in versions ) {
+				for ( var sep in [ "-", "." ] ) {
+					var name = prefix & sep & version & ".lex";
+					if ( !StructKeyExists( seen, name ) ) {
+						seen[ name ] = true;
+						ArrayAppend( names, name );
+					}
+				}
+			}
+		}
+
+		return names;
+	}
+
+	private array function _bundleLexNamePrefixes( required string bundleName ) {
+		var prefixes = [
+			  arguments.bundleName
+			, Replace( arguments.bundleName, ".", "-", "all" )
+			, Replace( arguments.bundleName, "-", ".", "all" )
+		];
+
+		// org.lucee.chart.extension -> chart-extension (the Maven artifact / lex filename)
+		if ( Left( arguments.bundleName, 10 ) == "org.lucee." ) {
+			var shortName = Mid( arguments.bundleName, 11 );
+			ArrayAppend( prefixes, shortName );
+			ArrayAppend( prefixes, Replace( shortName, ".", "-", "all" ) );
+			ArrayAppend( prefixes, Replace( shortName, "-", ".", "all" ) );
+		}
+
+		var out  = [];
+		var seen = {};
+		for ( var prefix in prefixes ) {
+			if ( Len( prefix ) && !StructKeyExists( seen, prefix ) ) {
+				seen[ prefix ] = true;
+				ArrayAppend( out, prefix );
+			}
+		}
+
+		return out;
 	}
 
 // PRIVATE HELPERS
@@ -1719,15 +1761,22 @@ component accessors=true {
 				return Compare( services.VersionUtils::sortableVersionString( b ), services.VersionUtils::sortableVersionString( a ) );
 			} );
 
+			var cores = ( ListFindNoCase( QueryColumnList( arguments.extensions ), "coreVersion" ) && IsArray( arguments.extensions.coreVersion[ i ] ) )
+				? Duplicate( arguments.extensions.coreVersion[ i ] ) : [];
+
 			for ( var version in extra ) {
 				ArrayAppend( older, version );
 				ArrayAppend( names, artifact & "-" & version & ".lex" );
 				ArrayAppend( dates, "" );
+				ArrayAppend( cores, "" );
 			}
 
 			arguments.extensions.older    [ i ] = older;
 			arguments.extensions.olderName[ i ] = names;
 			arguments.extensions.olderDate[ i ] = dates;
+			if ( ListFindNoCase( QueryColumnList( arguments.extensions ), "coreVersion" ) ) {
+				arguments.extensions.coreVersion[ i ] = cores;
+			}
 		}
 	}
 
@@ -1834,6 +1883,86 @@ component accessors=true {
 		}
 
 		return changed;
+	}
+
+	/**
+	 * For a collapsed listing (latest + older[]), keep the row when any
+	 * version fits the running core. If the latest does not fit, promote
+	 * the newest older version that does. Used by list() when all=false.
+	 */
+	public query function filterCollapsedByCoreVersion( required query extensions, required string coreVersion ) {
+		for ( var i=QueryRecordCount( arguments.extensions ); i>=1; i-- ) {
+			var chosen = _versionsFittingCore( arguments.extensions, i, arguments.coreVersion );
+			if ( !ArrayLen( chosen ) ) {
+				QueryDeleteRow( arguments.extensions, i );
+				continue;
+			}
+
+			var current = chosen[ 1 ];
+			if ( current.version != arguments.extensions.version[ i ] ) {
+				arguments.extensions.version        [ i ] = current.version;
+				arguments.extensions.filename       [ i ] = current.filename;
+				arguments.extensions.minCoreVersion [ i ] = current.minCore;
+				if ( ListFindNoCase( QueryColumnList( arguments.extensions ), "created" ) ) {
+					arguments.extensions.created[ i ] = current.created;
+				}
+				if ( ListFindNoCase( QueryColumnList( arguments.extensions ), "versionSortable" ) ) {
+					arguments.extensions.versionSortable[ i ] = services.VersionUtils::sortableVersionString( current.version );
+				}
+			}
+
+			var older     = [];
+			var olderName = [];
+			var olderDate = [];
+			var cores     = [];
+			for ( var j=2; j<=ArrayLen( chosen ); j++ ) {
+				ArrayAppend( older,     chosen[ j ].version );
+				ArrayAppend( olderName, chosen[ j ].filename );
+				ArrayAppend( olderDate, chosen[ j ].created );
+				ArrayAppend( cores,     chosen[ j ].minCore );
+			}
+			arguments.extensions.older    [ i ] = older;
+			arguments.extensions.olderName[ i ] = olderName;
+			arguments.extensions.olderDate[ i ] = olderDate;
+			if ( ListFindNoCase( QueryColumnList( arguments.extensions ), "coreVersion" ) ) {
+				arguments.extensions.coreVersion[ i ] = cores;
+			}
+		}
+
+		return arguments.extensions;
+	}
+
+	private array function _versionsFittingCore( required query extensions, required numeric row, required string coreVersion ) {
+		var fits = [];
+		var i    = arguments.row;
+		if ( _fitsCoreVersion( arguments.extensions.minCoreVersion[ i ], arguments.coreVersion ) ) {
+			ArrayAppend( fits, {
+				  version  = arguments.extensions.version[ i ]
+				, filename = arguments.extensions.filename[ i ]
+				, minCore  = arguments.extensions.minCoreVersion[ i ]
+				, created  = ListFindNoCase( QueryColumnList( arguments.extensions ), "created" ) ? arguments.extensions.created[ i ] : ""
+			} );
+		}
+
+		var older   = IsArray( arguments.extensions.older[ i ] ) ? arguments.extensions.older[ i ] : [];
+		var names   = IsArray( arguments.extensions.olderName[ i ] ) ? arguments.extensions.olderName[ i ] : [];
+		var dates   = IsArray( arguments.extensions.olderDate[ i ] ) ? arguments.extensions.olderDate[ i ] : [];
+		var cores   = ( ListFindNoCase( QueryColumnList( arguments.extensions ), "coreVersion" ) && IsArray( arguments.extensions.coreVersion[ i ] ) )
+			? arguments.extensions.coreVersion[ i ] : [];
+
+		for ( var j=1; j<=ArrayLen( older ); j++ ) {
+			var minCore = ArrayLen( cores ) >= j ? cores[ j ] : "";
+			if ( _fitsCoreVersion( minCore, arguments.coreVersion ) ) {
+				ArrayAppend( fits, {
+					  version  = older[ j ]
+					, filename = ArrayLen( names ) >= j ? names[ j ] : ""
+					, minCore  = minCore
+					, created  = ArrayLen( dates ) >= j ? dates[ j ] : ""
+				} );
+			}
+		}
+
+		return fits;
 	}
 
 	private function _filterByCoreVersion( required query extensions, required string coreVersion ) {

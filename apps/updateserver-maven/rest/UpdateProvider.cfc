@@ -395,7 +395,16 @@ component {
 
 		var bundle = bundleDownloadService.findBundle( argumentCollection=arguments );
 
+		if ( StructCount( bundle ) && Len( bundle.file ?: "" ) && FileExists( bundle.file ) ) {
+			return _serveLocalBundleFile( bundle.file, arguments.bundleName, arguments.bundleVersion, bundle.cacheExpires ?: "" );
+		}
+
 		if ( StructCount( bundle ) && Len( bundle.url ) ) {
+			// A .lex is not an OSGi bundle; extraction should have already replaced it.
+			if ( ListLast( ListFirst( bundle.url, "?" ), "." ) == "lex" ) {
+				_doBundle404( argumentCollection=arguments );
+				return;
+			}
 			if ( arguments.allowRedirect ){
 				return _relocateForDowload( bundle.url );
 			}
@@ -403,6 +412,19 @@ component {
 			return _serveBundleUrlLocally( bundle.url, bundle.cacheExpires );
 		}
 		_doBundle404( argumentCollection=arguments );
+	}
+
+	private function _serveLocalBundleFile( required string file, required string bundleName, required string bundleVersion, cacheExpires="" ) {
+		var expires  = IsDate( arguments.cacheExpires ) ? arguments.cacheExpires : DateAdd( "d", 30, Now() );
+		var fileName = arguments.bundleName & "-" & arguments.bundleVersion & ".jar";
+
+		header name="cache-control" value="public, max-age=#DateDiff( "s", Now(), expires )#";
+		header name="Content-Disposition" value="attachment; filename=""#fileName#""";
+		content
+			reset      = true
+			file       = arguments.file
+			type       = "application/java-archive"
+			deletefile = false;
 	}
 
 	private function _relocateForDowload( bundleUrl ) {
