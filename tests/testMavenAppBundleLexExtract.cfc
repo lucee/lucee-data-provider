@@ -73,13 +73,14 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 	}
 
 	private string function _createLexWithBundles() {
-		var src = variables.work & "src/";
+		var id  = CreateUniqueId();
+		var src = variables.work & "src-" & id & "/";
 		DirectoryCreate( src & "META-INF", true );
 		DirectoryCreate( src & "jars", true );
 		FileWrite( src & "META-INF/MANIFEST.MF", "Manifest-Version: 1.0#Chr(10)#id: D46B46A9-A0E3-44E1-D972A04AC3A8DC10#Chr(10)#version: 2.0.0.1#Chr(10)#" );
 		_writeOsgiJar( src & "jars/chart-extension-2.0.0.1.jar", "org.lucee.chart.extension", "2.0.0.1" );
 		_writeOsgiJar( src & "jars/org-jfree-chart-1-0-19-0001L.jar", "org.jfree.chart", "1.0.19.0001L" );
-		var lexFile = variables.work & "chart-extension-2.0.0.1.lex";
+		var lexFile = variables.work & "chart-extension-2.0.0.1-" & id & ".lex";
 		_zipDirectory( src, lexFile );
 		return lexFile;
 	}
