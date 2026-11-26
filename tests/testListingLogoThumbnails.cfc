@@ -53,6 +53,17 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( smaller ).toBeGT( 0 );
 			});
 
+			it( title="the listing can be built more than once on the same reader (with and without a maximum size)", body=function() {
+				for ( var size in [ "", "260x100" ] ) {
+					var reader = _reader( size );
+					var first  = reader.list( type="all", withLogo=true );
+					var second = reader.list( type="all", withLogo=true );
+					var third  = reader.list( type="release", withLogo=true );
+					expect( QueryRecordCount( second ) ).toBe( QueryRecordCount( first ) );
+					expect( QueryRecordCount( third ) ).toBeGT( 0 );
+				}
+			});
+
 			it( title="withLogo=false still strips the logos", body=function() {
 				var none = _reader( "260x100" ).list( type="all", withLogo=false );
 				for ( var i=1; i<=QueryRecordCount( none ); i++ ) {
