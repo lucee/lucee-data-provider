@@ -24,6 +24,8 @@ component accessors=true {
 	property name="extensionMeta"         type="query";
 	property name="extensionVersions"     type="struct";
 	property name="bundleDownloadService" type="any";
+	// opt-in: logos of the listing scaled to fit this size ("260x100"), empty: the logos as they are, see LogoThumbnails
+	property name="listingLogoMaxSize"    type="string" default="";
 
 	// LDEV-6789: file name > path relative to mavenRoot, for the files that are not in the flat bucket
 	variables._mavenPaths   = {};
@@ -397,6 +399,8 @@ component accessors=true {
 
 			if ( !arguments.withLogo ) {
 				_stripExtensionLogos( extensions );
+			} else {
+				_logoThumbnails().shrinkAll( extensions );
 			}
 
 			if ( !arguments.all ) {
@@ -1753,6 +1757,14 @@ component accessors=true {
 		}
 
 		return true;
+	}
+
+	private function _logoThumbnails() {
+		if ( !IsObject( variables._logoThumbnails ?: "" ) ) {
+			variables._logoThumbnails = new services.LogoThumbnails( getListingLogoMaxSize() );
+		}
+
+		return variables._logoThumbnails;
 	}
 
 	private function _stripExtensionLogos( extensions, type ) {
