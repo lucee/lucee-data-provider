@@ -186,7 +186,7 @@ component accessors=true {
 		}
 
 		try {
-			FileWrite( _getS3CacheFilePath( argumentCollection=arguments ), SerializeJson( bundleInfo ) );
+			services.CacheDir::writeAtomic( _getS3CacheFilePath( argumentCollection=arguments ), SerializeJson( bundleInfo ) );
 		} catch( any e ) { /* just a cache, failing is fine */ }
 	}
 

@@ -34,35 +34,116 @@ component {
 		application.extensionsS3Root      = "";
 		application.servicesReady         = false;
 		application.servicesError         = "";
+		application.servicesFailedAt      = 0;
+		application.servicesLoading       = false;
 		application.listingCache          = _createListingCache();
+		// the serialised /info listings, in memory (see services.InfoListingCache)
+		application.infoListingCache      = new services.InfoListingCache();
 
-		thread action="run" name="lucee-provider-maven-load-services" {
+		_startServicesLoad();
+	}
+
+	/**
+	 * Load the services in a background thread. A failure (for example an IO
+	 * error on the shared cache folder) is not kept: the next request after
+	 * SERVICES_RETRY_SECONDS starts a new load, see _retryFailedServicesLoad().
+	 */
+	private function _startServicesLoad() {
+		var start = false;
+		lock name="lucee-provider-maven-load-services" type="exclusive" timeout=5 throwOnTimeout=false {
+			if ( !( application.servicesLoading ?: false ) ) {
+				application.servicesLoading = true;
+				application.servicesError   = "";
+				start = true;
+			}
+		}
+		if ( !start ) {
+			return;
+		}
+
+		thread action="run" name="lucee-provider-maven-load-services-#CreateUUID()#" {
 			try {
 				setting requesttimeout=600;
-				_loadServices();
-				application.servicesReady = true;
-				SystemOutput( "Maven provider services are ready", true );
-				// Jira is filled in the background and must never gate readiness
-				_refreshJiraAsync();
+				// a storage error is often gone a few seconds later: try again right
+				// away before the load counts as failed
+				loaded    = false;
+				lastError = "";
+				for ( attempt = 1; attempt <= 3 && !loaded; attempt++ ) {
+					try {
+						_loadServices();
+						loaded = true;
+					} catch ( any e ) {
+						lastError = e;
+						SystemOutput( "Maven provider services load attempt #attempt# of 3 failed: #e.message#", true );
+						if ( attempt < 3 ) {
+							sleep( attempt * 2000 );
+						}
+					}
+				}
+
+				if ( loaded ) {
+					application.servicesError = "";
+					application.servicesReady = true;
+					services.ProviderHealth::markHealthy();
+					services.ProviderHealth::markReady();
+					SystemOutput( "Maven provider services are ready", true );
+					// Jira is filled in the background and must never gate readiness
+					_refreshJiraAsync();
+				} else {
+					// services loaded earlier (if any) are kept and still served
+					application.servicesFailedAt = GetTickCount();
+					application.servicesError    = lastError.message;
+					services.ProviderHealth::markFailing();
+					SystemOutput( "Maven provider services failed to load, retrying in #_servicesRetrySeconds()#s: #lastError.message#", true );
+					SystemOutput( lastError, true );
+				}
 			} catch ( any e ) {
-				application.servicesError = e.message;
+				application.servicesFailedAt = GetTickCount();
+				application.servicesError    = e.message;
 				SystemOutput( "Maven provider services failed to load: #e.message#", true );
-				SystemOutput( e, true );
+			} finally {
+				application.servicesLoading = false;
 			}
 		}
 	}
 
+	private function _retryFailedServicesLoad() {
+		if ( !Len( application.servicesError ?: "" ) ) {
+			return;
+		}
+		if ( ( GetTickCount() - Val( application.servicesFailedAt ?: 0 ) ) < _servicesRetrySeconds() * 1000 ) {
+			return;
+		}
+		_startServicesLoad();
+	}
+
+	private numeric function _servicesRetrySeconds() {
+		var seconds = Val( server.system.environment.SERVICES_RETRY_SECONDS ?: 30 );
+
+		return seconds > 0 ? seconds : 30;
+	}
+
 	function onRequestStart() output=true {
-		// Cold start can take a couple of minutes (Maven metadata). The default
-		// 50s request timeout would otherwise 500 waiting requests.
-		setting requesttimeout=600;
+		// Below the platform's request timeout (Cloud Run: 300s), so a request
+		// that runs too long ends with Lucee's own error, not a cut connection.
+		// Slow work (service load, meta and listing refreshes) runs in threads
+		// with their own timeout.
+		setting requesttimeout=_requestTimeoutSeconds();
 		header name="Content-Security-Policy" value="sandbox; object-src 'none'; script-src 'none'";
 
 		if ( this.allowReload && StructKeyExists( url, "fwreinit" ) ) {
-			application.servicesReady = false;
-			_loadServices();
-			application.servicesReady = true;
-			_refreshJiraAsync();
+			// the services in use stay until the new ones are loaded, a failed
+			// reload keeps serving them
+			try {
+				_loadServices();
+				application.servicesError = "";
+				application.servicesReady = true;
+				services.ProviderHealth::markHealthy();
+				services.ProviderHealth::markReady();
+				_refreshJiraAsync();
+			} catch ( any e ) {
+				SystemOutput( "Maven provider services reload failed, the loaded services are kept: #e.message#", true );
+			}
 		}
 
 		var allowedPaths = [ "rest", "healthcheck", "index.cfm", "warmup" ];
@@ -74,6 +155,33 @@ component {
 			echo( "not found" );
 			abort;
 		}
+
+		// only while the services are not ready: a failed load is started again, and a REST request is answered
+		// with 503 right away instead of waiting for the load (clients retry, and /ready/ keeps new instances out
+		// of rotation until this is no longer the case)
+		if ( !( application.servicesReady ?: false ) ) {
+			_retryFailedServicesLoad();
+
+			if ( requestedPath == "rest" ) {
+				content reset=true type="text/plain";
+				header statuscode=503 statustext="Service Unavailable";
+				header name="Retry-After" value=_retryAfterSeconds();
+				echo( "The provider is starting, try again in a moment" );
+				abort;
+			}
+		}
+	}
+
+	private numeric function _retryAfterSeconds() {
+		var seconds = Val( server.system.environment.NOT_READY_RETRY_AFTER_SECONDS ?: 30 );
+
+		return seconds > 0 ? Int( seconds ) : 30;
+	}
+
+	private numeric function _requestTimeoutSeconds() {
+		var seconds = Val( server.system.environment.REQUEST_TIMEOUT_SECONDS ?: 240 );
+
+		return seconds > 0 ? Int( seconds ) : 240;
 	}
 
 	private function _createListingCache() {
@@ -253,7 +361,12 @@ component {
 		);
 		// Cache only: an empty file is left empty here. The live Jira
 		// fetch runs in updateIssuesAsync() after servicesReady is set.
-		jiraChangelogService.loadIssues();
+		try {
+			jiraChangelogService.loadIssues();
+		} catch ( any e ) {
+			// only the changelog cache, it is filled by updateIssuesAsync() later
+			SystemOutput( "Jira issues cache could not be loaded at startup: #e.message#", true );
+		}
 		_stepEnd( "jira cache (no remote fetch)", t );
 
 		application.coreS3Root            = "";

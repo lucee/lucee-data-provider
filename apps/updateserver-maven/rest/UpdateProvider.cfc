@@ -28,7 +28,9 @@ component {
 		return IsBoolean( application.servicesReady ?: false ) && application.servicesReady;
 	}
 
-	private function _ensureServices( numeric timeoutMs=120000 ) {
+	// requests only get here once the services are ready (Application.cfc answers 503 before that), the wait only
+	// covers a request that was let in just before a reload
+	private function _ensureServices( numeric timeoutMs=5000 ) {
 		if ( variables.bound && _servicesReady() ) {
 			return;
 		}
@@ -36,7 +38,7 @@ component {
 		var started = GetTickCount();
 		while ( !_servicesReady() && ( GetTickCount() - started ) < arguments.timeoutMs ) {
 			if ( Len( application.servicesError ?: "" ) ) {
-				throw( message="Maven provider services failed to load: #application.servicesError#" );
+				throw( message="Maven provider services failed to load, retrying shortly: #application.servicesError#" );
 			}
 			sleep( 100 );
 		}
@@ -495,7 +497,6 @@ component {
 		httpmethod="GET" restpath="dependencies/{version}" {
 		_bind();
 
-		setting requesttimeout="1000";
 		local.mr=new services.legacy.MavenRepo();
 		try {
 			local.path=mr.getDependencies(version);
@@ -521,7 +522,6 @@ component {
 		httpmethod="GET" restpath="dependencies-read/{version}" {
 		_bind();
 
-		setting requesttimeout="1000";
 		local.mr=new services.legacy.MavenRepo();
 		try {
 			return mr.getOSGiDependencies(version,true);
@@ -643,8 +643,6 @@ component {
 		)
 		httpmethod="GET" restpath="list" {
 
-		setting requesttimeout="1000";
-
 		var cacheKey = "update-list-" & arguments.type & "-" & ( arguments.extended ? "extended" : "short" );
 
 		return _cachedListing( cacheKey, function() {
@@ -709,7 +707,6 @@ component {
 		httpmethod="GET" restpath="get/{version}" {
 		_bind();
 
-		setting requesttimeout="1000";
 		local.mr=new services.legacy.MavenRepo();
 		try {
 			return mr.get(arguments.version,arguments.extended);

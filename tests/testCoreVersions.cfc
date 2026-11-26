@@ -296,6 +296,18 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( core.resolveFile( "jar", "6.2.0.300" ) ).toBe( {} );
 			});
 
+			it( title="does not treat date-jar or size-jar on a flat version as an artifact type", body=function() {
+				var flat = _flatFiles();
+				var vs   = services.VersionUtils::toVersionSortable( "6.2.0.300" );
+				flat[ vs ][ "date-jar" ] = now();
+				flat[ vs ][ "size-jar" ] = 12345;
+				var core = _newVersions( _newWorld(), { flat=flat } );
+
+				expect( core.resolveFile( "jar", "6.2.0.300" ).source ).toBe( "flat" );
+				expect( core.resolveFile( "date-jar", "6.2.0.300" ) ).toBe( {} );
+				expect( core.resolveFile( "size-jar", "6.2.0.300" ) ).toBe( {} );
+			});
+
 		});
 
 		describe( "LDEV-6796 the versions a calling Lucee can load", function() {

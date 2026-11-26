@@ -12,6 +12,84 @@ component {
 		structDelete( application, "expressTemplates", false );
 	}
 
+	/**
+	 * Lists, and optionally deletes, every file at the bucket root whose name starts
+	 * with "forgebox" and ends with "-SNAPSHOT.zip" (case-insensitive). Does not
+	 * recurse and does not touch any other object. After one or more deletes, the
+	 * in-memory and on-disk versions cache is cleared (no second listing).
+	 * @return struct with dryRun, count, deleted (file names) and errors
+	 */
+	public struct function cleanupForgeboxSnapshots(boolean dryRun=false) {
+		setting requesttimeout="1000";
+
+		if (!len(trim(variables.s3Root))) {
+			throw "S3 root is not configured";
+		}
+
+		var root = variables.s3Root;
+		if (right(root, 1) != "/" && right(root, 1) != chr(92)) {
+			root &= "/";
+		}
+
+		var result = {
+			"dryRun": arguments.dryRun,
+			"count": 0,
+			"deleted": [],
+			"errors": []
+		};
+		var deletedAny = false;
+
+		// one listing of the bucket root only
+		var qry = directoryList(path:root, listInfo:"query", recurse:false);
+
+		loop query=qry {
+			var name = qry.name;
+			if (!isForgeboxSnapshotZip(name)) {
+				continue;
+			}
+			if (structKeyExists(qry, "type") && listFindNoCase("dir,directory", qry.type)) {
+				continue;
+			}
+
+			if (arguments.dryRun) {
+				arrayAppend(result.deleted, name);
+				continue;
+			}
+
+			try {
+				fileDelete(root & name);
+				arrayAppend(result.deleted, name);
+				deletedAny = true;
+			}
+			catch (e) {
+				arrayAppend(result.errors, {"name": name, "message": e.message});
+			}
+		}
+
+		result.count = arrayLen(result.deleted);
+		if (deletedAny) {
+			invalidateVersionCache();
+		}
+		return result;
+	}
+
+	private boolean function isForgeboxSnapshotZip(required string name) {
+		if (find("/", arguments.name) || find(chr(92), arguments.name) || find("..", arguments.name)) {
+			return false;
+		}
+		var n = lCase(arguments.name);
+		return left(n, 8) == "forgebox" && right(n, len("-snapshot.zip")) == "-snapshot.zip";
+	}
+
+	// clear the versions cache without listing the bucket again
+	private void function invalidateVersionCache() {
+		structDelete(application, "s3VersionData", false);
+		var cacheFile = getDirectoryFromPath(getCurrentTemplatePath()) & "cache/versions.json";
+		if (fileExists(cacheFile)) {
+			fileDelete(cacheFile);
+		}
+	}
+
 	private function logger( string text, any exception, type="info" ){
 		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
 		if ( !isNull(arguments.exception ) ){
@@ -155,6 +233,8 @@ component {
 				//if(isNull(data[version])) data[version]={};
 				data[vs]['version']=version;
 				data[vs][type]=name;
+				// date-jar comes from the directory listing (no extra S3 call). Other date-/size- fields stay unused.
+				if ( type == "jar" ) data[vs]['date-jar']=qry.dateLastModified;
 				//data[version]['date-'&type]=qry.dateLastModified;
 				//data[version]['size-'&type]=qry.size;
 			}
@@ -314,6 +394,17 @@ component {
 		}
 	}
 
+	/**
+	 * ForgeBox zips (fb / fbl) are built for final releases and for versions whose
+	 * jar is no older than 24 hours. A non-release without a usable date-jar is skipped.
+	 */
+	public boolean function shouldBuildForgeBox(required struct s3) {
+		// a release has no qualifier (SNAPSHOT, RC, BETA, ALPHA)
+		if ( find("-", s3.version ?: "") == 0 ) return true;
+		if ( !structKeyExists(s3, "date-jar") || !isDate(s3["date-jar"]) ) return false;
+		return dateDiff("n", s3["date-jar"], now()) <= 24 * 60;
+	}
+
 	/*
 		MARK: Create Artifacts
 	*/
@@ -331,7 +422,8 @@ component {
 				try {
 					// check and if necessary create other artifacts
 					var list="lco,war,light,express";
-					if(includingForgeBox)list&=",fb,fbl";
+					// ForgeBox zips only for releases, or for jars not older than 24 hours
+					if(includingForgeBox && shouldBuildForgeBox(s3))list&=",fb,fbl";
 
 					systemOutput("createArtifacts() Starting ( #s3.version# )",1,1);
 					var c= 0;

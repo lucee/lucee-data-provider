@@ -56,11 +56,95 @@ component accessors=true {
 	variables._loadInFlight             = false;
 	variables._loadStarted              = 0;
 	variables._lastListedAll            = false;
+	// versions asked for that no repository has (id|version > GetTickCount until which that is not looked up again)
+	variables._remoteMisses             = {};
+	variables._remoteMissTtlMs          = 300000;
+	variables._remoteMissMax            = 5000;
+	// file name > { fetched, artifact, version, repos }: versions fetched on demand while a meta load was running,
+	// added to the meta by that load (or the next one)
+	variables._pendingRemote            = {};
+
+	// changes whenever what is served changes (see reset()), unique per reader so a reload never reuses a generation
+	variables._readerId         = CreateUUID();
+	variables._metaGeneration   = 0;
 
 	reset();
 
 	function reset() {
-		variables._simpleCache = StructNew( "max:100" );
+		variables._simpleCache    = StructNew( "max:100" );
+		variables._metaGeneration = ( variables._metaGeneration ?: 0 ) + 1;
+		// derived from what is served, see coreVersionBucket()
+		variables._coreThresholdList = "";
+		variables._bucketMemo     = StructNew( "synchronized" );
+	}
+
+	/**
+	 * Identifies the served meta: a new value after every change of it (load, refresh, a version fetched on demand).
+	 * Caches of anything built from the meta compare it to know when they are out of date.
+	 */
+	public string function getMetaGeneration() {
+		return variables._readerId & "-" & variables._metaGeneration;
+	}
+
+	/**
+	 * The listing for a core version only depends on which of the min core versions of the served extensions that
+	 * core version satisfies (see _filterByCoreVersion and _fillOlderFromMavenVersions). Core versions that satisfy
+	 * the same ones get the same listing, this returns the same bucket for them. A core version that is not of the
+	 * form a.b.c.d is a bucket of its own, so it is answered exactly as before.
+	 */
+	public string function coreVersionBucket( string coreVersion="" ) {
+		var cv = Trim( arguments.coreVersion );
+
+		if ( !Len( cv ) ) {
+			return "any";
+		}
+
+		var memo = variables._bucketMemo;
+		if ( StructKeyExists( memo, cv ) ) {
+			return memo[ cv ];
+		}
+
+		var v      = ListToArray( cv, "." );
+		var bucket = "raw-" & cv;
+
+		if ( ArrayLen( v ) >= 4 ) {
+			try {
+				var sig = "";
+				for ( var threshold in _coreThresholds() ) {
+					sig &= services.VersionUtils::checkVersionGTE( threshold, v[ 1 ], v[ 2 ], v[ 3 ], v[ 4 ] ) ? "1" : "0";
+				}
+				bucket = "b" & Len( sig ) & "-" & LCase( Hash( sig, "MD5" ) );
+			} catch ( any e ) {
+				bucket = "raw-" & cv;
+			}
+		}
+
+		if ( StructCount( memo ) < 5000 ) {
+			memo[ cv ] = bucket;
+		}
+
+		return bucket;
+	}
+
+	// the distinct min core versions of what is served, in a stable order
+	private array function _coreThresholds() {
+		if ( IsArray( variables._coreThresholdList ) ) {
+			return variables._coreThresholdList;
+		}
+
+		var seen   = {};
+		var served = _getServed();
+		for ( var i=1; i<=QueryRecordCount( served ); i++ ) {
+			var minCore = Trim( served.minCoreVersion[ i ] );
+			if ( Len( minCore ) ) {
+				seen[ minCore ] = true;
+			}
+		}
+		var thresholds = StructKeyArray( seen );
+		ArraySort( thresholds, "textnocase" );
+		variables._coreThresholdList = thresholds;
+
+		return thresholds;
 	}
 
 	// the settings change what is served, so when the meta is loaded already, what is served is rebuilt
@@ -175,6 +259,9 @@ component accessors=true {
 			// LDEV-6795: the packaging of the files we don't know it of yet (only needed with a min core version for Maven)
 			metaChanged = _backfillPackaging( meta ) || metaChanged;
 
+			// versions fetched on demand while this load ran
+			metaChanged = _addPendingRemote( meta ) || metaChanged;
+
 			if ( metaChanged ) {
 				QuerySort( meta, "id,versionSortable", "asc,desc" );
 				_writeMetaFileToS3( meta );
@@ -222,8 +309,8 @@ component accessors=true {
 	 * meantime), or with wait=true on this request (the listing cache does that, it refreshes in the background
 	 * itself). Only one background refresh runs at a time.
 	 */
-	public void function refreshIfStale( boolean wait=false ) {
-		if ( !isMetaStale() ) {
+	public void function refreshIfStale( boolean wait=false, boolean force=false ) {
+		if ( !arguments.force && !isMetaStale() ) {
 			return;
 		}
 
@@ -302,11 +389,10 @@ component accessors=true {
 					if ( row1.versionSortable < row2.versionSortable ) return 1;
 					return 0;
 				} );
-				_fillOlderFromMavenVersions( extensions, arguments.type );
 			}
 
-			// After older versions are attached (and only then): keep a row
-			// when an older version fits the core, even if the latest does not.
+			// Keep a row when an older version of the meta fits the core, even if the latest does not (that version
+			// is then the one listed). Maven-only versions are attached after this, see _fillOlderFromMavenVersions.
 			if ( len( arguments.coreVersion ) ) {
 				if ( arguments.all ) {
 					extensions = _filterByCoreVersion( extensions, arguments.coreVersion );
@@ -317,6 +403,10 @@ component accessors=true {
 
 			if ( !arguments.withLogo ) {
 				_stripExtensionLogos( extensions );
+			}
+
+			if ( !arguments.all ) {
+				_fillOlderFromMavenVersions( extensions, arguments.type, arguments.coreVersion );
 			}
 
 			variables._simpleCache[ cacheKey ] = extensions;
@@ -348,12 +438,15 @@ component accessors=true {
 			if ( arguments.version == "latest" || isEmpty( arguments.version ) ) {
 				arguments.version = _getLatestVersion( mapped[ arguments.id ], arguments.coreVersion, arguments.type );
 			}
+			var direct = {};
 			if ( !StructKeyExists( mapped[ arguments.id ], arguments.version ) && getMavenOnly() ) {
-				_ensureRemoteVersion( arguments.id, arguments.version );
+				direct = _ensureRemoteVersion( arguments.id, arguments.version );
 				mapped = getExtensionVersions();
 			}
-			if ( StructKeyExists( mapped[ arguments.id ], arguments.version ) ) {
-				var ext = StructCopy( mapped[ arguments.id ][ arguments.version ] );
+			if ( StructKeyExists( mapped[ arguments.id ], arguments.version ) || !StructIsEmpty( direct ) ) {
+				var ext = StructKeyExists( mapped[ arguments.id ], arguments.version )
+					? StructCopy( mapped[ arguments.id ][ arguments.version ] )
+					: direct;
 
 				// LDEV-6795: a version that is asked for explicitly is not served to a core that can't load it. Without a
 				// core version there is nothing to check against, so it is served as it is.
@@ -622,62 +715,153 @@ component accessors=true {
 	 * A version that is asked for explicitly but not in the meta (Maven only lists the newest ones at startup):
 	 * only that version is looked up (see MavenExtensionSource.findVersion) and, when it is not known yet, its file
 	 * is read and added to the meta. The rest of the meta is left as it is, nothing else is listed or downloaded.
+	 *
+	 * The lookup and the download only lock this one file, never the whole meta, so a slow or missing version
+	 * does not hold up requests for other extensions, and a running meta load does not hold up this one. A version
+	 * no repository has is remembered for a while (_remoteMissTtlMs) and answered as not found right away.
+	 *
+	 * Returns the details of the version when they could not be added to the meta yet (a meta load is running and
+	 * adds them), an empty struct otherwise (added, or not available).
 	 */
-	private void function _ensureRemoteVersion( required string id, required string version ) {
+	private struct function _ensureRemoteVersion( required string id, required string version ) {
 		if ( !Len( arguments.version ) || arguments.version == "latest" ) {
-			return;
+			return {};
+		}
+		var missKey = arguments.id & "|" & arguments.version;
+		if ( Val( variables._remoteMisses[ missKey ] ?: 0 ) > GetTickCount() ) {
+			return {};
 		}
 		var artifact = _artifactForId( arguments.id );
 		if ( !Len( artifact ) || !IsObject( getMavenSource() ?: "" ) ) {
-			return;
-		}
-		var found = getMavenSource().findVersion( artifact, arguments.version );
-		if ( !( found.found ?: false ) ) {
-			return;
+			return {};
 		}
 
-		var name = artifact & "-" & arguments.version & ".lex";
+		var name   = artifact & "-" & arguments.version & ".lex";
+		var result = {};
 
-		lock type="exclusive" name="readExtMeta" timeout=120 {
-			var meta     = IsQuery( variables.extensionMeta ?: "" ) ? variables.extensionMeta : _getEmptyExtensionsQuery();
-			var fileName = "";
-
-			for ( var i=1; i<=QueryRecordCount( meta ); i++ ) {
-				if ( meta.filename[ i ] == name || ( meta.id[ i ] == arguments.id && meta.version[ i ] == arguments.version ) ) {
-					fileName = meta.filename[ i ];
-					break;
-				}
+		lock name="#variables._lockId#-remote-#name#" type="exclusive" timeout=60 throwOnTimeout=false {
+			// another request may have got it while this one waited for the lock
+			var known = getExtensionVersions() ?: {};
+			if ( StructKeyExists( known, arguments.id ) && StructKeyExists( known[ arguments.id ], arguments.version ) ) {
+				return {};
+			}
+			var pending = variables._pendingRemote[ name ] ?: "";
+			if ( IsStruct( pending ) ) {
+				return pending.detail;
 			}
 
-			if ( !Len( fileName ) ) {
-				var fetched = _fetchLexFile(
-					  { name=name, artifact=artifact, version=arguments.version, source="repo", repos=found.repos }
-					, ListToArray( meta.columnList )
-				);
-
-				if ( StructKeyExists( fetched, "error" ) ) {
-					SystemOutput( "Error processing lex file: [#name#]: #fetched.error#", true );
-					return;
-				}
-				if ( fetched.extMeta.id != arguments.id || fetched.extMeta.version != arguments.version ) {
-					SystemOutput( "Extension file [#name#] is [#fetched.extMeta.id#] [#fetched.extMeta.version#], not [#arguments.id#] [#arguments.version#], ignoring it.", true );
-					_deleteTmpFile( fetched.tmpFile );
-					return;
-				}
-
-				_storeLexFile( meta, name, fetched );
-				QuerySort( meta, "id,versionSortable", "asc,desc" );
-				_writeMetaFileToS3( meta );
-				fileName = name;
+			var found = getMavenSource().findVersion( artifact, arguments.version );
+			if ( !( found.found ?: false ) ) {
+				_rememberRemoteMiss( missKey );
+				return {};
+			}
+			// a HEAD (its result is cached) before the download, so a version that is listed but has no file
+			// is not waited for with the download timeout
+			if ( !Len( getMavenSource().getFileUrl( artifact, arguments.version, found.repos ) ) ) {
+				_rememberRemoteMiss( missKey );
+				return {};
 			}
 
-			variables._mavenRemote[ fileName ] = { artifact=artifact, version=arguments.version, repos=found.repos };
+			var current = IsQuery( variables.extensionMeta ?: "" ) ? variables.extensionMeta : _getEmptyExtensionsQuery();
+			var fetched = _fetchLexFile(
+				  { name=name, artifact=artifact, version=arguments.version, source="repo", repos=found.repos }
+				, ListToArray( current.columnList )
+			);
 
-			setExtensionMeta( meta );
-			_buildServed();
-			setExtensionVersions( _createExtensionAndVersionMap() );
-			reset();
+			if ( StructKeyExists( fetched, "error" ) ) {
+				SystemOutput( "Error processing lex file: [#name#]: #fetched.error#", true );
+				// could be a passing network problem: only remembered briefly
+				_rememberRemoteMiss( missKey, 60000 );
+				return {};
+			}
+			if ( fetched.extMeta.id != arguments.id || fetched.extMeta.version != arguments.version ) {
+				SystemOutput( "Extension file [#name#] is [#fetched.extMeta.id#] [#fetched.extMeta.version#], not [#arguments.id#] [#arguments.version#], ignoring it.", true );
+				_deleteTmpFile( fetched.tmpFile );
+				_rememberRemoteMiss( missKey );
+				return {};
+			}
+
+			var location = { artifact=artifact, version=arguments.version, repos=found.repos };
+			variables._mavenRemote[ name ] = location;
+
+			// only a short wait: a meta load holds this lock while it runs, it then adds the file itself
+			var added = false;
+			lock type="exclusive" name="readExtMeta" timeout=1 throwOnTimeout=false {
+				_addRemoteFile( name, fetched, location );
+				added = true;
+			}
+
+			if ( !added ) {
+				var detail = Duplicate( fetched.extMeta );
+				detail.filename        = name;
+				detail.versionSortable = Len( detail.version ) ? VersionUtils::sortableVersionString( detail.version ) : "";
+				detail.trial           = false;
+				detail.releaseType     = Len( detail.releaseType ?: "" ) ? detail.releaseType : "all";
+				variables._pendingRemote[ name ] = { fetched=fetched, location=location, detail=detail };
+				result = detail;
+			}
 		}
+
+		return result;
+	}
+
+	// adds a file fetched on demand to the meta, the caller holds the readExtMeta lock
+	private void function _addRemoteFile( required string name, required struct fetched, required struct location ) {
+		var meta = IsQuery( variables.extensionMeta ?: "" ) ? variables.extensionMeta : _getEmptyExtensionsQuery();
+
+		if ( _hasFile( meta, arguments.name, arguments.fetched.extMeta.id, arguments.fetched.extMeta.version ) ) {
+			_deleteTmpFile( arguments.fetched.tmpFile );
+		} else {
+			_storeLexFile( meta, arguments.name, arguments.fetched );
+			QuerySort( meta, "id,versionSortable", "asc,desc" );
+			_writeMetaFileToS3( meta );
+		}
+
+		variables._mavenRemote[ arguments.name ] = arguments.location;
+		setExtensionMeta( meta );
+		_buildServed();
+		setExtensionVersions( _createExtensionAndVersionMap() );
+		reset();
+	}
+
+	// the files fetched on demand while a meta load was running, added to the meta that load builds
+	private boolean function _addPendingRemote( required query meta ) {
+		var changed = false;
+
+		for ( var name in StructKeyArray( variables._pendingRemote ) ) {
+			var pending = variables._pendingRemote[ name ] ?: "";
+			if ( !IsStruct( pending ) ) {
+				continue;
+			}
+			if ( _hasFile( arguments.meta, name, pending.fetched.extMeta.id, pending.fetched.extMeta.version ) ) {
+				_deleteTmpFile( pending.fetched.tmpFile );
+			} else {
+				_storeLexFile( arguments.meta, name, pending.fetched );
+				changed = true;
+			}
+			variables._mavenRemote[ name ] = pending.location;
+			StructDelete( variables._pendingRemote, name );
+		}
+
+		return changed;
+	}
+
+	private boolean function _hasFile( required query meta, required string name, required string id, required string version ) {
+		for ( var i=1; i<=QueryRecordCount( arguments.meta ); i++ ) {
+			if ( arguments.meta.filename[ i ] == arguments.name || ( arguments.meta.id[ i ] == arguments.id && arguments.meta.version[ i ] == arguments.version ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private void function _rememberRemoteMiss( required string key, numeric ttlMs=variables._remoteMissTtlMs ) {
+		// bounded: the versions asked for come from the requests
+		if ( StructCount( variables._remoteMisses ) >= variables._remoteMissMax ) {
+			variables._remoteMisses = {};
+		}
+		variables._remoteMisses[ arguments.key ] = GetTickCount() + arguments.ttlMs;
 	}
 
 	private string function _artifactForId( required string id ) {
@@ -925,12 +1109,16 @@ component accessors=true {
 			variables._mavenStateChanged = true;
 			variables._mavenStateLoaded  = true;
 		} else if ( !variables._mavenStateLoaded ) {
-			var stateFile = getS3Root() & "/extensions-maven.json";
+			var raw = services.CacheDir::readText( getS3Root() & "/extensions-maven.json", true );
 
-			if ( FileExists( stateFile ) ) {
-				var state = DeserializeJson( FileRead( stateFile ), false );
-
-				variables._mavenState = { skipped=state.skipped ?: {}, artifactIds=state.artifactIds ?: {}, versions=state.versions ?: {} };
+			if ( Len( raw ) ) {
+				try {
+					var state = DeserializeJson( raw, false );
+					variables._mavenState = { skipped=state.skipped ?: {}, artifactIds=state.artifactIds ?: {}, versions=state.versions ?: {} };
+				} catch ( any e ) {
+					// unreadable state is a cache miss, it is rebuilt and saved again
+					SystemOutput( "Extension Maven state could not be parsed, rebuilding it: #e.message#", true );
+				}
 			}
 			variables._mavenStateLoaded = true;
 		}
@@ -941,8 +1129,13 @@ component accessors=true {
 			if ( !StructIsEmpty( variables._mavenVersions ) ) {
 				variables._mavenState.versions = variables._mavenVersions;
 			}
-			services.CacheDir::writeAtomic( getS3Root() & "/extensions-maven.json", SerializeJson( variables._mavenState ) );
-			variables._mavenStateChanged = false;
+			try {
+				services.CacheDir::writeAtomic( getS3Root() & "/extensions-maven.json", SerializeJson( variables._mavenState ), true );
+				variables._mavenStateChanged = false;
+			} catch ( any e ) {
+				// only a cache: kept in memory and written again with the next change
+				SystemOutput( "Extension Maven state could not be saved: #e.message#", true );
+			}
 		}
 	}
 
@@ -952,10 +1145,14 @@ component accessors=true {
 
 	// this happens once at startup / init
 	private function _readExistingMetaFileFromS3() {
-		var metaFile = getS3Root() & "/extensions.json";
-		if ( FileExists( metaFile  ) ) {
-			var meta = DeserializeJson( FileRead( metaFile ), false );
-			return _updateExtensionSorting( meta );
+		// a missing or unreadable file is a cache miss: the meta is rebuilt from the sources and written again
+		var raw = services.CacheDir::readText( getS3Root() & "/extensions.json", true );
+		if ( Len( raw ) ) {
+			try {
+				return _updateExtensionSorting( DeserializeJson( raw, false ) );
+			} catch ( any e ) {
+				SystemOutput( "Extension meta could not be parsed, rebuilding it: #e.message#", true );
+			}
 		}
 		return _getEmptyExtensionsQuery();
 	}
@@ -979,7 +1176,12 @@ component accessors=true {
 		var metaFile = getS3Root() & "/extensions.json";
 
 		// atomic: the instances share the folder (Cloud Run: /download/provider/extensions/)
-		services.CacheDir::writeAtomic( metaFile, SerializeJson( meta ) );
+		try {
+			services.CacheDir::writeAtomic( metaFile, SerializeJson( meta ), true );
+		} catch ( any e ) {
+			// only a cache: the meta in memory is served, a storage error must not fail the load
+			SystemOutput( "Extension meta could not be saved: #e.message#", true );
+		}
 	}
 
 	private function _getEmptyExtensionsQuery() {
@@ -1495,11 +1697,18 @@ component accessors=true {
 	/**
 	 * Adds versions known from Maven Central and lucee-services metadata to `older`, without downloading
 	 * every historical .lex at listing time. A version asked for later is still fetched on demand.
+	 *
+	 * With a core version, only versions that core can load are added, as /full/{id} answers a 404 for the others:
+	 * a version that is in the meta is added when its minimum core version fits, a version that is not in the meta
+	 * (its minimum core version is not known) only when it is older than the version the extension is listed with,
+	 * that is the newest one of the meta that fits the core. Older Administrators (Lucee 5.4) offer every version of
+	 * `older`, newest first, so a newer version that only fits newer cores was offered to them and failed.
 	 */
-	private function _fillOlderFromMavenVersions( required query extensions, required string type ) {
+	private function _fillOlderFromMavenVersions( required query extensions, required string type, string coreVersion="" ) {
 		if ( StructIsEmpty( variables._mavenVersions ?: {} ) ) {
 			return;
 		}
+		var mapped = Len( arguments.coreVersion ) ? ( getExtensionVersions() ?: {} ) : {};
 
 		for ( var i=1; i<=QueryRecordCount( arguments.extensions ); i++ ) {
 			var artifact = _artifactForId( arguments.extensions.id[ i ] );
@@ -1524,6 +1733,16 @@ component accessors=true {
 				}
 				if ( !_matchesReleaseType( version, arguments.type ) ) {
 					continue;
+				}
+				if ( Len( arguments.coreVersion ) ) {
+					var knownVersions = mapped[ arguments.extensions.id[ i ] ] ?: {};
+					if ( StructKeyExists( knownVersions, version ) && version != "_latest" ) {
+						if ( !_fitsCoreVersion( knownVersions[ version ].minCoreVersion, arguments.coreVersion ) ) {
+							continue;
+						}
+					} else if ( Compare( services.VersionUtils::sortableVersionString( version ), services.VersionUtils::sortableVersionString( current ) ) > 0 ) {
+						continue;
+					}
 				}
 				ArrayAppend( extra, version );
 			}

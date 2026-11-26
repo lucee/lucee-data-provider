@@ -55,6 +55,21 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( _row( reader.list( type="release" ), mailId ).version ).toBe( "1.1.0.19" );
 			} );
 
+			it( "a forced refresh rebuilds the meta in the background, the request is not held up", function() {
+				var world = _newWorld();
+				var reader = _newReader( world );
+				_addRepoVersion( world, "mail-extension", "1.1.0.20", mailId, mixed );
+				reader.refreshIfStale(); // not stale: nothing happens
+				expect( _row( reader.list( type="release" ), mailId ).version ).toBe( "1.1.0.17" );
+
+				reader.refreshIfStale( force=true );
+				var deadline = GetTickCount() + 10000;
+				while ( !ArrayFind( QueryColumnData( reader.getExtensionMeta(), "version" ), "1.1.0.20" ) && GetTickCount() < deadline ) {
+					sleep( 25 );
+				}
+				expect( _row( reader.list( type="release" ), mailId ).version ).toBe( "1.1.0.20" );
+			} );
+
 			it( "builds abc and snapshot from the same source as all, with the newest version of each type", function() {
 				var world = _newWorld();
 				_addRepoVersion( world, "mail-extension", "1.1.0.18-RC", mailId, mixed );
@@ -123,6 +138,33 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( older ).toInclude( "1.1.0.16-RC" );
 			} );
 
+			it( "lists only versions the requested core can load in older", function() {
+				var world = _newWorld();
+				// the newest version needs a newer core, it is read at startup (latest), so its minimum core is known
+				_addRepoVersion( world, "mail-extension", "1.2.0.0-SNAPSHOT", mailId, snapshots, "7.0.0.0" );
+				// only in the metadata, their minimum core is not known: one newer, one older than the listed version
+				_addToMetadata( world, mixed, "mail-extension", "1.1.0.18-RC" );
+				_addToMetadata( world, mixed, "mail-extension", "1.0.0.1" );
+				world.pages[ snapshots & "org/lucee/" ] = _listing( [ "mail-extension" ] );
+				var reader = _newReader( world );
+
+				var old = _row( reader.list( type="all", coreVersion="5.4.8.2" ), mailId );
+				expect( old.version ).toBe( "1.1.0.17" );
+				expect( old.older ).notToInclude( "1.2.0.0-SNAPSHOT" );
+				expect( old.older ).notToInclude( "1.1.0.18-RC" );
+				expect( old.older ).toInclude( "1.0.0.1" );
+
+				var current = _row( reader.list( type="all", coreVersion="7.1.0.0" ), mailId );
+				expect( current.version ).toBe( "1.2.0.0-SNAPSHOT" );
+				expect( current.older ).toInclude( "1.1.0.18-RC" );
+				expect( current.older ).toInclude( "1.1.0.17" );
+				expect( current.older ).toInclude( "1.0.0.1" );
+
+				var noCore = _row( reader.list( type="all" ), mailId );
+				expect( noCore.older ).toInclude( "1.1.0.18-RC" );
+				expect( noCore.older ).toInclude( "1.0.0.1" );
+			} );
+
 			it( "keeps serving the older rows of the meta after a newer version was published", function() {
 				var world = _newWorld();
 				var reader = _newReader( world );
@@ -156,6 +198,55 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( world.requests ).notToInclude( releases & "org/lucee/" ); // no group listing, no loadMeta
 				expect( _metadataReads( world ).filter( function( r ) { return !r.contains( "mail-extension" ); } ) ).toHaveLength( 0 );
 				expect( _row( reader.list( type="release" ), mailId ).version ).toBe( "1.1.0.17" );
+			} );
+
+			it( "remembers a version no repository has and does not look it up again", function() {
+				var world = _newWorld();
+				var reader = _newReader( world );
+				ArrayClear( world.requests );
+				ArrayClear( world.downloads );
+
+				expect( reader.getExtensionDetail( id=mailId, version="9.9.9.9" ) ).toBeEmpty();
+				var first = ArrayLen( world.requests );
+				expect( first ).toBeGT( 0 );
+				expect( reader.getExtensionDetail( id=mailId, version="9.9.9.9" ) ).toBeEmpty();
+				expect( ArrayLen( world.requests ) ).toBe( first );
+				expect( world.downloads ).toHaveLength( 0 );
+			} );
+
+			it( "does not download a version that is listed but has no file", function() {
+				var world = _newWorld();
+				var reader = _newReader( world );
+				_addToMetadata( world, mixed, "mail-extension", "1.0.0.2" );
+				ArrayClear( world.downloads );
+
+				expect( reader.getExtensionDetail( id=mailId, version="1.0.0.2" ) ).toBeEmpty();
+				expect( world.downloads ).toHaveLength( 0 );
+			} );
+
+			it( "a version asked for does not wait for a running meta load, which then adds it", function() {
+				var world = _newWorld();
+				var reader = _newReader( world );
+				_addRepoVersion( world, "mail-extension", "1.0.0.1", mailId, mixed );
+				var holder = "hold-ext-meta-" & CreateUUID();
+				thread name=holder {
+					lock type="exclusive" name="readExtMeta" timeout=5 {
+						sleep( 4000 );
+					}
+				}
+				sleep( 300 );
+
+				var started = GetTickCount();
+				var ext = reader.getExtensionDetail( id=mailId, version="1.0.0.1" );
+				var took = GetTickCount() - started;
+				thread action="join" name=holder;
+
+				expect( ext.version ).toBe( "1.0.0.1" );
+				expect( took ).toBeLT( 3500 );
+				expect( reader.getDownloadUrl( ext.filename, "" ) ).toBe( mixed & "org/lucee/mail-extension/1.0.0.1/mail-extension-1.0.0.1.lex" );
+
+				reader.loadMeta();
+				expect( reader.getExtensionVersions()[ mailId ] ).toHaveKey( "1.0.0.1" );
 			} );
 
 			it( "does not read lucee-services metadata for a final Central lists", function() {
@@ -300,12 +391,12 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 		return world;
 	}
 
-	private function _addRepoVersion( world, artifact, version, id, repo ) {
+	private function _addRepoVersion( world, artifact, version, id, repo, string minCore="" ) {
 		var fileName = arguments.artifact & "-" & arguments.version & ".lex";
 		var fileUrl  = arguments.repo & "org/lucee/" & arguments.artifact & "/" & arguments.version & "/" & fileName;
 		var lexFile  = lexDir & CreateUUID() & ".lex";
 
-		_createLex( lexFile, arguments.id, arguments.version );
+		_createLex( lexFile, arguments.id, arguments.version, arguments.minCore );
 		arguments.world.files[ fileUrl ] = lexFile;
 		_addToMetadata( arguments.world, arguments.repo, arguments.artifact, arguments.version );
 	}
@@ -421,14 +512,16 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 		return reader;
 	}
 
-	private function _createLex( path, id, version ) {
+	private function _createLex( path, id, version, string minCore="" ) {
 		var src = base & "src-" & CreateUUID() & "/";
 
 		DirectoryCreate( src & "META-INF", true );
 		FileWrite( src & "META-INF/MANIFEST.MF", "Manifest-Version: 1.0" & Chr( 13 ) & Chr( 10 )
 			& "id: " & arguments.id & Chr( 13 ) & Chr( 10 )
 			& "name: LDEV fallback test extension" & Chr( 13 ) & Chr( 10 )
-			& "version: " & arguments.version & Chr( 13 ) & Chr( 10 ) & Chr( 13 ) & Chr( 10 ) );
+			& "version: " & arguments.version & Chr( 13 ) & Chr( 10 )
+			& ( Len( arguments.minCore ) ? "lucee-core-version: " & arguments.minCore & Chr( 13 ) & Chr( 10 ) : "" )
+			& Chr( 13 ) & Chr( 10 ) );
 
 		DirectoryCreate( GetDirectoryFromPath( arguments.path ), true, true );
 		Compress( format="zip", source=src, target=arguments.path, includeBaseFolder=false );

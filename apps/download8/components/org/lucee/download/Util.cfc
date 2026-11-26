@@ -515,10 +515,14 @@ component accessors="false" {
 			return local.data;
 
 		} else {
-			// version detail — immutable, cache indefinitely
+			// version detail — immutable, cache indefinitely.
+			// download=false and download=true share this cache entry, but only download=true
+			// carries "metadata" (name, description, image, MinCoreVersion). A cached
+			// download=false entry must not satisfy a download=true call, otherwise the
+			// metadata is never read and the caller gets an empty struct forever.
 			local.key    = "extdata_" & arguments.groupId & "_" & arguments.artifactId & "_" & arguments.version;
 			local.cached = dlCacheGet(local.key);
-			if (!isEmpty(local.cached)) return local.cached;
+			if (!isEmpty(local.cached) && (!arguments.download || !isEmpty(local.cached.metadata ?: {}))) return local.cached;
 			local.t = getTickCount();
 			try {
 				local.meta = LuceeExtension(arguments.groupId, arguments.artifactId, arguments.version, arguments.download);
@@ -528,7 +532,8 @@ component accessors="false" {
 					local.meta.metadata.image = resolveRelativeImage(arguments.groupId, arguments.artifactId, local.meta.metadata.image, local.meta.lex ?: (local.meta.pom ?: ""));
 					local.meta.metadata.image = toImageReference(arguments.groupId, arguments.artifactId, local.meta.metadata.image);
 				}
-				dlCachePut(local.key, local.meta);
+				// never cache a detailed result without metadata: it means the read failed
+				if (!arguments.download || !isEmpty(local.meta.metadata ?: {})) dlCachePut(local.key, local.meta);
 				return local.meta;
 			} catch(e) {cflog(log:"application",exception:e,type:"error"); return {}; }
 		}

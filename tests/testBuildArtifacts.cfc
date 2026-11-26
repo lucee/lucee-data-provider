@@ -18,13 +18,14 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 				buildArtifacts( "lucee-6.0.3.1" );
 			});
 			// jakarta & javax, tomcat 10
-			it(title="check valid artifacts are produced, 6.2.0.30-SNAPSHOT", body=function(){
-				buildArtifacts( "lucee-6.2.0.30-SNAPSHOT" );
+			// a final release: old snapshot jars are not kept
+			it(title="check valid artifacts are produced, 6.2.0.321", body=function(){
+				buildArtifacts( "lucee-6.2.0.321" );
 			});
 
 			// jakarta, tomcat 11
-			it(title="check valid artifacts are produced, 7.0.0.159-SNAPSHOT", body=function(){
-				buildArtifacts( "lucee-7.0.0.159-SNAPSHOT" );
+			it(title="check valid artifacts are produced, 7.0.0.395", body=function(){
+				buildArtifacts( "lucee-7.0.0.395" );
 			});
 		});
 	}
@@ -52,7 +53,11 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		directoryCreate( buildDir & "express-templates", true );
 
 		var srcJar = fetch( arguments.version  & ".jar" );
-		FileCopy( srcJar, buildDir & listLast( srcJar, "/\" ) );
+		var destJar = buildDir & listLast( srcJar, "/\" );
+		FileCopy( srcJar, destJar );
+		// FileCopy may keep the source last-modified; a cached jar older than 24h
+		// would otherwise skip ForgeBox zips for SNAPSHOT versions
+		createObject( "java", "java.io.File" ).init( destJar ).setLastModified( now().getTime() );
 
 		/* 
 		could use https://update.lucee.org/rest/update/provider/expressTemplates for now rely on these existing on s3

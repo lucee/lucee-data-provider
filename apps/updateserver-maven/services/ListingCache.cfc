@@ -25,7 +25,12 @@ component {
 		variables.generation = Len( gen ) ? _safeKey( gen ) : "";
 		variables.cacheDir = Len( variables.generation ) ? variables.rootDir & variables.generation & "/" : variables.rootDir;
 		if ( !DirectoryExists( variables.cacheDir ) ) {
-			DirectoryCreate( variables.cacheDir, true );
+			try {
+				DirectoryCreate( variables.cacheDir, true );
+			} catch ( any e ) {
+				// reads are then a miss and the listing is produced on the request
+				SystemOutput( "Listing cache could not create [#variables.cacheDir#]: #e.message#", true );
+			}
 		}
 		variables.ttlSeconds = Max( 1, Int( Val( arguments.ttlSeconds ) ) );
 		variables.maxRefreshMs = Max( 1, Val( arguments.maxRefreshSeconds ) ) * 1000;
@@ -97,7 +102,14 @@ component {
 		}
 
 		var removed = 0;
-		for ( var name in DirectoryList( variables.rootDir, false, "name", "*.json" ) ) {
+		var names   = [];
+		try {
+			names = DirectoryList( variables.rootDir, false, "name", "*.json" );
+		} catch ( any e ) {
+			// only housekeeping, it must never stop the application from starting
+			SystemOutput( "Listing cache could not list [#variables.rootDir#]: #e.message#", true );
+		}
+		for ( var name in names ) {
 			var path = variables.rootDir & name;
 			if ( !FileExists( path ) ) {
 				continue;
@@ -169,7 +181,7 @@ component {
 			}
 		}
 
-		return _refreshSync( arguments.key, arguments.producer );
+		return _refreshSync( arguments.key, arguments.producer, false );
 	}
 
 	public any function put( required string key, required any data, date cachedAt=Now() ) {
@@ -184,10 +196,19 @@ component {
 		return arguments.data;
 	}
 
-	private any function _refreshSync( required string key, required any producer ) {
-		var data = arguments.producer();
+	/**
+	 * @background true when this runs in the background refresh thread: the producer is called with
+	 *             background=true, so it can do the slow work there and never on a request
+	 */
+	private any function _refreshSync( required string key, required any producer, boolean background=false ) {
+		var data = arguments.producer( background=arguments.background );
 
-		put( arguments.key, data );
+		try {
+			put( arguments.key, data );
+		} catch ( any e ) {
+			// the listing is still served, it is written again with the next refresh
+			SystemOutput( "Listing cache could not write [#arguments.key#]: #e.message#", true );
+		}
 
 		return data;
 	}
@@ -217,7 +238,7 @@ component {
 		{
 			try {
 				setting requesttimeout=600;
-				_refreshSync( key, producer );
+				_refreshSync( key, producer, true );
 			} catch ( any e ) {
 				SystemOutput( "Listing cache refresh failed for [#key#]: #e.message#", true );
 			} finally {
