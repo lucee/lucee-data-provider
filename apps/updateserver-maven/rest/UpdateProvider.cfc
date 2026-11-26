@@ -570,9 +570,14 @@ component {
 
 	/**
 	 * The dependencies of a core version are built from all the jars of its pom, which can take minutes.
-	 * A request waits for that at most DEPENDENCIES_WAIT_SECONDS (default 10). The build goes on in the
-	 * background, one per version and kind, and the next request gets its result. A version that is not
-	 * a core version is answered right away.
+	 * A request waits for that at most DEPENDENCIES_WAIT_SECONDS (default 180, kept below the
+	 * request timeout) and returns the zip or the list itself when the build finishes in time.
+	 * The build goes on in the background, one per version and kind; a request only answers 503
+	 * with Retry-After when that wait is exceeded. A version that is not a core version is
+	 * answered right away.
+	 *
+	 * A build left in "running" after its thread has died, or for longer than
+	 * DEPENDENCIES_STALE_SECONDS (default 600), is started again instead of answering 503 forever.
 	 */
 	private struct function _dependencies( required string kind, required string version ) {
 		if ( !StructKeyExists( variables.coreVersions.getVersions(), services.VersionUtils::toVersionSortable( arguments.version ) ) ) {
@@ -580,41 +585,105 @@ component {
 		}
 
 		var key = arguments.kind & ":" & arguments.version;
-		var wait = Val( server.system.environment.DEPENDENCIES_WAIT_SECONDS ?: 10 ) * 1000;
+		var deadline = GetTickCount() + ( _dependenciesWaitSeconds() * 1000 );
+		var build = {};
 
-		lock name="update-provider-dependencies" type="exclusive" timeout=5 {
-			if ( !StructKeyExists( application, "dependencyBuilds" ) ) {
-				application.dependencyBuilds = {};
-			}
-			var build = application.dependencyBuilds[ key ] ?: {};
-			// a failed build is tried again after a minute
-			if ( StructIsEmpty( build ) || ( build.status == "failed" && DateDiff( "s", build.ended, Now() ) > 60 ) ) {
-				build = { status="running", started=Now() };
-				application.dependencyBuilds[ key ] = build;
-				// thread attributes are copies, the thread updates the entry of the application scope
-				thread name="dependencies-#Hash( key )#-#CreateUUID()#" action="run" key=key kind=arguments.kind version=arguments.version {
-					local.entry = application.dependencyBuilds[ attributes.key ];
-					try {
-						local.mr = new services.legacy.MavenRepo();
-						local.entry.result = attributes.kind == "zip" ? local.mr.getDependencies( attributes.version ) : local.mr.getOSGiDependencies( attributes.version, true );
-						local.entry.ended  = Now();
-						local.entry.status = "done";
-					}
-					catch ( any e ) {
-						local.entry.error  = e.message;
-						local.entry.ended  = Now();
-						local.entry.status = "failed";
-						WriteLog( text="dependencies #attributes.kind# #attributes.version#: #e.message#", type="error", log="update-provider" );
-					}
+		while ( true ) {
+			lock name="update-provider-dependencies" type="exclusive" timeout=5 {
+				if ( !StructKeyExists( application, "dependencyBuilds" ) ) {
+					application.dependencyBuilds = {};
+				}
+				build = application.dependencyBuilds[ key ] ?: {};
+				// empty, a failed build after a minute, or a stale running build: start one
+				if ( StructIsEmpty( build ) || _dependenciesShouldRestart( build ) ) {
+					build = _dependenciesStart( key, arguments.kind, arguments.version );
 				}
 			}
-		}
-
-		var started = GetTickCount();
-		while ( build.status == "running" && ( GetTickCount() - started ) < wait ) {
+			if ( build.status != "running" || GetTickCount() >= deadline ) {
+				return build;
+			}
 			sleep( 100 );
 		}
+	}
+
+	private struct function _dependenciesStart( required string key, required string kind, required string version ) {
+		var threadName = "dependencies-#Hash( arguments.key )#-#CreateUUID()#";
+		var build = { status="running", started=Now(), threadName=threadName };
+		application.dependencyBuilds[ arguments.key ] = build;
+		// thread attributes are copies, the thread updates the entry of the application scope
+		thread name="#threadName#" action="run" key=arguments.key kind=arguments.kind version=arguments.version threadName=threadName {
+			local.entry = application.dependencyBuilds[ attributes.key ];
+			try {
+				local.entry.javaThread = CreateObject( "java", "java.lang.Thread" ).currentThread();
+				local.mr = new services.legacy.MavenRepo();
+				local.result = attributes.kind == "zip" ? local.mr.getDependencies( attributes.version ) : local.mr.getOSGiDependencies( attributes.version, true );
+				// a newer start of the same key must not be overwritten by this thread
+				if ( ( application.dependencyBuilds[ attributes.key ].threadName ?: "" ) != attributes.threadName ) {
+					return;
+				}
+				local.entry.result = local.result;
+				local.entry.ended  = Now();
+				local.entry.status = "done";
+			}
+			catch ( any e ) {
+				if ( ( application.dependencyBuilds[ attributes.key ].threadName ?: "" ) != attributes.threadName ) {
+					return;
+				}
+				local.entry.error  = e.message;
+				local.entry.ended  = Now();
+				local.entry.status = "failed";
+				WriteLog( text="dependencies #attributes.kind# #attributes.version#: #e.message#", type="error", log="update-provider" );
+			}
+		}
 		return build;
+	}
+
+	private boolean function _dependenciesShouldRestart( required struct build ) {
+		if ( arguments.build.status == "failed" && DateDiff( "s", arguments.build.ended, Now() ) > 60 ) {
+			return true;
+		}
+		if ( arguments.build.status != "running" ) {
+			return false;
+		}
+		if ( !StructKeyExists( arguments.build, "started" ) || DateDiff( "s", arguments.build.started, Now() ) > _dependenciesStaleSeconds() ) {
+			return true;
+		}
+		return !_dependenciesThreadIsAlive( arguments.build );
+	}
+
+	private boolean function _dependenciesThreadIsAlive( required struct build ) {
+		if ( StructKeyExists( arguments.build, "javaThread" ) ) {
+			try {
+				return arguments.build.javaThread.isAlive();
+			}
+			catch ( any e ) {
+				return false;
+			}
+		}
+		// the worker has not stored its Java thread yet; only treat it as dead after a short grace
+		return DateDiff( "s", arguments.build.started, Now() ) < 15;
+	}
+
+	private numeric function _dependenciesWaitSeconds() {
+		var seconds = Val( server.system.environment.DEPENDENCIES_WAIT_SECONDS ?: 180 );
+		if ( seconds <= 0 ) {
+			seconds = 180;
+		}
+		var requestTimeout = Val( server.system.environment.REQUEST_TIMEOUT_SECONDS ?: 240 );
+		if ( requestTimeout <= 0 ) {
+			requestTimeout = 240;
+		}
+		// stay under the request timeout so Lucee does not kill the wait itself
+		var maxWait = requestTimeout > 10 ? requestTimeout - 10 : requestTimeout;
+		if ( seconds > maxWait ) {
+			return maxWait;
+		}
+		return seconds;
+	}
+
+	private numeric function _dependenciesStaleSeconds() {
+		var seconds = Val( server.system.environment.DEPENDENCIES_STALE_SECONDS ?: 600 );
+		return seconds > 0 ? seconds : 600;
 	}
 
 	private function _dependenciesNotReady( required struct build, required string version ) {

@@ -1362,7 +1362,14 @@ component accessors=true {
 			_downloadCandidate( arguments.candidate, tmpFile );
 
 			var extMeta   = _initExtensionMetaFromManifest( tmpFile, arguments.cols );
-			extMeta.image = _getLogoThumbnail( tmpFile );
+			// a manifest image that is already an http(s) URL ending in .png is passed through as it is, so the
+			// listing stays small and META-INF/logo.png is not read or turned into base64. Anything else (an
+			// embedded logo, a URL that is not .png) is handled as before.
+			if ( _isPngLogoUrl( extMeta.image ?: "" ) ) {
+				extMeta.image = Trim( extMeta.image );
+			} else {
+				extMeta.image = _getLogoThumbnail( tmpFile );
+			}
 
 			return { tmpFile=tmpFile, extMeta=extMeta };
 		} catch ( any e ) {
@@ -1574,6 +1581,23 @@ component accessors=true {
 
 			QueryAddColumn( arguments.meta, "packaging", "varchar", values );
 		}
+	}
+
+
+	/**
+	 * True when the value is an http(s) URL whose path ends in .png (case-insensitive). A query string
+	 * is ignored, so https://example.com/logo.PNG?v=1 counts. The Lucee Administrator takes the file
+	 * type from the URL's extension, so other endings are left to the embedded-logo path.
+	 */
+	private boolean function _isPngLogoUrl( required string src ) {
+		var value = Trim( arguments.src );
+		if ( !ReFindNoCase( "^https?://", value ) ) {
+			return false;
+		}
+
+		var path = ListFirst( ListFirst( value, "?" ), "##" );
+
+		return ReFindNoCase( "\.png$", path ) > 0;
 	}
 
 	private function _getLogoThumbnail( lexFile ){

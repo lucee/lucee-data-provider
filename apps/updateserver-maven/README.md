@@ -329,6 +329,8 @@ Run defaults):
 | `ALLOW_RELOAD` | unset/false (`?fwreinit` only works when this is true) |
 | `HEALTH_FAIL_AFTER_SECONDS` | `300`. `/healthcheck/` answers `503` once the services have been failing to load this long, so a liveness probe replaces the container. `0` disables it. |
 | `REQUEST_TIMEOUT_SECONDS` | `240`. Lucee request timeout, kept below the Cloud Run request timeout (`--timeout 300`). Background work (service load, meta and listing refreshes) has its own timeout. |
+| `DEPENDENCIES_WAIT_SECONDS` | `180`. How long a `/rest/update/provider/dependencies/{version}` or `dependencies-read/{version}` request waits for the zip or the list to be built. The first request can then return the result itself. If the wait is exceeded, the request answers `503` with `Retry-After: 30` and the build goes on in the background. Capped at 10 seconds below `REQUEST_TIMEOUT_SECONDS`. |
+| `DEPENDENCIES_STALE_SECONDS` | `600`. A build left in `running` for this long, or whose worker thread has died, is started again instead of answering `503` forever. |
 | `NOT_READY_RETRY_AFTER_SECONDS` | `30`. `Retry-After` of the `503` a `/rest/` request gets while the services are not loaded yet. |
 | `SERVICES_RETRY_SECONDS` | `30`. When loading the provider services fails (for example an IO error on the shared cache folder), the next request after this many seconds starts a new load. The failure is never kept for the life of the instance. |
 | `PORT` | Cloud Run sets this to `8080` |
