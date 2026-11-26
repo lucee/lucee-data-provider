@@ -63,6 +63,12 @@ component {
 		var logo     = arguments.withLogo;
 		var core     = arguments.coreVersion;
 
+		// a client that asks for another format than JSON (Accept header, or a format extension of the url) gets the
+		// response the REST layer serialises, as before
+		if ( !_wantsJson() ) {
+			return _infoStruct( hostName, listType, logo, core, arguments.flush );
+		}
+
 		try {
 			_bind();
 			// flush only rebuilds this listing from the loaded meta and starts a background refresh of the meta,
@@ -75,13 +81,7 @@ component {
 			// META (title, image, url) is built from the current hostName on every request, it is small; the
 			// cached listing is put in as it is, so the response is the same as serialising the whole struct
 			var body = Replace( SerializeJSON( {
-				  meta       = {
-					  title       = "Lucee Association Switzerland Extension Store (#hostName#)"
-					, description = ""
-					, image       = "https://#hostName#/extension/extension-provider.png"
-					, url         = "https://#hostName#"
-					, mode        = "production"
-				  }
+				  meta       = _infoMeta( hostName )
 				, extensions = variables.listingPlaceholder
 			}, "row" ), '"' & variables.listingPlaceholder & '"', entry.json, "one" );
 
@@ -94,6 +94,49 @@ component {
 			// not cached: the next request tries again
 			return e;
 		}
+	}
+
+	// the response as a struct, for the REST layer to serialise in the format the client asked for
+	private any function _infoStruct( required string hostName, required string listType, required boolean withLogo, required string coreVersion, boolean flush=false ) {
+		try {
+			_bind();
+			variables.metaReader.refreshIfStale( force=arguments.flush );
+			return {
+				  meta       = _infoMeta( arguments.hostName )
+				, extensions = variables.metaReader.list( type=arguments.listType, withLogo=arguments.withLogo, coreVersion=arguments.coreVersion )
+			};
+		} catch ( any e ) {
+			return e;
+		}
+	}
+
+	private struct function _infoMeta( required string hostName ) {
+		return {
+			  title       = "Lucee Association Switzerland Extension Store (#arguments.hostName#)"
+			, description = ""
+			, image       = "https://#arguments.hostName#/extension/extension-provider.png"
+			, url         = "https://#arguments.hostName#"
+			, mode        = "production"
+		};
+	}
+
+	// Does the client get JSON from the REST layer? Yes without an Accept header, with one that names JSON, or the
+	// any type wildcard without a type the REST layer would prefer. Not with a format extension in the url (info.xml).
+	private boolean function _wantsJson() {
+		var last = ListLast( cgi.path_info ?: "", "/" );
+		if ( Find( ".", last ) ) {
+			return false;
+		}
+
+		var accept = LCase( Trim( cgi.http_accept ?: "" ) );
+		if ( !Len( accept ) || Find( "json", accept ) ) {
+			return true;
+		}
+		if ( ReFind( "cfml|wddx|xml|text/plain", accept ) ) {
+			return false;
+		}
+
+		return Find( "*/*", accept ) > 0;
 	}
 
 	variables.listingPlaceholder = "__LUCEE_PROVIDER_EXTENSIONS_" & Replace( CreateUUID(), "-", "", "all" ) & "__";
