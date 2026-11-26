@@ -189,6 +189,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				var world = _newWorld();
 				var reader = _newReader( world );
 				ArrayClear( world.requests );
+				ArrayClear( world.downloads );
 
 				expect( reader.getExtensionDetail( id=mailId, version="9.9.9.9" ) ).toBeEmpty();
 				var first = ArrayLen( world.requests );
