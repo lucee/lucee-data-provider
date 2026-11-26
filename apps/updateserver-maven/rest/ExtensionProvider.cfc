@@ -38,19 +38,6 @@ component {
 		_ensureServices();
 	}
 
-	private any function _cachedListing( required string key, required any producer, boolean flush=false ) {
-		// Wait for services, then serve or rebuild this revision's listing.
-		// Do not peek() a previous revision's JSON while startup is still running.
-		// /healthcheck/ is a separate application and does not go through this method.
-		return services.ListingCache::getWhenReady(
-			  cache       = application.listingCache
-			, key         = arguments.key
-			, producer    = arguments.producer
-			, ensureReady = function() { _ensureServices(); }
-			, flush       = arguments.flush
-		);
-	}
-
 	private void function _artifactNotFound( required string type, string version="", string qualifier="", string id="" ) {
 		services.ArtifactNotFound::log(
 			  type      = arguments.type
@@ -65,7 +52,7 @@ component {
 	 * @httpmethod GET
 	 * @restPath   info
 	 */
-	remote struct function getInfo(
+	remote function getInfo(
 		  required boolean withLogo     = true      restargsource="url"
 		, required string  type         = 'release' restargsource="url"
 		, required boolean flush        = false     restargsource="url"
@@ -73,44 +60,137 @@ component {
 	) {
 		var hostName = cgi.HTTP_HOST;
 		var listType = ReFindNoCase( "^beta\.", hostName ) ? "abc" : arguments.type;
-		var cacheKey = "extension-list-" & listType & "-" & ( arguments.withLogo ? "logo" : "nologo" ) & "-" & arguments.coreVersion;
+		var logo     = arguments.withLogo;
+		var core     = arguments.coreVersion;
+
+		// a client that asks for another format than JSON (Accept header, or a format extension of the url) gets the
+		// response the REST layer serialises, as before
+		if ( !_wantsJson() ) {
+			return _infoStruct( hostName, listType, logo, core, arguments.flush );
+		}
 
 		try {
-			// Cache only the extension list. META (title, image, url) is built
-			// from the current hostName on every request, because the cache key
-			// has no host: a listing first built for the run.app hostname would
-			// otherwise be served on extension.lucee.org, and a background
-			// refresh would keep the hostname the closure captured.
+			_bind();
 			// flush only rebuilds this listing from the loaded meta and starts a background refresh of the meta,
-			// the meta is never rebuilt on the request (that can take longer than the request may run)
-			if ( arguments.flush ) {
-				variables.metaReader.refreshIfStale( force=true );
+			// the meta is never rebuilt on the request (that can take longer than the request may run). Otherwise
+			// a stale meta is refreshed in the background, the listing below is rebuilt once that changed it.
+			variables.metaReader.refreshIfStale( force=arguments.flush );
+
+			var entry = _listingJson( listType, logo, core, arguments.flush );
+
+			// the host is part of the response (META), so it is part of the ETag
+			var etag    = services.HttpCaching::weakEtag( entry.etag & "|" & hostName );
+			var headers = _cacheHeaders( etag, entry.builtAt );
+			if ( services.HttpCaching::isNotModified(
+				  ifNoneMatch     = _requestHeader( "If-None-Match" )
+				, ifModifiedSince = _requestHeader( "If-Modified-Since" )
+				, etag            = etag
+				, lastModified    = entry.builtAt
+			) ) {
+				RestSetResponse( { status=304, headers=headers } );
+				return;
 			}
-			var extensions = _cachedListing( cacheKey, function( boolean background=false ) {
-				// in the background refresh of a stale copy, the meta it is built from is brought up to date first,
-				// otherwise the refresh would only serialise the same old meta again. On a request (no cached copy
-				// yet) the loaded meta is used and a stale one is refreshed in the background.
-				variables.metaReader.refreshIfStale( wait=arguments.background );
-				return variables.metaReader.list(
-					  type        = listType
-					, withLogo    = withLogo
-					, coreVersion = coreVersion
-				);
-			}, arguments.flush );
-			return {
-				  meta       = {
-					  title       = "Lucee Association Switzerland Extension Store (#hostName#)"
-					, description = ""
-					, image       = "https://#hostName#/extension/extension-provider.png"
-					, url         = "https://#hostName#"
-					, mode        = "production"
-				  }
-				, extensions = extensions
-			};
+
+			// META (title, image, url) is built from the current hostName on every request, it is small; the
+			// cached listing is put in as it is, so the response is the same as serialising the whole struct
+			var body = Replace( SerializeJSON( {
+				  meta       = _infoMeta( hostName )
+				, extensions = variables.listingPlaceholder
+			}, "row" ), '"' & variables.listingPlaceholder & '"', entry.json, "one" );
+
+			headers[ "Content-Type" ] = "application/json;charset=UTF-8";
+			RestSetResponse( { status=200, content=body, headers=headers } );
 		} catch ( any e ) {
 			// not cached: the next request tries again
 			return e;
 		}
+	}
+
+	private string function _requestHeader( required string name ) {
+		var headers = GetHttpRequestData( false ).headers;
+
+		return StructKeyExists( headers, arguments.name ) ? Trim( headers[ arguments.name ] ) : "";
+	}
+
+	// ETag, Cache-Control and (when known) Last-Modified of a JSON response; it depends on the Accept header too
+	private struct function _cacheHeaders( required string etag, any lastModified="" ) {
+		var headers = {
+			  "ETag"          = arguments.etag
+			, "Cache-Control" = services.HttpCaching::cacheControl()
+			, "Vary"          = "Accept, Accept-Encoding"
+		};
+		if ( IsDate( arguments.lastModified ) ) {
+			headers[ "Last-Modified" ] = services.HttpCaching::httpDate( arguments.lastModified );
+		}
+
+		return headers;
+	}
+
+	// the response as a struct, for the REST layer to serialise in the format the client asked for
+	private any function _infoStruct( required string hostName, required string listType, required boolean withLogo, required string coreVersion, boolean flush=false ) {
+		try {
+			_bind();
+			variables.metaReader.refreshIfStale( force=arguments.flush );
+			return {
+				  meta       = _infoMeta( arguments.hostName )
+				, extensions = variables.metaReader.list( type=arguments.listType, withLogo=arguments.withLogo, coreVersion=arguments.coreVersion )
+			};
+		} catch ( any e ) {
+			return e;
+		}
+	}
+
+	private struct function _infoMeta( required string hostName ) {
+		return {
+			  title       = "Lucee Association Switzerland Extension Store (#arguments.hostName#)"
+			, description = ""
+			, image       = "https://#arguments.hostName#/extension/extension-provider.png"
+			, url         = "https://#arguments.hostName#"
+			, mode        = "production"
+		};
+	}
+
+	// Does the client get JSON from the REST layer? Yes without an Accept header, with one that names JSON, or the
+	// any type wildcard without a type the REST layer would prefer. Not with a format extension in the url (info.xml).
+	private boolean function _wantsJson() {
+		var last = ListLast( cgi.path_info ?: "", "/" );
+		if ( Find( ".", last ) ) {
+			return false;
+		}
+
+		var accept = LCase( Trim( cgi.http_accept ?: "" ) );
+		if ( !Len( accept ) || Find( "json", accept ) ) {
+			return true;
+		}
+		if ( ReFind( "cfml|wddx|xml|text/plain", accept ) ) {
+			return false;
+		}
+
+		return Find( "*/*", accept ) > 0;
+	}
+
+	variables.listingPlaceholder = "__LUCEE_PROVIDER_EXTENSIONS_" & Replace( CreateUUID(), "-", "", "all" ) & "__";
+
+	/**
+	 * The serialised extension listing, from memory. Keyed by the bucket of the core version (core versions that
+	 * get the same listing share one entry, see ExtensionMetadataReader.coreVersionBucket()), rebuilt in the
+	 * background once the meta changed.
+	 */
+	private struct function _listingJson( required string listType, required boolean withLogo, required string coreVersion, boolean force=false ) {
+		var reader = variables.metaReader;
+		var type   = arguments.listType;
+		var logo   = arguments.withLogo;
+		var core   = arguments.coreVersion;
+		var key    = type & "|" & ( logo ? "logo" : "nologo" ) & "|" & reader.coreVersionBucket( core );
+
+		return application.infoListingCache.get(
+			  key        = key
+			, generation = reader.getMetaGeneration()
+			, producer   = function() {
+				return SerializeJSON( reader.list( type=type, withLogo=logo, coreVersion=core ), "row" );
+			}
+			, force      = arguments.force
+		);
 	}
 
 	/**
@@ -136,7 +216,20 @@ component {
 		);
 
 		if ( StructCount( ext ) ) {
-			return ext;
+			if ( !_wantsJson() ) {
+				return ext;
+			}
+			// the same JSON the REST layer writes for the struct, with an ETag so a client can ask again cheaply
+			var body    = SerializeJSON( ext );
+			var etag    = services.HttpCaching::weakEtag( body );
+			var headers = _cacheHeaders( etag );
+			if ( services.HttpCaching::isNotModified( ifNoneMatch=_requestHeader( "If-None-Match" ), etag=etag ) ) {
+				RestSetResponse( { status=304, headers=headers } );
+				return;
+			}
+			headers[ "Content-Type" ] = "application/json;charset=UTF-8";
+			RestSetResponse( { status=200, content=body, headers=headers } );
+			return;
 		}
 
 		var msg = "There is no extension at this provider with id [#EncodeForHtml( arguments.id )#]";

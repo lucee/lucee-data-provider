@@ -64,10 +64,87 @@ component accessors=true {
 	// added to the meta by that load (or the next one)
 	variables._pendingRemote            = {};
 
+	// changes whenever what is served changes (see reset()), unique per reader so a reload never reuses a generation
+	variables._readerId         = CreateUUID();
+	variables._metaGeneration   = 0;
+
 	reset();
 
 	function reset() {
-		variables._simpleCache = StructNew( "max:100" );
+		variables._simpleCache    = StructNew( "max:100" );
+		variables._metaGeneration = ( variables._metaGeneration ?: 0 ) + 1;
+		// derived from what is served, see coreVersionBucket()
+		variables._coreThresholdList = "";
+		variables._bucketMemo     = StructNew( "synchronized" );
+	}
+
+	/**
+	 * Identifies the served meta: a new value after every change of it (load, refresh, a version fetched on demand).
+	 * Caches of anything built from the meta compare it to know when they are out of date.
+	 */
+	public string function getMetaGeneration() {
+		return variables._readerId & "-" & variables._metaGeneration;
+	}
+
+	/**
+	 * The listing for a core version only depends on which of the min core versions of the served extensions that
+	 * core version satisfies (see _filterByCoreVersion and _fillOlderFromMavenVersions). Core versions that satisfy
+	 * the same ones get the same listing, this returns the same bucket for them. A core version that is not of the
+	 * form a.b.c.d is a bucket of its own, so it is answered exactly as before.
+	 */
+	public string function coreVersionBucket( string coreVersion="" ) {
+		var cv = Trim( arguments.coreVersion );
+
+		if ( !Len( cv ) ) {
+			return "any";
+		}
+
+		var memo = variables._bucketMemo;
+		if ( StructKeyExists( memo, cv ) ) {
+			return memo[ cv ];
+		}
+
+		var v      = ListToArray( cv, "." );
+		var bucket = "raw-" & cv;
+
+		if ( ArrayLen( v ) >= 4 ) {
+			try {
+				var sig = "";
+				for ( var threshold in _coreThresholds() ) {
+					sig &= services.VersionUtils::checkVersionGTE( threshold, v[ 1 ], v[ 2 ], v[ 3 ], v[ 4 ] ) ? "1" : "0";
+				}
+				bucket = "b" & Len( sig ) & "-" & LCase( Hash( sig, "MD5" ) );
+			} catch ( any e ) {
+				bucket = "raw-" & cv;
+			}
+		}
+
+		if ( StructCount( memo ) < 5000 ) {
+			memo[ cv ] = bucket;
+		}
+
+		return bucket;
+	}
+
+	// the distinct min core versions of what is served, in a stable order
+	private array function _coreThresholds() {
+		if ( IsArray( variables._coreThresholdList ) ) {
+			return variables._coreThresholdList;
+		}
+
+		var seen   = {};
+		var served = _getServed();
+		for ( var i=1; i<=QueryRecordCount( served ); i++ ) {
+			var minCore = Trim( served.minCoreVersion[ i ] );
+			if ( Len( minCore ) ) {
+				seen[ minCore ] = true;
+			}
+		}
+		var thresholds = StructKeyArray( seen );
+		ArraySort( thresholds, "textnocase" );
+		variables._coreThresholdList = thresholds;
+
+		return thresholds;
 	}
 
 	// the settings change what is served, so when the meta is loaded already, what is served is rebuilt
