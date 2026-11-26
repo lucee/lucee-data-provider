@@ -24,7 +24,8 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( json ).toInclude( '"jar":"lucee-7.0.6.10.jar"' );
 				expect( json ).toInclude( '"sources":{"pom":{"src":"x.pom"}}' );
 				expect( json ).toInclude( '"list":[{"a":1}]' );
-				expect( json ).notToInclude( '"VERSION"' );
+				// notToInclude does not look at the case
+				expect( Find( '"VERSION"', json ) ).toBe( 0 );
 				// the version key stays as it is
 				expect( json ).toInclude( '"07.000.006.0010.100"' );
 			});
@@ -42,7 +43,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			it( title="the original is not changed", body=function() {
 				var entry = { VERSION="1" };
 				lowerkeysservices.LowerKeys::copy( entry );
-				expect( SerializeJSON( entry ) ).toInclude( '"VERSION"' );
+				expect( Find( '"VERSION"', SerializeJSON( entry ) ) ).toBeGT( 0 );
 			});
 
 			it( title="list?extended=true and get/{version} use it", body=function() {
