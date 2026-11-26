@@ -122,9 +122,11 @@ component {
 	}
 
 	function onRequestStart() output=true {
-		// Cold start can take a couple of minutes (Maven metadata). The default
-		// 50s request timeout would otherwise 500 waiting requests.
-		setting requesttimeout=600;
+		// Below the platform's request timeout (Cloud Run: 300s), so a request
+		// that runs too long ends with Lucee's own error, not a cut connection.
+		// Slow work (service load, meta and listing refreshes) runs in threads
+		// with their own timeout.
+		setting requesttimeout=_requestTimeoutSeconds();
 		header name="Content-Security-Policy" value="sandbox; object-src 'none'; script-src 'none'";
 
 		if ( this.allowReload && StructKeyExists( url, "fwreinit" ) ) {
@@ -172,6 +174,12 @@ component {
 		var seconds = Val( server.system.environment.NOT_READY_RETRY_AFTER_SECONDS ?: 30 );
 
 		return seconds > 0 ? Int( seconds ) : 30;
+	}
+
+	private numeric function _requestTimeoutSeconds() {
+		var seconds = Val( server.system.environment.REQUEST_TIMEOUT_SECONDS ?: 240 );
+
+		return seconds > 0 ? Int( seconds ) : 240;
 	}
 
 	private function _createListingCache() {

@@ -322,6 +322,7 @@ Run defaults):
 | `LUCEE_JAVA_OPTS` | `-Xms256m -Xmx1200m` in the image (a 2GiB Cloud Run container; the base image default is `-Xms64m -Xmx512m`) |
 | `ALLOW_RELOAD` | unset/false (`?fwreinit` only works when this is true) |
 | `HEALTH_FAIL_AFTER_SECONDS` | `300`. `/healthcheck/` answers `503` once the services have been failing to load this long, so a liveness probe replaces the container. `0` disables it. |
+| `REQUEST_TIMEOUT_SECONDS` | `240`. Lucee request timeout, kept below the Cloud Run request timeout (`--timeout 300`). Background work (service load, meta and listing refreshes) has its own timeout. |
 | `NOT_READY_RETRY_AFTER_SECONDS` | `30`. `Retry-After` of the `503` a `/rest/` request gets while the services are not loaded yet. |
 | `SERVICES_RETRY_SECONDS` | `30`. When loading the provider services fails (for example an IO error on the shared cache folder), the next request after this many seconds starts a new load. The failure is never kept for the life of the instance. |
 | `PORT` | Cloud Run sets this to `8080` |

@@ -232,8 +232,8 @@ component accessors=true {
 	 * meantime), or with wait=true on this request (the listing cache does that, it refreshes in the background
 	 * itself). Only one background refresh runs at a time.
 	 */
-	public void function refreshIfStale( boolean wait=false ) {
-		if ( !isMetaStale() ) {
+	public void function refreshIfStale( boolean wait=false, boolean force=false ) {
+		if ( !arguments.force && !isMetaStale() ) {
 			return;
 		}
 

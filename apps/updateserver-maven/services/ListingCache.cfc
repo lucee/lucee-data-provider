@@ -181,7 +181,7 @@ component {
 			}
 		}
 
-		return _refreshSync( arguments.key, arguments.producer );
+		return _refreshSync( arguments.key, arguments.producer, false );
 	}
 
 	public any function put( required string key, required any data, date cachedAt=Now() ) {
@@ -196,8 +196,12 @@ component {
 		return arguments.data;
 	}
 
-	private any function _refreshSync( required string key, required any producer ) {
-		var data = arguments.producer();
+	/**
+	 * @background true when this runs in the background refresh thread: the producer is called with
+	 *             background=true, so it can do the slow work there and never on a request
+	 */
+	private any function _refreshSync( required string key, required any producer, boolean background=false ) {
+		var data = arguments.producer( background=arguments.background );
 
 		try {
 			put( arguments.key, data );
@@ -234,7 +238,7 @@ component {
 		{
 			try {
 				setting requesttimeout=600;
-				_refreshSync( key, producer );
+				_refreshSync( key, producer, true );
 			} catch ( any e ) {
 				SystemOutput( "Listing cache refresh failed for [#key#]: #e.message#", true );
 			} finally {

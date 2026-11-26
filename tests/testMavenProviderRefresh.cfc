@@ -55,6 +55,21 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( _row( reader.list( type="release" ), mailId ).version ).toBe( "1.1.0.19" );
 			} );
 
+			it( "a forced refresh rebuilds the meta in the background, the request is not held up", function() {
+				var world = _newWorld();
+				var reader = _newReader( world );
+				_addRepoVersion( world, "mail-extension", "1.1.0.20", mailId, mixed );
+				reader.refreshIfStale(); // not stale: nothing happens
+				expect( _row( reader.list( type="release" ), mailId ).version ).toBe( "1.1.0.17" );
+
+				reader.refreshIfStale( force=true );
+				var deadline = GetTickCount() + 10000;
+				while ( !ArrayFind( QueryColumnData( reader.getExtensionMeta(), "version" ), "1.1.0.20" ) && GetTickCount() < deadline ) {
+					sleep( 25 );
+				}
+				expect( _row( reader.list( type="release" ), mailId ).version ).toBe( "1.1.0.20" );
+			} );
+
 			it( "builds abc and snapshot from the same source as all, with the newest version of each type", function() {
 				var world = _newWorld();
 				_addRepoVersion( world, "mail-extension", "1.1.0.18-RC", mailId, mixed );
