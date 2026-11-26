@@ -83,6 +83,7 @@ component {
 					application.servicesError = "";
 					application.servicesReady = true;
 					services.ProviderHealth::markHealthy();
+					services.ProviderHealth::markReady();
 					SystemOutput( "Maven provider services are ready", true );
 					// Jira is filled in the background and must never gate readiness
 					_refreshJiraAsync();
@@ -134,15 +135,11 @@ component {
 				application.servicesError = "";
 				application.servicesReady = true;
 				services.ProviderHealth::markHealthy();
+				services.ProviderHealth::markReady();
 				_refreshJiraAsync();
 			} catch ( any e ) {
 				SystemOutput( "Maven provider services reload failed, the loaded services are kept: #e.message#", true );
 			}
-		}
-
-		// only while the services are not ready: a failed load is started again
-		if ( !( application.servicesReady ?: false ) ) {
-			_retryFailedServicesLoad();
 		}
 
 		var allowedPaths = [ "rest", "healthcheck", "index.cfm", "warmup" ];
@@ -154,6 +151,27 @@ component {
 			echo( "not found" );
 			abort;
 		}
+
+		// only while the services are not ready: a failed load is started again, and a REST request is answered
+		// with 503 right away instead of waiting for the load (clients retry, and /ready/ keeps new instances out
+		// of rotation until this is no longer the case)
+		if ( !( application.servicesReady ?: false ) ) {
+			_retryFailedServicesLoad();
+
+			if ( requestedPath == "rest" ) {
+				content reset=true type="text/plain";
+				header statuscode=503 statustext="Service Unavailable";
+				header name="Retry-After" value=_retryAfterSeconds();
+				echo( "The provider is starting, try again in a moment" );
+				abort;
+			}
+		}
+	}
+
+	private numeric function _retryAfterSeconds() {
+		var seconds = Val( server.system.environment.NOT_READY_RETRY_AFTER_SECONDS ?: 30 );
+
+		return seconds > 0 ? Int( seconds ) : 30;
 	}
 
 	private function _createListingCache() {
