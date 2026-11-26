@@ -706,8 +706,8 @@ component {
 
 	remote function listMissing(boolean inclFB=false restargsource="url")
 		httpmethod="GET" restpath="list-missing" {
-		_bind();
-		return _notWithoutS3( "The list of the missing flat files" );
+		// no flat files, so nothing is missing
+		return {};
 	}
 
 	/**
@@ -716,8 +716,30 @@ component {
 	*/
 	remote function buildLatest()
 		httpmethod="GET" restpath="buildLatest" {
-		_bind();
-		return _notWithoutS3( "Building the flat files" );
+		// release builds still call this, there is nothing to build: the versions come from Maven
+		return _nothingToDo();
+	}
+
+	/**
+	 * the legacy provider deletes forgebox-*-SNAPSHOT.zip from S3, this provider has no S3 and builds no zips
+	 */
+	remote struct function cleanupForgeboxSnapshots(
+		string token="" restargsource="url",
+		boolean dryRun=false restargsource="url"
+	) httpmethod="GET" restpath="cleanupForgeboxSnapshots" {
+		return _nothingToDo();
+	}
+
+	remote struct function cleanupForgeboxSnapshotsPost(
+		string token="" restargsource="url",
+		boolean dryRun=false restargsource="url"
+	) httpmethod="POST" restpath="cleanupForgeboxSnapshots" {
+		return _nothingToDo();
+	}
+
+	// 200 for the maintenance calls of the legacy provider, this one serves from Maven and keeps no flat files
+	private struct function _nothingToDo() {
+		return { "type":"info", "message":"Nothing to do, this update provider serves from the Maven repositories only." };
 	}
 
 	private boolean function isVersion(required string version) {
