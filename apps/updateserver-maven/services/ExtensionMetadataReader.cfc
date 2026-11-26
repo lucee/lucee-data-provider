@@ -26,6 +26,11 @@ component accessors=true {
 	property name="bundleDownloadService" type="any";
 	// opt-in: logos of the listing scaled to fit this size ("260x100"), empty: the logos as they are, see LogoThumbnails
 	property name="listingLogoMaxSize"    type="string" default="";
+	// public logo URL of an extension, same pattern as Lucee 8 ExtensionProvider.toArtifactImageUrl():
+	// {base}{group}-{artifact}.png with dots turned into dashes. Empty: the URL is never used.
+	property name="artifactLogoBaseUrl"   type="string" default="https://cdn.lucee.org/artifacts/";
+	// tests: a struct of url > boolean, or an object with exists(url). When set, no HTTP is made.
+	property name="artifactLogoProbe"     type="any";
 
 	// LDEV-6789: file name > path relative to mavenRoot, for the files that are not in the flat bucket
 	variables._mavenPaths   = {};
@@ -65,6 +70,11 @@ component accessors=true {
 	// file name > { fetched, artifact, version, repos }: versions fetched on demand while a meta load was running,
 	// added to the meta by that load (or the next one)
 	variables._pendingRemote            = {};
+	// existence of public artifact logo URLs, checked only while the meta is built, never on a listing request
+	variables._artifactLogoCache        = StructNew( "sync" );
+	variables._artifactLogoExistsTtl    = 86400; // seconds, a file that is there stays there
+	variables._artifactLogoMissingTtl   = 300;   // seconds, a missing file is only cached briefly
+	variables._artifactLogoHeadTimeout  = 5;
 
 	// changes whenever what is served changes (see reset()), unique per reader so a reload never reuses a generation
 	variables._readerId         = CreateUUID();
@@ -265,6 +275,11 @@ component accessors=true {
 
 			// versions fetched on demand while this load ran
 			metaChanged = _addPendingRemote( meta ) || metaChanged;
+
+			// a public artifact logo URL instead of the stored base64, when that file is there. Done here
+			// so already persisted meta is updated without downloading the lex files again. The check is
+			// cached and happens only while the meta is built, not on listing or detail requests.
+			metaChanged = _preferArtifactLogoUrls( meta ) || metaChanged;
 
 			if ( metaChanged ) {
 				QuerySort( meta, "id,versionSortable", "asc,desc" );
@@ -899,12 +914,24 @@ component accessors=true {
 		var candidates = [:];
 
 		for ( var file in arguments.bucketFiles ) {
-			candidates[ file.name ] = { name=file.name, artifact=file.artifact, version=file.version, source="bucket", path=file.path };
+			candidates[ file.name ] = _withCandidateGroup( {
+				  name     = file.name
+				, artifact = file.artifact
+				, version  = file.version
+				, source   = "bucket"
+				, path     = file.path
+			}, file.group ?: "" );
 		}
 
 		for ( var file in arguments.remoteFiles ) {
 			if ( !StructKeyExists( candidates, file.name ) ) {
-				candidates[ file.name ] = { name=file.name, artifact=file.artifact, version=file.version, source="repo", repos=file.repos };
+				candidates[ file.name ] = _withCandidateGroup( {
+					  name     = file.name
+					, artifact = file.artifact
+					, version  = file.version
+					, source   = "repo"
+					, repos    = file.repos
+				}, file.group ?: "" );
 			}
 		}
 
@@ -925,7 +952,13 @@ component accessors=true {
 				var name = artifact & "-" & version & ".lex";
 
 				if ( !StructKeyExists( all, name ) ) {
-					all[ name ] = { name=name, artifact=artifact, version=version, source="repo", repos=versions[ version ] };
+					all[ name ] = _withCandidateGroup( {
+						  name     = name
+						, artifact = artifact
+						, version  = version
+						, source   = "repo"
+						, repos    = versions[ version ]
+					} );
 				}
 			}
 		}
@@ -966,7 +999,11 @@ component accessors=true {
 			if ( found.source == "bucket" ) {
 				paths[ fileName ] = found.path;
 			} else {
-				remote[ fileName ] = { artifact=found.artifact, version=found.version, repos=found.repos };
+				var location = { artifact=found.artifact, version=found.version, repos=found.repos };
+				if ( Len( found.group ?: "" ) ) {
+					location.group = found.group;
+				}
+				remote[ fileName ] = location;
 			}
 		}
 
@@ -1361,15 +1398,11 @@ component accessors=true {
 		try {
 			_downloadCandidate( arguments.candidate, tmpFile );
 
-			var extMeta   = _initExtensionMetaFromManifest( tmpFile, arguments.cols );
-			// a manifest image that is already an http(s) URL ending in .png is passed through as it is, so the
-			// listing stays small and META-INF/logo.png is not read or turned into base64. Anything else (an
-			// embedded logo, a URL that is not .png) is handled as before.
-			if ( _isPngLogoUrl( extMeta.image ?: "" ) ) {
-				extMeta.image = Trim( extMeta.image );
-			} else {
-				extMeta.image = _getLogoThumbnail( tmpFile );
-			}
+			var extMeta  = _initExtensionMetaFromManifest( tmpFile, arguments.cols );
+			var manifest = _readLexManifest( tmpFile );
+			// prefer a public artifact logo URL (or a manifest image that is already a .png URL) over
+			// reading META-INF/logo.png and embedding it as base64, so the listing stays small.
+			extMeta.image = _resolveLogoImage( arguments.candidate, manifest, extMeta.image ?: "", tmpFile );
 
 			return { tmpFile=tmpFile, extMeta=extMeta };
 		} catch ( any e ) {
@@ -1583,6 +1616,243 @@ component accessors=true {
 		}
 	}
 
+
+	/**
+	 * The image value for a newly read lex file: a public artifact logo URL when that file is there,
+	 * otherwise a manifest image that is already a .png URL, otherwise the embedded logo as base64.
+	 */
+	private string function _resolveLogoImage( required struct candidate, required struct manifest, required string currentImage, required string lexFile ) {
+		var current = Trim( arguments.currentImage );
+
+		// a custom .png URL already in the manifest is kept as it is, except a GitHub raw URL, which
+		// is rate-limited and is replaced by the public artifact logo when that file is there.
+		if ( _isPngLogoUrl( current ) && !_isGithubRawLogoUrl( current ) ) {
+			return current;
+		}
+
+		var hosted = _hostedArtifactLogoUrl( _logoCoords( arguments.candidate, arguments.manifest ) );
+		if ( Len( hosted ) ) {
+			return hosted;
+		}
+		if ( _isPngLogoUrl( current ) ) {
+			return current;
+		}
+
+		return _getLogoThumbnail( arguments.lexFile );
+	}
+
+	/**
+	 * Replaces a stored base64 logo with the public artifact logo URL when that file is there.
+	 * Returns whether any row changed. Listing requests only read the result, they do not check URLs.
+	 */
+	private boolean function _preferArtifactLogoUrls( required query meta ) {
+		if ( !ListFindNoCase( arguments.meta.columnList, "image" ) ) {
+			return false;
+		}
+
+		var changed = false;
+
+		for ( var i=1; i<=QueryRecordCount( arguments.meta ); i++ ) {
+			var current = Trim( arguments.meta.image[ i ] );
+			if ( _isPngLogoUrl( current ) && !_isGithubRawLogoUrl( current ) ) {
+				continue;
+			}
+
+			var hosted = _hostedArtifactLogoUrl( _logoCoordsFromRow( arguments.meta, i ) );
+			if ( Len( hosted ) && hosted != current ) {
+				arguments.meta.image[ i ] = hosted;
+				changed = true;
+			}
+		}
+
+		return changed;
+	}
+
+	private struct function _withCandidateGroup( required struct candidate, string group="" ) {
+		var groupId = Trim( arguments.group );
+
+		if ( !Len( groupId ) ) {
+			groupId = _groupForArtifact( arguments.candidate.artifact ?: "" );
+		}
+		if ( Len( groupId ) ) {
+			arguments.candidate.group = groupId;
+		}
+
+		return arguments.candidate;
+	}
+
+	private string function _groupForArtifact( required string artifact ) {
+		if ( !Len( Trim( arguments.artifact ) ) ) {
+			return "";
+		}
+
+		try {
+			if ( IsObject( getMavenSource() ?: "" ) ) {
+				return Trim( getMavenSource().getGroup( arguments.artifact ) );
+			}
+		} catch ( any e ) {}
+
+		return "";
+	}
+
+	/**
+	 * groupId and artifactId from a Maven candidate (preferred) or the lex manifest.
+	 */
+	private struct function _logoCoords( struct candidate={}, struct manifest={} ) {
+		var group    = Trim( arguments.candidate.group ?: "" );
+		var artifact = Trim( arguments.candidate.artifact ?: "" );
+
+		if ( !Len( group ) ) {
+			group = Trim( arguments.manifest.groupId ?: "" );
+		}
+		if ( !Len( artifact ) ) {
+			artifact = Trim( arguments.manifest.artifactId ?: "" );
+		}
+		if ( !Len( group ) ) {
+			group = _groupForArtifact( artifact );
+		}
+		if ( !Len( group ) || !Len( artifact ) ) {
+			return {};
+		}
+
+		return { group=group, artifact=artifact };
+	}
+
+	/**
+	 * groupId and artifactId of an already stored meta row, from the Maven locations learned
+	 * in this load (not from the row itself: those columns are not part of the listing query).
+	 */
+	private struct function _logoCoordsFromRow( required query meta, required numeric row ) {
+		var fileName = arguments.meta.filename[ arguments.row ];
+		var version  = arguments.meta.version[ arguments.row ];
+		var id       = arguments.meta.id[ arguments.row ];
+		var remote   = variables._mavenRemote[ fileName ] ?: "";
+		var path     = variables._mavenPaths[ fileName ] ?: "";
+		var artifact = "";
+		var group    = "";
+
+		if ( IsStruct( remote ) ) {
+			artifact = Trim( remote.artifact ?: "" );
+			group    = Trim( remote.group ?: "" );
+		}
+		if ( !Len( artifact ) && Len( path ) ) {
+			artifact = Trim( ListFirst( Replace( path, "\", "/", "all" ), "/" ) );
+		}
+		if ( !Len( artifact ) ) {
+			for ( var name in variables._mavenState.artifactIds ?: {} ) {
+				if ( ( variables._mavenState.artifactIds[ name ] ?: "" ) == id ) {
+					artifact = name;
+					break;
+				}
+			}
+		}
+		if ( !Len( artifact ) && Len( version ) && Right( fileName, Len( version ) + 5 ) == "-" & version & ".lex" ) {
+			var fromFile = Left( fileName, Len( fileName ) - Len( version ) - 5 );
+			if ( Len( fromFile ) && (
+				   StructKeyExists( variables._mavenState.artifactIds ?: {}, fromFile )
+				|| StructKeyExists( variables._mavenVersions, fromFile )
+			) ) {
+				artifact = fromFile;
+			}
+		}
+		if ( !Len( group ) ) {
+			group = _groupForArtifact( artifact );
+		}
+		if ( !Len( group ) || !Len( artifact ) ) {
+			return {};
+		}
+
+		return { group=group, artifact=artifact };
+	}
+
+	/**
+	 * The public artifact logo URL when the file is known to be there, otherwise an empty string.
+	 * Same pattern as Lucee 8: https://cdn.lucee.org/artifacts/{group}-{artifact}.png (dots become dashes).
+	 * No version is appended; a logo change under the same name keeps the same URL.
+	 */
+	private string function _hostedArtifactLogoUrl( required struct coords ) {
+		if ( !Len( arguments.coords.group ?: "" ) || !Len( arguments.coords.artifact ?: "" ) ) {
+			return "";
+		}
+
+		var address = _artifactLogoUrl( arguments.coords.group, arguments.coords.artifact );
+		if ( !Len( address ) || !_artifactLogoExists( address ) ) {
+			return "";
+		}
+
+		return address;
+	}
+
+	private string function _artifactLogoUrl( required string groupId, required string artifactId ) {
+		var group    = Trim( arguments.groupId );
+		var artifact = Trim( arguments.artifactId );
+		var base     = Trim( getArtifactLogoBaseUrl() ?: "" );
+
+		if ( !Len( group ) || !Len( artifact ) || !Len( base ) ) {
+			return "";
+		}
+		if ( Right( base, 1 ) != "/" ) {
+			base &= "/";
+		}
+
+		return base & Replace( group & "-" & artifact, ".", "-", "all" ) & ".png";
+	}
+
+	/**
+	 * Whether the public artifact logo is there. Only called while the meta is built.
+	 * A test probe (a struct of url > boolean, or an object with exists(url)) is used when set,
+	 * so the tests never make an HTTP request. Definitive answers are remembered; a transient
+	 * failure is not cached and is treated as missing for this build.
+	 */
+	private boolean function _artifactLogoExists( required string logoUrl ) {
+		var address = Trim( arguments.logoUrl );
+		if ( !Len( address ) ) {
+			return false;
+		}
+
+		var probe = getArtifactLogoProbe() ?: "";
+		// a probe with exists(url) (a component or a struct of functions) is used first, so tests
+		// can count the calls; a plain struct of url > boolean is the simple case
+		if ( !IsSimpleValue( probe ) && StructKeyExists( probe, "exists" ) ) {
+			try {
+				return probe.exists( address ) ? true : false;
+			} catch ( any e ) {
+				return false;
+			}
+		}
+		if ( IsStruct( probe ) ) {
+			return IsBoolean( probe[ address ] ?: false ) && probe[ address ];
+		}
+
+		var cached = variables._artifactLogoCache[ address ] ?: "";
+		if ( IsStruct( cached ) && DateDiff( "s", cached.time, Now() ) < ( cached.exists ? variables._artifactLogoExistsTtl : variables._artifactLogoMissingTtl ) ) {
+			return cached.exists;
+		}
+
+		var status = 0;
+		try {
+			http url=address method="head" timeout=variables._artifactLogoHeadTimeout redirect=true
+				useragent="lucee-data-provider extension provider" result="local.res" {};
+			status = Val( local.res.statusCode ?: 0 );
+		} catch ( any e ) {
+			status = 0;
+		}
+
+		if ( status >= 200 && status < 400 ) {
+			variables._artifactLogoCache[ address ] = { exists=true, time=Now() };
+			return true;
+		}
+		if ( status == 404 || status == 410 ) {
+			variables._artifactLogoCache[ address ] = { exists=false, time=Now() };
+			return false;
+		}
+
+		return false;
+	}
+
+	private boolean function _isGithubRawLogoUrl( required string src ) {
+		return FindNoCase( "raw.githubusercontent.com/", arguments.src ) > 0;
+	}
 
 	/**
 	 * True when the value is an http(s) URL whose path ends in .png (case-insensitive). A query string
