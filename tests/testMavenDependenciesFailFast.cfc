@@ -45,6 +45,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				var started  = GetTickCount();
 
 				var rsp = provider.getDependencies( "1.2.3.4" );
+				// the 404 was set on the response of the test request
+				expect( getPageContext().getResponse().getStatus() ).toBe( 404 );
+				getPageContext().getResponse().setStatus( 200 );
 				expect( rsp.type ).toBe( "error" );
 				expect( rsp.message ).toInclude( "1.2.3.4" );
 				expect( GetTickCount() - started ).toBeLT( 2000 );
