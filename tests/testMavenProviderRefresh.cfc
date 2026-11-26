@@ -200,6 +200,55 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( _row( reader.list( type="release" ), mailId ).version ).toBe( "1.1.0.17" );
 			} );
 
+			it( "remembers a version no repository has and does not look it up again", function() {
+				var world = _newWorld();
+				var reader = _newReader( world );
+				ArrayClear( world.requests );
+				ArrayClear( world.downloads );
+
+				expect( reader.getExtensionDetail( id=mailId, version="9.9.9.9" ) ).toBeEmpty();
+				var first = ArrayLen( world.requests );
+				expect( first ).toBeGT( 0 );
+				expect( reader.getExtensionDetail( id=mailId, version="9.9.9.9" ) ).toBeEmpty();
+				expect( ArrayLen( world.requests ) ).toBe( first );
+				expect( world.downloads ).toHaveLength( 0 );
+			} );
+
+			it( "does not download a version that is listed but has no file", function() {
+				var world = _newWorld();
+				var reader = _newReader( world );
+				_addToMetadata( world, mixed, "mail-extension", "1.0.0.2" );
+				ArrayClear( world.downloads );
+
+				expect( reader.getExtensionDetail( id=mailId, version="1.0.0.2" ) ).toBeEmpty();
+				expect( world.downloads ).toHaveLength( 0 );
+			} );
+
+			it( "a version asked for does not wait for a running meta load, which then adds it", function() {
+				var world = _newWorld();
+				var reader = _newReader( world );
+				_addRepoVersion( world, "mail-extension", "1.0.0.1", mailId, mixed );
+				var holder = "hold-ext-meta-" & CreateUUID();
+				thread name=holder {
+					lock type="exclusive" name="readExtMeta" timeout=5 {
+						sleep( 4000 );
+					}
+				}
+				sleep( 300 );
+
+				var started = GetTickCount();
+				var ext = reader.getExtensionDetail( id=mailId, version="1.0.0.1" );
+				var took = GetTickCount() - started;
+				thread action="join" name=holder;
+
+				expect( ext.version ).toBe( "1.0.0.1" );
+				expect( took ).toBeLT( 3500 );
+				expect( reader.getDownloadUrl( ext.filename, "" ) ).toBe( mixed & "org/lucee/mail-extension/1.0.0.1/mail-extension-1.0.0.1.lex" );
+
+				reader.loadMeta();
+				expect( reader.getExtensionVersions()[ mailId ] ).toHaveKey( "1.0.0.1" );
+			} );
+
 			it( "does not read lucee-services metadata for a final Central lists", function() {
 				var world = _newWorld();
 				var found = _newSource( world ).findVersion( "mail-extension", "1.1.0.17" );

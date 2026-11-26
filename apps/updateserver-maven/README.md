@@ -31,9 +31,21 @@ Expected differences versus Pixl8 (`https://update.lucee.org` /
 ## Health check
 
 `GET /healthcheck/` returns `OK` (200) immediately. It is a **separate
-Lucee application** (`this.name=lucee-provider-maven-healthcheck`), so
-the Cloud Run startup probe does not wait for Maven metadata to load.
-`/healthcheck` without the trailing slash 302s to `/healthcheck/`.
+Lucee application** (`this.name=lucee-provider-maven-healthcheck`) and is
+the liveness probe. `/healthcheck` without the trailing slash 302s to
+`/healthcheck/`.
+
+## Readiness
+
+`GET /ready/` is the startup probe. It is also a separate application
+(`this.name=lucee-provider-maven-ready`) and answers immediately:
+`503 STARTING` until the provider services are loaded, then `200 READY`.
+With it as the startup probe, a new revision only gets traffic once it
+can serve it, and the previous revision keeps serving until then.
+
+While the services are not loaded, every `/rest/` request is answered
+with `503` and `Retry-After: 30` (`NOT_READY_RETRY_AFTER_SECONDS`) right
+away instead of waiting for the load.
 
 The first health-check request also fires a background warmup of the
 main app (`/warmup/`). Service loading runs in a background thread.
@@ -89,10 +101,10 @@ copy is still served and a background thread refreshes it. A miss (or
 file + rename) so a shared Cloud Storage FUSE mount is not left with a
 half-written file.
 
-List and info requests wait until Maven services are ready and then
-rebuild a missing listing. They do not return a cached copy while
-startup is still running. `GET /healthcheck/` is a separate application
-and still returns `OK` immediately.
+List and info requests are answered with `503` until the Maven services
+are ready (see Readiness) and then rebuild a missing listing. They do not
+return a cached copy while startup is still running. `GET /healthcheck/`
+and `GET /ready/` are separate applications and answer immediately.
 
 Storage errors on the shared mount (for example "Stale file handle"
 after another instance replaced a file while it was open) never leave
@@ -202,6 +214,15 @@ app directory, change it to `-f apps/updateserver-maven/Dockerfile` (or
 to `--config apps/updateserver-maven/cloudbuild.yaml`). This repository
 does not change the trigger or add a deploy job.
 
+Set the trigger's **included files** filter so only changes to this app
+build and deploy a new revision (every new revision has a cold start):
+
+```text
+apps/updateserver-maven/**
+apps/updateserver/Dockerfile
+devops/.CFconfig-update.json5
+```
+
 Manual build from the repo root, after this PR is on `main`:
 
 ```sh
@@ -239,7 +260,7 @@ gcloud run deploy "$SERVICE" \
   --cpu-boost \
   --min-instances 0 \
   --max-instances 4 \
-  --startup-probe=httpGetPath=/healthcheck/,periodSeconds=5,timeoutSeconds=5,failureThreshold=12,initialDelaySeconds=10 \
+  --startup-probe=httpGetPath=/ready/,periodSeconds=10,timeoutSeconds=5,failureThreshold=23,initialDelaySeconds=10 \
   --liveness-probe=httpGetPath=/healthcheck/,periodSeconds=30,timeoutSeconds=5,failureThreshold=3 \
   --set-env-vars=CACHE_DIRECTORY=/download,CACHE_DIR=/download/provider,ALLOW_RELOAD=false,LUCEE_LOGGING_FORCE_APPENDER=console,LISTING_CACHE_SECONDS=300
 ```
@@ -265,11 +286,12 @@ Recommended probe settings (also in the snippet above):
 
 | Setting | Value | Why |
 |---------|-------|-----|
-| Path | `/healthcheck/` | separate app, returns `OK` immediately |
+| Startup path | `/ready/` | separate app, `503` until the services are loaded |
 | Initial delay | 10s | Tomcat start |
-| Period | 5s | |
-| Timeout | 5s | health check does not load the main app |
-| Failure threshold | 12 | about one minute for Tomcat, not Maven |
+| Period | 10s | |
+| Timeout | 5s | the probe does not load the main app |
+| Failure threshold | 23 | 10s + 23 x 10s = 240s, the most a startup probe can wait; a revision that is not ready by then does not get traffic |
+| Liveness path | `/healthcheck/` | `503` only after the services failed to load for `HEALTH_FAIL_AFTER_SECONDS` |
 
 ### 4. Test the `run.app` URL
 
@@ -301,6 +323,7 @@ Run defaults):
 | `ALLOW_RELOAD` | unset/false (`?fwreinit` only works when this is true) |
 | `HEALTH_FAIL_AFTER_SECONDS` | `300`. `/healthcheck/` answers `503` once the services have been failing to load this long, so a liveness probe replaces the container. `0` disables it. |
 | `REQUEST_TIMEOUT_SECONDS` | `240`. Lucee request timeout, kept below the Cloud Run request timeout (`--timeout 300`). Background work (service load, meta and listing refreshes) has its own timeout. |
+| `NOT_READY_RETRY_AFTER_SECONDS` | `30`. `Retry-After` of the `503` a `/rest/` request gets while the services are not loaded yet. |
 | `SERVICES_RETRY_SECONDS` | `30`. When loading the provider services fails (for example an IO error on the shared cache folder), the next request after this many seconds starts a new load. The failure is never kept for the life of the instance. |
 | `PORT` | Cloud Run sets this to `8080` |
 | `EXTENSIONS_MAVEN_REPOS_RELEASES` / `LUCEE_MVN_REPO_RELEASES` | Maven Central |

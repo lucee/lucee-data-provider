@@ -56,6 +56,13 @@ component accessors=true {
 	variables._loadInFlight             = false;
 	variables._loadStarted              = 0;
 	variables._lastListedAll            = false;
+	// versions asked for that no repository has (id|version > GetTickCount until which that is not looked up again)
+	variables._remoteMisses             = {};
+	variables._remoteMissTtlMs          = 300000;
+	variables._remoteMissMax            = 5000;
+	// file name > { fetched, artifact, version, repos }: versions fetched on demand while a meta load was running,
+	// added to the meta by that load (or the next one)
+	variables._pendingRemote            = {};
 
 	reset();
 
@@ -174,6 +181,9 @@ component accessors=true {
 
 			// LDEV-6795: the packaging of the files we don't know it of yet (only needed with a min core version for Maven)
 			metaChanged = _backfillPackaging( meta ) || metaChanged;
+
+			// versions fetched on demand while this load ran
+			metaChanged = _addPendingRemote( meta ) || metaChanged;
 
 			if ( metaChanged ) {
 				QuerySort( meta, "id,versionSortable", "asc,desc" );
@@ -345,12 +355,15 @@ component accessors=true {
 			if ( arguments.version == "latest" || isEmpty( arguments.version ) ) {
 				arguments.version = _getLatestVersion( mapped[ arguments.id ], arguments.coreVersion, arguments.type );
 			}
+			var direct = {};
 			if ( !StructKeyExists( mapped[ arguments.id ], arguments.version ) && getMavenOnly() ) {
-				_ensureRemoteVersion( arguments.id, arguments.version );
+				direct = _ensureRemoteVersion( arguments.id, arguments.version );
 				mapped = getExtensionVersions();
 			}
-			if ( StructKeyExists( mapped[ arguments.id ], arguments.version ) ) {
-				var ext = StructCopy( mapped[ arguments.id ][ arguments.version ] );
+			if ( StructKeyExists( mapped[ arguments.id ], arguments.version ) || !StructIsEmpty( direct ) ) {
+				var ext = StructKeyExists( mapped[ arguments.id ], arguments.version )
+					? StructCopy( mapped[ arguments.id ][ arguments.version ] )
+					: direct;
 
 				// LDEV-6795: a version that is asked for explicitly is not served to a core that can't load it. Without a
 				// core version there is nothing to check against, so it is served as it is.
@@ -583,62 +596,153 @@ component accessors=true {
 	 * A version that is asked for explicitly but not in the meta (Maven only lists the newest ones at startup):
 	 * only that version is looked up (see MavenExtensionSource.findVersion) and, when it is not known yet, its file
 	 * is read and added to the meta. The rest of the meta is left as it is, nothing else is listed or downloaded.
+	 *
+	 * The lookup and the download only lock this one file, never the whole meta, so a slow or missing version
+	 * does not hold up requests for other extensions, and a running meta load does not hold up this one. A version
+	 * no repository has is remembered for a while (_remoteMissTtlMs) and answered as not found right away.
+	 *
+	 * Returns the details of the version when they could not be added to the meta yet (a meta load is running and
+	 * adds them), an empty struct otherwise (added, or not available).
 	 */
-	private void function _ensureRemoteVersion( required string id, required string version ) {
+	private struct function _ensureRemoteVersion( required string id, required string version ) {
 		if ( !Len( arguments.version ) || arguments.version == "latest" ) {
-			return;
+			return {};
+		}
+		var missKey = arguments.id & "|" & arguments.version;
+		if ( Val( variables._remoteMisses[ missKey ] ?: 0 ) > GetTickCount() ) {
+			return {};
 		}
 		var artifact = _artifactForId( arguments.id );
 		if ( !Len( artifact ) || !IsObject( getMavenSource() ?: "" ) ) {
-			return;
-		}
-		var found = getMavenSource().findVersion( artifact, arguments.version );
-		if ( !( found.found ?: false ) ) {
-			return;
+			return {};
 		}
 
-		var name = artifact & "-" & arguments.version & ".lex";
+		var name   = artifact & "-" & arguments.version & ".lex";
+		var result = {};
 
-		lock type="exclusive" name="readExtMeta" timeout=120 {
-			var meta     = IsQuery( variables.extensionMeta ?: "" ) ? variables.extensionMeta : _getEmptyExtensionsQuery();
-			var fileName = "";
-
-			for ( var i=1; i<=QueryRecordCount( meta ); i++ ) {
-				if ( meta.filename[ i ] == name || ( meta.id[ i ] == arguments.id && meta.version[ i ] == arguments.version ) ) {
-					fileName = meta.filename[ i ];
-					break;
-				}
+		lock name="#variables._lockId#-remote-#name#" type="exclusive" timeout=60 throwOnTimeout=false {
+			// another request may have got it while this one waited for the lock
+			var known = getExtensionVersions() ?: {};
+			if ( StructKeyExists( known, arguments.id ) && StructKeyExists( known[ arguments.id ], arguments.version ) ) {
+				return {};
+			}
+			var pending = variables._pendingRemote[ name ] ?: "";
+			if ( IsStruct( pending ) ) {
+				return pending.detail;
 			}
 
-			if ( !Len( fileName ) ) {
-				var fetched = _fetchLexFile(
-					  { name=name, artifact=artifact, version=arguments.version, source="repo", repos=found.repos }
-					, ListToArray( meta.columnList )
-				);
-
-				if ( StructKeyExists( fetched, "error" ) ) {
-					SystemOutput( "Error processing lex file: [#name#]: #fetched.error#", true );
-					return;
-				}
-				if ( fetched.extMeta.id != arguments.id || fetched.extMeta.version != arguments.version ) {
-					SystemOutput( "Extension file [#name#] is [#fetched.extMeta.id#] [#fetched.extMeta.version#], not [#arguments.id#] [#arguments.version#], ignoring it.", true );
-					_deleteTmpFile( fetched.tmpFile );
-					return;
-				}
-
-				_storeLexFile( meta, name, fetched );
-				QuerySort( meta, "id,versionSortable", "asc,desc" );
-				_writeMetaFileToS3( meta );
-				fileName = name;
+			var found = getMavenSource().findVersion( artifact, arguments.version );
+			if ( !( found.found ?: false ) ) {
+				_rememberRemoteMiss( missKey );
+				return {};
+			}
+			// a HEAD (its result is cached) before the download, so a version that is listed but has no file
+			// is not waited for with the download timeout
+			if ( !Len( getMavenSource().getFileUrl( artifact, arguments.version, found.repos ) ) ) {
+				_rememberRemoteMiss( missKey );
+				return {};
 			}
 
-			variables._mavenRemote[ fileName ] = { artifact=artifact, version=arguments.version, repos=found.repos };
+			var current = IsQuery( variables.extensionMeta ?: "" ) ? variables.extensionMeta : _getEmptyExtensionsQuery();
+			var fetched = _fetchLexFile(
+				  { name=name, artifact=artifact, version=arguments.version, source="repo", repos=found.repos }
+				, ListToArray( current.columnList )
+			);
 
-			setExtensionMeta( meta );
-			_buildServed();
-			setExtensionVersions( _createExtensionAndVersionMap() );
-			reset();
+			if ( StructKeyExists( fetched, "error" ) ) {
+				SystemOutput( "Error processing lex file: [#name#]: #fetched.error#", true );
+				// could be a passing network problem: only remembered briefly
+				_rememberRemoteMiss( missKey, 60000 );
+				return {};
+			}
+			if ( fetched.extMeta.id != arguments.id || fetched.extMeta.version != arguments.version ) {
+				SystemOutput( "Extension file [#name#] is [#fetched.extMeta.id#] [#fetched.extMeta.version#], not [#arguments.id#] [#arguments.version#], ignoring it.", true );
+				_deleteTmpFile( fetched.tmpFile );
+				_rememberRemoteMiss( missKey );
+				return {};
+			}
+
+			var location = { artifact=artifact, version=arguments.version, repos=found.repos };
+			variables._mavenRemote[ name ] = location;
+
+			// only a short wait: a meta load holds this lock while it runs, it then adds the file itself
+			var added = false;
+			lock type="exclusive" name="readExtMeta" timeout=1 throwOnTimeout=false {
+				_addRemoteFile( name, fetched, location );
+				added = true;
+			}
+
+			if ( !added ) {
+				var detail = Duplicate( fetched.extMeta );
+				detail.filename        = name;
+				detail.versionSortable = Len( detail.version ) ? VersionUtils::sortableVersionString( detail.version ) : "";
+				detail.trial           = false;
+				detail.releaseType     = Len( detail.releaseType ?: "" ) ? detail.releaseType : "all";
+				variables._pendingRemote[ name ] = { fetched=fetched, location=location, detail=detail };
+				result = detail;
+			}
 		}
+
+		return result;
+	}
+
+	// adds a file fetched on demand to the meta, the caller holds the readExtMeta lock
+	private void function _addRemoteFile( required string name, required struct fetched, required struct location ) {
+		var meta = IsQuery( variables.extensionMeta ?: "" ) ? variables.extensionMeta : _getEmptyExtensionsQuery();
+
+		if ( _hasFile( meta, arguments.name, arguments.fetched.extMeta.id, arguments.fetched.extMeta.version ) ) {
+			_deleteTmpFile( arguments.fetched.tmpFile );
+		} else {
+			_storeLexFile( meta, arguments.name, arguments.fetched );
+			QuerySort( meta, "id,versionSortable", "asc,desc" );
+			_writeMetaFileToS3( meta );
+		}
+
+		variables._mavenRemote[ arguments.name ] = arguments.location;
+		setExtensionMeta( meta );
+		_buildServed();
+		setExtensionVersions( _createExtensionAndVersionMap() );
+		reset();
+	}
+
+	// the files fetched on demand while a meta load was running, added to the meta that load builds
+	private boolean function _addPendingRemote( required query meta ) {
+		var changed = false;
+
+		for ( var name in StructKeyArray( variables._pendingRemote ) ) {
+			var pending = variables._pendingRemote[ name ] ?: "";
+			if ( !IsStruct( pending ) ) {
+				continue;
+			}
+			if ( _hasFile( arguments.meta, name, pending.fetched.extMeta.id, pending.fetched.extMeta.version ) ) {
+				_deleteTmpFile( pending.fetched.tmpFile );
+			} else {
+				_storeLexFile( arguments.meta, name, pending.fetched );
+				changed = true;
+			}
+			variables._mavenRemote[ name ] = pending.location;
+			StructDelete( variables._pendingRemote, name );
+		}
+
+		return changed;
+	}
+
+	private boolean function _hasFile( required query meta, required string name, required string id, required string version ) {
+		for ( var i=1; i<=QueryRecordCount( arguments.meta ); i++ ) {
+			if ( arguments.meta.filename[ i ] == arguments.name || ( arguments.meta.id[ i ] == arguments.id && arguments.meta.version[ i ] == arguments.version ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private void function _rememberRemoteMiss( required string key, numeric ttlMs=variables._remoteMissTtlMs ) {
+		// bounded: the versions asked for come from the requests
+		if ( StructCount( variables._remoteMisses ) >= variables._remoteMissMax ) {
+			variables._remoteMisses = {};
+		}
+		variables._remoteMisses[ arguments.key ] = GetTickCount() + arguments.ttlMs;
 	}
 
 	private string function _artifactForId( required string id ) {

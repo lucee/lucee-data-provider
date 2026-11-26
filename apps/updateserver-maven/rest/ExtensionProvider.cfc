@@ -10,7 +10,9 @@ component {
 		return IsBoolean( application.servicesReady ?: false ) && application.servicesReady;
 	}
 
-	private function _ensureServices( numeric timeoutMs=120000 ) {
+	// requests only get here once the services are ready (Application.cfc answers 503 before that), the wait only
+	// covers a request that was let in just before a reload
+	private function _ensureServices( numeric timeoutMs=5000 ) {
 		if ( variables.bound && _servicesReady() ) {
 			return;
 		}
