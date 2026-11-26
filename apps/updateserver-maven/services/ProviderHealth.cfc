@@ -12,7 +12,22 @@
 component {
 
 	static {
-		static.KEY = "luceeProviderMavenFailingSince";
+		static.KEY       = "luceeProviderMavenFailingSince";
+		static.READY_KEY = "luceeProviderMavenReady";
+	}
+
+	/**
+	 * The services are loaded and requests can be served. Read by /ready/ (the startup probe), which is a separate
+	 * application, so this is kept in the server scope too.
+	 */
+	public static void function markReady() {
+		server[ static.READY_KEY ] = true;
+	}
+
+	public static boolean function isReady() {
+		var ready = server[ static.READY_KEY ] ?: false;
+
+		return IsBoolean( ready ) && ready;
 	}
 
 	// first failed load since the services were last ready, the time is kept across retries

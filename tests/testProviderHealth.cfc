@@ -39,6 +39,26 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( services.ProviderHealth::failingSince() ).toBe( 0 );
 			});
 
+			it( title="is ready once the services are loaded (the /ready/ startup probe)", body=function() {
+				var key = "luceeProviderMavenReady";
+				var had = StructKeyExists( server, key );
+				var was = server[ key ] ?: false;
+				try {
+					StructDelete( server, key );
+					expect( services.ProviderHealth::isReady() ).toBeFalse();
+					server[ key ] = "not a boolean";
+					expect( services.ProviderHealth::isReady() ).toBeFalse();
+					services.ProviderHealth::markReady();
+					expect( services.ProviderHealth::isReady() ).toBeTrue();
+				} finally {
+					if ( had ) {
+						server[ key ] = was;
+					} else {
+						StructDelete( server, key );
+					}
+				}
+			});
+
 		});
 	}
 
