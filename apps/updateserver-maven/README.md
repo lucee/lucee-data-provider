@@ -26,7 +26,9 @@ Expected differences versus Pixl8 (`https://update.lucee.org` /
 - core and extension downloads redirect to `maven.lucee-services.com` or
   Maven Central instead of `cdn.lucee.org` / `ext.lucee.org`
 - endpoints that only exist against S3 answer **501**: `expressTemplates`,
-  `forgebox/{version}`, `list-missing` and `buildLatest`
+  `list-missing` and `buildLatest`
+- `forgebox/{version}` (`?light=true` for Lucee Light) redirects to the CommandBox
+  engine package of that version (`FORGEBOX_ENGINE_URL`) instead of building one
 
 ## Health check
 
@@ -329,6 +331,7 @@ Run defaults):
 | `NOT_READY_RETRY_AFTER_SECONDS` | `30`. `Retry-After` of the `503` a `/rest/` request gets while the services are not loaded yet. |
 | `SERVICES_RETRY_SECONDS` | `30`. When loading the provider services fails (for example an IO error on the shared cache folder), the next request after this many seconds starts a new load. The failure is never kept for the life of the instance. |
 | `PORT` | Cloud Run sets this to `8080` |
+| `FORGEBOX_ENGINE_URL` | `https://downloads.ortussolutions.com/lucee/lucee/`. Base of the `forgebox/{version}` redirect: `{base}{version}/cf-engine-{version}[-light].zip` |
 | `EXTENSIONS_MAVEN_REPOS_RELEASES` / `LUCEE_MVN_REPO_RELEASES` | Maven Central |
 | `EXTENSIONS_MAVEN_REPOS_SNAPSHOTS` / `LUCEE_MVN_REPO_SNAPSHOTS` | Sonatype snapshots |
 | `EXTENSIONS_MAVEN_REPOS_MIXED` / `LUCEE_MVN_REPO_MIXED` | `https://maven.lucee-services.com/` |
