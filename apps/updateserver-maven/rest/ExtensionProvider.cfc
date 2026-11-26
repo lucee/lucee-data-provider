@@ -66,17 +66,17 @@ component {
 		// a client that asks for another format than JSON (Accept header, or a format extension of the url) gets the
 		// response the REST layer serialises, as before
 		if ( !_wantsJson() ) {
-			return _infoStruct( hostName, listType, logo, core, arguments.flush );
+			return _infoStruct( hostName, listType, logo, core, false );
 		}
 
 		try {
 			_bind();
-			// flush only rebuilds this listing from the loaded meta and starts a background refresh of the meta,
-			// the meta is never rebuilt on the request (that can take longer than the request may run). Otherwise
-			// a stale meta is refreshed in the background, the listing below is rebuilt once that changed it.
-			variables.metaReader.refreshIfStale( force=arguments.flush );
+			// flush is accepted and ignored: the meta and the listings are refreshed in the background (TTL), a
+			// request never forces a rebuild. A stale meta is refreshed in the background, the listing below is
+			// rebuilt once that changed it.
+			variables.metaReader.refreshIfStale();
 
-			var entry = _listingJson( listType, logo, core, arguments.flush );
+			var entry = _listingJson( listType, logo, core, false );
 
 			// the host is part of the response (META), so it is part of the ETag
 			var etag    = services.HttpCaching::weakEtag( entry.etag & "|" & hostName );
@@ -211,7 +211,7 @@ component {
 			, withLogo      = arguments.withLogo
 			, version       = arguments.version
 			, coreVersion   = arguments.coreVersion
-			, flush         = arguments.flush
+			, flush         = false // flush is ignored, see getInfo
 			, type          = arguments.type
 		);
 
@@ -264,17 +264,18 @@ component {
 			  id       = arguments.id
 			, version  = arguments.version
 			, coreVersion   = arguments.coreVersion
-			, flush    = arguments.flush
+			, flush    = false // flush is ignored, see getInfo
 			, withLogo = false
 			, type     = arguments.type
 		);
 
 		if ( StructCount( ext ) ) {
-			return _redirectToFile( ext.filename );
+			return _redirectToFile( ext.filename, arguments.version );
 		}
 
 		_artifactNotFound( type="extension", id=arguments.id, version=arguments.version, qualifier="lex" );
 		header statuscode="404" statustext="Not Found";
+		header name="Cache-Control" value=services.DownloadCaching::forNotFound();
 	}
 
 	/**
@@ -295,66 +296,70 @@ component {
 			  id       = arguments.id
 			, version  = arguments.version
 			, coreVersion   = arguments.coreVersion
-			, flush    = arguments.flush
+			, flush    = false // flush is ignored, see getInfo
 			, withLogo = false
 			, type     = arguments.type
 		);
 
 		if ( StructCount( ext ) ) {
-			return _redirectToFile( ext.filename );
+			return _redirectToFile( ext.filename, arguments.version );
 		}
 
 		_artifactNotFound( type="extension", id=arguments.id, version=arguments.version, qualifier="lex" );
 		header statuscode="404" statustext="Not Found";
+		header name="Cache-Control" value=services.DownloadCaching::forNotFound();
 	}
 
 
 	/**
-	 * Would be good to get rid of this?
+	 * Kept for the callers that still ask for it, does nothing: the extension meta and the listings are refreshed
+	 * in the background (see ExtensionMetadataReader.refreshIfStale and the listing cache).
 	 *
 	 * @httpmethod GET
 	 * @restPath   updateCache
 	 */
-	remote struct function updateCache(){
-		_bind();
-		try {
-			return {
-				  meta       = {}
-				, extensions = variables.metaReader.loadMeta()
-			}
-		} catch( any e ) {
-			return e;
-		}
+	remote function updateCache() {
+		_noRefreshNeeded();
 	}
 
 	/**
-	 * Would be good to get rid of this?
+	 * Kept for the callers that still ask for it (the Lucee build calls it after a publish), does nothing, see updateCache.
 	 *
 	 * @httpmethod GET
 	 * @restPath   reset
 	 */
 	remote function reset() {
-		_bind();
-		variables.metaReader.loadMeta();
+		_noRefreshNeeded();
+	}
+
+	private void function _noRefreshNeeded() {
+		RestSetResponse( {
+			  status  = 200
+			, content = "Nothing to do, the extension listing is refreshed in the background"
+			, headers = { "Content-Type" = "text/plain;charset=UTF-8", "Cache-Control" = "no-store" }
+		} );
 	}
 
 	/**
 	 * Redirects to the file of an extension. A 404 when there is no url for it, which can only be in the Maven only
 	 * mode (STORAGE=maven): a file that is in no Maven repository (there is no flat bucket to serve it from).
 	 */
-	private function _redirectToFile( required string fileName ) {
+	private function _redirectToFile( required string fileName, string version="" ) {
 		var fileUrl = variables.metaReader.getDownloadUrl( arguments.fileName, variables.cdnURL );
 
 		if ( !Len( fileUrl ) ) {
 			_artifactNotFound( type="extension", id=arguments.fileName, qualifier="lex" );
 			content type="text/plain";
 			header statuscode="404" statustext="Not Found";
+			header name="Cache-Control" value=services.DownloadCaching::forNotFound();
 			echo( "The extension file [#EncodeForHtml( arguments.fileName )#] is not available from the Maven repositories" );
 			return;
 		}
 
 		header statuscode="302" statustext="Found";
 		header name="Location" value=fileUrl;
+		// a client (or a cache in between) can follow the same redirect again without asking, see DownloadCaching
+		header name="Cache-Control" value=services.DownloadCaching::forRedirect( arguments.version );
 	}
 
 	/**

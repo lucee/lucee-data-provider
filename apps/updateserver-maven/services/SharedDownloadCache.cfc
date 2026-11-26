@@ -54,8 +54,8 @@ component {
 	public struct function dlCacheGet( required string key ) {
 		var t = GetTickCount();
 
+		// a memory hit is not logged: it takes no time and happens for every extension on every listing build
 		if ( StructKeyExists( variables.cache, arguments.key ) ) {
-			SystemOutput( "reading data from memory [#arguments.key#] took #GetTickCount()-t#ms", true );
 			return variables.cache[ arguments.key ];
 		}
 
