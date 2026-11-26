@@ -29,26 +29,26 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 		describe( "listing logos: a manifest image that is already a .png URL is passed through", function() {
 
 			it( title="puts an http(s) URL ending in .png into the image column as it is, and does not read META-INF/logo.png", body=function() {
-				var url    = "https://cdn.example.invalid/logos/demo.png";
+				var logoSrc = "https://cdn.example.invalid/logos/demo.png";
 				var reader = _reader([
-					_spec( "url-extension-1.0.0.1.lex", "11111111-1111-1111-1111-111111111111", "1.0.0.1", url, "not a png" )
+					_spec( "url-extension-1.0.0.1.lex", "11111111-1111-1111-1111-111111111111", "1.0.0.1", logoSrc, "not a png" )
 				]);
 				var listed = reader.list( type="all", withLogo=true );
 				var detail = reader.getExtensionDetail( id="11111111-1111-1111-1111-111111111111", withLogo=true );
 
 				expect( listed.recordCount ).toBe( 1 );
-				expect( listed.image[ 1 ] ).toBe( url );
-				expect( detail[ "image" ] ).toBe( url );
+				expect( listed.image[ 1 ] ).toBe( logoSrc );
+				expect( detail[ "image" ] ).toBe( logoSrc );
 			});
 
 			it( title="ignores the query string and is case-insensitive when checking for .png", body=function() {
-				var url    = "https://cdn.example.invalid/logos/DEMO.PNG?v=2&cache=bust";
+				var logoSrc = "https://cdn.example.invalid/logos/DEMO.PNG?v=2&cache=bust";
 				var reader = _reader([
-					_spec( "case-extension-1.0.0.1.lex", "22222222-2222-2222-2222-222222222222", "1.0.0.1", url, "not a png" )
+					_spec( "case-extension-1.0.0.1.lex", "22222222-2222-2222-2222-222222222222", "1.0.0.1", logoSrc, "not a png" )
 				]);
 				var listed = reader.list( type="all", withLogo=true );
 
-				expect( listed.image[ 1 ] ).toBe( url );
+				expect( listed.image[ 1 ] ).toBe( logoSrc );
 			});
 
 			it( title="leaves a URL that does not end in .png to the embedded logo, as before", skip=noImageFunctions(), body=function() {
@@ -85,13 +85,13 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			});
 
 			it( title="LISTING_LOGO_MAX_SIZE leaves a passed-through .png URL as it is", body=function() {
-				var url    = "https://cdn.example.invalid/logos/demo.png";
+				var logoSrc = "https://cdn.example.invalid/logos/demo.png";
 				var reader = _reader([
-					_spec( "thumb-extension-1.0.0.1.lex", "66666666-6666-6666-6666-666666666666", "1.0.0.1", url, "not a png" )
+					_spec( "thumb-extension-1.0.0.1.lex", "66666666-6666-6666-6666-666666666666", "1.0.0.1", logoSrc, "not a png" )
 				], "260x100");
 				var listed = reader.list( type="all", withLogo=true );
 
-				expect( listed.image[ 1 ] ).toBe( url );
+				expect( listed.image[ 1 ] ).toBe( logoSrc );
 			});
 
 		});
