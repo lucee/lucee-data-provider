@@ -135,6 +135,9 @@ component {
 		}
 		local.content=fileRead(pom);
 		local.xml=xmlParse(content);
+		if (!structKeyExists(xml.xmlRoot, "dependencies")) {
+			throw "POM #pom# has no <dependencies> element";
+		}
 
 		// custom repositories
 		local.repos=[defaultRepo, "https://maven.lucee-services.com"];
@@ -192,6 +195,63 @@ component {
 		return arr;
 	}
 
+
+	/**
+	 * Since LDEV-6707, Maven Central publishes a slim packaging=pom POM with no
+	 * <dependencies>. The loader POM that lists the OSGi bundles is on
+	 * maven.lucee-services.com. Pick the first candidate that actually has
+	 * <dependencies>, trying lucee-services first.
+	 */
+	public string function resolveDependencyPom(required string version, struct sources={}, array candidates) {
+		if (isNull(arguments.candidates) || !arrayLen(arguments.candidates)) {
+			arguments.candidates = _dependencyPomCandidates(arguments.version, arguments.sources);
+		}
+		loop array=arguments.candidates item="local.pom" {
+			try {
+				if (pomHasDependencies(pom)) {
+					return pom;
+				}
+			}
+			catch (e) {
+				systemOutput("resolveDependencyPom skipped #pom#: #e.message#", true);
+			}
+		}
+		throw "No POM with <dependencies> is available for version #arguments.version#";
+	}
+
+	public boolean function pomHasDependencies(required string pom) {
+		var path = arguments.pom;
+		if (findNoCase("http", path) == 1) {
+			var localPom = getArtifactDirectory() & "pom-" & hash(path, "md5") & ".pom";
+			if (!fileExists(localPom) || fileSize(localPom) == 0) {
+				try { _fileCopy(path, localPom); } catch (e) { return false; }
+			}
+			if (!fileExists(localPom) || fileSize(localPom) == 0) return false;
+			path = localPom;
+		}
+		if (!fileExists(path)) return false;
+		return findNoCase("<dependencies>", fileRead(path)) > 0;
+	}
+
+	private array function _dependencyPomCandidates(required string version, struct sources={}) {
+		var candidates = [];
+		var seen = {};
+		var add = function(src) {
+			if (!len(src) || structKeyExists(seen, lCase(src))) return;
+			seen[lCase(src)] = true;
+			arrayAppend(candidates, src);
+		};
+		// the loader POM is on lucee-services; Central may only have the slim one
+		add("https://maven.lucee-services.com/org/lucee/lucee/#arguments.version#/lucee-#arguments.version#.pom");
+		if (structKeyExists(arguments.sources, "pom") && !isNull(arguments.sources.pom.src) && len(arguments.sources.pom.src)) {
+			add(arguments.sources.pom.src);
+		}
+		loop array=_mavenLayoutRepos(arguments.version) item="local.repo" {
+			add(rereplace(repo, "/$", "") & "/org/lucee/lucee/" & arguments.version & "/lucee-" & arguments.version & ".pom");
+		}
+		return candidates;
+	}
+
 	/**
 	* returns local location for the loader (lucee.jar) of a specific version (get downloaded if necessary)
 	* @version version to get jars for, can also be 
@@ -201,7 +261,7 @@ component {
 			local.rtn=[];
 			var data=get(version,true)
 			local.dir=getArtifactDirectory();
-			local.dependencies=readDependenciesFromPOM(data.sources.pom.src); // get dependcies
+			local.dependencies=readDependenciesFromPOM(resolveDependencyPom(version, isNull(data.sources) ? {} : data.sources)); // get dependcies
 			local.manifest=new Manifest();
 			//return dependencies;
 			loop array=dependencies item="local.dep" {

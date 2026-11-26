@@ -623,6 +623,11 @@ component {
 			header name="Retry-After" value="30";
 			return { "type":"info", "message":"The dependencies of version #arguments.version# are being prepared, try again in a moment." };
 		}
+		if ( arguments.build.status == "failed" ) {
+			header statuscode="500" statustext="Internal Server Error";
+			var reason = arguments.build.error ?: "the dependencies could not be built";
+			return { "type":"error", "message":"The dependencies of version #arguments.version# could not be built: #reason#" };
+		}
 		header statuscode="404" statustext="Not Found";
 		return { "type":"error", "message":"The version #arguments.version# is not available." };
 	}
