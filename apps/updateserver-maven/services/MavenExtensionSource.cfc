@@ -80,6 +80,7 @@ component accessors=true {
 		variables._pages          = StructNew( "sync" ); // url > { status, content, time } of the metadata reads
 		variables._existingSaved  = 0;                   // GetTickCount() of the last write of the HEAD results
 		variables._existingDirty  = false;
+		variables._dirtyPages     = StructNew( "sync" ); // url > true, metadata reads not written to the cache folder yet
 		_loadExisting();
 
 		return this;
@@ -433,12 +434,16 @@ component accessors=true {
 	}
 
 	/**
-	 * Writes the HEAD results (the files that are there) to the shared cache folder when they changed. Called after
-	 * a meta load (in the background), never on a request: on a shared Cloud Storage mount every file access is a
-	 * billed operation.
+	 * Writes the HEAD results (the files that are there) and the metadata reads that changed to the shared cache
+	 * folder. Called after a meta load (in the background), never on a request: on a shared Cloud Storage mount
+	 * every file access is a billed operation.
 	 */
 	public void function saveState() {
-		if ( !Len( variables.cacheDir ) || !variables._existingDirty ) {
+		if ( !Len( variables.cacheDir ) ) {
+			return;
+		}
+		_savePages();
+		if ( !variables._existingDirty ) {
 			return;
 		}
 
@@ -576,10 +581,12 @@ component accessors=true {
 		var nowMs = Now().getTime();
 		var entry = variables._pages[ arguments.address ] ?: "";
 
-		if ( Len( variables.cacheDir ) && ( !IsStruct( entry ) || ( nowMs - entry.time ) >= ttlMs ) ) {
-			var shared = _readPage( arguments.address );
-			if ( IsStruct( shared ) && ( !IsStruct( entry ) || shared.time > entry.time ) ) {
-				entry = shared;
+		// the cache folder is only read when this instance has no copy yet (cold start), after that the copy in
+		// memory is used and refreshed from the repository
+		if ( Len( variables.cacheDir ) && !IsStruct( entry ) ) {
+			entry = _readPage( arguments.address );
+			if ( IsStruct( entry ) ) {
+				variables._pages[ arguments.address ] = entry;
 			}
 		}
 
@@ -593,8 +600,11 @@ component accessors=true {
 		if ( page.status == 200 || page.status == 404 ) {
 			if ( ttlMs > 0 || Len( variables.cacheDir ) ) {
 				var fresh = { status=page.status, content=( page.status == 200 ? page.content : "" ), time=nowMs };
+				// only a changed read is written (with the next saveState), an unchanged one is not written again
+				if ( Len( variables.cacheDir ) && ( !IsStruct( entry ) || entry.status != fresh.status || Compare( entry.content, fresh.content ) != 0 ) ) {
+					variables._dirtyPages[ arguments.address ] = true;
+				}
 				variables._pages[ arguments.address ] = fresh;
-				_writePage( arguments.address, fresh );
 			}
 			return page;
 		}
@@ -668,6 +678,16 @@ component accessors=true {
 	// written with the next saveState(), not on the request
 	private void function _existingChanged() {
 		variables._existingDirty = true;
+	}
+
+	private void function _savePages() {
+		for ( var address in StructKeyArray( variables._dirtyPages ) ) {
+			StructDelete( variables._dirtyPages, address );
+			var entry = variables._pages[ address ] ?: "";
+			if ( IsStruct( entry ) ) {
+				_writePage( address, entry );
+			}
+		}
 	}
 
 	private array function _sortRepos( required array repos, required boolean snapshot ) {

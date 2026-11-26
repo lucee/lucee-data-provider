@@ -262,8 +262,12 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			it( "shares maven-metadata.xml reads between instances through the cache folder, within the TTL", function() {
 				var dir = base & "shared-" & CreateUUID() & "/";
 				var first = _newWorld();
-				_newSource( first, dir, 300 ).listExtensions();
+				var firstSource = _newSource( first, dir, 300 );
+				firstSource.listExtensions();
 				expect( _metadataReads( first ) ).notToBeEmpty();
+				// written after the meta load (in the background), not while listing
+				expect( DirectoryExists( dir & "metadata" ) ).toBeFalse();
+				firstSource.saveState();
 
 				var second = _newWorld();
 				_newSource( second, dir, 300 ).listExtensions();
@@ -274,7 +278,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				var dir = base & "stale-" & CreateUUID() & "/";
 				var world = _newWorld();
 				_addToMetadata( world, mixed, "mail-extension", "1.0.0.1" );
-				_newSource( world, dir, 1 ).listExtensions();
+				var source = _newSource( world, dir, 1 );
+				source.listExtensions();
+				source.saveState();
 				sleep( 1100 );
 
 				var later = _newWorld();
