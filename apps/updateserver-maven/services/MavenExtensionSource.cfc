@@ -341,6 +341,14 @@ component accessors=true {
 		return result;
 	}
 
+	/**
+	 * The groupId of an artifact, as discovered from the group listings (org.lucee, io.forgebox, …),
+	 * or the default group when it has not been seen yet.
+	 */
+	public string function getGroup( required string artifact ) {
+		return _groupOf( arguments.artifact );
+	}
+
 	private string function _groupOf( required string artifact ) {
 		return variables._artifactGroups[ arguments.artifact ] ?: variables.group;
 	}
