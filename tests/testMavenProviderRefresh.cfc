@@ -298,6 +298,22 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( second.heads ).toHaveLength( 0 );
 			} );
 
+			it( "writes the HEAD results after the meta load, not on the request, and only the files that are there", function() {
+				var dir = base & "head-deferred-" & CreateUUID() & "/";
+				var world = _newWorld();
+				var source = _newSource( world, dir, 300 );
+				expect( source.getFileUrl( "mail-extension", "1.1.0.17", [ releases, mixed ] ) ).notToBe( "" );
+				expect( source.getFileUrl( "mail-extension", "9.9.9.9", [ releases, mixed ] ) ).toBe( "" );
+				expect( FileExists( dir & "maven-head.json" ) ).toBeFalse( "written on the request" );
+
+				source.saveState();
+				var saved = DeserializeJson( FileRead( dir & "maven-head.json" ) );
+				expect( StructCount( saved ) ).toBe( 1 );
+				for ( var fileUrl in saved ) {
+					expect( saved[ fileUrl ].exists ).toBeTrue();
+				}
+			} );
+
 			it( "runs one loadMeta at a time, the calls that come in meanwhile get its result", function() {
 				var world = _newWorld();
 				var reader = _newReader( world );

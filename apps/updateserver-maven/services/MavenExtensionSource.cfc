@@ -433,7 +433,9 @@ component accessors=true {
 	}
 
 	/**
-	 * Writes the HEAD results to the shared cache folder when they changed (also done every 30s while they change).
+	 * Writes the HEAD results (the files that are there) to the shared cache folder when they changed. Called after
+	 * a meta load (in the background), never on a request: on a shared Cloud Storage mount every file access is a
+	 * billed operation.
 	 */
 	public void function saveState() {
 		if ( !Len( variables.cacheDir ) || !variables._existingDirty ) {
@@ -446,7 +448,8 @@ component accessors=true {
 		for ( var fileUrl in variables._existing ) {
 			var entry = variables._existing[ fileUrl ] ?: "";
 
-			if ( IsStruct( entry ) && DateDiff( "s", entry.time, now ) < ( entry.exists ? variables._existsTtl : variables._missingTtl ) ) {
+			// a missing file is only remembered briefly, that is kept in memory only
+			if ( IsStruct( entry ) && entry.exists && DateDiff( "s", entry.time, now ) < variables._existsTtl ) {
 				data[ fileUrl ] = { exists=entry.exists, time=DateTimeFormat( entry.time, "iso" ) };
 			}
 		}
@@ -662,12 +665,9 @@ component accessors=true {
 		}
 	}
 
+	// written with the next saveState(), not on the request
 	private void function _existingChanged() {
 		variables._existingDirty = true;
-
-		if ( GetTickCount() - variables._existingSaved > 30000 ) {
-			saveState();
-		}
 	}
 
 	private array function _sortRepos( required array repos, required boolean snapshot ) {
@@ -815,8 +815,7 @@ component accessors=true {
 		}
 
 		if ( result.status == 404 ) {
-			variables._existing[ arguments.fileUrl ] = { exists=false, time=Now() };
-			_existingChanged();
+			variables._existing[ arguments.fileUrl ] = { exists=false, time=Now() }; // memory only, see saveState
 			return false;
 		}
 

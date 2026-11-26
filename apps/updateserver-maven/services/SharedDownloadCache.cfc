@@ -16,6 +16,11 @@ component {
 	function init( string cacheDir, struct memory ) {
 		variables.cacheDir = arguments.cacheDir ?: "";
 		variables.cache    = arguments.memory ?: {};
+		// key > GetTickCount() of a read that found no file: not looked up in the folder again for missTtlMs,
+		// every file access on the shared Cloud Storage mount is a billed operation
+		variables.misses    = StructNew( "synchronized" );
+		variables.missTtlMs = 60000;
+		variables._dir      = "";
 
 		return this;
 	}
@@ -24,6 +29,9 @@ component {
 	 * Shared cache root. override for tests.
 	 */
 	public string function getCacheDirectory() {
+		if ( Len( variables._dir ) ) {
+			return variables._dir;
+		}
 		var dir = Trim( variables.cacheDir );
 		if ( !Len( dir ) ) {
 			dir = Trim( server.system.environment.CACHE_DIRECTORY ?: "" );
@@ -43,6 +51,9 @@ component {
 			}
 		}
 		variables.cacheDir = dir;
+		if ( DirectoryExists( dir ) ) {
+			variables._dir = _withSlash( dir ); // checked once
+		}
 
 		return _withSlash( dir );
 	}
@@ -59,8 +70,16 @@ component {
 			return variables.cache[ arguments.key ];
 		}
 
+		var missed = variables.misses[ arguments.key ] ?: 0;
+		if ( missed > 0 && ( GetTickCount() - missed ) < variables.missTtlMs ) {
+			return {};
+		}
+
 		var file = getCacheDirectory() & arguments.key & ".json";
 		var raw = services.CacheDir::readText( file );
+		if ( !Len( raw ) ) {
+			variables.misses[ arguments.key ] = GetTickCount();
+		}
 		if ( Len( raw ) ) {
 			try {
 				var val = DeserializeJson( raw );
@@ -85,6 +104,7 @@ component {
 	 */
 	public void function dlCachePut( required string key, required any value ) {
 		variables.cache[ arguments.key ] = arguments.value;
+		StructDelete( variables.misses, arguments.key );
 		var file = getCacheDirectory() & arguments.key & ".json";
 		var json = SerializeJson( arguments.value );
 
