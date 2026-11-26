@@ -78,6 +78,19 @@ component {
 
 			var entry = _listingJson( listType, logo, core, arguments.flush );
 
+			// the host is part of the response (META), so it is part of the ETag
+			var etag    = services.HttpCaching::weakEtag( entry.etag & "|" & hostName );
+			var headers = _cacheHeaders( etag, entry.builtAt );
+			if ( services.HttpCaching::isNotModified(
+				  ifNoneMatch     = _requestHeader( "If-None-Match" )
+				, ifModifiedSince = _requestHeader( "If-Modified-Since" )
+				, etag            = etag
+				, lastModified    = entry.builtAt
+			) ) {
+				RestSetResponse( { status=304, headers=headers } );
+				return;
+			}
+
 			// META (title, image, url) is built from the current hostName on every request, it is small; the
 			// cached listing is put in as it is, so the response is the same as serialising the whole struct
 			var body = Replace( SerializeJSON( {
@@ -85,15 +98,32 @@ component {
 				, extensions = variables.listingPlaceholder
 			}, "row" ), '"' & variables.listingPlaceholder & '"', entry.json, "one" );
 
-			RestSetResponse( {
-				  status  = 200
-				, content = body
-				, headers = { "Content-Type" = "application/json;charset=UTF-8" }
-			} );
+			headers[ "Content-Type" ] = "application/json;charset=UTF-8";
+			RestSetResponse( { status=200, content=body, headers=headers } );
 		} catch ( any e ) {
 			// not cached: the next request tries again
 			return e;
 		}
+	}
+
+	private string function _requestHeader( required string name ) {
+		var headers = GetHttpRequestData( false ).headers;
+
+		return StructKeyExists( headers, arguments.name ) ? Trim( headers[ arguments.name ] ) : "";
+	}
+
+	// ETag, Cache-Control and (when known) Last-Modified of a JSON response; it depends on the Accept header too
+	private struct function _cacheHeaders( required string etag, any lastModified="" ) {
+		var headers = {
+			  "ETag"          = arguments.etag
+			, "Cache-Control" = services.HttpCaching::cacheControl()
+			, "Vary"          = "Accept, Accept-Encoding"
+		};
+		if ( IsDate( arguments.lastModified ) ) {
+			headers[ "Last-Modified" ] = services.HttpCaching::httpDate( arguments.lastModified );
+		}
+
+		return headers;
 	}
 
 	// the response as a struct, for the REST layer to serialise in the format the client asked for
@@ -186,7 +216,20 @@ component {
 		);
 
 		if ( StructCount( ext ) ) {
-			return ext;
+			if ( !_wantsJson() ) {
+				return ext;
+			}
+			// the same JSON the REST layer writes for the struct, with an ETag so a client can ask again cheaply
+			var body    = SerializeJSON( ext );
+			var etag    = services.HttpCaching::weakEtag( body );
+			var headers = _cacheHeaders( etag );
+			if ( services.HttpCaching::isNotModified( ifNoneMatch=_requestHeader( "If-None-Match" ), etag=etag ) ) {
+				RestSetResponse( { status=304, headers=headers } );
+				return;
+			}
+			headers[ "Content-Type" ] = "application/json;charset=UTF-8";
+			RestSetResponse( { status=200, content=body, headers=headers } );
+			return;
 		}
 
 		var msg = "There is no extension at this provider with id [#EncodeForHtml( arguments.id )#]";
