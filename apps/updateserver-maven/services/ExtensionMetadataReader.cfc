@@ -205,7 +205,9 @@ component accessors=true {
 
 	private function _loadMeta( query srcMeta ) {
 		lock type="exclusive" name="readExtMeta" timeout=0 {
-			var meta           = isQuery( arguments.srcMeta ) ? arguments.srcMeta : _readExistingMetaFileFromS3();
+			// the file is only read when nothing is loaded yet (startup), a refresh works on a copy of the loaded meta
+			var meta           = isQuery( arguments.srcMeta ) ? arguments.srcMeta
+				: ( IsQuery( variables.extensionMeta ?: "" ) ? Duplicate( variables.extensionMeta ) : _readExistingMetaFileFromS3() );
 			_ensureColumns( meta );
 			var existingByFile = _mapExtensionQueryByFilename( meta );
 			var lexFiles       = _listLexFilesFromBucket();

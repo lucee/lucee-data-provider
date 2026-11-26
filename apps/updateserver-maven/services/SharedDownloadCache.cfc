@@ -21,6 +21,8 @@ component {
 		variables.misses    = StructNew( "synchronized" );
 		variables.missTtlMs = 60000;
 		variables._dir      = "";
+		// key > hash of the data last read from or written to the folder, see dlCachePut
+		variables.written   = StructNew( "synchronized" );
 
 		return this;
 	}
@@ -87,6 +89,7 @@ component {
 					return {};
 				}
 				variables.cache[ arguments.key ] = val;
+				variables.written[ arguments.key ] = _dataHash( val );
 				SystemOutput( "reading data from file [#file#] took #GetTickCount()-t#ms", true );
 				return val;
 			} catch ( any e ) {
@@ -105,16 +108,36 @@ component {
 	public void function dlCachePut( required string key, required any value ) {
 		variables.cache[ arguments.key ] = arguments.value;
 		StructDelete( variables.misses, arguments.key );
+
+		// the same data as in the folder (a refresh that found nothing new): only the copy in memory is updated, the
+		// file is not written again. The time in the file stays, an instance that reads it refreshes it in the background.
+		var hash = _dataHash( arguments.value );
+		if ( ( variables.written[ arguments.key ] ?: "" ) == hash ) {
+			return;
+		}
+
 		var file = getCacheDirectory() & arguments.key & ".json";
 		var json = SerializeJson( arguments.value );
 
 		lock name="dlCachePut_#arguments.key#" type="exclusive" timeout="5" {
 			try {
 				services.CacheDir::writeAtomic( file, json );
+				variables.written[ arguments.key ] = hash;
 			} catch ( any e ) {
 				SystemOutput( "SharedDownloadCache could not write [#file#]: #e.message#", true );
 			}
 		}
+	}
+
+	// hash of what is stored without the time it was cached at ({ data, cachedAt } as download8 writes it)
+	private string function _dataHash( required any value ) {
+		var v = arguments.value;
+		if ( IsStruct( v ) && StructKeyExists( v, "data" ) && StructKeyExists( v, "cachedAt" ) ) {
+			var rest = StructCopy( v );
+			StructDelete( rest, "cachedAt" );
+			v = rest;
+		}
+		return Hash( SerializeJson( v ), "MD5" );
 	}
 
 	/**
