@@ -9,7 +9,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 		};
 
 		variables.src = FileRead( ExpandPath( dir & "../apps/updateserver-maven/rest/UpdateProvider.cfc" ) );
-		variables.keys = [ "servicesReady", "servicesError", "bundleDownloadService", "coreS3Root", "coreCdnUrl", "jiraChangelogService", "coreVersions" ];
+		variables.keys = [ "servicesReady", "servicesError", "bundleDownloadService", "coreS3Root", "coreCdnUrl", "jiraChangelogService", "coreVersions", "dependencyBuilds" ];
 	}
 
 	function run( testResults, testBox ) {
@@ -28,6 +28,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				application.coreCdnUrl            = "";
 				application.jiraChangelogService  = {};
 				application.coreVersions          = { getVersions=function() { return { "07.000.006.0010.100"={ version="7.0.6.10" } }; } };
+				application.dependencyBuilds      = {};
 			});
 
 			afterEach( function() {
@@ -70,6 +71,32 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( variables.src ).toInclude( "_dependenciesThreadIsAlive" );
 				expect( variables.src ).toInclude( "isAlive()" );
 				expect( variables.src ).toInclude( "sleep( 100 )" );
+			});
+
+			it( title="returns the dependencies of a listed version that is already built", body=function() {
+				getPageContext().getResponse().setStatus( 200 );
+				application.dependencyBuilds = {
+					"list:7.0.6.10"={ status="done", ended=Now(), result=[ "org.lucee.commons-io-2.16.1.jar" ] }
+				};
+				var provider = new depsmavenrest.UpdateProvider();
+				var rsp = provider.getDependencies( "7.0.6.10" );
+				expect( getPageContext().getResponse().getStatus() ).toBe( 200 );
+				expect( rsp ).toBe( [ "org.lucee.commons-io-2.16.1.jar" ] );
+			});
+
+			it( title="does not report a listed version whose build failed as missing", body=function() {
+				getPageContext().getResponse().setStatus( 200 );
+				application.dependencyBuilds = {
+					"list:7.0.6.10"={ status="failed", ended=Now(), error="No POM with <dependencies> is available for version 7.0.6.10" }
+				};
+				var provider = new depsmavenrest.UpdateProvider();
+				var rsp = provider.getDependencies( "7.0.6.10" );
+				expect( getPageContext().getResponse().getStatus() ).toBe( 500 );
+				getPageContext().getResponse().setStatus( 200 );
+				expect( rsp.type ).toBe( "error" );
+				expect( rsp.message ).toInclude( "7.0.6.10" );
+				expect( rsp.message ).toInclude( "could not be built" );
+				expect( rsp.message ).notToInclude( "is not available" );
 			});
 
 		});
