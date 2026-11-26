@@ -55,11 +55,21 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 
 			it( title="waits for the build at most DEPENDENCIES_WAIT_SECONDS, the build goes on in the background", body=function() {
 				expect( variables.src ).toInclude( "DEPENDENCIES_WAIT_SECONDS" );
-				expect( variables.src ).toInclude( 'thread name="dependencies-' );
+				expect( variables.src ).toInclude( "DEPENDENCIES_WAIT_SECONDS ?: 180" );
+				expect( variables.src ).notToInclude( "DEPENDENCIES_WAIT_SECONDS ?: 10" );
+				expect( variables.src ).toInclude( 'thread name="#threadName#"' );
 				expect( variables.src ).toInclude( 'header name="Retry-After" value="30"' );
 				// no request builds the dependencies itself anymore
 				var fn = Mid( variables.src, Find( 'restpath="dependencies/{version}"', variables.src ), 600 );
 				expect( fn ).notToInclude( "mr.getDependencies" );
+			});
+
+			it( title="restarts a running build whose thread is dead or older than DEPENDENCIES_STALE_SECONDS", body=function() {
+				expect( variables.src ).toInclude( "DEPENDENCIES_STALE_SECONDS ?: 600" );
+				expect( variables.src ).toInclude( "_dependenciesShouldRestart" );
+				expect( variables.src ).toInclude( "_dependenciesThreadIsAlive" );
+				expect( variables.src ).toInclude( "isAlive()" );
+				expect( variables.src ).toInclude( "sleep( 100 )" );
 			});
 
 		});
