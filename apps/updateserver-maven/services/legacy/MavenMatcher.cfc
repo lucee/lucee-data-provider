@@ -100,6 +100,8 @@
 			var urls=[
 				  repositories[ 1 ] & "/org/lucee/" & art1 & "/" & arguments.bundleVersion & "/" & art1 & "-" & arguments.bundleVersion & ".jar"
 				, repositories[ 1 ] & "/org/lucee/" & art2 & "/" & arguments.bundleVersion & "/" & art2 & "-" & arguments.bundleVersion & ".jar"
+				, repositories[ 1 ] & "/org/lucee/" & art1 & "/" & arguments.bundleVersion & "/" & art1 & "-" & arguments.bundleVersion & ".lex"
+				, repositories[ 1 ] & "/org/lucee/" & art2 & "/" & arguments.bundleVersion & "/" & art2 & "-" & arguments.bundleVersion & ".lex"
 			];
 
 			for( var _url in urls ) {
@@ -139,6 +141,21 @@
 			ArrayAppend( uris, "/" & arguments.bundleName & "/" & arguments.bundleName
 				& "/" & arguments.bundleVersion
 				& "/" & arguments.bundleName & "-" & arguments.bundleVersion & ".jar" );
+		}
+
+		// org.lucee.* OSGi names are often published as org.lucee:<dashed-name>
+		// with a .lex (the extension) rather than a .jar. Try both.
+		if ( Left( arguments.bundleName, 10 ) == "org.lucee." ) {
+			var art1 = Mid( arguments.bundleName, 11 );
+			var art2 = Replace( art1, ".", "-", "all" );
+			loop array=[ art2, art1 ] item="local.art" {
+				var base = "/org/lucee/" & art & "/" & arguments.bundleVersion & "/" & art & "-" & arguments.bundleVersion;
+				ArrayAppend( uris, base & ".jar" );
+				ArrayAppend( uris, base & ".lex" );
+				if ( art1 == art2 ) {
+					break;
+				}
+			}
 		}
 
 		return uris;

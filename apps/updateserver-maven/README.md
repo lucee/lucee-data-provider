@@ -25,7 +25,9 @@ Expected differences versus Pixl8 (`https://update.lucee.org` /
   4.x, fewer old snapshots, but the newest releases)
 - core and extension downloads redirect to `maven.lucee-services.com` or
   Maven Central instead of `cdn.lucee.org` / `ext.lucee.org`
-- `expressTemplates` and `forgebox/{version}` only exist against S3 and answer **501**
+- `expressTemplates` only exists against S3 and answers **501**
+- `forgebox/{version}` (`?light=true` for Lucee Light) redirects to the CommandBox
+  engine package of that version (`FORGEBOX_ENGINE_URL`) instead of building one
 - `buildLatest` and `cleanupForgeboxSnapshots` answer **200** and do nothing,
   `list-missing` answers **200** with `{}` (there are no flat files)
 
@@ -319,6 +321,9 @@ Run defaults):
 | `CACHE_DIR` | `/download/provider` in the image. App-specific caches (listing JSON, Maven indexes, extension meta, Jira issues) go under this folder so they cannot collide with download8's shared `{key}.json` files. If unset, defaults to `CACHE_DIRECTORY/provider`. |
 | `LOCAL_CACHE_DIR` | fallback alias for `CACHE_DIR` when `CACHE_DIR` is not set |
 | `LISTING_CACHE_SECONDS` | `300` (five minutes). TTL for list/info JSON under `CACHE_DIR/listings/`. |
+| `LISTING_LOGO_MAX_SIZE` | empty (off). Opt-in, for example `260x100`: logos in the `/info` listing (`withLogo=true`) that are larger are scaled to fit and served as PNG when that is smaller. The Lucee Administrator scales them to 130x50 itself. `/info/{id}` keeps the original logo. |
+| `INFO_CACHE_SECONDS` | `300`. `Cache-Control: public, max-age=` of `/rest/extension/provider/info` and `/info/{id}`. Both send a weak `ETag` and answer `If-None-Match` with 304; `/info` also sends `Last-Modified`. JSON responses are gzip-compressed by Tomcat (set up in `docker-entrypoint.sh`). |
+| `DOWNLOAD_CACHE_SECONDS` / `LATEST_CACHE_SECONDS` / `NOT_FOUND_CACHE_SECONDS` | `86400` / `300` / `300`. `Cache-Control: public, max-age=` of the `/full/{id}` and `/trial/{id}` answers: a redirect to an explicitly given version, a redirect to the latest version (no `version`), and a 404. |
 | `LUCEE_LOGGING_FORCE_APPENDER` | `console` in the image (needed so `ARTIFACT_NOT_FOUND` lines show up in Cloud Logging) |
 | `LUCEE_JAVA_OPTS` | `-Xms256m -Xmx1200m` in the image (a 2GiB Cloud Run container; the base image default is `-Xms64m -Xmx512m`) |
 | `ALLOW_RELOAD` | unset/false (`?fwreinit` only works when this is true) |
@@ -327,6 +332,7 @@ Run defaults):
 | `NOT_READY_RETRY_AFTER_SECONDS` | `30`. `Retry-After` of the `503` a `/rest/` request gets while the services are not loaded yet. |
 | `SERVICES_RETRY_SECONDS` | `30`. When loading the provider services fails (for example an IO error on the shared cache folder), the next request after this many seconds starts a new load. The failure is never kept for the life of the instance. |
 | `PORT` | Cloud Run sets this to `8080` |
+| `FORGEBOX_ENGINE_URL` | `https://downloads.ortussolutions.com/lucee/lucee/`. Base of the `forgebox/{version}` redirect: `{base}{version}/cf-engine-{version}[-light].zip` |
 | `EXTENSIONS_MAVEN_REPOS_RELEASES` / `LUCEE_MVN_REPO_RELEASES` | Maven Central |
 | `EXTENSIONS_MAVEN_REPOS_SNAPSHOTS` / `LUCEE_MVN_REPO_SNAPSHOTS` | Sonatype snapshots |
 | `EXTENSIONS_MAVEN_REPOS_MIXED` / `LUCEE_MVN_REPO_MIXED` | `https://maven.lucee-services.com/` |

@@ -37,6 +37,8 @@ component {
 		application.servicesFailedAt      = 0;
 		application.servicesLoading       = false;
 		application.listingCache          = _createListingCache();
+		// the serialised /info listings, in memory (see services.InfoListingCache)
+		application.infoListingCache      = new services.InfoListingCache();
 
 		_startServicesLoad();
 	}
@@ -318,6 +320,7 @@ component {
 			, mavenOnlyMinCore     = Trim( server.system.environment.EXTENSIONS_MAVEN_ONLY_MIN_CORE ?: "" )
 			, packagingBackfillMax = Val( server.system.environment.EXTENSIONS_PACKAGING_BACKFILL_MAX ?: 200 )
 			, metaTtl              = _metaTtl()
+			, listingLogoMaxSize   = Trim( server.system.environment.LISTING_LOGO_MAX_SIZE ?: "" )
 		);
 		_stepEnd( "extension metadata reader", t );
 

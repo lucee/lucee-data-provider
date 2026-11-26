@@ -336,6 +336,7 @@ component accessors="false" {
 			try {
 				local.val = deserializeJSON(fileRead(local.file));
 				variables.cache[key] = local.val;
+				dlCacheWritten()[key] = dlCacheHash(local.val);
 				info("reading data from file [#local.file#] took #getTickCount()-local.t#ms");
 				return local.val;
 			} catch(e) {
@@ -347,15 +348,55 @@ component accessors="false" {
 
 	function dlCachePut(key, value) {
 		variables.cache[key] = value;
+		// the same data as in the file (a refresh that found nothing new): only the copy in memory is updated,
+		// the file on the shared storage is not written again (its cachedAt stays, a reader refreshes it in the background)
+		local.hash = dlCacheHash(value);
+		if ((dlCacheWritten()[key] ?: "") == local.hash) return;
 		local.file = getCacheDirectory() & server.separator.file & key & ".json";
 		local.json = serializeJSON(value);
 		lock name="dlCachePut_#key#" type="exclusive" timeout="5" {
 			try {
 				fileWrite(local.file, local.json);
+				dlCacheWritten()[key] = local.hash;
 			} catch(e) {
 				cflog(log:"application",exception:e,type:"error");
 			}
 		}
+	}
+
+	// key > hash of the data last read from or written to the cache folder
+	private struct function dlCacheWritten() {
+		if (isNull(variables.dlWritten)) variables.dlWritten = structNew("synchronized");
+		return variables.dlWritten;
+	}
+
+	// hash of a cache value without the time it was cached at
+	private string function dlCacheHash(value) {
+		local.v = arguments.value;
+		if (isStruct(local.v) && structKeyExists(local.v, "data") && structKeyExists(local.v, "cachedAt")) {
+			local.v = structCopy(local.v);
+			structDelete(local.v, "cachedAt");
+		}
+		return hash(serializeJSON(local.v), "MD5");
+	}
+
+	// one background refresh per key at a time: each call while a key is stale started one before,
+	// and each of them called the repositories and wrote the same file again. A hanging refresh blocks for 5 minutes at most.
+	private boolean function dlStartRefresh(key) {
+		if (isNull(variables.dlRefreshing)) variables.dlRefreshing = structNew("synchronized");
+		local.started = false;
+		lock name="dlRefresh_#arguments.key#" type="exclusive" timeout="1" throwOnTimeout="false" {
+			local.since = variables.dlRefreshing[arguments.key] ?: 0;
+			if (local.since == 0 || (getTickCount() - local.since) > 300000) {
+				variables.dlRefreshing[arguments.key] = getTickCount();
+				local.started = true;
+			}
+		}
+		return local.started;
+	}
+
+	private void function dlEndRefresh(key) {
+		if (!isNull(variables.dlRefreshing)) structDelete(variables.dlRefreshing, arguments.key);
 	}
 
 	// ── Lucee versions API (cached) ──────────────────────────────────────
@@ -385,7 +426,7 @@ component accessors="false" {
 			local.data   = local.cached.data ?: [];
 			local.age    = structKeyExists(local.cached, "cachedAt") ? dateDiff("n", local.cached.cachedAt, now()) : 999;
 			if (!arrayIsEmpty(local.data)) {
-				if (local.age >= 5) {
+				if (local.age >= 5 && dlStartRefresh("luceeVersionsList")) {
 					thread action="run" name="refresh-versions-list-#getTickCount()#" {
 						local.t = getTickCount();
 						try {
@@ -394,6 +435,8 @@ component accessors="false" {
 							dlCachePut("luceeVersionsList", { data: local.list, cachedAt: now() });
 						} catch(e) {
 							cflog(log:"application",exception:e,type:"error");
+						} finally {
+							dlEndRefresh("luceeVersionsList");
 						}
 					}
 				}
@@ -445,7 +488,7 @@ component accessors="false" {
 			local.data   = local.cached.data ?: [];
 			local.age    = structKeyExists(local.cached, "cachedAt") ? dateDiff("n", local.cached.cachedAt, now()) : 999;
 			if (!arrayIsEmpty(local.data)) {
-				if (local.age >= 10) {
+				if (local.age >= 10 && dlStartRefresh(local.key)) {
 					thread action="run" name="refresh-extartifacts-#arguments.groupId#-#getTickCount()#"
 						gid=arguments.groupId ckey=local.key {
 						local.t = getTickCount();
@@ -456,6 +499,8 @@ component accessors="false" {
 							if (!arrayIsEmpty(local.list)) dlCachePut(attributes.ckey, { data: local.list, cachedAt: now() });
 						} catch(e) {
 							cflog(log:"application",exception:e,type:"error");
+						} finally {
+							dlEndRefresh(attributes.ckey);
 						}
 					}
 				}
@@ -480,7 +525,7 @@ component accessors="false" {
 			local.data   = local.cached.data ?: [];
 			local.age    = structKeyExists(local.cached, "cachedAt") ? dateDiff("n", local.cached.cachedAt, now()) : 999;
 			if (!arrayIsEmpty(local.data)) {
-				if (local.age >= 10) {
+				if (local.age >= 10 && dlStartRefresh(local.key)) {
 					thread action="run" name="refresh-extver-#arguments.groupId#-#arguments.artifactId#-#getTickCount()#"
 						gid=arguments.groupId aid=arguments.artifactId ckey=local.key {
 						local.t = getTickCount();
@@ -494,6 +539,8 @@ component accessors="false" {
 							if (!arrayIsEmpty(local.list)) dlCachePut(attributes.ckey, { data: local.list, cachedAt: now() });
 						} catch(e) {
 							cflog(log:"application",exception:e,type:"error");
+						} finally {
+							dlEndRefresh(attributes.ckey);
 						}
 					}
 				}
