@@ -318,6 +318,7 @@ Run defaults):
 | `CACHE_DIR` | `/download/provider` in the image. App-specific caches (listing JSON, Maven indexes, extension meta, Jira issues) go under this folder so they cannot collide with download8's shared `{key}.json` files. If unset, defaults to `CACHE_DIRECTORY/provider`. |
 | `LOCAL_CACHE_DIR` | fallback alias for `CACHE_DIR` when `CACHE_DIR` is not set |
 | `LISTING_CACHE_SECONDS` | `300` (five minutes). TTL for list/info JSON under `CACHE_DIR/listings/`. |
+| `INFO_CACHE_SECONDS` | `300`. `Cache-Control: public, max-age=` of `/rest/extension/provider/info` and `/info/{id}`. Both send a weak `ETag` and answer `If-None-Match` with 304; `/info` also sends `Last-Modified`. JSON responses are gzip-compressed by Tomcat (set up in `docker-entrypoint.sh`). |
 | `LUCEE_LOGGING_FORCE_APPENDER` | `console` in the image (needed so `ARTIFACT_NOT_FOUND` lines show up in Cloud Logging) |
 | `LUCEE_JAVA_OPTS` | `-Xms256m -Xmx1200m` in the image (a 2GiB Cloud Run container; the base image default is `-Xms64m -Xmx512m`) |
 | `ALLOW_RELOAD` | unset/false (`?fwreinit` only works when this is true) |
