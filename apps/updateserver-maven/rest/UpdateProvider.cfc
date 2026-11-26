@@ -141,7 +141,19 @@ component {
 				};
 
 			var latest = {};
-			latest.version = versions[keys[arrayLen(keys)]].version;
+			// a stable install is never offered an alpha, nor a pre-release of another major.minor
+			var latestKey = keys[ arrayLen( keys ) ];
+			if ( ALL_VERSION!=version.display ) {
+				latestKey = "";
+				for ( var i=arrayLen( keys ); i>=1; i-- ) {
+					if ( services.VersionUtils::isOfferableUpdate( versions[ keys[ i ] ].version, version.display ) ) {
+						latestKey = keys[ i ];
+						break;
+					}
+				}
+			}
+			// nothing to offer: the installed version is the latest one, so it is answered as "no update"
+			latest.version = Len( latestKey ) ? versions[ latestKey ].version : version.display;
 			var latestVersion=toVersion(latest.version);
 
 			// others
