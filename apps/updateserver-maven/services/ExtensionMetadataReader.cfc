@@ -205,7 +205,9 @@ component accessors=true {
 
 	private function _loadMeta( query srcMeta ) {
 		lock type="exclusive" name="readExtMeta" timeout=0 {
-			var meta           = isQuery( arguments.srcMeta ) ? arguments.srcMeta : _readExistingMetaFileFromS3();
+			// the file is only read when nothing is loaded yet (startup), a refresh works on a copy of the loaded meta
+			var meta           = isQuery( arguments.srcMeta ) ? arguments.srcMeta
+				: ( IsQuery( variables.extensionMeta ?: "" ) ? Duplicate( variables.extensionMeta ) : _readExistingMetaFileFromS3() );
 			_ensureColumns( meta );
 			var existingByFile = _mapExtensionQueryByFilename( meta );
 			var lexFiles       = _listLexFilesFromBucket();
@@ -1809,11 +1811,12 @@ component accessors=true {
 	}
 
 	private function _logoThumbnails() {
-		if ( !IsObject( variables._logoThumbnails ?: "" ) ) {
-			variables._logoThumbnails = new services.LogoThumbnails( getListingLogoMaxSize() );
+		// not variables._logoThumbnails: that is this function, assigning it replaced the function after the first call
+		if ( !IsObject( variables._logoThumbnailer ?: "" ) ) {
+			variables._logoThumbnailer = new services.LogoThumbnails( getListingLogoMaxSize() );
 		}
 
-		return variables._logoThumbnails;
+		return variables._logoThumbnailer;
 	}
 
 	private function _stripExtensionLogos( extensions, type ) {

@@ -35,6 +35,7 @@ component {
 		variables.mixedRepo       = Right( arguments.mixedRepo, 1 ) == "/" ? arguments.mixedRepo : arguments.mixedRepo & "/";
 		variables.timeout         = arguments.timeout;
 		variables.versionsListTtl = arguments.versionsListTtl;
+		variables.refreshing      = StructNew( "synchronized" ); // key > GetTickCount() of the running background refresh
 		variables.extensionTtl    = arguments.extensionTtl;
 		variables.listVersions    = arguments.listVersions    ?: "";
 		variables.versionDetail   = arguments.versionDetail   ?: "";
@@ -46,6 +47,24 @@ component {
 		return this;
 	}
 
+	// one background refresh per key at a time: every call while a key is stale started one before, and each of them
+	// wrote the same file to the shared folder again. A refresh that hangs no longer blocks after 5 minutes.
+	private boolean function _startRefresh( required string key ) {
+		var started = false;
+		lock name="lucee-catalog-refresh-#arguments.key#" type="exclusive" timeout=1 throwOnTimeout=false {
+			var since = variables.refreshing[ arguments.key ] ?: 0;
+			if ( since == 0 || ( GetTickCount() - since ) > 300000 ) {
+				variables.refreshing[ arguments.key ] = GetTickCount();
+				started = true;
+			}
+		}
+		return started;
+	}
+
+	private void function _endRefresh( required string key ) {
+		StructDelete( variables.refreshing, arguments.key );
+	}
+
 	// ── Core versions (LuceeVersionsList / LuceeVersionsDetail) ──────────
 
 	public array function getVersionList( boolean flush=false ) {
@@ -55,9 +74,13 @@ component {
 		var age    = StructKeyExists( cached, "cachedAt" ) ? DateDiff( "n", cached.cachedAt, Now() ) : 999;
 
 		if ( !ArrayIsEmpty( data ) ) {
-			if ( age >= variables.versionsListTtl ) {
-				thread action="run" name="refresh-versions-list-#GetTickCount()#" {
-					_putVersionList();
+			if ( age >= variables.versionsListTtl && _startRefresh( key ) ) {
+				thread action="run" name="refresh-versions-list-#GetTickCount()#" ckey=key {
+					try {
+						_putVersionList();
+					} finally {
+						_endRefresh( attributes.ckey );
+					}
 				}
 			}
 			return data;
@@ -104,9 +127,13 @@ component {
 		var age    = StructKeyExists( cached, "cachedAt" ) ? DateDiff( "n", cached.cachedAt, Now() ) : 999;
 
 		if ( !ArrayIsEmpty( data ) ) {
-			if ( age >= variables.extensionTtl ) {
+			if ( age >= variables.extensionTtl && _startRefresh( key ) ) {
 				thread action="run" name="refresh-extartifacts-#arguments.groupId#-#GetTickCount()#" gid=arguments.groupId ckey=key {
-					_putExtensionArtifacts( attributes.gid, attributes.ckey );
+					try {
+						_putExtensionArtifacts( attributes.gid, attributes.ckey );
+					} finally {
+						_endRefresh( attributes.ckey );
+					}
 				}
 			}
 			return data;
@@ -122,10 +149,14 @@ component {
 		var age    = StructKeyExists( cached, "cachedAt" ) ? DateDiff( "n", cached.cachedAt, Now() ) : 999;
 
 		if ( !ArrayIsEmpty( data ) ) {
-			if ( age >= variables.extensionTtl ) {
+			if ( age >= variables.extensionTtl && _startRefresh( key ) ) {
 				thread action="run" name="refresh-extver-#arguments.groupId#-#arguments.artifactId#-#GetTickCount()#"
 					gid=arguments.groupId aid=arguments.artifactId ckey=key {
-					_putExtensionVersions( attributes.gid, attributes.aid, attributes.ckey );
+					try {
+						_putExtensionVersions( attributes.gid, attributes.aid, attributes.ckey );
+					} finally {
+						_endRefresh( attributes.ckey );
+					}
 				}
 			}
 			return data;
