@@ -318,6 +318,7 @@ component {
 			, mavenOnlyMinCore     = Trim( server.system.environment.EXTENSIONS_MAVEN_ONLY_MIN_CORE ?: "" )
 			, packagingBackfillMax = Val( server.system.environment.EXTENSIONS_PACKAGING_BACKFILL_MAX ?: 200 )
 			, metaTtl              = _metaTtl()
+			, listingLogoMaxSize   = Trim( server.system.environment.LISTING_LOGO_MAX_SIZE ?: "" )
 		);
 		_stepEnd( "extension metadata reader", t );
 
