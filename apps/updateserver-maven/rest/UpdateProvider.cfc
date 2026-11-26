@@ -145,7 +145,19 @@ component {
 				};
 
 			var latest = {};
-			latest.version = versions[keys[arrayLen(keys)]].version;
+			// a stable install is never offered an alpha, nor a pre-release of another major.minor
+			var latestKey = keys[ arrayLen( keys ) ];
+			if ( ALL_VERSION!=version.display ) {
+				latestKey = "";
+				for ( var i=arrayLen( keys ); i>=1; i-- ) {
+					if ( services.VersionUtils::isOfferableUpdate( versions[ keys[ i ] ].version, version.display ) ) {
+						latestKey = keys[ i ];
+						break;
+					}
+				}
+			}
+			// nothing to offer: the installed version is the latest one, so it is answered as "no update"
+			latest.version = Len( latestKey ) ? versions[ latestKey ].version : version.display;
 			var latestVersion=toVersion(latest.version);
 
 			// others
@@ -414,7 +426,16 @@ component {
 
 		var bundle = bundleDownloadService.findBundle( argumentCollection=arguments );
 
+		if ( StructCount( bundle ) && Len( bundle.file ?: "" ) && FileExists( bundle.file ) ) {
+			return _serveLocalBundleFile( bundle.file, arguments.bundleName, arguments.bundleVersion, bundle.cacheExpires ?: "" );
+		}
+
 		if ( StructCount( bundle ) && Len( bundle.url ) ) {
+			// A .lex is not an OSGi bundle; extraction should have already replaced it.
+			if ( ListLast( ListFirst( bundle.url, "?" ), "." ) == "lex" ) {
+				_doBundle404( argumentCollection=arguments );
+				return;
+			}
 			if ( arguments.allowRedirect ){
 				return _relocateForDowload( bundle.url );
 			}
@@ -422,6 +443,19 @@ component {
 			return _serveBundleUrlLocally( bundle.url, bundle.cacheExpires );
 		}
 		_doBundle404( argumentCollection=arguments );
+	}
+
+	private function _serveLocalBundleFile( required string file, required string bundleName, required string bundleVersion, cacheExpires="" ) {
+		var expires  = IsDate( arguments.cacheExpires ) ? arguments.cacheExpires : DateAdd( "d", 30, Now() );
+		var fileName = arguments.bundleName & "-" & arguments.bundleVersion & ".jar";
+
+		header name="cache-control" value="public, max-age=#DateDiff( "s", Now(), expires )#";
+		header name="Content-Disposition" value="attachment; filename=""#fileName#""";
+		content
+			reset      = true
+			file       = arguments.file
+			type       = "application/java-archive"
+			deletefile = false;
 	}
 
 	private function _relocateForDowload( bundleUrl ) {

@@ -262,8 +262,12 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			it( "shares maven-metadata.xml reads between instances through the cache folder, within the TTL", function() {
 				var dir = base & "shared-" & CreateUUID() & "/";
 				var first = _newWorld();
-				_newSource( first, dir, 300 ).listExtensions();
+				var firstSource = _newSource( first, dir, 300 );
+				firstSource.listExtensions();
 				expect( _metadataReads( first ) ).notToBeEmpty();
+				// written after the meta load (in the background), not while listing
+				expect( DirectoryExists( dir & "metadata" ) ).toBeFalse();
+				firstSource.saveState();
 
 				var second = _newWorld();
 				_newSource( second, dir, 300 ).listExtensions();
@@ -274,7 +278,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				var dir = base & "stale-" & CreateUUID() & "/";
 				var world = _newWorld();
 				_addToMetadata( world, mixed, "mail-extension", "1.0.0.1" );
-				_newSource( world, dir, 1 ).listExtensions();
+				var source = _newSource( world, dir, 1 );
+				source.listExtensions();
+				source.saveState();
 				sleep( 1100 );
 
 				var later = _newWorld();
@@ -296,6 +302,22 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( _newSource( second, dir, 300 ).getFileUrl( "mail-extension", "1.1.0.17", [ releases, mixed ] ) )
 					.toBe( releases & "org/lucee/mail-extension/1.1.0.17/mail-extension-1.1.0.17.lex" );
 				expect( second.heads ).toHaveLength( 0 );
+			} );
+
+			it( "writes the HEAD results after the meta load, not on the request, and only the files that are there", function() {
+				var dir = base & "head-deferred-" & CreateUUID() & "/";
+				var world = _newWorld();
+				var source = _newSource( world, dir, 300 );
+				expect( source.getFileUrl( "mail-extension", "1.1.0.17", [ releases, mixed ] ) ).notToBe( "" );
+				expect( source.getFileUrl( "mail-extension", "9.9.9.9", [ releases, mixed ] ) ).toBe( "" );
+				expect( FileExists( dir & "maven-head.json" ) ).toBeFalse( "written on the request" );
+
+				source.saveState();
+				var saved = DeserializeJson( FileRead( dir & "maven-head.json" ) );
+				expect( StructCount( saved ) ).toBe( 1 );
+				for ( var fileUrl in saved ) {
+					expect( saved[ fileUrl ].exists ).toBeTrue();
+				}
 			} );
 
 			it( "runs one loadMeta at a time, the calls that come in meanwhile get its result", function() {
