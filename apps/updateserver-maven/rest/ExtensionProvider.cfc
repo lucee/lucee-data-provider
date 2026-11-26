@@ -81,11 +81,8 @@ component {
 			// has no host: a listing first built for the run.app hostname would
 			// otherwise be served on extension.lucee.org, and a background
 			// refresh would keep the hostname the closure captured.
-			// flush only rebuilds this listing from the loaded meta and starts a background refresh of the meta,
-			// the meta is never rebuilt on the request (that can take longer than the request may run)
-			if ( arguments.flush ) {
-				variables.metaReader.refreshIfStale( force=true );
-			}
+			// flush is accepted and ignored: the meta and the listings are refreshed in the background (TTL), a
+			// request never forces a rebuild
 			var extensions = _cachedListing( cacheKey, function( boolean background=false ) {
 				// in the background refresh of a stale copy, the meta it is built from is brought up to date first,
 				// otherwise the refresh would only serialise the same old meta again. On a request (no cached copy
@@ -96,7 +93,7 @@ component {
 					, withLogo    = withLogo
 					, coreVersion = coreVersion
 				);
-			}, arguments.flush );
+			} );
 			return {
 				  meta       = {
 					  title       = "Lucee Association Switzerland Extension Store (#hostName#)"
@@ -131,7 +128,7 @@ component {
 			, withLogo      = arguments.withLogo
 			, version       = arguments.version
 			, coreVersion   = arguments.coreVersion
-			, flush         = arguments.flush
+			, flush         = false // flush is ignored, see getInfo
 			, type          = arguments.type
 		);
 
@@ -171,7 +168,7 @@ component {
 			  id       = arguments.id
 			, version  = arguments.version
 			, coreVersion   = arguments.coreVersion
-			, flush    = arguments.flush
+			, flush    = false // flush is ignored, see getInfo
 			, withLogo = false
 			, type     = arguments.type
 		);
@@ -202,7 +199,7 @@ component {
 			  id       = arguments.id
 			, version  = arguments.version
 			, coreVersion   = arguments.coreVersion
-			, flush    = arguments.flush
+			, flush    = false // flush is ignored, see getInfo
 			, withLogo = false
 			, type     = arguments.type
 		);
@@ -217,32 +214,32 @@ component {
 
 
 	/**
-	 * Would be good to get rid of this?
+	 * Kept for the callers that still ask for it, does nothing: the extension meta and the listings are refreshed
+	 * in the background (see ExtensionMetadataReader.refreshIfStale and the listing cache).
 	 *
 	 * @httpmethod GET
 	 * @restPath   updateCache
 	 */
-	remote struct function updateCache(){
-		_bind();
-		try {
-			return {
-				  meta       = {}
-				, extensions = variables.metaReader.loadMeta()
-			}
-		} catch( any e ) {
-			return e;
-		}
+	remote function updateCache() {
+		_noRefreshNeeded();
 	}
 
 	/**
-	 * Would be good to get rid of this?
+	 * Kept for the callers that still ask for it (the Lucee build calls it after a publish), does nothing, see updateCache.
 	 *
 	 * @httpmethod GET
 	 * @restPath   reset
 	 */
 	remote function reset() {
-		_bind();
-		variables.metaReader.loadMeta();
+		_noRefreshNeeded();
+	}
+
+	private void function _noRefreshNeeded() {
+		RestSetResponse( {
+			  status  = 200
+			, content = "Nothing to do, the extension listing is refreshed in the background"
+			, headers = { "Content-Type" = "text/plain;charset=UTF-8", "Cache-Control" = "no-store" }
+		} );
 	}
 
 	/**
