@@ -475,15 +475,11 @@ component {
 		httpmethod="GET" restpath="dependencies/{version}" {
 		_bind();
 
-		local.mr=new services.legacy.MavenRepo();
-		try {
-			local.path=mr.getDependencies(version);
+		var build = _dependencies( "zip", arguments.version );
+		if ( build.status != "done" ) {
+			return _dependenciesNotReady( build, arguments.version );
 		}
-		catch(e){
-			systemOutput("dependencies/#version# failed: #e.message#", true);
-			logger(text="dependencies/#version#: #e.message#", exception=e, type="error");
-			return {"type":"error","message":"The version #version# is not available."};
-		}
+		local.path = build.result;
 
 		file action="readBinary" file="#path#" variable="local.bin";
 			header name="Content-disposition" value="attachment;filename=lucee-dependencies-#version#.zip";
@@ -500,15 +496,70 @@ component {
 		httpmethod="GET" restpath="dependencies-read/{version}" {
 		_bind();
 
-		local.mr=new services.legacy.MavenRepo();
-		try {
-			return mr.getOSGiDependencies(version,true);
+		var build = _dependencies( "list", arguments.version );
+		if ( build.status != "done" ) {
+			return _dependenciesNotReady( build, arguments.version );
 		}
-		catch(e){
-			systemOutput("dependencies-read/#version# failed: #e.message#", true);
-			logger(text="dependencies-read/#version#: #e.message#", exception=e, type="error");
-			return {"type":"error","message":"The version #version# is not available."};
+		return build.result;
+	}
+
+	/**
+	 * The dependencies of a core version are built from all the jars of its pom, which can take minutes.
+	 * A request waits for that at most DEPENDENCIES_WAIT_SECONDS (default 10). The build goes on in the
+	 * background, one per version and kind, and the next request gets its result. A version that is not
+	 * a core version is answered right away.
+	 */
+	private struct function _dependencies( required string kind, required string version ) {
+		if ( !StructKeyExists( variables.coreVersions.getVersions(), services.VersionUtils::toVersionSortable( arguments.version ) ) ) {
+			return { status="unknown" };
 		}
+
+		var key = arguments.kind & ":" & arguments.version;
+		var wait = Val( server.system.environment.DEPENDENCIES_WAIT_SECONDS ?: 10 ) * 1000;
+
+		lock name="update-provider-dependencies" type="exclusive" timeout=5 {
+			if ( !StructKeyExists( application, "dependencyBuilds" ) ) {
+				application.dependencyBuilds = {};
+			}
+			var build = application.dependencyBuilds[ key ] ?: {};
+			// a failed build is tried again after a minute
+			if ( StructIsEmpty( build ) || ( build.status == "failed" && DateDiff( "s", build.ended, Now() ) > 60 ) ) {
+				build = { status="running", started=Now() };
+				application.dependencyBuilds[ key ] = build;
+				// thread attributes are copies, the thread updates the entry of the application scope
+				thread name="dependencies-#Hash( key )#-#CreateUUID()#" action="run" key=key kind=arguments.kind version=arguments.version {
+					local.entry = application.dependencyBuilds[ attributes.key ];
+					try {
+						local.mr = new services.legacy.MavenRepo();
+						local.entry.result = attributes.kind == "zip" ? local.mr.getDependencies( attributes.version ) : local.mr.getOSGiDependencies( attributes.version, true );
+						local.entry.ended  = Now();
+						local.entry.status = "done";
+					}
+					catch ( any e ) {
+						local.entry.error  = e.message;
+						local.entry.ended  = Now();
+						local.entry.status = "failed";
+						WriteLog( text="dependencies #attributes.kind# #attributes.version#: #e.message#", type="error", log="update-provider" );
+					}
+				}
+			}
+		}
+
+		var started = GetTickCount();
+		while ( build.status == "running" && ( GetTickCount() - started ) < wait ) {
+			sleep( 100 );
+		}
+		return build;
+	}
+
+	private function _dependenciesNotReady( required struct build, required string version ) {
+		if ( arguments.build.status == "running" ) {
+			header statuscode="503" statustext="Service Unavailable";
+			header name="Retry-After" value="30";
+			return { "type":"info", "message":"The dependencies of version #arguments.version# are being prepared, try again in a moment." };
+		}
+		header statuscode="404" statustext="Not Found";
+		return { "type":"error", "message":"The version #arguments.version# is not available." };
 	}
 
 	remote function getExpressTemplates() httpmethod="GET" restpath="expressTemplates" {
