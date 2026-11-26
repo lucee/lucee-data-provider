@@ -37,6 +37,8 @@ component {
 		application.servicesFailedAt      = 0;
 		application.servicesLoading       = false;
 		application.listingCache          = _createListingCache();
+		// the serialised /info listings, in memory (see services.InfoListingCache)
+		application.infoListingCache      = new services.InfoListingCache();
 
 		_startServicesLoad();
 	}
