@@ -197,4 +197,27 @@ component {
 
 		return (v[4] <= arguments.build);
 	}
+
+	/**
+	 * Can the core version [candidate] be offered as the update of the installed version [installed]?
+	 * A stable install (no qualifier) is never offered an ALPHA, nor a pre-release (SNAPSHOT, BETA, RC, ALPHA)
+	 * of another major.minor. An install that is a pre-release itself is not restricted here.
+	 */
+	public static boolean function isOfferableUpdate( required string candidate, required string installed ) {
+		if ( Len( ListRest( ListLast( arguments.installed, "." ), "-" ) ) ) {
+			return true;
+		}
+
+		var qualifier = ListRest( ListLast( arguments.candidate, "." ), "-" );
+
+		if ( !Len( qualifier ) ) {
+			return true;
+		}
+		if ( qualifier == "ALPHA" ) {
+			return false;
+		}
+
+		return ListFirst( arguments.candidate, "." ) == ListFirst( arguments.installed, "." )
+			&& ListGetAt( arguments.candidate, 2, "." ) == ListGetAt( arguments.installed, 2, "." );
+	}
 }

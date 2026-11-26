@@ -16,6 +16,10 @@ component {
 	MIN_NEW_CHANGELOG_VERSION="5.3.0.0";
 	MIN_WIN_UPDATE_VERSION="5.0.1.27";
 
+	// forgebox/{version} redirects to the CommandBox engine package of that version
+	variables.forgeboxEngineUrl = server.system.environment.FORGEBOX_ENGINE_URL ?: "https://downloads.ortussolutions.com/lucee/lucee/";
+	if ( Right( variables.forgeboxEngineUrl, 1 ) != "/" ) variables.forgeboxEngineUrl &= "/";
+
 	private function logger( string text, any exception, type="info" ){
 		var log = arguments.text & chr(13) & chr(10) & callstackGet('string');
 		if ( !isNull(arguments.exception ) )
@@ -141,7 +145,19 @@ component {
 				};
 
 			var latest = {};
-			latest.version = versions[keys[arrayLen(keys)]].version;
+			// a stable install is never offered an alpha, nor a pre-release of another major.minor
+			var latestKey = keys[ arrayLen( keys ) ];
+			if ( ALL_VERSION!=version.display ) {
+				latestKey = "";
+				for ( var i=arrayLen( keys ); i>=1; i-- ) {
+					if ( services.VersionUtils::isOfferableUpdate( versions[ keys[ i ] ].version, version.display ) ) {
+						latestKey = keys[ i ];
+						break;
+					}
+				}
+			}
+			// nothing to offer: the installed version is the latest one, so it is answered as "no update"
+			latest.version = Len( latestKey ) ? versions[ latestKey ].version : version.display;
 			var latestVersion=toVersion(latest.version);
 
 			// others
@@ -360,8 +376,35 @@ component {
 		string ioid="" restargsource="url",
 		boolean light=false restargsource="url")
 		httpmethod="GET" restpath="forgebox/{version}" {
-		_bind();
-		return _notWithoutS3( "The forgebox download" );
+		// a plain redirect, it needs no services and no storage
+		var redirect = forgeboxEngineLocation( arguments.version, arguments.light );
+
+		if ( !Len( redirect ) ) {
+			content reset=true type="text/plain";
+			header statuscode="404" statustext="Not Found";
+			echo( "version [#arguments.version#] is not a Lucee version" );
+			return;
+		}
+
+		header statuscode="302" statustext="Found";
+		header name="Location" value=redirect;
+		// a published version does not change
+		header name="Cache-Control" value="public, max-age=86400";
+		return;
+	}
+
+	/**
+	 * Location of the CommandBox engine package of a Lucee version, "" if [version] is not a Lucee version.
+	 * The qualifier is upper case, as in the version list (5.3.4.54-rc is 5.3.4.54-RC).
+	 */
+	public string function forgeboxEngineLocation( required string version, boolean light=false ) {
+		var v = UCase( Trim( arguments.version ) );
+
+		if ( !REFind( "^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(-[A-Z]+)?$", v ) ) {
+			return "";
+		}
+
+		return variables.forgeboxEngineUrl & v & "/cf-engine-" & v & ( arguments.light ? "-light" : "" ) & ".zip";
 	}
 
 	/**
@@ -383,7 +426,16 @@ component {
 
 		var bundle = bundleDownloadService.findBundle( argumentCollection=arguments );
 
+		if ( StructCount( bundle ) && Len( bundle.file ?: "" ) && FileExists( bundle.file ) ) {
+			return _serveLocalBundleFile( bundle.file, arguments.bundleName, arguments.bundleVersion, bundle.cacheExpires ?: "" );
+		}
+
 		if ( StructCount( bundle ) && Len( bundle.url ) ) {
+			// A .lex is not an OSGi bundle; extraction should have already replaced it.
+			if ( ListLast( ListFirst( bundle.url, "?" ), "." ) == "lex" ) {
+				_doBundle404( argumentCollection=arguments );
+				return;
+			}
 			if ( arguments.allowRedirect ){
 				return _relocateForDowload( bundle.url );
 			}
@@ -391,6 +443,19 @@ component {
 			return _serveBundleUrlLocally( bundle.url, bundle.cacheExpires );
 		}
 		_doBundle404( argumentCollection=arguments );
+	}
+
+	private function _serveLocalBundleFile( required string file, required string bundleName, required string bundleVersion, cacheExpires="" ) {
+		var expires  = IsDate( arguments.cacheExpires ) ? arguments.cacheExpires : DateAdd( "d", 30, Now() );
+		var fileName = arguments.bundleName & "-" & arguments.bundleVersion & ".jar";
+
+		header name="cache-control" value="public, max-age=#DateDiff( "s", Now(), expires )#";
+		header name="Content-Disposition" value="attachment; filename=""#fileName#""";
+		content
+			reset      = true
+			file       = arguments.file
+			type       = "application/java-archive"
+			deletefile = false;
 	}
 
 	private function _relocateForDowload( bundleUrl ) {
@@ -475,15 +540,11 @@ component {
 		httpmethod="GET" restpath="dependencies/{version}" {
 		_bind();
 
-		local.mr=new services.legacy.MavenRepo();
-		try {
-			local.path=mr.getDependencies(version);
+		var build = _dependencies( "zip", arguments.version );
+		if ( build.status != "done" ) {
+			return _dependenciesNotReady( build, arguments.version );
 		}
-		catch(e){
-			systemOutput("dependencies/#version# failed: #e.message#", true);
-			logger(text="dependencies/#version#: #e.message#", exception=e, type="error");
-			return {"type":"error","message":"The version #version# is not available."};
-		}
+		local.path = build.result;
 
 		file action="readBinary" file="#path#" variable="local.bin";
 			header name="Content-disposition" value="attachment;filename=lucee-dependencies-#version#.zip";
@@ -500,15 +561,70 @@ component {
 		httpmethod="GET" restpath="dependencies-read/{version}" {
 		_bind();
 
-		local.mr=new services.legacy.MavenRepo();
-		try {
-			return mr.getOSGiDependencies(version,true);
+		var build = _dependencies( "list", arguments.version );
+		if ( build.status != "done" ) {
+			return _dependenciesNotReady( build, arguments.version );
 		}
-		catch(e){
-			systemOutput("dependencies-read/#version# failed: #e.message#", true);
-			logger(text="dependencies-read/#version#: #e.message#", exception=e, type="error");
-			return {"type":"error","message":"The version #version# is not available."};
+		return build.result;
+	}
+
+	/**
+	 * The dependencies of a core version are built from all the jars of its pom, which can take minutes.
+	 * A request waits for that at most DEPENDENCIES_WAIT_SECONDS (default 10). The build goes on in the
+	 * background, one per version and kind, and the next request gets its result. A version that is not
+	 * a core version is answered right away.
+	 */
+	private struct function _dependencies( required string kind, required string version ) {
+		if ( !StructKeyExists( variables.coreVersions.getVersions(), services.VersionUtils::toVersionSortable( arguments.version ) ) ) {
+			return { status="unknown" };
 		}
+
+		var key = arguments.kind & ":" & arguments.version;
+		var wait = Val( server.system.environment.DEPENDENCIES_WAIT_SECONDS ?: 10 ) * 1000;
+
+		lock name="update-provider-dependencies" type="exclusive" timeout=5 {
+			if ( !StructKeyExists( application, "dependencyBuilds" ) ) {
+				application.dependencyBuilds = {};
+			}
+			var build = application.dependencyBuilds[ key ] ?: {};
+			// a failed build is tried again after a minute
+			if ( StructIsEmpty( build ) || ( build.status == "failed" && DateDiff( "s", build.ended, Now() ) > 60 ) ) {
+				build = { status="running", started=Now() };
+				application.dependencyBuilds[ key ] = build;
+				// thread attributes are copies, the thread updates the entry of the application scope
+				thread name="dependencies-#Hash( key )#-#CreateUUID()#" action="run" key=key kind=arguments.kind version=arguments.version {
+					local.entry = application.dependencyBuilds[ attributes.key ];
+					try {
+						local.mr = new services.legacy.MavenRepo();
+						local.entry.result = attributes.kind == "zip" ? local.mr.getDependencies( attributes.version ) : local.mr.getOSGiDependencies( attributes.version, true );
+						local.entry.ended  = Now();
+						local.entry.status = "done";
+					}
+					catch ( any e ) {
+						local.entry.error  = e.message;
+						local.entry.ended  = Now();
+						local.entry.status = "failed";
+						WriteLog( text="dependencies #attributes.kind# #attributes.version#: #e.message#", type="error", log="update-provider" );
+					}
+				}
+			}
+		}
+
+		var started = GetTickCount();
+		while ( build.status == "running" && ( GetTickCount() - started ) < wait ) {
+			sleep( 100 );
+		}
+		return build;
+	}
+
+	private function _dependenciesNotReady( required struct build, required string version ) {
+		if ( arguments.build.status == "running" ) {
+			header statuscode="503" statustext="Service Unavailable";
+			header name="Retry-After" value="30";
+			return { "type":"info", "message":"The dependencies of version #arguments.version# are being prepared, try again in a moment." };
+		}
+		header statuscode="404" statustext="Not Found";
+		return { "type":"error", "message":"The version #arguments.version# is not available." };
 	}
 
 	remote function getExpressTemplates() httpmethod="GET" restpath="expressTemplates" {
