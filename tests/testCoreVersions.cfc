@@ -392,16 +392,18 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			it( title="offers a calling Lucee only the versions it can load, and the newest of those", body=function() {
 				var provider = _newProvider( _newVersions( _newWorld() ) );
 
+				// a stable 6.1 is not offered the snapshot of 6.2, but the newest release
 				var six = provider.getInfo( "6.1.0.1" );
 				expect( six.type ).toBe( "info" );
-				expect( six.available ).toBe( "6.2.1.7-SNAPSHOT" );
+				expect( six.available ).toBe( "6.2.0.321" );
 				expect( six.otherVersions ).toBe( [ "6.2.0.1", "6.2.0.300", "6.2.0.321", "6.2.1.7-SNAPSHOT" ] );
 
+				// a stable 7.0 is not offered the RC or the snapshot of 7.1, they are still listed
 				var seven = provider.getInfo( "7.0.0.1" );
-				expect( seven.available ).toBe( "7.1.1.2-SNAPSHOT" );
+				expect( seven.message ).toInclude( "no update" );
 				expect( seven.otherVersions ).toBe( [ "7.0.0.1", "7.1.0.5-RC", "7.1.1.2-SNAPSHOT" ] );
 
-				expect( provider.getInfoSimple( "6.1.0.1" ) ).toBe( "6.2.1.7-SNAPSHOT" );
+				expect( provider.getInfoSimple( "6.1.0.1" ) ).toBe( "6.2.0.321" );
 			});
 
 			it( title="says there is no update when the newest version of the major is the one of the caller", body=function() {
@@ -423,13 +425,31 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( info.otherVersions ).toBe( [] );
 			});
 
-			it( title="offers the newest of all versions as before with the filter none", body=function() {
+			it( title="offers the newest of all versions with the filter none, but never an alpha to a stable version", body=function() {
 				var provider = _newProvider( _newVersions( _newWorld(), { versionFilter="none" } ) );
 				var info     = provider.getInfo( "6.1.0.1" );
 
-				expect( info.available ).toBe( "8.0.0.1-ALPHA" );
+				expect( info.available ).toBe( "7.0.0.1" );
+				expect( info.otherVersions ).toInclude( "8.0.0.1-ALPHA" );
 				expect( info.otherVersions ).toInclude( "5.3.10.120" );
 				expect( info.otherVersions ).toInclude( "7.0.0.1" );
+			});
+
+			it( title="never offers a stable version an alpha, or a pre-release of another major.minor", body=function() {
+				var world = _newWorld();
+				// 7.2.0.45-ALPHA was offered to 7.0 and 7.1 releases
+				_setMetadata( world, mixed, [ "6.2.0.321", "7.1.0.5-RC", "7.1.1.2-SNAPSHOT", "8.0.0.1-ALPHA", "6.2.1.7-SNAPSHOT", "7.2.0.45-ALPHA", "7.1.0.6", "7.0.0.9-SNAPSHOT" ] );
+				var provider = _newProvider( _newVersions( world ) );
+
+				expect( provider.getInfoSimple( "7.0.0.1" ) ).toBe( "7.1.0.6" );
+				expect( provider.getInfo( "7.0.0.1" ).available ).toBe( "7.1.0.6" );
+				expect( provider.getInfoSimple( "7.1.0.5" ) ).toBe( "7.1.1.2-SNAPSHOT" );
+				// a snapshot of the own major.minor is still offered
+				expect( provider.getInfoSimple( "6.2.0.300" ) ).toBe( "6.2.1.7-SNAPSHOT" );
+				// a pre-release install is not restricted
+				expect( provider.getInfoSimple( "7.1.0.5-RC" ) ).toBe( "7.2.0.45-ALPHA" );
+				// nothing newer to offer
+				expect( provider.getInfo( "7.1.1.0" ).available ).toBe( "7.1.1.2-SNAPSHOT" );
 			});
 
 			it( title="does not filter the versions for the version of all versions", body=function() {

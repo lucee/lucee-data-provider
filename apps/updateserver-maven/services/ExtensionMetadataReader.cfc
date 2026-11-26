@@ -1760,11 +1760,12 @@ component accessors=true {
 	}
 
 	private function _logoThumbnails() {
-		if ( !IsObject( variables._logoThumbnails ?: "" ) ) {
-			variables._logoThumbnails = new services.LogoThumbnails( getListingLogoMaxSize() );
+		// not variables._logoThumbnails: that is this function, assigning it replaced the function after the first call
+		if ( !IsObject( variables._logoThumbnailer ?: "" ) ) {
+			variables._logoThumbnailer = new services.LogoThumbnails( getListingLogoMaxSize() );
 		}
 
-		return variables._logoThumbnails;
+		return variables._logoThumbnailer;
 	}
 
 	private function _stripExtensionLogos( extensions, type ) {
