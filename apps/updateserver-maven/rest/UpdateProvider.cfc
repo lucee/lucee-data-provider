@@ -473,7 +473,6 @@ component {
 		httpmethod="GET" restpath="dependencies/{version}" {
 		_bind();
 
-		setting requesttimeout="1000";
 		local.mr=new services.legacy.MavenRepo();
 		try {
 			local.path=mr.getDependencies(version);
@@ -499,7 +498,6 @@ component {
 		httpmethod="GET" restpath="dependencies-read/{version}" {
 		_bind();
 
-		setting requesttimeout="1000";
 		local.mr=new services.legacy.MavenRepo();
 		try {
 			return mr.getOSGiDependencies(version,true);
@@ -621,8 +619,6 @@ component {
 		)
 		httpmethod="GET" restpath="list" {
 
-		setting requesttimeout="1000";
-
 		var cacheKey = "update-list-" & arguments.type & "-" & ( arguments.extended ? "extended" : "short" );
 
 		return _cachedListing( cacheKey, function() {
@@ -687,7 +683,6 @@ component {
 		httpmethod="GET" restpath="get/{version}" {
 		_bind();
 
-		setting requesttimeout="1000";
 		local.mr=new services.legacy.MavenRepo();
 		try {
 			return mr.get(arguments.version,arguments.extended);

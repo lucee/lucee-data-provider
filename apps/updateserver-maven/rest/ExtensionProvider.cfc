@@ -79,13 +79,18 @@ component {
 			// has no host: a listing first built for the run.app hostname would
 			// otherwise be served on extension.lucee.org, and a background
 			// refresh would keep the hostname the closure captured.
-			var extensions = _cachedListing( cacheKey, function() {
-				// the listing cache runs this in the background once its copy is stale: the meta it is built from
-				// is brought up to date first, otherwise the refresh would only serialise the same old meta again
-				variables.metaReader.refreshIfStale( wait=true );
+			// flush only rebuilds this listing from the loaded meta and starts a background refresh of the meta,
+			// the meta is never rebuilt on the request (that can take longer than the request may run)
+			if ( arguments.flush ) {
+				variables.metaReader.refreshIfStale( force=true );
+			}
+			var extensions = _cachedListing( cacheKey, function( boolean background=false ) {
+				// in the background refresh of a stale copy, the meta it is built from is brought up to date first,
+				// otherwise the refresh would only serialise the same old meta again. On a request (no cached copy
+				// yet) the loaded meta is used and a stale one is refreshed in the background.
+				variables.metaReader.refreshIfStale( wait=arguments.background );
 				return variables.metaReader.list(
 					  type        = listType
-					, flush       = flush
 					, withLogo    = withLogo
 					, coreVersion = coreVersion
 				);

@@ -42,6 +42,28 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( leftovers ).toHaveLength( 0 );
 			});
 
+			it( title="tells the producer whether it runs on the request or in the background refresh", body=function() {
+				var cache = new services.ListingCache( cacheDir=variables.work & "background/", ttlSeconds=60 );
+				var seen = [];
+				var producer = function( boolean background=false ) {
+					ArrayAppend( seen, arguments.background );
+					return { background=arguments.background };
+				};
+
+				// a miss is produced on the request
+				expect( cache.get( "ext-info-bg", producer ).background ).toBeFalse();
+
+				// a stale copy is refreshed in the background
+				cache.put( "ext-info-bg", { background="stale" }, DateAdd( "s", -120, Now() ) );
+				expect( cache.get( "ext-info-bg", producer ).background ).toBe( "stale" );
+				var deadline = GetTickCount() + 10000;
+				while ( cache.isRefreshing( "ext-info-bg" ) && GetTickCount() < deadline ) {
+					sleep( 25 );
+				}
+				expect( seen ).toBe( [ false, true ] );
+				expect( cache.peek( "ext-info-bg" ).background ).toBeTrue();
+			});
+
 			it( title="serves a stale copy and refreshes in the background once the TTL has passed", body=function() {
 				var cache = new services.ListingCache( cacheDir=variables.work & "stale/", ttlSeconds=60 );
 				var calls = { n=0 };
