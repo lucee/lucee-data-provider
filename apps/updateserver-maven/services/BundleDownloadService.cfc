@@ -17,6 +17,80 @@ component accessors=true {
 	 * by looking up various locations
 	 */
 	public struct function findBundle( required string bundleName, required string bundleVersion, string searchName=arguments.bundleName ) {
+		var found = _findBundle( argumentCollection=arguments );
+		// the outer call only: a jar that is only on the disk of this instance (extracted from a lex) is redirected to
+		// when the same jar has a public URL, see _preferPublicUrl()
+		if ( arguments.searchName == arguments.bundleName ) {
+			return _preferPublicUrl( found, arguments.bundleName, arguments.bundleVersion );
+		}
+		return found;
+	}
+
+	/**
+	 * A jar that was extracted from a lex (bundle.file, only on the disk of this instance) gets the public URL of the
+	 * same bundle when there is one, so the download can be a 302 instead of this instance serving the bytes.
+	 * The URL lookup runs once per bundle and instance, its result is kept in the lookup cache: a found URL for good,
+	 * a miss is looked up again after a day (an hour when the lookup failed), so a jar that was uploaded later
+	 * (the "Upload Maven jar" workflow of lucee/Lucee, org.lucee:<Bundle-SymbolicName>:<Bundle-Version>) is picked up.
+	 * A cached answer (url or a miss that is not due) costs no network call.
+	 */
+	private struct function _preferPublicUrl( required struct info, required string bundleName, required string bundleVersion ) {
+		if ( !StructCount( arguments.info ) || Len( arguments.info.url ?: "" ) || !Len( arguments.info.file ?: "" ) ) {
+			return arguments.info;
+		}
+		// "latest" is the newest jar of the lex, a URL of the newest Maven version can be another version
+		if ( arguments.bundleVersion == "latest" || !_urlCheckDue( arguments.info ) ) {
+			return arguments.info;
+		}
+
+		var key = _getCacheKey( arguments.bundleName, arguments.bundleVersion );
+		lock name="lucee-bundle-url-#Hash( key, "MD5" )#" type="exclusive" timeout=30 throwOnTimeout=false {
+			// another request may have looked it up while this one waited
+			var current = StructKeyExists( variables._lookupCache, key ) ? variables._lookupCache[ key ] : arguments.info;
+			if ( !Len( current.file ?: "" ) ) {
+				current = arguments.info;
+			}
+			if ( Len( current.url ?: "" ) || !_urlCheckDue( current ) ) {
+				return current;
+			}
+
+			var publicUrl  = "";
+			var retryHours = 24;
+			try {
+				publicUrl = _findPublicJarUrl( arguments.bundleName, arguments.bundleVersion );
+			} catch ( any e ) {
+				retryHours = 1;
+				SystemOutput( "Could not look up a public URL for bundle [#arguments.bundleName#] [#arguments.bundleVersion#]: #e.message#", true );
+			}
+
+			var updated = StructCopy( current );
+			updated.url           = publicUrl;
+			updated.urlCheckAfter = Len( publicUrl ) ? "" : DateAdd( "h", retryHours, Now() );
+			_put( key, updated );
+			return updated;
+		}
+		return arguments.info;
+	}
+
+	private boolean function _urlCheckDue( required struct info ) {
+		var due = arguments.info.urlCheckAfter ?: "";
+		return !IsDate( due ) || Now() >= due;
+	}
+
+	// a jar (never a lex) on Maven Central or the Lucee repositories, the same lookups findBundle uses
+	private string function _findPublicJarUrl( required string bundleName, required string bundleVersion ) {
+		var u = getMavenMatcher().findBundleUrl( bundleName=arguments.bundleName, bundleVersion=arguments.bundleVersion );
+		if ( Len( Trim( u ) ) && !_isLex( u ) && ReFindNoCase( "^https?://", u ) ) {
+			return u;
+		}
+		u = getMavenMatcher().findBundleUrl( bundleName=arguments.bundleName, bundleVersion=arguments.bundleVersion, rawSearch=true, jarsOnly=true );
+		if ( Len( Trim( u ) ) && !_isLex( u ) && ReFindNoCase( "^https?://", u ) ) {
+			return u;
+		}
+		return "";
+	}
+
+	private struct function _findBundle( required string bundleName, required string bundleVersion, string searchName=arguments.bundleName ) {
 		// Get it from cache (eventually everything will end up here)
 		var bundleInfo = _cacheLookup( argumentCollection=arguments );
 
@@ -86,7 +160,7 @@ component accessors=true {
 			}
 
 			if ( Len( newSearchName ) ) {
-				return findBundle( argumentCollection=arguments, searchName=newSearchName );
+				return _findBundle( argumentCollection=arguments, searchName=newSearchName );
 			}
 		}
 
@@ -136,7 +210,12 @@ component accessors=true {
 		if ( StructCount( fromCache ) ) {
 			var staleFile = Len( fromCache.file ?: "" ) && !FileExists( fromCache.file );
 			var lexUrl    = Len( fromCache.url ?: "" ) && _isLex( fromCache.url );
-			if ( staleFile || lexUrl ) {
+			if ( staleFile && !lexUrl && Len( fromCache.url ?: "" ) ) {
+				// the jar is gone from the temp folder, but it has a public URL: keep that, no new lookup
+				fromCache = StructCopy( fromCache );
+				fromCache.file = "";
+				_put( key, fromCache );
+			} else if ( staleFile || lexUrl ) {
 				fromCache = {};
 				StructDelete( _lookupCache, key );
 			}
@@ -295,11 +374,13 @@ component accessors=true {
 
 	private function _createBundleInfo( bundleName, bundleVersion, bundleUrl, cacheExpires="", file="" ) {
 		return {
-			  name         = arguments.bundleName
-			, version      = arguments.bundleVersion
-			, url          = arguments.bundleUrl
-			, file         = arguments.file
-			, cacheExpires = arguments.cacheExpires
+			  name          = arguments.bundleName
+			, version       = arguments.bundleVersion
+			, url           = arguments.bundleUrl
+			, file          = arguments.file
+			, cacheExpires  = arguments.cacheExpires
+			// a file without url: when to look for a public URL of it (again), "" is right away, see _preferPublicUrl()
+			, urlCheckAfter = ""
 		};
 	}
 
@@ -518,13 +599,18 @@ component accessors=true {
 	}
 
 	private void function _rememberJar( required string bundleName, required string bundleVersion, required string file, any cacheExpires="never" ) {
-		_put( _getCacheKey( arguments.bundleName, arguments.bundleVersion ), _createBundleInfo(
+		var key = _getCacheKey( arguments.bundleName, arguments.bundleVersion );
+		// a public URL that is already known for this bundle is kept, see _preferPublicUrl()
+		var known = StructKeyExists( variables._lookupCache, key ) ? variables._lookupCache[ key ] : {};
+		var info = _createBundleInfo(
 			  bundleName    = arguments.bundleName
 			, bundleVersion = arguments.bundleVersion
-			, bundleUrl     = ""
+			, bundleUrl     = ( Len( known.url ?: "" ) && !_isLex( known.url ) ) ? known.url : ""
 			, file          = arguments.file
 			, cacheExpires  = arguments.cacheExpires
-		) );
+		);
+		info.urlCheckAfter = known.urlCheckAfter ?: "";
+		_put( key, info );
 	}
 
 	private string function _cachedJarPath( required string bundleName, required string bundleVersion ) {

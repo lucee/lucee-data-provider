@@ -92,7 +92,10 @@
 		//return targetURL;
 	}
 
-	public function findBundleUrl( required string bundleName, string bundleVersion="latest", rawSearch=false ) {
+	/**
+	 * @jarsOnly only look for a jar, never answer a .lex (used to find a public URL for a jar that was extracted from a lex)
+	 */
+	public function findBundleUrl( required string bundleName, string bundleVersion="latest", rawSearch=false, boolean jarsOnly=false ) {
 		if ( !arguments.rawSearch ) {
 			try {
 				var match = getMatch( arguments.bundleName, arguments.bundleVersion );
@@ -105,6 +108,11 @@
 
 		var repositories = rawSearchRepositories();
 		var uris = rawSearchPaths( arguments.bundleName, arguments.bundleVersion );
+		if ( arguments.jarsOnly ) {
+			uris = uris.filter( function( uri ) {
+				return Right( uri, 4 ) == ".jar";
+			} );
+		}
 
 		for( var rep in repositories ) {
 			for ( var candidate in uris ) {
@@ -121,9 +129,11 @@
 			var urls=[
 				  repositories[ 1 ] & "/org/lucee/" & art1 & "/" & arguments.bundleVersion & "/" & art1 & "-" & arguments.bundleVersion & ".jar"
 				, repositories[ 1 ] & "/org/lucee/" & art2 & "/" & arguments.bundleVersion & "/" & art2 & "-" & arguments.bundleVersion & ".jar"
-				, repositories[ 1 ] & "/org/lucee/" & art1 & "/" & arguments.bundleVersion & "/" & art1 & "-" & arguments.bundleVersion & ".lex"
-				, repositories[ 1 ] & "/org/lucee/" & art2 & "/" & arguments.bundleVersion & "/" & art2 & "-" & arguments.bundleVersion & ".lex"
 			];
+			if ( !arguments.jarsOnly ) {
+				ArrayAppend( urls, repositories[ 1 ] & "/org/lucee/" & art1 & "/" & arguments.bundleVersion & "/" & art1 & "-" & arguments.bundleVersion & ".lex" );
+				ArrayAppend( urls, repositories[ 1 ] & "/org/lucee/" & art2 & "/" & arguments.bundleVersion & "/" & art2 & "-" & arguments.bundleVersion & ".lex" );
+			}
 
 			for( var _url in urls ) {
 				if( FileExists( _url ) ) {
