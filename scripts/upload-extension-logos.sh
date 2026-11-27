@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # Upload a local folder of extension logo PNGs to the artifacts R2 bucket.
 #
-# Object keys: extension-logos/<filename>.png
-# Public URL:  https://artifacts.lucee.org/extension-logos/<filename>.png
+# Object keys: <filename>.png  (bucket root, no prefix)
+# Public URL:  https://artifacts.lucee.org/<filename>.png
 #
 # Usage:
 #   ./scripts/upload-extension-logos.sh /Users/mic/Downloads/artifacts [bucket] [--dry-run]
 #
-# Defaults: bucket=lucee-artifacts
+# Defaults: bucket=lucee-artifacts-public
 # Requires: npx wrangler, logged in to the Cloudflare account that owns the bucket.
 # wrangler must be called with --remote so the objects go to the real bucket, not local miniflare storage.
 #
 # To print an rclone equivalent instead of uploading with wrangler:
-#   ./scripts/upload-extension-logos.sh /Users/mic/Downloads/artifacts lucee-artifacts --rclone
+#   ./scripts/upload-extension-logos.sh /Users/mic/Downloads/artifacts lucee-artifacts-public --rclone
 
 set -euo pipefail
 
@@ -26,9 +26,8 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 SRC="${1:-}"
-BUCKET="${2:-lucee-artifacts}"
+BUCKET="${2:-lucee-artifacts-public}"
 MODE="${3:-}"
-PREFIX="extension-logos"
 CACHE_CONTROL="public, max-age=86400"
 
 if [[ -z "$SRC" ]]; then
@@ -46,8 +45,8 @@ if [[ ${#FILES[@]} -eq 0 ]]; then
 fi
 
 echo "Source:  $SRC"
-echo "Bucket:  $BUCKET"
-echo "Prefix:  $PREFIX/  (${#FILES[@]} png files)"
+echo "Bucket:  $BUCKET (keys at bucket root)"
+echo "Files:   ${#FILES[@]} png"
 echo "Headers: Content-Type: image/png"
 echo "         Cache-Control: $CACHE_CONTROL"
 echo
@@ -55,7 +54,7 @@ echo
 if [[ "$MODE" == "--rclone" ]]; then
 	cat <<RCLONE
 # rclone (configure an "r2" remote first: type=s3, provider=Cloudflare, endpoint=https://<accountid>.r2.cloudflarestorage.com)
-rclone copy "$SRC" "r2:${BUCKET}/${PREFIX}" \\
+rclone copy "$SRC" "r2:${BUCKET}" \\
   --include "*.png" --include "*.PNG" \\
   --header-upload "Cache-Control: ${CACHE_CONTROL}" \\
   --header-upload "Content-Type: image/png"
@@ -70,13 +69,12 @@ fi
 
 for f in "${FILES[@]}"; do
 	name="$(basename "$f")"
-	key="${PREFIX}/${name}"
 	if [[ $DRY -eq 1 ]]; then
-		echo "dry-run: $f -> ${BUCKET}/${key}"
+		echo "dry-run: $f -> ${BUCKET}/${name}"
 		continue
 	fi
-	echo "put ${BUCKET}/${key}"
-	npx wrangler r2 object put "${BUCKET}/${key}" \
+	echo "put ${BUCKET}/${name}"
+	npx wrangler r2 object put "${BUCKET}/${name}" \
 		--file "$f" \
 		--content-type "image/png" \
 		--cache-control "$CACHE_CONTROL" \
@@ -85,5 +83,5 @@ done
 
 if [[ $DRY -eq 0 ]]; then
 	echo
-	echo "Done. Example: https://artifacts.lucee.org/${PREFIX}/$(basename "${FILES[0]}")"
+	echo "Done. Example: https://artifacts.lucee.org/$(basename "${FILES[0]}")"
 fi

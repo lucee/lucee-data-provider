@@ -1,33 +1,33 @@
 # artifacts.lucee.org
 
-Public host for extension logos, and later other small artifacts. It is a Cloudflare R2 bucket with the custom domain `artifacts.lucee.org`. Core Lucee jar / light / `.lco` fallbacks stay on `cdn.lucee.org`.
+Public host for extension logos, and later other small artifacts. It is the Cloudflare R2 bucket `lucee-artifacts-public`, served at the custom domain `artifacts.lucee.org`. Core Lucee jar / light / `.lco` fallbacks stay on `cdn.lucee.org`.
 
 ## URL layout
 
 One configurable base URL, `ARTIFACTS_URL`, default:
 
 ```
-https://artifacts.lucee.org/extension-logos/
+https://artifacts.lucee.org/
 ```
 
-A logo is then:
+A logo is then at the domain root (no `artifacts/` or other prefix):
 
 ```
-https://artifacts.lucee.org/extension-logos/{group}-{artifact}.png
+https://artifacts.lucee.org/{group}-{artifact}.png
 ```
 
 Dots in the Maven group and artifact become dashes. There is no version in the path, so a logo change under the same coordinates keeps the same URL.
 
 Examples:
 
-| Coordinates | Public URL |
+| Coordinates | Public URL / R2 key |
 |---|---|
-| `org.lucee` / `ajax-extension` | `https://artifacts.lucee.org/extension-logos/org-lucee-ajax-extension.png` |
-| `com.example.foo` / `bar.baz-extension` | `https://artifacts.lucee.org/extension-logos/com-example-foo-bar-baz-extension.png` |
+| `org.lucee` / `ajax-extension` | `https://artifacts.lucee.org/org-lucee-ajax-extension.png` |
+| `com.example.foo` / `bar.baz-extension` | `https://artifacts.lucee.org/com-example-foo-bar-baz-extension.png` |
 
-R2 object keys match that path: `extension-logos/org-lucee-ajax-extension.png`.
+R2 object keys are the file names at the bucket root, for example `org-lucee-ajax-extension.png`. A file in `/Users/mic/Downloads/artifacts/org-lucee-ajax-extension.png` is uploaded as that key, not under an `artifacts/` prefix.
 
-The `extension-logos/` prefix is used so the same bucket and domain can later hold other artifact types under other prefixes. To change the prefix or host, set `ARTIFACTS_URL` (a trailing slash is added when missing). The download page and the Maven update/extension provider both read this variable.
+To use a different host or path later, set `ARTIFACTS_URL` (a trailing slash is added when missing). The download page and the Maven update/extension provider both read this variable.
 
 If a GitHub raw logo or a leftover `https://cdn.lucee.org/artifacts/…` URL is still in cached metadata, it is rewritten to the artifacts host at render time **only when that file exists** there. Otherwise the original URL is kept.
 
@@ -35,39 +35,40 @@ If a GitHub raw logo or a leftover `https://cdn.lucee.org/artifacts/…` URL is 
 
 | Name | Default | Used by |
 |---|---|---|
-| `ARTIFACTS_URL` | `https://artifacts.lucee.org/extension-logos/` | `apps/download8` (`Util.cfc`) and `apps/updateserver-maven` (`ExtensionMetadataReader`) |
+| `ARTIFACTS_URL` | `https://artifacts.lucee.org/` | `apps/download8` (`Util.cfc`) and `apps/updateserver-maven` (`ExtensionMetadataReader`) |
 
-## Cloudflare setup
+## Cloudflare bucket
 
-Do this in the Cloudflare dashboard for the `lucee.org` zone (no API changes are made from this repo):
+Already in place:
 
-1. Create an R2 bucket, for example `lucee-artifacts`.
-2. In the bucket's **Settings → Custom Domains**, add `artifacts.lucee.org`. Cloudflare will attach the hostname to the zone and serve the bucket over HTTPS.
-3. Upload logos to keys under `extension-logos/` (see below). A file at `/Users/mic/Downloads/artifacts/org-lucee-ajax-extension.png` must be stored as `extension-logos/org-lucee-ajax-extension.png`, not at the bucket root and not under an `artifacts/` prefix.
-4. Optional: a Cache Rule for `artifacts.lucee.org/extension-logos/*` with a one-day edge TTL. Do not mark the objects immutable — a logo can be replaced under the same name. After replacing a file, purge that URL if the old copy is still cached.
-5. CORS is not required for ordinary `<img src>` requests.
+- Bucket: `lucee-artifacts-public`
+- Custom domain: `artifacts.lucee.org` (active)
+- Public development (r2.dev) URL: leave disabled
+- CORS: not required for ordinary `<img src>` requests
+
+Optional: a Cache Rule for `artifacts.lucee.org/*` with a one-day edge TTL. Do not mark the objects immutable — a logo can be replaced under the same name. After replacing a file, purge that URL if the old copy is still cached.
 
 Check a file with:
 
 ```sh
-curl -sSI https://artifacts.lucee.org/extension-logos/org-lucee-ajax-extension.png
+curl -sSI https://artifacts.lucee.org/org-lucee-ajax-extension.png
 ```
 
-You want `200`, `content-type: image/png`, and a `cache-control` header.
+You want `200`, `content-type: image/png`, and a `cache-control` header. A missing object currently returns `404`.
 
 ## Upload
 
 From a local folder of PNGs (for example `~/Downloads/artifacts`):
 
 ```sh
-./scripts/upload-extension-logos.sh /Users/mic/Downloads/artifacts lucee-artifacts
+./scripts/upload-extension-logos.sh /Users/mic/Downloads/artifacts lucee-artifacts-public
 ```
 
-The script uses `npx wrangler r2 object put … --remote` with `Content-Type: image/png` and `Cache-Control: public, max-age=86400`. It can also print an equivalent `rclone` command.
+The script uses `npx wrangler r2 object put … --remote` with `Content-Type: image/png` and `Cache-Control: public, max-age=86400`, and writes each file to the bucket root under its existing name. It can also print an equivalent `rclone` command.
 
 ## Files currently on cdn.lucee.org/artifacts
 
-The CDN prefix does not list its objects (the `/artifacts/` URL returns an empty S3 directory). The live download page at https://download.lucee.org/ currently uses these **34** files from `https://cdn.lucee.org/artifacts/`. Upload them to the matching `extension-logos/` keys:
+The CDN prefix does not list its objects (the `/artifacts/` URL returns an empty S3 directory). The live download page at https://download.lucee.org/ currently uses these **34** files from `https://cdn.lucee.org/artifacts/`. Upload them to the matching root keys on `artifacts.lucee.org`:
 
 ```
 org-lucee-administrator-extension.png

@@ -4,7 +4,7 @@ services:
     image: lucee-download8:latest
     environment:
       LUCEE_ADMIN_PASSWORD: "lamiinne"
-      # ARTIFACTS_URL: "https://artifacts.lucee.org/extension-logos/"
+      # ARTIFACTS_URL: "https://artifacts.lucee.org/"
     volumes:
       - "./www:/var/www"
       - "./components:/var/components"

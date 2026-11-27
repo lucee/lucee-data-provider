@@ -3,7 +3,7 @@ component accessors="false" {
 	this.CDN = "https://cdn.lucee.org/";
 	// public extension logos (and later other small artifacts). Core jar/lco fallbacks stay on this.CDN.
 	// Override with ARTIFACTS_URL (trailing slash is added when missing). init() applies the env value.
-	this.ARTIFACTS_URL = "https://artifacts.lucee.org/extension-logos/";
+	this.ARTIFACTS_URL = "https://artifacts.lucee.org/";
 	// tests: a struct of url > boolean, skips the HTTP existence check when the URL is a key
 	this.artifactLogoProbe = {};
 	// base for GitHub Release assets (installers, express, war and, for 7.1+, the core files)
@@ -234,10 +234,10 @@ component accessors="false" {
 	// ── Extension images ─────────────────────────────────────────────────
 
 	// Public base URL for hosted extension logos. Default:
-	// https://artifacts.lucee.org/extension-logos/
+	// https://artifacts.lucee.org/
 	public string function artifactsBaseUrl() {
 		var base = trim(server.system.environment.ARTIFACTS_URL ?: "");
-		if (!len(base)) base = "https://artifacts.lucee.org/extension-logos/";
+		if (!len(base)) base = "https://artifacts.lucee.org/";
 		if (right(base, 1) != "/") base &= "/";
 		return base;
 	}

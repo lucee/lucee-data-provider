@@ -29,7 +29,7 @@ component accessors=true {
 	// public logo URL of an extension, same pattern as Lucee 8 ExtensionProvider.toArtifactImageUrl():
 	// {base}{group}-{artifact}.png with dots turned into dashes. Empty: the URL is never used.
 	// Override at construction (ARTIFACTS_URL in Application.cfc).
-	property name="artifactLogoBaseUrl"   type="string" default="https://artifacts.lucee.org/extension-logos/";
+	property name="artifactLogoBaseUrl"   type="string" default="https://artifacts.lucee.org/";
 	// tests: a struct of url > boolean, or an object with exists(url). When set, no HTTP is made.
 	property name="artifactLogoProbe"     type="any";
 
@@ -1769,7 +1769,7 @@ component accessors=true {
 	/**
 	 * The public artifact logo URL when the file is known to be there, otherwise an empty string.
 	 * Same pattern as Lucee 8: {artifactLogoBaseUrl}{group}-{artifact}.png (dots become dashes).
-	 * Default base: https://artifacts.lucee.org/extension-logos/
+	 * Default base: https://artifacts.lucee.org/
 	 * No version is appended; a logo change under the same name keeps the same URL.
 	 */
 	private string function _hostedArtifactLogoUrl( required struct coords ) {

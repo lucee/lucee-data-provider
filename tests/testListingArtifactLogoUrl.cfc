@@ -13,7 +13,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 
 		// 1x1 PNG, used only when the embedded logo should be read
 		variables.pngBytes = ToBinary( "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" );
-		variables.artifactsBase  = "https://artifacts.lucee.org/extension-logos/";
+		variables.artifactsBase  = "https://artifacts.lucee.org/";
 		variables.defaultLogoUrl = variables.artifactsBase & "org-lucee-demo-extension.png";
 	}
 
@@ -35,7 +35,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 
 		describe( "listing logos: the public artifact logo URL is used when that file is there", function() {
 
-			it( title="defaults artifactLogoBaseUrl to artifacts.lucee.org/extension-logos/", body=function() {
+			it( title="defaults artifactLogoBaseUrl to artifacts.lucee.org/", body=function() {
 				var reader = new services.ExtensionMetadataReader();
 				expect( reader.getArtifactLogoBaseUrl() ).toBe( variables.artifactsBase );
 			});

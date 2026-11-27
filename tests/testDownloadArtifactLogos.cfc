@@ -6,7 +6,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			"/download8util": expandPath(dir & "../apps/download8/components/org/lucee/download/")
 		};
 		variables.util = new download8util.Util();
-		variables.util.ARTIFACTS_URL = "https://artifacts.lucee.org/extension-logos/";
+		variables.util.ARTIFACTS_URL = "https://artifacts.lucee.org/";
 		variables.base = variables.util.ARTIFACTS_URL;
 		variables.hosted = variables.base & "org-lucee-ajax-extension.png";
 		variables.raw = "https://raw.githubusercontent.com/lucee/extension-ajax/main/source/images/logo.png";

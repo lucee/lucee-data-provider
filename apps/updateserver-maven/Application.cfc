@@ -255,7 +255,7 @@ component {
 	private string function _artifactsBaseUrl() {
 		var base = Trim( server.system.environment.ARTIFACTS_URL ?: "" );
 		if ( !Len( base ) ) {
-			base = "https://artifacts.lucee.org/extension-logos/";
+			base = "https://artifacts.lucee.org/";
 		}
 		if ( Right( base, 1 ) != "/" ) {
 			base &= "/";
