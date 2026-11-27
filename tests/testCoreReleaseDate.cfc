@@ -148,10 +148,10 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 
 				expect( svc.get( "8.0.0.310" ) ).toBe( "" );
 				expect( heads.n ).toBe( 1 );
-				clock.now = DateAdd( "n", 5, clock.now );
+				clock.now = DateAdd( "s", 299, clock.now );
 				expect( svc.get( "8.0.0.310" ) ).toBe( "" );
 				expect( heads.n ).toBe( 1 );
-				clock.now = DateAdd( "s", 1, clock.now );
+				clock.now = DateAdd( "s", 1, clock.now ); // 300 seconds: the miss expires
 				expect( svc.get( "8.0.0.310" ) ).toBe( "" );
 				expect( heads.n ).toBe( 2 );
 			});
