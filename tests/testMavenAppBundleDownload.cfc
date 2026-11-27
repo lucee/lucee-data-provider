@@ -58,11 +58,14 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( mappings[ "org.h2" ].artifact ).toBe( "h2" );
 			});
 
-			it( title="rawSearchPaths for org.h2 1.3.172 is the Central com.h2database/h2 layout", body=function() {
+			it( title="rawSearchPaths for org.h2 1.3.172 is the Central com.h2database/h2 layout first, then org.lucee:org.h2", body=function() {
 				var matcher = new services.legacy.MavenMatcher();
 				var paths = matcher.rawSearchPaths( "org.h2", "1.3.172" );
 
-				expect( paths ).toBe( [ "/com/h2database/h2/1.3.172/h2-1.3.172.jar" ] );
+				expect( paths ).toBe( [
+					  "/com/h2database/h2/1.3.172/h2-1.3.172.jar"
+					, "/org/lucee/org.h2/1.3.172/org.h2-1.3.172.jar"
+				] );
 			});
 
 			it( title="extensionFileNamesForBundle maps org.lucee.chart.extension to chart-extension-2.0.0.1.lex", body=function() {
