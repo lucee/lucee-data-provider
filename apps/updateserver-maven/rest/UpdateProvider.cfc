@@ -861,21 +861,19 @@ component {
 	remote function getDate(required string version restargsource="Path")
 		httpmethod="GET" restpath="getdate/{version}" {
 		_bind();
-		var mr=new services.legacy.MavenRepo();
-		try{
-			var info=mr.get(version,true);
-			if(!isNull(info.sources.pom.date))
-				return parseDateTime(info.sources.pom.date);
-			else if(!isNull(info.sources.jar.date))
-				return parseDateTime(info.sources.jar.date);
-		} catch(e) {
-			//systemOutput(e.stackTrace, true);
+		try {
+			return application.coreReleaseDate.get( arguments.version );
+		}
+		catch ( CoreReleaseDate.NotFound e ) {
+			header statuscode="404" statustext="Not Found";
+			return "";
+		}
+		catch ( e ) {
 			var mess=  "maven.getDate() threw " & left(cfcatch.message,100);
 			logger(text=mess, type="error");
 			systemOutput(mess, true, true );
+			return "";
 		}
-
-		return "";
 	}
 
 	remote function readGetOnlyForDebugging(
