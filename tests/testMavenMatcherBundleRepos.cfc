@@ -58,6 +58,15 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( ArrayToList( paths ) ).notToInclude( ".lex" );
 			});
 
+			it( title="bundles that ship only inside a lex (org.lucee.axis.extension SNAPSHOT, mssqljdbc4) are looked up as org.lucee:<Bundle-SymbolicName>", body=function() {
+				// the layout scripts/publish-lex-bundles-to-r2.mjs writes
+				var matcher = new services.legacy.MavenMatcher();
+				expect( matcher.rawSearchPaths( "org.lucee.axis.extension", "1.4.0.27-SNAPSHOT" ) )
+					.toInclude( "/org/lucee/org.lucee.axis.extension/1.4.0.27-SNAPSHOT/org.lucee.axis.extension-1.4.0.27-SNAPSHOT.jar" );
+				expect( matcher.rawSearchPaths( "mssqljdbc4", "4.0.2206.100" ) )
+					.toInclude( "/org/lucee/mssqljdbc4/4.0.2206.100/mssqljdbc4-4.0.2206.100.jar" );
+			});
+
 			it( title="the raw search asks Maven Central first and the Lucee repository after it", body=function() {
 				var repos = new services.legacy.MavenMatcher().rawSearchRepositories();
 				expect( repos[ 1 ] ).toBe( "https://repo1.maven.org/maven2" );
