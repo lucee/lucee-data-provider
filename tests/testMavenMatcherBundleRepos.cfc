@@ -20,7 +20,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 					expect( mappings[ bundleName ].artifact ).toBe( bundleName );
 				}
 				var paths = matcher.rawSearchPaths( "bcprov-lts8on", "2.73.4" );
-				expect( paths ).toInclude( "/org/bouncycastle/bcprov-lts8on/2.73.4/bcprov-lts8on-2.73.4.jar" );
+				expect( paths[ 1 ] ).toBe( "/org/bouncycastle/bcprov-lts8on/2.73.4/bcprov-lts8on-2.73.4.jar" );
 			});
 
 			it( title="looks for a bundle that is on no public repository as org.lucee:<Bundle-SymbolicName>", body=function() {
@@ -30,6 +30,14 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				// org.lucee.* names keep their own guesses, no doubled org/lucee/org.lucee.* path
 				var own = matcher.rawSearchPaths( "org.lucee.janinocc", "3.1.9" );
 				expect( ArrayToList( own ) ).notToInclude( "/org/lucee/org.lucee.janinocc/" );
+			});
+
+			it( title="a mapped bundle in a Lucee build (e.g. xmpcore 5.1.2.0002L) is also looked up as org.lucee:<Bundle-SymbolicName>", body=function() {
+				var paths = new services.legacy.MavenMatcher().rawSearchPaths( "xmpcore", "5.1.2.0002L" );
+				expect( paths ).toBe( [
+					  "/com/adobe/xmp/xmpcore/5.1.2.0002L/xmpcore-5.1.2.0002L.jar"
+					, "/org/lucee/xmpcore/5.1.2.0002L/xmpcore-5.1.2.0002L.jar"
+				] );
 			});
 
 			it( title="the raw search asks Maven Central first and the Lucee repository after it", body=function() {

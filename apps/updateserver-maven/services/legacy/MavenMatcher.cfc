@@ -150,6 +150,10 @@
 			ArrayAppend( uris, "/" & Replace( mvnId.group, '.', '/', 'all' ) & "/" & mvnId.artifact
 				& "/" & arguments.bundleVersion
 				& "/" & mvnId.artifact & "-" & arguments.bundleVersion & ".jar" );
+			// a Lucee build of a mapped bundle (e.g. xmpcore 5.1.2.0002L) is not in the mapped group, it is published as org.lucee:<Bundle-SymbolicName>
+			if ( Left( arguments.bundleName, 10 ) != "org.lucee." && mvnId.group != "org.lucee" ) {
+				ArrayAppend( uris, _luceeBundlePath( arguments.bundleName, arguments.bundleVersion ) );
+			}
 			return uris;
 		}
 
@@ -167,8 +171,7 @@
 		// a bundle that is on no public Maven repository is published as org.lucee:<Bundle-SymbolicName>:<Bundle-Version>
 		// (the "Upload Maven jar" workflow of lucee/Lucee), e.g. org.lucee:apache.lucene.analyzers:2.4.1
 		if ( Left( arguments.bundleName, 10 ) != "org.lucee." ) {
-			ArrayAppend( uris, "/org/lucee/" & arguments.bundleName & "/" & arguments.bundleVersion
-				& "/" & arguments.bundleName & "-" & arguments.bundleVersion & ".jar" );
+			ArrayAppend( uris, _luceeBundlePath( arguments.bundleName, arguments.bundleVersion ) );
 		}
 
 		// org.lucee.* OSGi names are often published as org.lucee:<dashed-name>
@@ -187,6 +190,12 @@
 		}
 
 		return uris;
+	}
+
+	// org.lucee:<Bundle-SymbolicName>:<Bundle-Version>, the layout of the "Upload Maven jar" workflow of lucee/Lucee
+	private string function _luceeBundlePath( required string bundleName, required string bundleVersion ) {
+		return "/org/lucee/" & arguments.bundleName & "/" & arguments.bundleVersion
+			& "/" & arguments.bundleName & "-" & arguments.bundleVersion & ".jar";
 	}
 
 	private struct function fetchMavenMetaData( required string metaFile, required string baseUrl ){

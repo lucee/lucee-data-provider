@@ -20,6 +20,14 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 				expect( u ).toBe( "https://maven.lucee-services.com/org/lucee/apache.lucene.analyzers/2.4.1/apache.lucene.analyzers-2.4.1.jar" );
 			});
 
+			it( title="Lucee builds of the bundles of older stable releases resolve on the Lucee repository", body=function() {
+				var matcher = new services.legacy.MavenMatcher();
+				loop array=[ [ "fusiondebug.api.server", "1.0.20" ], [ "xmpcore", "5.1.2.0002L" ], [ "metadata.extractor", "2.8.1.0002L" ], [ "nu.xom", "1.2.5.osgi" ] ] item="local.b" {
+					var u = matcher.findBundleUrl( bundleName=b[ 1 ], bundleVersion=b[ 2 ], rawSearch=true );
+					expect( u ).toBe( "https://maven.lucee-services.com/org/lucee/#b[ 1 ]#/#b[ 2 ]#/#b[ 1 ]#-#b[ 2 ]#.jar" );
+				}
+			});
+
 		});
 	}
 
