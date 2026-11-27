@@ -22,6 +22,7 @@ on:
   pull_request:
     paths:
       - 'scripts/extension-bundles-to-r2*'
+      - 'scripts/publish-lex-bundles-to-r2.mjs'
       - '.github/workflows/extension-bundles-to-r2.yml'
 
 # two runs could race for the same keys (harmless with If-None-Match, but the summaries would be confusing)
@@ -41,7 +42,7 @@ jobs:
         with:
           node-version: '22'
       - name: Unit tests
-        run: node --test scripts/extension-bundles-to-r2.test.mjs
+        run: node --test scripts/extension-bundles-to-r2.test.mjs scripts/publish-lex-bundles-to-r2.test.mjs
 
   publish:
     if: github.event_name == 'workflow_dispatch'
