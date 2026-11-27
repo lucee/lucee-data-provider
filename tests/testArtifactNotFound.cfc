@@ -57,6 +57,33 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( services.ArtifactNotFound::PREFIX() ).toBe( "ARTIFACT_NOT_FOUND" );
 			});
 
+			it( title="redactQueryString replaces webSecurityKey and serverSecurityKey values and leaves other params", body=function() {
+				var qs = "webId=abc&webSecurityKey=secret-web&serverId=def&serverSecurityKey=secret-server&allowRedirect=true&jv=11.0.20";
+				var redacted = services.ArtifactNotFound::redactQueryString( qs );
+
+				expect( redacted ).toInclude( "webId=abc" );
+				expect( redacted ).toInclude( "serverId=def" );
+				expect( redacted ).toInclude( "allowRedirect=true" );
+				expect( redacted ).toInclude( "jv=11.0.20" );
+				expect( redacted ).toInclude( "webSecurityKey=REDACTED" );
+				expect( redacted ).toInclude( "serverSecurityKey=REDACTED" );
+				expect( redacted ).notToInclude( "secret-web" );
+				expect( redacted ).notToInclude( "secret-server" );
+			});
+
+			it( title="redactQueryString is case-insensitive on the security-key param names", body=function() {
+				var redacted = services.ArtifactNotFound::redactQueryString( "WEBSECURITYKEY=Abc&ServerSecurityKey=Def" );
+
+				expect( redacted ).toBe( "WEBSECURITYKEY=REDACTED&ServerSecurityKey=REDACTED" );
+				expect( redacted ).notToInclude( "Abc" );
+				expect( redacted ).notToInclude( "Def" );
+			});
+
+			it( title="redactQueryString leaves an empty or already-safe query string unchanged", body=function() {
+				expect( services.ArtifactNotFound::redactQueryString( "" ) ).toBe( "" );
+				expect( services.ArtifactNotFound::redactQueryString( "allowRedirect=true" ) ).toBe( "allowRedirect=true" );
+			});
+
 		});
 	}
 

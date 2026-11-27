@@ -100,6 +100,7 @@
     "org.apache.sanselan.sanselan": { "artifact": "sanselan", "group": "org.apache.sanselan" },
     "org.apache.tika.core": { "artifact": "tika-core", "group": "org.apache.tika" },
     "org.apache.tika.parsers": { "artifact": "tika-parsers", "group": "org.apache.tika" },
+    "org.h2": { "artifact": "h2", "group": "com.h2database" },
     "org.hsqldb.hsqldb": { "artifact": "hsqldb", "group": "org.hsqldb" },
     "org.jfree.chart": { "artifact": "chart", "group": "org.jfree" },
     "org.jfree.common": { "artifact": "common", "group": "org.jfree" },
