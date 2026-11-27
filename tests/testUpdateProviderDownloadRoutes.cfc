@@ -61,11 +61,10 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( variables.extSrc ).toInclude( 'header name="Allow" value="GET, HEAD, OPTIONS"' );
 			});
 
-			it( title="a bundle with a public URL is a 302 before a jar on the disk of this instance is served", body=function() {
-				var redirectAt = Find( "if ( Len( bundleUrl ) && arguments.allowRedirect )", variables.src );
-				var fileAt     = Find( "_serveLocalBundleFile( bundleFile", variables.src );
-				expect( redirectAt ).toBeGT( 0 );
-				expect( fileAt ).toBeGT( redirectAt );
+			it( title="a bundle is a 302 to its URL or a 404, never a jar served from the disk of this instance", body=function() {
+				expect( variables.src ).toInclude( "return _relocateForDowload( bundleUrl, arguments.bundleVersion );" );
+				expect( FindNoCase( "_serveLocalBundleFile", variables.src ) ).toBe( 0 );
+				expect( FindNoCase( "bundle.file", variables.src ) ).toBe( 0 );
 				// the redirect can be cached by the client
 				expect( variables.src ).toInclude( "services.DownloadCaching::forRedirect( arguments.bundleVersion )" );
 			});

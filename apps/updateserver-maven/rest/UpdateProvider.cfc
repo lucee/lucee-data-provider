@@ -409,9 +409,10 @@ component {
 	 * function to load 3rd party Bundle file, for example "/antlr/2.7.6"
 	 * relocate to a download URL or directly serve the download as a binary (application/zip).
 	 *
-	 * A 302 to the public URL of the jar whenever there is one (Maven Central, maven.lucee-services.com, ...), also for
-	 * a jar that was extracted from a lex when the same bundle has a public URL (see BundleDownloadService). The jar is
-	 * only served by this instance when there is no public URL, or when the client asks for that (allowRedirect=false).
+	 * A 302 to the jar on Maven Central or the Lucee repository (maven.lucee-services.com), or a 404. A bundle is
+	 * never extracted from an extension .lex: a jar that is only inside a lex is published as
+	 * org.lucee:<Bundle-SymbolicName>:<Bundle-Version> with the "Upload Maven jar" workflow of lucee/Lucee.
+	 * allowRedirect=false streams the jar from its URL instead of the redirect.
 	 * HEAD answers like GET (Tomcat sends no body), OPTIONS answers the allowed methods.
 	 *
 	 * @httpmethod GET,HEAD,OPTIONS
@@ -434,20 +435,16 @@ component {
 			return;
 		}
 
-		// A .lex is not an OSGi bundle; extraction should have already replaced it.
-		var bundleUrl  = Len( bundle.url ?: "" ) && ListLast( ListFirst( bundle.url, "?" ), "." ) != "lex" ? bundle.url : "";
-		var bundleFile = Len( bundle.file ?: "" ) && FileExists( bundle.file ) ? bundle.file : "";
-
-		if ( Len( bundleUrl ) && arguments.allowRedirect ) {
+		// a .lex is not an OSGi bundle
+		var bundleUrl = Len( bundle.url ?: "" ) && ListLast( ListFirst( bundle.url, "?" ), "." ) != "lex" ? bundle.url : "";
+		if ( !Len( bundleUrl ) ) {
+			_doBundle404( argumentCollection=arguments );
+			return;
+		}
+		if ( arguments.allowRedirect ) {
 			return _relocateForDowload( bundleUrl, arguments.bundleVersion );
 		}
-		if ( Len( bundleFile ) ) {
-			return _serveLocalBundleFile( bundleFile, arguments.bundleName, arguments.bundleVersion, bundle.cacheExpires ?: "" );
-		}
-		if ( Len( bundleUrl ) ) {
-			return _serveBundleUrlLocally( bundleUrl, bundle.cacheExpires ?: "" );
-		}
-		_doBundle404( argumentCollection=arguments );
+		return _serveBundleUrlLocally( bundleUrl, bundle.cacheExpires ?: "" );
 	}
 
 	/**
@@ -462,19 +459,6 @@ component {
 		header name="Allow" value="GET, HEAD, OPTIONS";
 		header name="Cache-Control" value="public, max-age=86400";
 		return true;
-	}
-
-	private function _serveLocalBundleFile( required string file, required string bundleName, required string bundleVersion, cacheExpires="" ) {
-		var expires  = IsDate( arguments.cacheExpires ) ? arguments.cacheExpires : DateAdd( "d", 30, Now() );
-		var fileName = arguments.bundleName & "-" & arguments.bundleVersion & ".jar";
-
-		header name="cache-control" value="public, max-age=#DateDiff( "s", Now(), expires )#";
-		header name="Content-Disposition" value="attachment; filename=""#fileName#""";
-		content
-			reset      = true
-			file       = arguments.file
-			type       = "application/java-archive"
-			deletefile = false;
 	}
 
 	private function _relocateForDowload( required string bundleUrl, string bundleVersion="" ) {
