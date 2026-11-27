@@ -11,6 +11,11 @@
 // ships inside a .lex (for example org.lucee.axis.extension or mssqljdbc4, which were only in the
 // legacy S3 bucket extension-downloads) becomes resolvable once its jar is at that key in R2.
 //
+// This is the one-extension variant of scripts/publish-lex-bundles-to-r2.mjs (which walks every .lex
+// in a bucket); it reuses that script's .lex reading (zipEntries, bundlesOfLex, parseManifest) and target
+// layout (bundleKey, pomFor), and adds: an extension input, the provider check, required bundles from the
+// extension manifest, checksums, conditional (never overwriting) writes and a summary table.
+//
 // What the script does:
 //   1. downloads the .lex (Maven coordinates groupId:artifactId:version on MAVEN_REPO, or an https URL)
 //   2. reads the bundles it ships (jars/*.jar, Bundle-SymbolicName / Bundle-Version of each manifest)
@@ -36,8 +41,9 @@
 //   EXTENSION=org.lucee:axis-extension:1.4.0.27-SNAPSHOT node scripts/extension-bundles-to-r2.mjs
 
 import { createHash, createHmac } from "node:crypto";
-import { inflateRawSync } from "node:zlib";
 import { appendFileSync } from "node:fs";
+// the .lex reading and the target layout are shared with the bulk script (all .lex files in a bucket)
+import { zipEntries, zipRead, parseManifest, bundlesOfLex, bundleKey, pomFor, dirPrefix } from "./publish-lex-bundles-to-r2.mjs";
 
 export const USER_AGENT = "lucee-gian-ci-check";
 const MAX_LEX_BYTES = 256 * 1024 * 1024;
@@ -69,67 +75,7 @@ export function lexUrl(input, repo = "https://maven.lucee-services.com") {
 	return `${repo.replace(/\/+$/, "")}/${g.replaceAll(".", "/")}/${a}/${ver}/${a}-${ver}.lex`;
 }
 
-// ---------------------------------------------------------------- zip
-
-/** Map of entry name -> () => Buffer, from the central directory (stored and deflated entries). */
-export function readZip(buf) {
-	let eocd = -1;
-	for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65535); i--) {
-		if (buf.readUInt32LE(i) === 0x06054b50) {
-			eocd = i;
-			break;
-		}
-	}
-	if (eocd < 0) throw new Error("not a zip file (no end of central directory)");
-	const count = buf.readUInt16LE(eocd + 10);
-	let p = buf.readUInt32LE(eocd + 16);
-	const entries = new Map();
-	for (let n = 0; n < count; n++) {
-		if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error("broken zip central directory");
-		const method = buf.readUInt16LE(p + 10);
-		const csize = buf.readUInt32LE(p + 20);
-		const nameLen = buf.readUInt16LE(p + 28);
-		const extraLen = buf.readUInt16LE(p + 30);
-		const commentLen = buf.readUInt16LE(p + 32);
-		const local = buf.readUInt32LE(p + 42);
-		const name = buf.toString("utf8", p + 46, p + 46 + nameLen);
-		p += 46 + nameLen + extraLen + commentLen;
-		if (name.endsWith("/")) continue;
-		entries.set(name, () => {
-			if (buf.readUInt32LE(local) !== 0x04034b50) throw new Error(`broken zip entry ${name}`);
-			const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
-			const data = buf.subarray(start, start + csize);
-			if (method === 0) return Buffer.from(data);
-			if (method === 8) return inflateRawSync(data);
-			throw new Error(`zip entry ${name} uses unsupported compression ${method}`);
-		});
-	}
-	return entries;
-}
-
 // ---------------------------------------------------------------- manifests
-
-/** Main section of a MANIFEST.MF as { header: value } (continuation lines joined). */
-export function parseManifest(text) {
-	const out = {};
-	const lines = String(text).replace(/\r\n?/g, "\n").replace(/\n /g, "").split("\n");
-	for (const line of lines) {
-		if (!line.trim()) break; // end of the main section
-		const i = line.indexOf(":");
-		if (i > 0) out[line.slice(0, i).trim()] = line.slice(i + 1).trim();
-	}
-	return out;
-}
-
-/** Bundle-SymbolicName (without directives) and Bundle-Version of a jar, null when it is not a bundle. */
-export function bundleOfJar(jarBuf) {
-	const read = readZip(jarBuf).get("META-INF/MANIFEST.MF");
-	if (!read) return null;
-	const mf = parseManifest(read().toString("utf8"));
-	const name = (mf["Bundle-SymbolicName"] ?? "").split(";")[0].trim();
-	if (!name) return null;
-	return { name, version: (mf["Bundle-Version"] ?? "0.0.0").trim() };
-}
 
 const NAME_KEYS = ["bundleName", "bundle-name", "bundlename"];
 const VERSION_KEYS = ["bundleVersion", "bundle-version", "bundleversion"];
@@ -167,28 +113,18 @@ export function requiredBundles(manifest) {
 
 /** Everything the extension needs or ships, one entry per name@version. */
 export function collectBundles(lexBuf) {
-	const zip = readZip(lexBuf);
-	const mfRead = zip.get("META-INF/MANIFEST.MF");
-	if (!mfRead) throw new Error("the .lex has no META-INF/MANIFEST.MF");
-	const manifest = parseManifest(mfRead().toString("utf8"));
+	const entries = zipEntries(lexBuf);
+	const mfEntry = entries.find((e) => e.name.toUpperCase() === "META-INF/MANIFEST.MF");
+	if (!mfEntry) throw new Error("the .lex has no META-INF/MANIFEST.MF");
+	const manifest = parseManifest(zipRead(lexBuf, mfEntry).toString("utf8"));
 	const bundles = new Map();
-	const notBundles = [];
-	for (const [entry, read] of zip) {
-		if (!/^jars\/[^/]+\.jar$/i.test(entry)) continue;
-		const jar = read();
-		let b = null;
-		try {
-			b = bundleOfJar(jar);
-		} catch {
-			b = null;
-		}
-		if (!b) {
-			notBundles.push(entry);
-			continue;
-		}
+	const shipped = bundlesOfLex(lexBuf);
+	for (const b of shipped) {
 		const key = `${b.name}@${b.version}`;
-		bundles.set(key, { ...b, shipped: true, required: false, entry, jar });
+		if (!bundles.has(key)) bundles.set(key, { name: b.name, version: b.version, shipped: true, required: false, entry: b.path, jar: b.data });
 	}
+	const bundlePaths = new Set(shipped.map((b) => b.path));
+	const notBundles = entries.map((e) => e.name).filter((n) => /^jars\/[^/]+\.jar$/i.test(n) && !bundlePaths.has(n));
 	for (const r of requiredBundles(manifest)) {
 		const key = `${r.name}@${r.version}`;
 		if (bundles.has(key)) bundles.get(key).required = true;
@@ -203,40 +139,23 @@ export function collectBundles(lexBuf) {
 
 // ---------------------------------------------------------------- target layout
 
-/** Maven-layout key of a bundle as org.lucee:<Bundle-SymbolicName>:<Bundle-Version>. */
-export function bundleBase(name, version) {
-	if (!SAFE.test(name) || !SAFE.test(version)) return null;
-	return `org/lucee/${name}/${version}/${name}-${version}`;
-}
-
-export function minimalPom(name, version) {
-	return `<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-  <modelVersion>4.0.0</modelVersion>
-  <groupId>org.lucee</groupId>
-  <artifactId>${name}</artifactId>
-  <version>${version}</version>
-  <packaging>jar</packaging>
-  <description>OSGi bundle ${name} ${version}, published from a Lucee extension (.lex) so the update provider can resolve it</description>
-</project>
-`;
-}
-
 const digest = (alg, body) => createHash(alg).update(body).digest("hex");
 
 /** The objects of one bundle, jar first: jar, pom and a .sha1 / .md5 of each. */
+// layout: bundleKey of publish-lex-bundles-to-r2.mjs (org.lucee:<BSN>:<version>, plain key also for SNAPSHOTs)
 export function planObjects(name, version, jar, prefix = "") {
-	const base = bundleBase(name, version);
-	if (!base) throw new Error(`[${name}] / [${version}] cannot be used in a Maven path`);
-	const pom = Buffer.from(minimalPom(name, version));
+	const jarKey = bundleKey(name, version, "jar", prefix);
+	if (!jarKey) throw new Error(`[${name}] / [${version}] cannot be used in a Maven path`);
+	const base = jarKey.slice(0, -".jar".length);
+	const pom = Buffer.from(pomFor(name, version));
 	const objects = [];
 	for (const [ext, body, type] of [
 		["jar", jar, "application/java-archive"],
 		["pom", pom, "application/xml"]
 	]) {
-		objects.push({ key: `${prefix}${base}.${ext}`, body, type });
-		objects.push({ key: `${prefix}${base}.${ext}.sha1`, body: Buffer.from(digest("sha1", body)), type: "text/plain" });
-		objects.push({ key: `${prefix}${base}.${ext}.md5`, body: Buffer.from(digest("md5", body)), type: "text/plain" });
+		objects.push({ key: `${base}.${ext}`, body, type });
+		objects.push({ key: `${base}.${ext}.sha1`, body: Buffer.from(digest("sha1", body)), type: "text/plain" });
+		objects.push({ key: `${base}.${ext}.md5`, body: Buffer.from(digest("md5", body)), type: "text/plain" });
 	}
 	return objects;
 }
@@ -297,8 +216,7 @@ export function r2Config(env) {
 	const g = (k) => (env[k] ?? "").trim();
 	const missing = ["R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"].filter((k) => !g(k));
 	if (missing.length) throw new Error(`missing ${missing.join(", ")} (needed when DRY_RUN=false)`);
-	let prefix = g("R2_PREFIX").replace(/^\/+/, "");
-	if (prefix && !prefix.endsWith("/")) prefix += "/";
+	const prefix = dirPrefix(g("R2_PREFIX"));
 	return { endpoint: g("R2_ENDPOINT").replace(/\/+$/, ""), bucket: g("R2_BUCKET"), accessKeyId: g("R2_ACCESS_KEY_ID"), secretAccessKey: g("R2_SECRET_ACCESS_KEY"), prefix };
 }
 
@@ -359,7 +277,7 @@ export async function run(env = process.env, log = console.log) {
 	const provider = (env.PROVIDER_URL || "https://update.lucee.org/rest/update/provider/download/").trim();
 	const url = lexUrl(env.EXTENSION, repo);
 	const r2 = dryRun ? null : r2Config(env);
-	const prefix = r2?.prefix ?? (env.R2_PREFIX ?? "").trim();
+	const prefix = r2?.prefix ?? dirPrefix(env.R2_PREFIX ?? "");
 
 	log(`extension: ${redact(url)}${dryRun ? " (dry run, nothing is written)" : ""}`);
 	const lex = await download(url);
@@ -396,16 +314,16 @@ export async function run(env = process.env, log = console.log) {
 				row.detail = "provider 404 and the jar is not in the .lex";
 				continue;
 			}
-			const base = bundleBase(b.name, b.version);
-			if (!base) {
+			const jarPath = bundleKey(b.name, b.version);
+			if (!jarPath) {
 				row.status = "unresolvable";
 				row.detail = "name or version not usable in a Maven path";
 				continue;
 			}
 			// the provider remembers a 404 for 10 minutes, the repository may already have it
-			if (await repoHas(repo, `${base}.jar`)) {
+			if (await repoHas(repo, jarPath)) {
 				row.status = "present";
-				row.detail = `in ${repo}/${base}.jar (provider still answers 404, it caches misses for 10 minutes)`;
+				row.detail = `in ${repo}/${jarPath} (provider still answers 404, it caches misses for 10 minutes)`;
 				continue;
 			}
 			const objects = planObjects(b.name, b.version, b.jar, prefix);
@@ -421,7 +339,7 @@ export async function run(env = process.env, log = console.log) {
 			}
 			let written = 0;
 			for (const o of objects) if (await r2PutIfAbsent(r2, o)) written++;
-			const visible = await repoHas(repo, `${base}.jar`).catch(() => false);
+			const visible = await repoHas(repo, jarPath).catch(() => false);
 			row.status = "uploaded";
 			row.detail = `${objects[0].key}, ${written}/${objects.length} objects written${visible ? ", served by " + repo : ", not visible on " + repo + " yet"}`;
 		} catch (e) {

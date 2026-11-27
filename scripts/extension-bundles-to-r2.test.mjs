@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import { deflateRawSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import {
-	lexUrl, redact, readZip, parseManifest, bundleOfJar, requiredBundles, collectBundles,
-	bundleBase, planObjects, providerState, signedRequest, r2Config, summaryTable, run, USER_AGENT
+	lexUrl, redact, requiredBundles, collectBundles, planObjects, providerState, signedRequest, r2Config, summaryTable, run, USER_AGENT
 } from "./extension-bundles-to-r2.mjs";
+import { parseManifest, bundleKey } from "./publish-lex-bundles-to-r2.mjs";
 
 // minimal zip writer (deflated entries) for the fixtures
 function zip(files) {
@@ -62,18 +62,6 @@ test("redact never prints a query string (presigned URLs)", () => {
 	assert.equal(redact("https://h/p.jar"), "https://h/p.jar");
 });
 
-test("parseManifest joins continuation lines and stops at the main section", () => {
-	const mf = parseManifest("Bundle-SymbolicName: org.lucee.very.long\r\n .name\r\nBundle-Version: 1.0\r\n\r\nName: x\r\nBundle-Version: 2\r\n");
-	assert.equal(mf["Bundle-SymbolicName"], "org.lucee.very.long.name");
-	assert.equal(mf["Bundle-Version"], "1.0");
-});
-
-test("bundleOfJar strips directives, null without Bundle-SymbolicName", () => {
-	assert.deepEqual(bundleOfJar(jar("a.b;singleton:=true", "1.2.3")), { name: "a.b", version: "1.2.3" });
-	assert.equal(bundleOfJar(zip({ "META-INF/MANIFEST.MF": "Manifest-Version: 1.0\n" })), null);
-	assert.throws(() => readZip(Buffer.from("not a zip at all, definitely not")), /not a zip/);
-});
-
 test("requiredBundles reads jdbc, webservice and cache entries", () => {
 	const r = requiredBundles(parseManifest(`${AXIS_MF}jdbc: "[{'id':'mssql','class':'com.microsoft.sqlserver.jdbc.SQLServerDriver','bundleName':'mssqljdbc4','bundleVersion':'4.0.2206.100'}]"
 cache: "[{'class':'x.Y','bundle-name':'org.lucee.ehcache','bundle-version':'2.10.0.33'}]"
@@ -91,6 +79,8 @@ test("collectBundles merges shipped and required bundles", () => {
 	assert.ok(ext.shipped && ext.required && ext.jar);
 	const ns = bundles.find((b) => b.name === "not.shipped");
 	assert.ok(!ns.shipped && ns.required && ns.jar === null);
+	// shipped jar with a directive in Bundle-SymbolicName (read by bundlesOfLex)
+	assert.ok(collectBundles(axisLex()).bundles.some((b) => b.name === "org.lucee.axis.extension" && b.shipped));
 	assert.equal(collectBundles(axisLex()).notBundles[0], "jars/plain.jar");
 });
 
@@ -108,7 +98,7 @@ test("planObjects: org.lucee:<BSN>:<version>, SNAPSHOT on the plain key, checksu
 	assert.equal(objs[1].body.toString(), createHash("sha1").update(body).digest("hex"));
 	assert.equal(objs[2].body.toString(), createHash("md5").update(body).digest("hex"));
 	assert.match(objs[3].body.toString(), /<artifactId>org.lucee.axis.extension<\/artifactId>/);
-	assert.equal(bundleBase("../evil", "1"), null);
+	assert.equal(bundleKey("../evil", "1"), "");
 	assert.throws(() => planObjects("a b", "1", body), /Maven path/);
 });
 
