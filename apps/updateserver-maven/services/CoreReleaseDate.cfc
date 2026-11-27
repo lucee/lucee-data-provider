@@ -10,6 +10,7 @@
  * - not in the list: 404, no network request
  * - lastModified on the catalog detail: that date
  * - otherwise one HEAD request, with a 5 second timeout
+ * - no version list at all (catalog failed): the HEAD request decides
  *
  * Results stay in memory: releases indefinitely, SNAPSHOT versions for an
  * hour, and a listed version that still has no date for 5 minutes.
@@ -41,6 +42,10 @@ component {
 	 * The release date of a listed version, or an empty string when the
 	 * version is listed but the date is not known yet. Throws
 	 * CoreReleaseDate.NotFound when the version is not in the catalog.
+	 *
+	 * When the catalog has no version list at all (LuceeVersionsList failed),
+	 * nothing can be ruled out, so the HEAD request decides and a miss is not
+	 * cached, the list is retried on the next request.
 	 */
 	public any function get( required string version ) {
 		var ver    = Trim( arguments.version );
@@ -50,14 +55,18 @@ component {
 			return cached;
 		}
 
-		if ( !_isListed( ver ) ) {
+		var list   = variables.catalog.getVersionList();
+		var noList = !IsArray( list ) || ArrayIsEmpty( list );
+
+		if ( !noList && !_isListed( list, ver ) ) {
 			throw( type="CoreReleaseDate.NotFound", message="Version [#ver#] is not in the catalog" );
 		}
 
-		var date = _dateFromCatalog( ver );
+		var detail = noList ? {} : _detail( ver );
+		var date   = _asDate( detail.lastModified ?: "" );
 
 		if ( !IsDate( date ) ) {
-			date = _dateFromHead( ver );
+			date = _dateFromHead( ver, detail );
 		}
 
 		if ( IsDate( date ) ) {
@@ -65,7 +74,9 @@ component {
 			return date;
 		}
 
-		_store( ver, "", variables.missingTtl );
+		if ( !noList ) {
+			_store( ver, "", variables.missingTtl );
+		}
 		return "";
 	}
 
@@ -94,10 +105,8 @@ component {
 		};
 	}
 
-	private boolean function _isListed( required string version ) {
-		var list = variables.catalog.getVersionList();
-
-		for ( var entry in list ) {
+	private boolean function _isListed( required array list, required string version ) {
+		for ( var entry in arguments.list ) {
 			if ( IsSimpleValue( entry ) && entry == arguments.version ) {
 				return true;
 			}
@@ -109,26 +118,18 @@ component {
 		return false;
 	}
 
-	private any function _dateFromCatalog( required string version ) {
+	private struct function _detail( required string version ) {
 		try {
 			var detail = variables.catalog.getVersionDetail( arguments.version );
 		} catch ( any e ) {
-			return "";
+			return {};
 		}
 
-		if ( !IsStruct( detail ) ) {
-			return "";
-		}
-
-		return _asDate( detail.lastModified ?: "" );
+		return IsStruct( detail ) ? detail : {};
 	}
 
-	private any function _dateFromHead( required string version ) {
-		var fileUrl = _headUrl( arguments.version );
-
-		if ( !Len( fileUrl ) ) {
-			return "";
-		}
+	private any function _dateFromHead( required string version, required struct detail ) {
+		var fileUrl = _headUrl( arguments.version, arguments.detail );
 
 		try {
 			var result = variables.httpClient.head( fileUrl, variables.timeout );
@@ -144,20 +145,15 @@ component {
 		return _asDate( result.lastModified ?: "" );
 	}
 
-	private string function _headUrl( required string version ) {
-		try {
-			var detail = variables.catalog.getVersionDetail( arguments.version );
-			if ( IsStruct( detail ) ) {
-				for ( var key in [ "pom", "jar" ] ) {
-					if ( Len( detail[ key ] ?: "" ) && IsSimpleValue( detail[ key ] ) && ReFindNoCase( "^https?://", detail[ key ] ) ) {
-						return detail[ key ];
-					}
-				}
+	private string function _headUrl( required string version, required struct detail ) {
+		for ( var key in [ "pom", "jar" ] ) {
+			var value = arguments.detail[ key ] ?: "";
+			if ( IsSimpleValue( value ) && ReFindNoCase( "^https?://", value ) ) {
+				return value;
 			}
-		} catch ( any e ) {
-			// fall through to the Maven layout
 		}
 
+		// fall through to the Maven layout
 		return variables.mixedRepo & "org/lucee/lucee/" & arguments.version & "/lucee-" & arguments.version & ".pom";
 	}
 

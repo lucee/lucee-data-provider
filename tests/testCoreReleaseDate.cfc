@@ -156,6 +156,44 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( heads.n ).toBe( 2 );
 			});
 
+			it( title="reads the catalog detail only once when it has neither a date nor a file URL", body=function() {
+				var calls = { detail=0, head=0 };
+				var svc = _new(
+					  list   = [ "7.1.2.195" ]
+					, detail = function( version ) { calls.detail++; return {}; }
+					, head   = function( required string fileUrl, required numeric timeout ) { calls.head++; return { status=404, lastModified="" }; }
+				);
+
+				expect( svc.get( "7.1.2.195" ) ).toBe( "" );
+				expect( calls.detail ).toBe( 1 );
+				expect( calls.head ).toBe( 1 );
+			});
+
+			it( title="an empty version list does not 404, the HEAD request decides and a miss is not cached", body=function() {
+				var calls = { detail=0, head=0 };
+				var date = CreateDateTime( 2025, 10, 31, 9, 8, 4 );
+				var svc = _new(
+					  list   = []
+					, detail = function( version ) { calls.detail++; return {}; }
+					, head   = function( required string fileUrl, required numeric timeout ) {
+						calls.head++;
+						if ( Find( "6.2.3.35", arguments.fileUrl ) ) {
+							return { status=200, lastModified=date };
+						}
+						return { status=404, lastModified="" };
+					}
+				);
+
+				expect( DateCompare( svc.get( "6.2.3.35" ), date ) ).toBe( 0 );
+				expect( DateCompare( svc.get( "6.2.3.35" ), date ) ).toBe( 0 );
+				expect( calls.head ).toBe( 1 );
+
+				expect( svc.get( "6.2.3.34" ) ).toBe( "" );
+				expect( svc.get( "6.2.3.34" ) ).toBe( "" );
+				expect( calls.head ).toBe( 3 );
+				expect( calls.detail ).toBe( 0 );
+			});
+
 		});
 	}
 
