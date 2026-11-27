@@ -46,9 +46,16 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( paths ).toInclude( "/mysql/mysql-connector-java/8.0.19/mysql-connector-java-8.0.19.jar" );
 			});
 
-			it( title="the bundle of an older extension version (redis.extension 2.9.0.3-BETA) is looked up in the lex of org.lucee:redis-extension", body=function() {
+			it( title="the jar of an extension (redis.extension 2.9.0.3-BETA) is looked up as org.lucee:<Bundle-SymbolicName>, never in a lex", body=function() {
 				var paths = new services.legacy.MavenMatcher().rawSearchPaths( "redis.extension", "2.9.0.3-BETA" );
-				expect( paths ).toInclude( "/org/lucee/redis-extension/2.9.0.3-BETA/redis-extension-2.9.0.3-BETA.lex" );
+				expect( paths ).toInclude( "/org/lucee/redis.extension/2.9.0.3-BETA/redis.extension-2.9.0.3-BETA.jar" );
+				expect( ArrayToList( paths ) ).notToInclude( ".lex" );
+			});
+
+			it( title="an org.lucee.* bundle is also looked up as org.lucee:<Bundle-SymbolicName>, never in a lex", body=function() {
+				var paths = new services.legacy.MavenMatcher().rawSearchPaths( "org.lucee.oracle", "23.26.0.0-ojdbc11" );
+				expect( paths ).toInclude( "/org/lucee/org.lucee.oracle/23.26.0.0-ojdbc11/org.lucee.oracle-23.26.0.0-ojdbc11.jar" );
+				expect( ArrayToList( paths ) ).notToInclude( ".lex" );
 			});
 
 			it( title="the raw search asks Maven Central first and the Lucee repository after it", body=function() {

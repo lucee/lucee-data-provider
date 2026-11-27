@@ -249,7 +249,7 @@ component {
 	/**
 	 * provides trial versions ??!
 	 *
-	 * @httpmethod GET
+	 * @httpmethod GET,HEAD,OPTIONS
 	 * @restPath   full/{id}
 	 */
 	remote function getFull(
@@ -259,6 +259,7 @@ component {
 		,          boolean flush   = false  restargsource="url"
 		,          string  type    = "release" restargsource="url" // the type of version to answer with when no version is given
 	) {
+		if ( _answerOptions() ) return;
 		_bind();
 		var ext = _getDetail(
 			  id       = arguments.id
@@ -281,7 +282,7 @@ component {
 	/**
 	 * provides trial versions (not sure what this is - has same logic as /full/{id})
 	 *
-	 * @httpmethod GET
+	 * @httpmethod GET,HEAD,OPTIONS
 	 * @restPath   trial/{id}
 	 */
 	remote function getTrial(
@@ -291,6 +292,7 @@ component {
 		,          boolean flush   = false  restargsource="url"
 		,          string  type    = "release" restargsource="url" // the type of version to answer with when no version is given
 	) {
+		if ( _answerOptions() ) return;
 		_bind();
 		var ext = _getDetail(
 			  id       = arguments.id
@@ -330,6 +332,20 @@ component {
 	 */
 	remote function reset() {
 		_noRefreshNeeded();
+	}
+
+	/**
+	 * OPTIONS on a download route: 204 with the allowed methods, no lookup and no services needed.
+	 */
+	private boolean function _answerOptions() {
+		if ( UCase( cgi.request_method ?: "" ) != "OPTIONS" ) {
+			return false;
+		}
+		content reset=true;
+		header statuscode="204" statustext="No Content";
+		header name="Allow" value="GET, HEAD, OPTIONS";
+		header name="Cache-Control" value="public, max-age=86400";
+		return true;
 	}
 
 	private void function _noRefreshNeeded() {

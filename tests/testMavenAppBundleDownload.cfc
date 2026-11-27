@@ -36,16 +36,16 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 					  "/unmapped-bundle/1.2.3/unmapped-bundle-1.2.3.jar"
 					, "/unmapped-bundle/unmapped-bundle/1.2.3/unmapped-bundle-1.2.3.jar"
 					, "/org/lucee/unmapped-bundle/1.2.3/unmapped-bundle-1.2.3.jar"
-					, "/org/lucee/unmapped-bundle/1.2.3/unmapped-bundle-1.2.3.lex"
 				] );
 			});
 
-			it( title="rawSearchPaths for org.lucee.chart.extension also tries the dashed .lex", body=function() {
+			it( title="rawSearchPaths for org.lucee.chart.extension tries the dashed jar and the Bundle-SymbolicName, never a .lex", body=function() {
 				var matcher = new services.legacy.MavenMatcher();
 				var paths = matcher.rawSearchPaths( "org.lucee.chart.extension", "2.0.0.1" );
 
-				expect( paths ).toInclude( "/org/lucee/chart-extension/2.0.0.1/chart-extension-2.0.0.1.lex" );
+				expect( ArrayToList( paths ) ).notToInclude( ".lex" );
 				expect( paths ).toInclude( "/org/lucee/chart-extension/2.0.0.1/chart-extension-2.0.0.1.jar" );
+				expect( paths ).toInclude( "/org/lucee/org.lucee.chart.extension/2.0.0.1/org.lucee.chart.extension-2.0.0.1.jar" );
 				// the naive dots-to-slashes guess is still first, but is not enough on its own
 				expect( paths ).toInclude( "/org/lucee/chart/extension/2.0.0.1/extension-2.0.0.1.jar" );
 			});

@@ -238,7 +238,8 @@ component {
 	remote function downLoader(
 			required string version restargsource="Path",
 			string ioid="" restargsource="url")
-		httpmethod="GET" restpath="loader/{version}" {
+		httpmethod="GET,HEAD,OPTIONS" restpath="loader/{version}" {
+		if ( _answerOptions() ) return;
 		_bind();
 
 		redirectToCore("jar",arguments.version);
@@ -252,7 +253,8 @@ component {
 	remote function downLight(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="light/{version}" {
+		httpmethod="GET,HEAD,OPTIONS" restpath="light/{version}" {
+		if ( _answerOptions() ) return;
 		_bind();
 
 		redirectToCore("light",arguments.version);
@@ -266,7 +268,8 @@ component {
 	remote function downZero(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="zero/{version}" {
+		httpmethod="GET,HEAD,OPTIONS" restpath="zero/{version}" {
+		if ( _answerOptions() ) return;
 		_bind();
 
 		redirectToCore("zero",arguments.version);
@@ -279,7 +282,8 @@ component {
 	remote function downLoaderAll(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="loader-all/{version}" {
+		httpmethod="GET,HEAD,OPTIONS" restpath="loader-all/{version}" {
+		if ( _answerOptions() ) return;
 		_bind();
 
 		redirectToCore("jar",arguments.version);
@@ -292,7 +296,8 @@ component {
 	remote function downloadCoreAlias(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="core/{version}" {
+		httpmethod="GET,HEAD,OPTIONS" restpath="core/{version}" {
+		if ( _answerOptions() ) return;
 		_bind();
 
 		redirectToCore("lco",arguments.version);
@@ -341,7 +346,8 @@ component {
 	remote function downloadCore(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="download/{version}" {
+		httpmethod="GET,HEAD,OPTIONS" restpath="download/{version}" {
+		if ( _answerOptions() ) return;
 		_bind();
 
 		redirectToCore("lco",arguments.version);
@@ -350,20 +356,11 @@ component {
 
 
 
-	/**
-	* function to download Lucee Core file
-	* return the download as a binary (application/zip), if there is no download available, the functions throws a exception
-	*/
-	remote function downloadWarHead(required string version restargsource="Path", string ioid="" restargsource="url")
-		httpmethod="HEAD" restpath="war/{version}" {
-		_bind();
-			return downloadWar(version, ioid);
-	}
-
 	remote function downloadWar(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="war/{version}" {
+		httpmethod="GET,HEAD,OPTIONS" restpath="war/{version}" {
+		if ( _answerOptions() ) return;
 		_bind();
 
 		redirectToCore("war",arguments.version);
@@ -375,7 +372,8 @@ component {
 		required string version restargsource="Path",
 		string ioid="" restargsource="url",
 		boolean light=false restargsource="url")
-		httpmethod="GET" restpath="forgebox/{version}" {
+		httpmethod="GET,HEAD,OPTIONS" restpath="forgebox/{version}" {
+		if ( _answerOptions() ) return;
 		// a plain redirect, it needs no services and no storage
 		var redirect = forgeboxEngineLocation( arguments.version, arguments.light );
 
@@ -411,7 +409,13 @@ component {
 	 * function to load 3rd party Bundle file, for example "/antlr/2.7.6"
 	 * relocate to a download URL or directly serve the download as a binary (application/zip).
 	 *
-	 * @httpmethod GET
+	 * A 302 to the jar on Maven Central or the Lucee repository (maven.lucee-services.com), or a 404. A bundle is
+	 * never extracted from an extension .lex: a jar that is only inside a lex is published as
+	 * org.lucee:<Bundle-SymbolicName>:<Bundle-Version> with the "Upload Maven jar" workflow of lucee/Lucee.
+	 * allowRedirect=false streams the jar from its URL instead of the redirect.
+	 * HEAD answers like GET (Tomcat sends no body), OPTIONS answers the allowed methods.
+	 *
+	 * @httpmethod GET,HEAD,OPTIONS
 	 * @restpath   download/{bundlename}/{bundleversion}
 	 */
 	remote function downloadBundle(
@@ -419,48 +423,50 @@ component {
 		,          string  bundleVersion        restargsource="Path"
 		,          boolean allowRedirect = true restargsource="url"
 	) {
+		if ( _answerOptions() ) return;
 		_bind();
 		if ( arguments.bundleName == 'lucee.core' ) {
 			return downloadCore( arguments.bundleVersion );
 		}
 
 		var bundle = bundleDownloadService.findBundle( argumentCollection=arguments );
-
-		if ( StructCount( bundle ) && Len( bundle.file ?: "" ) && FileExists( bundle.file ) ) {
-			return _serveLocalBundleFile( bundle.file, arguments.bundleName, arguments.bundleVersion, bundle.cacheExpires ?: "" );
+		if ( !StructCount( bundle ) ) {
+			_doBundle404( argumentCollection=arguments );
+			return;
 		}
 
-		if ( StructCount( bundle ) && Len( bundle.url ) ) {
-			// A .lex is not an OSGi bundle; extraction should have already replaced it.
-			if ( ListLast( ListFirst( bundle.url, "?" ), "." ) == "lex" ) {
-				_doBundle404( argumentCollection=arguments );
-				return;
-			}
-			if ( arguments.allowRedirect ){
-				return _relocateForDowload( bundle.url );
-			}
-
-			return _serveBundleUrlLocally( bundle.url, bundle.cacheExpires );
+		// a .lex is not an OSGi bundle
+		var bundleUrl = Len( bundle.url ?: "" ) && ListLast( ListFirst( bundle.url, "?" ), "." ) != "lex" ? bundle.url : "";
+		if ( !Len( bundleUrl ) ) {
+			_doBundle404( argumentCollection=arguments );
+			return;
 		}
-		_doBundle404( argumentCollection=arguments );
+		if ( arguments.allowRedirect ) {
+			return _relocateForDowload( bundleUrl, arguments.bundleVersion );
+		}
+		return _serveBundleUrlLocally( bundleUrl, bundle.cacheExpires ?: "" );
 	}
 
-	private function _serveLocalBundleFile( required string file, required string bundleName, required string bundleVersion, cacheExpires="" ) {
-		var expires  = IsDate( arguments.cacheExpires ) ? arguments.cacheExpires : DateAdd( "d", 30, Now() );
-		var fileName = arguments.bundleName & "-" & arguments.bundleVersion & ".jar";
-
-		header name="cache-control" value="public, max-age=#DateDiff( "s", Now(), expires )#";
-		header name="Content-Disposition" value="attachment; filename=""#fileName#""";
-		content
-			reset      = true
-			file       = arguments.file
-			type       = "application/java-archive"
-			deletefile = false;
+	/**
+	 * OPTIONS on a download route: 204 with the allowed methods, no lookup and no services needed.
+	 */
+	private boolean function _answerOptions() {
+		if ( UCase( cgi.request_method ?: "" ) != "OPTIONS" ) {
+			return false;
+		}
+		content reset=true;
+		header statuscode="204" statustext="No Content";
+		header name="Allow" value="GET, HEAD, OPTIONS";
+		header name="Cache-Control" value="public, max-age=86400";
+		return true;
 	}
 
-	private function _relocateForDowload( bundleUrl ) {
+	private function _relocateForDowload( required string bundleUrl, string bundleVersion="" ) {
+		content reset=true;
 		header statuscode="302" statustext="Found";
 		header name="Location" value=arguments.bundleUrl;
+		// a pinned bundle version does not change, a client (or a cache in between) can follow the redirect again
+		header name="Cache-Control" value=services.DownloadCaching::forRedirect( arguments.bundleVersion );
 	}
 
 	private function _serveBundleUrlLocally( bundleUrl, cacheExpires ) {
@@ -537,7 +543,8 @@ component {
 	remote function downloadDependencies(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="dependencies/{version}" {
+		httpmethod="GET,HEAD,OPTIONS" restpath="dependencies/{version}" {
+		if ( _answerOptions() ) return;
 		_bind();
 
 		var build = _dependencies( "zip", arguments.version );
@@ -720,7 +727,8 @@ component {
 			string type restargsource="path", // stable rc beta snapshot all
 			string distribution restargsource="path", // jar. light, zero
 			string format restargsource="path" // redirect, string, url, info, filename
-		) httpmethod="GET" restpath="latest/{version}/{type}/{distribution}/{format}" {
+		) httpmethod="GET,HEAD,OPTIONS" restpath="latest/{version}/{type}/{distribution}/{format}" {
+		if ( _answerOptions() ) return;
 		_bind();
 
 		try {
@@ -883,7 +891,8 @@ component {
 	remote function downloadExpress(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url")
-		httpmethod="GET" restpath="express/{version}" {
+		httpmethod="GET,HEAD,OPTIONS" restpath="express/{version}" {
+		if ( _answerOptions() ) return;
 		_bind();
 
 		redirectToCore("express",arguments.version);
@@ -1117,21 +1126,47 @@ component {
 
 		header statuscode="302" statustext="Found";
 		header name="Location" value=file.url;
+		header name="Cache-Control" value=services.DownloadCaching::forRedirect( arguments.version );
 	}
 
+	/**
+	 * Does the core artifact exist? The answer is kept in memory per URL (a found file for a day, a missing one for
+	 * NOT_FOUND_CACHE_SECONDS, default 300), so a redirect costs no HEAD request to the repository on every download.
+	 */
 	private boolean function _remoteArtifactExists(required string artifactUrl) {
 		if(!Len(arguments.artifactUrl)) {
 			return false;
 		}
+		if ( !StructKeyExists( application, "remoteArtifactExists" ) ) {
+			application.remoteArtifactExists = StructNew( "synchronized" );
+		}
+		var known = application.remoteArtifactExists[ arguments.artifactUrl ] ?: {};
+		if ( StructCount( known ) && GetTickCount() < known.until ) {
+			return known.exists;
+		}
+
+		var exists = true;
+		var ttl    = 86400;
 		try {
 			http method="head" url=arguments.artifactUrl timeout=10 redirect=true throwonerror=false result="local.res";
 			var code = Val(ListFirst(res.statuscode ?: (res.status_code ?: "0"), " "));
-			return code >= 200 && code < 400;
+			exists = code >= 200 && code < 400;
+			if ( !exists ) {
+				var nf = Val( server.system.environment.NOT_FOUND_CACHE_SECONDS ?: 300 );
+				ttl = nf > 0 ? nf : 300;
+			}
 		}
 		catch(any e) {
-			// if the check itself fails, still redirect rather than hide a real file
-			return true;
+			// if the check itself fails, still redirect rather than hide a real file, and ask again soon
+			exists = true;
+			ttl    = 60;
 		}
+		// bounded, a stream of made up versions cannot grow it without end
+		if ( StructCount( application.remoteArtifactExists ) >= 5000 ) {
+			StructClear( application.remoteArtifactExists );
+		}
+		application.remoteArtifactExists[ arguments.artifactUrl ] = { exists=exists, until=GetTickCount() + ( ttl * 1000 ) };
+		return exists;
 	}
 
 	/**

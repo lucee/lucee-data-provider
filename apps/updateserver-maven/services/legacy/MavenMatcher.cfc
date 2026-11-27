@@ -104,6 +104,14 @@
 		}
 
 		var repositories = rawSearchRepositories();
+		// "latest" of a bundle uploaded as org.lucee:<Bundle-SymbolicName>: the <latest> of its maven-metadata.xml
+		if ( arguments.bundleVersion == "latest" ) {
+			var latest = Len( variables.mixedRepo ) ? latestLuceeBundleVersion( arguments.bundleName ) : "";
+			if ( !Len( latest ) ) {
+				return "";
+			}
+			arguments.bundleVersion = latest;
+		}
 		var uris = rawSearchPaths( arguments.bundleName, arguments.bundleVersion );
 
 		for( var rep in repositories ) {
@@ -121,8 +129,6 @@
 			var urls=[
 				  repositories[ 1 ] & "/org/lucee/" & art1 & "/" & arguments.bundleVersion & "/" & art1 & "-" & arguments.bundleVersion & ".jar"
 				, repositories[ 1 ] & "/org/lucee/" & art2 & "/" & arguments.bundleVersion & "/" & art2 & "-" & arguments.bundleVersion & ".jar"
-				, repositories[ 1 ] & "/org/lucee/" & art1 & "/" & arguments.bundleVersion & "/" & art1 & "-" & arguments.bundleVersion & ".lex"
-				, repositories[ 1 ] & "/org/lucee/" & art2 & "/" & arguments.bundleVersion & "/" & art2 & "-" & arguments.bundleVersion & ".lex"
 			];
 
 			for( var _url in urls ) {
@@ -181,29 +187,44 @@
 			ArrayAppend( uris, _luceeBundlePath( arguments.bundleName, arguments.bundleVersion ) );
 		}
 
-		// the bundle of an extension (e.g. redis.extension 2.9.0.3-BETA) is in the lex of org.lucee:<dashed-name>, the
-		// listing only has the latest version of an extension, the older ones are found through the Maven layout
-		if ( Left( arguments.bundleName, 10 ) != "org.lucee." ) {
-			var lexArt = Replace( arguments.bundleName, ".", "-", "all" );
-			ArrayAppend( uris, "/org/lucee/" & lexArt & "/" & arguments.bundleVersion & "/" & lexArt & "-" & arguments.bundleVersion & ".lex" );
-		}
-
-		// org.lucee.* OSGi names are often published as org.lucee:<dashed-name>
-		// with a .lex (the extension) rather than a .jar. Try both.
+		// org.lucee.* OSGi names are often published as org.lucee:<dashed-name>. Only jars: a bundle is never
+		// extracted from an extension .lex, a jar that is only inside a lex is published as
+		// org.lucee:<Bundle-SymbolicName>:<Bundle-Version> (the "Upload Maven jar" workflow of lucee/Lucee)
 		if ( Left( arguments.bundleName, 10 ) == "org.lucee." ) {
 			var art1 = Mid( arguments.bundleName, 11 );
 			var art2 = Replace( art1, ".", "-", "all" );
 			loop array=[ art2, art1 ] item="local.art" {
-				var base = "/org/lucee/" & art & "/" & arguments.bundleVersion & "/" & art & "-" & arguments.bundleVersion;
-				ArrayAppend( uris, base & ".jar" );
-				ArrayAppend( uris, base & ".lex" );
+				ArrayAppend( uris, "/org/lucee/" & art & "/" & arguments.bundleVersion & "/" & art & "-" & arguments.bundleVersion & ".jar" );
 				if ( art1 == art2 ) {
 					break;
 				}
 			}
+			// a jar of an extension that was uploaded as org.lucee:<Bundle-SymbolicName> (e.g. org.lucee:org.lucee.oracle)
+			ArrayAppend( uris, _luceeBundlePath( arguments.bundleName, arguments.bundleVersion ) );
 		}
 
 		return uris;
+	}
+
+	/**
+	 * The latest version of org.lucee:<bundleName> on the Lucee repository (maven-metadata.xml, written by the
+	 * "Upload Maven jar" workflow), "" when there is none.
+	 */
+	public string function latestLuceeBundleVersion( required string bundleName ) {
+		try {
+			http url=variables.mixedRepo & "/org/lucee/" & arguments.bundleName & "/maven-metadata.xml" timeout=10 throwonerror=false result="local.res";
+			if ( Val( res.status_code ?: 0 ) != 200 || !IsXml( res.filecontent ) ) {
+				return "";
+			}
+			var versioning = XmlParse( res.filecontent ).XmlRoot.versioning;
+			if ( StructKeyExists( versioning, "release" ) && Len( versioning.release.XmlText ) ) {
+				return versioning.release.XmlText;
+			}
+			if ( StructKeyExists( versioning, "latest" ) && Len( versioning.latest.XmlText ) ) {
+				return versioning.latest.XmlText;
+			}
+		} catch ( any e ) {}
+		return "";
 	}
 
 	// org.lucee:<Bundle-SymbolicName>:<Bundle-Version>, the layout of the "Upload Maven jar" workflow of lucee/Lucee
