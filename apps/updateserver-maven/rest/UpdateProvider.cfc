@@ -515,9 +515,10 @@ component {
 	 * function to load 3rd party Bundle file, for example "/antlr/2.7.6"
 	 * relocate to a download URL or directly serve the download as a binary (application/zip).
 	 *
-	 * A 302 to the jar on Maven Central or the Lucee repository (maven.lucee-services.com), or a 404. A bundle is
-	 * never extracted from an extension .lex: a jar that is only inside a lex is published as
-	 * org.lucee:<Bundle-SymbolicName>:<Bundle-Version> with the "Upload Maven jar" workflow of lucee/Lucee.
+	 * A 302 to the jar on Maven Central or the Lucee repository (maven.lucee-services.com). A jar that is only inside
+	 * an extension .lex is extracted once and kept in the bundle cache (Cloud Storage,
+	 * <prefix><Bundle-SymbolicName>-<Bundle-Version>.jar): a 302 to it when the bucket has a public URL
+	 * (BUNDLE_CACHE_PUBLIC_URL), otherwise the jar is sent from the bucket. Otherwise a 404.
 	 * allowRedirect=false streams the jar from its URL instead of the redirect.
 	 * HEAD answers like GET (Tomcat sends no body), OPTIONS answers the allowed methods.
 	 *
@@ -543,6 +544,10 @@ component {
 
 		// a .lex is not an OSGi bundle
 		var bundleUrl = Len( bundle.url ?: "" ) && ListLast( ListFirst( bundle.url, "?" ), "." ) != "lex" ? bundle.url : "";
+		if ( !Len( bundleUrl ) && Len( bundle.cacheObject ?: "" ) ) {
+			// extracted from an extension .lex, in the bundle cache bucket that has no public URL
+			return _serveCachedBundle( arguments.bundleName, arguments.bundleVersion );
+		}
 		if ( !Len( bundleUrl ) ) {
 			_doBundle404( argumentCollection=arguments );
 			return;
@@ -573,6 +578,33 @@ component {
 		header name="Location" value=arguments.bundleUrl;
 		// a pinned bundle version does not change, a client (or a cache in between) can follow the redirect again
 		header name="Cache-Control" value=services.DownloadCaching::forRedirect( arguments.bundleVersion );
+	}
+
+	/**
+	 * A jar from the bundle cache (Cloud Storage, a bucket without public access): read from the bucket and sent.
+	 * HEAD answers the headers only, without reading the jar.
+	 */
+	private function _serveCachedBundle( required string bundleName, required string bundleVersion ) {
+		var fileName = arguments.bundleName & "-" & arguments.bundleVersion & ".jar";
+		var bytes    = "";
+		if ( UCase( cgi.request_method ?: "" ) != "HEAD" ) {
+			try {
+				bytes = bundleDownloadService.readCachedBundle( arguments.bundleName, arguments.bundleVersion );
+			} catch ( any e ) {
+				SystemOutput( "Could not read [#fileName#] from the bundle cache: #e.message#", true );
+				_doBundle404( argumentCollection=arguments );
+				return;
+			}
+		}
+		content reset=true;
+		// a jar of a bundle version does not change
+		header name="Cache-Control" value="public, max-age=2592000";
+		header name="Content-Disposition" value="attachment; filename=""#fileName#""";
+		if ( IsBinary( bytes ) ) {
+			content type="application/java-archive" variable=bytes;
+		} else {
+			content type="application/java-archive";
+		}
 	}
 
 	private function _serveBundleUrlLocally( bundleUrl, cacheExpires ) {

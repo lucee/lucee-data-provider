@@ -1,6 +1,8 @@
 ﻿component {
 
 	variables.mavenMappings = deserializeJSON( fileRead( "mavenMappings.json" ) );
+	// bundles that ship inside an extension .lex of another name: bundle name > [ org.lucee artifactId of the lex ]
+	variables.lexBundles    = deserializeJSON( fileRead( "lexBundles.json" ) );
 	variables.mixedRepo     = "https://maven.lucee-services.com";
 
 	/**
@@ -204,6 +206,68 @@
 		}
 
 		return uris;
+	}
+
+	/**
+	 * The extension .lex files (org.lucee:<artifact>:<version>.lex) that can contain an OSGi bundle, for the .lex
+	 * fallback of the bundle download (BundleDownloadService). The artifact is guessed from the bundle name, the
+	 * same way the lookups did before the fallback was switched off:
+	 *   - org.lucee.axis.extension 1.4.0.27-SNAPSHOT > org.lucee:axis-extension:1.4.0.27-SNAPSHOT (and axis.extension)
+	 *   - redis.extension 2.9.0.3-BETA               > org.lucee:redis-extension:2.9.0.3-BETA
+	 *   - a bundle that ships inside an extension of another name is listed in lexBundles.json
+	 *     (mssqljdbc4 4.0.2206.100 > org.lucee:mssql-jdbc-extension:4.0.2206.100)
+	 * Only URLs that exist are returned (one HEAD per candidate and repository until found), "latest" has none.
+	 */
+	public array function findLexUrls( required string bundleName, required string bundleVersion ) {
+		if ( !Len( arguments.bundleVersion ) || arguments.bundleVersion == "latest" ) {
+			return [];
+		}
+		var found = [];
+		for ( var path in lexSearchPaths( arguments.bundleName, arguments.bundleVersion ) ) {
+			for ( var rep in lexSearchRepositories() ) {
+				if ( FileExists( rep & path ) ) {
+					ArrayAppend( found, rep & path );
+					break;
+				}
+			}
+		}
+		return found;
+	}
+
+	// the Lucee repository first (most extension lex files are there), then Maven Central and the snapshots
+	public array function lexSearchRepositories() {
+		var repositories = [];
+		if ( Len( variables.mixedRepo ) ) {
+			ArrayAppend( repositories, variables.mixedRepo );
+		}
+		ArrayAppend( repositories, "https://repo1.maven.org/maven2" );
+		ArrayAppend( repositories, "https://oss.sonatype.org/content/repositories/snapshots" );
+		return repositories;
+	}
+
+	public array function lexSearchPaths( required string bundleName, required string bundleVersion ) {
+		var artifacts = [];
+		for ( var art in variables.lexBundles[ arguments.bundleName ] ?: [] ) {
+			ArrayAppend( artifacts, art );
+		}
+		if ( Left( arguments.bundleName, 10 ) == "org.lucee." ) {
+			var art1 = Mid( arguments.bundleName, 11 );
+			ArrayAppend( artifacts, Replace( art1, ".", "-", "all" ) );
+			ArrayAppend( artifacts, art1 );
+		} else {
+			ArrayAppend( artifacts, Replace( arguments.bundleName, ".", "-", "all" ) );
+		}
+
+		var paths = [];
+		var seen  = {};
+		for ( var a in artifacts ) {
+			if ( !Len( a ) || StructKeyExists( seen, a ) || !ReFind( "^[A-Za-z0-9._-]+$", a ) || !ReFind( "^[A-Za-z0-9._+-]+$", arguments.bundleVersion ) ) {
+				continue;
+			}
+			seen[ a ] = true;
+			ArrayAppend( paths, "/org/lucee/" & a & "/" & arguments.bundleVersion & "/" & a & "-" & arguments.bundleVersion & ".lex" );
+		}
+		return paths;
 	}
 
 	/**

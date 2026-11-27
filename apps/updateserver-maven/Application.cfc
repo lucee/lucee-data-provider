@@ -236,6 +236,25 @@ component {
 		return ArrayLen( mixed ) ? mixed[ 1 ] : "";
 	}
 
+	/**
+	 * The bundle jars extracted from extension .lex files, in Cloud Storage as
+	 * <BUNDLE_CACHE_PREFIX><Bundle-SymbolicName>-<Bundle-Version>.jar. Default: bucket lucee_downloads (the bucket
+	 * this service mounts, its service account can already write there), prefix provider/bundles/.
+	 * BUNDLE_CACHE_BUCKET=none switches the cache and the .lex fallback off.
+	 */
+	private function _createBundleCache() {
+		var env    = server.system.environment;
+		var bucket = Trim( env.BUNDLE_CACHE_BUCKET ?: "lucee_downloads" );
+
+		return new services.GcsBundleCache(
+			  bucket          = bucket == "none" ? "" : bucket
+			, prefix          = env.BUNDLE_CACHE_PREFIX ?: "provider/bundles/"
+			, publicBaseUrl   = env.BUNDLE_CACHE_PUBLIC_URL ?: ""
+			, timeout         = Val( env.BUNDLE_CACHE_TIMEOUT ?: 20 )
+			, negativeSeconds = Val( env.BUNDLE_CACHE_NEGATIVE_SECONDS ?: 600 )
+		);
+	}
+
 	private struct function _mavenSourceArguments() {
 		var env = server.system.environment;
 
@@ -347,6 +366,10 @@ component {
 			, bundleCdnUrl        = ""
 			, extensionMetaReader = extMetaReader
 			, mavenMatcher        = new services.legacy.MavenMatcher( mixedRepo=_bundleMixedRepo() )
+			, bundleCache         = _createBundleCache()
+			, lexFallback         = _envBoolean( "BUNDLE_LEX_FALLBACK", true )
+			, lexMaxBytes         = Val( server.system.environment.BUNDLE_LEX_MAX_MB ?: 100 ) * 1048576
+			, lexTimeout          = Val( server.system.environment.BUNDLE_LEX_TIMEOUT ?: 60 )
 		);
 		extMetaReader.setBundleDownloadservice( bundleDownloadService );
 		_stepEnd( "bundle download service", t );
