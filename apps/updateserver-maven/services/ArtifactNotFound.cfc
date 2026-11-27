@@ -72,10 +72,34 @@ component {
 		return _requestIp();
 	}
 
+	/**
+	 * Drop values of Lucee client security-key query params from a query string
+	 * so they are never written to logs. Names are matched case-insensitively;
+	 * other params (allowRedirect, jv, webId, serverId, ...) are left as they are.
+	 */
+	public static string function redactQueryString( required string qs ) {
+		var raw = Trim( arguments.qs );
+		if ( !Len( raw ) ) {
+			return "";
+		}
+
+		var kept = [];
+		loop list=raw item="local.pair" delimiters="&" {
+			var name = ListFirst( pair, "=" );
+			if ( ListFindNoCase( "webSecurityKey,serverSecurityKey", name ) ) {
+				ArrayAppend( kept, name & "=REDACTED" );
+			} else {
+				ArrayAppend( kept, pair );
+			}
+		}
+
+		return ArrayToList( kept, "&" );
+	}
+
 	private static string function _requestPath() {
 		var script = Trim( cgi.script_name ?: "" );
 		var info   = Trim( cgi.path_info ?: "" );
-		var qs     = Trim( cgi.query_string ?: "" );
+		var qs     = redactQueryString( cgi.query_string ?: "" );
 		var path   = script;
 
 		if ( Len( info ) && !FindNoCase( info, script ) ) {

@@ -50,6 +50,21 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( paths ).toInclude( "/org/lucee/chart/extension/2.0.0.1/extension-2.0.0.1.jar" );
 			});
 
+			it( title="maps the org.h2 OSGi bundle to Maven Central com.h2database:h2", body=function() {
+				var mappings = DeserializeJSON( FileRead( variables.mappingsFile ) );
+
+				expect( mappings ).toHaveKey( "org.h2" );
+				expect( mappings[ "org.h2" ].group ).toBe( "com.h2database" );
+				expect( mappings[ "org.h2" ].artifact ).toBe( "h2" );
+			});
+
+			it( title="rawSearchPaths for org.h2 1.3.172 is the Central com.h2database/h2 layout", body=function() {
+				var matcher = new services.legacy.MavenMatcher();
+				var paths = matcher.rawSearchPaths( "org.h2", "1.3.172" );
+
+				expect( paths ).toBe( [ "/com/h2database/h2/1.3.172/h2-1.3.172.jar" ] );
+			});
+
 			it( title="extensionFileNamesForBundle maps org.lucee.chart.extension to chart-extension-2.0.0.1.lex", body=function() {
 				var reader = new services.ExtensionMetadataReader();
 				var names = reader.extensionFileNamesForBundle( "org.lucee.chart.extension", "2.0.0.1" );
