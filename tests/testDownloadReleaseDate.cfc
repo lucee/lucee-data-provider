@@ -8,10 +8,12 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 		};
 	}
 
+	function beforeEach() {
+		application.mavenDates = {};
+	}
+
 	function afterEach() {
-		if ( !IsNull( application.mavenDates ) ) {
-			StructClear( application.mavenDates );
-		}
+		application.mavenDates = {};
 	}
 
 	function run( testResults, testBox ) {
@@ -111,6 +113,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 	}
 
 	private function _new( required any head, any nowFn ) {
+		application.mavenDates = {};
 		var dl = new download.download();
 		dl.setHttpClient( { head=arguments.head } );
 		if ( !IsNull( arguments.nowFn ) ) {
