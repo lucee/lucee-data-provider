@@ -15,6 +15,16 @@ export interface Env {
 	 * this many minutes, then read again from the upstream. Default 5, 0 = not cached.
 	 */
 	METADATA_CACHE_TTL_MINUTES?: string;
+	/**
+	 * Where org.lucee maven-metadata.xml and the group index come from:
+	 * "upstream" = fetch the current upstream (previous behaviour),
+	 * "r2" = generate from R2 listings only,
+	 * "merge" = union of R2 listings and the upstream file (default, until the
+	 * one-off copy of the S3 history into R2 is done).
+	 */
+	METADATA_SOURCE?: string;
+	/** Minutes a generated metadata file is reused from KV before it is rebuilt. Default 60. */
+	METADATA_GENERATE_TTL_MINUTES?: string;
 	/** Timeout in seconds for upstream/provider requests. */
 	TIMEOUT?: string;
 	/** Base URL of the GitHub Release assets for core files; empty disables the lookup. */

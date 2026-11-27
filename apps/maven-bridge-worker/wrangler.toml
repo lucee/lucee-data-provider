@@ -42,6 +42,13 @@ EXTENSION_PROVIDERS = "https://www.forgebox.io|io.forgebox,https://extension.luc
 CACHE_TTL_MINUTES = "60"
 # directory listings and maven-metadata.xml are cached per location for this long, so new releases show up quickly; 0 = not cached
 METADATA_CACHE_TTL_MINUTES = "5"
+# where org.lucee maven-metadata.xml and the group index come from:
+#   upstream = fetch from the configured upstream (previous behaviour)
+#   merge    = generate from R2 listings, unioned with the upstream file (default until the S3 history has been copied into R2)
+#   r2       = generate from R2 listings only (use this after the one-off copy)
+METADATA_SOURCE = "merge"
+# how long a generated metadata file is reused from KV; the hourly cron also rebuilds everything
+METADATA_GENERATE_TTL_MINUTES = "60"
 TIMEOUT = "300"
 GITHUB_RELEASES_URL = "https://github.com/lucee/Lucee/releases/download/"
 # "off": upstream redirects only (like maven-bridge); "serve": serve objects found in R2 first
@@ -64,3 +71,12 @@ CHECKSUM_MAX_MB = "128"
 # larger artifacts are hashed in the background (the checksum answers 404 until it is cached), 0 = always
 CHECKSUM_INLINE_MAX_MB = "16"
 # FLUSH_TOKEN is a secret: wrangler secret put FLUSH_TOKEN (flush is disabled without it)
+
+# R2 object-created events (Put, Copy, CompleteMultipartUpload) should be sent to this
+# queue so the worker can rebuild the affected artifact and group metadata. The queue
+# and the bucket notification rule are created in the Cloudflare dashboard (see README);
+# they are not created by this deploy. Deploying this consumer fails until the queue exists.
+[[queues.consumers]]
+queue = "lucee-artifacts-object-created"
+max_batch_size = 20
+max_batch_timeout = 8

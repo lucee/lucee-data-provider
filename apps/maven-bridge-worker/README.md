@@ -61,9 +61,11 @@ streamed by the worker (content type, ETag, Last-Modified, Content-Length, `Rang
 `If-None-Match`/`If-Modified-Since` → 304, `HEAD`). A miss falls back to the redirect logic above, or with fill on miss is fetched from the
 source and stored (see below). `R2_HOSTS` limits R2 to some hostnames (comma separated, empty = all);
 the other hostnames keep the plain redirects.
-Listings and `maven-metadata.xml` files of upstream groups are read from the upstream first; a copy in
-R2 is only used when the upstream does not have the file or cannot be reached (so a bulk copy can never
-pin old metadata).
+`METADATA_SOURCE` controls where `org.lucee` artifact and group `maven-metadata.xml` files and the
+`/org/lucee/` index come from (see [Generated metadata](#generated-metadata)). Other listings
+(per-artifact and per-version `index.html`, version-level `maven-metadata.xml`) are still read from
+the upstream first; a copy in R2 is only used when the upstream does not have the file or cannot be
+reached.
 
 Object keys use the Maven layout of the upstream, so a copy of `cdn.lucee.org` can be used as is:
 
@@ -138,9 +140,15 @@ The CFML bridge kept everything in the server scope. Here:
   Computed checksums (`checksum:<generation>:<type>:<source>`) are kept in KV too, with an expiration,
   next to the short-lived markers of background computations (`checksum-pending:<generation>:<source>`)
   and their attempt counts (`checksum-attempts:<generation>:<source>`, 1 day).
+- **KV (`generated-metadata:<generation>:<path>`)**: generated `org.lucee` metadata and the group
+  index, keyed without the request hostname so every hostname shares the same entry. Rebuilt by the
+  hourly cron and by the R2 object-created queue. Entries older than `METADATA_GENERATE_TTL_MINUTES`
+  (default 60) are rebuilt on the next request. `?flush=metadata` bumps the generation, so the next
+  request rebuilds them.
 - **Cache API**: upstream directory listings and `maven-metadata.xml` files for
   `METADATA_CACHE_TTL_MINUTES` (default 5), so new releases show up within minutes, and positive `HEAD`
   checks on the upstream for `CACHE_TTL_MINUTES`, keyed by a cache generation that a flush bumps.
+  Generated metadata uses a fixed Cache API key (not the request origin).
   The Cache API is per Cloudflare location, and a zone purge by URL does not reach these entries
   (the Worker uses its own cache keys); use `?flush=metadata` (below) instead.
 
@@ -175,6 +183,8 @@ curl -H "X-Flush-Token: $FLUSH_TOKEN" "https://mvn.lucee-services.com/org/lucee/
 | `EXTENSION_PROVIDERS` | ForgeBox + extension.lucee.org/cdn | `provider\|groupId[\|upstream]`, comma separated, or a JSON array of `{provider, groupId, upstream}` |
 | `CACHE_TTL_MINUTES` | `60` | age after which KV entries are refreshed |
 | `METADATA_CACHE_TTL_MINUTES` | `5` | how long directory listings and `maven-metadata.xml` are cached per location (`0` = not cached) |
+| `METADATA_SOURCE` | `merge` | where org.lucee artifact/group `maven-metadata.xml` and `/org/lucee/` come from: `upstream` (fetch the configured upstream), `merge` (generate from R2 listings, unioned with the upstream file until the S3 history has been copied into R2), `r2` (generate from R2 only, after that copy) |
+| `METADATA_GENERATE_TTL_MINUTES` | `60` | how long a generated metadata file is reused from KV (`0` = rebuild on every request); the hourly cron also rebuilds everything |
 | `NEGATIVE_CACHE_TTL_MINUTES` | `5` | how long a 404 of the upstream (existence checks, listings, metadata) is remembered per location (`0` = not remembered) |
 | `TIMEOUT` | `300` | upstream/provider timeout in seconds |
 | `GITHUB_RELEASES_URL` | `https://github.com/lucee/Lucee/releases/download/` | 7.1+ core builds; empty disables |
@@ -192,7 +202,65 @@ Secrets: `FLUSH_TOKEN` (`wrangler secret put FLUSH_TOKEN`; CI sets it from the
 `MAVEN_BRIDGE_FLUSH_TOKEN` secret when that exists).
 
 Bindings: KV `BRIDGE_CACHE` (namespace `lucee-maven-bridge-cache`), R2 `ARTIFACTS`
-(bucket `lucee-artifacts`, read in serve mode, written with fill on miss). Custom domains: `maven.lucee-services.com`, `mvn.lucee-services.com`.
+(bucket `lucee-artifacts`, read in serve mode, written with fill on miss). Queue consumer
+`lucee-artifacts-object-created` (see below). Custom domains: `maven.lucee-services.com`, `mvn.lucee-services.com`.
+
+### Generated metadata
+
+The worker builds these files from the objects in the `ARTIFACTS` bucket, instead of fetching them
+from the upstream:
+
+- `org/lucee/<artifactId>/maven-metadata.xml` (and `.sha1` / `.md5` / `.sha256` / `.sha512` of that file)
+- `org/lucee/maven-metadata.xml` (group listing of `*-extension` artifacts, same format as today)
+- `/org/lucee/` (`org/lucee/index.html`)
+
+`<latest>` is the highest version (including SNAPSHOT, RC, BETA and ALPHA). `<release>` is the
+highest non-SNAPSHOT version; RC, BETA and ALPHA count as a release, matching the files the
+current upstream already publishes. Versions are listed in Maven order, oldest first.
+
+`METADATA_SOURCE` defaults to `merge`: versions found in R2 are unioned with the versions in the
+upstream file. That keeps older releases visible until the one-off copy of the S3 Maven layout
+into R2 has been run (`scripts/copy-s3-maven-to-r2.mjs` in this repository). After that copy,
+set `METADATA_SOURCE = "r2"` and redeploy so the worker no longer reads metadata from the
+upstream. `upstream` keeps the previous fetch-from-upstream behaviour.
+
+A new object in the bucket should trigger a rebuild of that artifact's metadata and of the group
+files through an R2 event notification into the `lucee-artifacts-object-created` queue. The
+hourly cron rebuilds everything as a safety net.
+
+#### Cloudflare setup (do this before deploying this change)
+
+These steps are done in the Cloudflare dashboard (or API), not by the deploy. Creating the queue
+first is required: a deploy of the queue consumer fails if the queue does not exist.
+
+1. **Create the queue.** Open **Workers & Pages → Queues → Create queue**. Name it exactly
+   `lucee-artifacts-object-created`. Leave the default settings.
+2. **Event notification on the bucket.** Open **R2 → lucee-artifacts → Settings → Event
+   notifications → Add notification**. Add two rules (one for releases, one for SNAPSHOTs), both
+   sending to the queue created above, for the **Object creation** actions (`PutObject`,
+   `CopyObject`, `CompleteMultipartUpload`):
+   - prefix `org/lucee/`
+   - prefix `snapshots/org/lucee/`
+3. **Deploy the worker** (merge this pull request, or `wrangler deploy` from
+   `apps/maven-bridge-worker`). The consumer binding is already in `wrangler.toml`. Confirm
+   **Workers → lucee-maven-bridge → Settings → Queues** shows the consumer, and that a test
+   publish of a jar updates `/org/lucee/<artifact>/maven-metadata.xml` within a few seconds.
+4. **Copy the S3 history** (once, after a dry run). From the repository root, with the S3 and R2
+   credentials in the environment (see the script header):
+
+   ```sh
+   node scripts/copy-s3-maven-to-r2.mjs --dry-run
+   node scripts/copy-s3-maven-to-r2.mjs
+   ```
+
+   The script copies `org/lucee/**` from the `lucee-downloads` bucket, skips objects that already
+   exist in R2 with the same size, and does not copy `maven-metadata.xml*` or `index.html`.
+   SNAPSHOT keys are written under `snapshots/`.
+5. **Switch to R2 only.** After the copy and a check that a known old version still appears in
+   `maven-metadata.xml`, set `METADATA_SOURCE = "r2"` in `wrangler.toml` (or as a Worker variable)
+   and redeploy.
+
+`?flush=metadata` (with `FLUSH_TOKEN`) forces the next request to rebuild generated files.
 
 ## Develop and test
 
