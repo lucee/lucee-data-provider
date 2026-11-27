@@ -122,10 +122,9 @@ component {
 		return variables.coreVersions.getGeneration();
 	}
 
-	// /info also has the changelog (Jira issues), stale issues are fetched again in the background
-	private string function _infoGeneration() {
+	// the Jira issues the changelogs are built from, stale issues are fetched again in the background
+	private string function _issuesGeneration() {
 		var jira = variables.jiraChangelogService;
-		var gen  = _versionsGeneration();
 
 		try {
 			jira.refreshIfStale();
@@ -133,7 +132,29 @@ component {
 			logger( text="Jira changelog refresh could not be started: #e.message#", exception=e, type="error" );
 		}
 
-		return gen & "|" & jira.getIssuesGeneration();
+		return jira.getIssuesGeneration();
+	}
+
+	// /info also has the changelog (Jira issues)
+	private string function _infoGeneration() {
+		return _versionsGeneration() & "|" & _issuesGeneration();
+	}
+
+	/**
+	 * The cached changelog/{versionFrom}/{versionTo} (changelogDetailed with detailed) answer: { json, etag,
+	 * generation, builtAt }. It only depends on the Jira issues, not on the core versions.
+	 */
+	public struct function changelogEntry( required string versionFrom, required string versionTo, boolean detailed=false ) {
+		_ensureServices();
+
+		var jira = variables.jiraChangelogService;
+		var vf   = arguments.versionFrom;
+		var vt   = arguments.versionTo;
+		var det  = arguments.detailed;
+
+		return _listingEntry( "update-changelog-" & vf & "-" & vt & "-" & ( det ? "detailed" : "short" ), _issuesGeneration(), function() {
+			return jira.getChangeLog( versionFrom=vf, versionTo=vt, detailed=det );
+		} );
 	}
 
 	/**
@@ -273,7 +294,7 @@ component {
 			try {
 				var newChangeLog=isNewer(version,toVersion(MIN_NEW_CHANGELOG_VERSION));
 				local.notes=(ALL_VERSION==version.display)?
-					"":getChangeLog(version.display,latestVersion.display);
+					"":variables.jiraChangelogService.getChangeLog( versionFrom=version.display, versionTo=latestVersion.display );
 
 				// do we need old layout of changelog?
 				if(!isNewer(version,toVersion(MIN_NEW_CHANGELOG_VERSION))) {
@@ -598,23 +619,33 @@ component {
 		return "";
 	}
 
-	remote struct function getChangeLog(
+	// cached as JSON with ETag, as info/{version}, see changelogEntry()
+	remote function getChangeLog(
 		required string versionFrom restargsource="Path",
 		required string versionTo restargsource="Path")
 		httpmethod="GET" restpath="changelog/{versionFrom}/{versionTo}" {
-		_bind();
 
-		return variables.jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo );
+		// another format than JSON: the REST layer serialises the changelog as before (dates of the detailed one stay dates)
+		if ( !services.HttpCaching::wantsJson() ) {
+			_bind();
+			return variables.jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo );
+		}
+		return _answerListing( changelogEntry( arguments.versionFrom, arguments.versionTo, false ) );
 	}
 
-	remote struct function getChangeLogExtended(
+	remote function getChangeLogExtended(
 		required string versionFrom restargsource="Path",
 		required string versionTo restargsource="Path")
 		httpmethod="GET" restpath="changelogDetailed/{versionFrom}/{versionTo}" {
-		_bind();
 
-		return variables.jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo, detailed=true );
+		// another format than JSON: the REST layer serialises the changelog as before (dates of the detailed one stay dates)
+		if ( !services.HttpCaching::wantsJson() ) {
+			_bind();
+			return variables.jiraChangelogService.getChangeLog( versionFrom=arguments.versionFrom, versionTo=arguments.versionTo, detailed=true );
+		}
+		return _answerListing( changelogEntry( arguments.versionFrom, arguments.versionTo, true ) );
 	}
+
 	remote string function getChangeLogLastUpdated()
 		httpmethod="GET" restpath="changelogLastUpdated" {
 		_bind();
