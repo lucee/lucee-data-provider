@@ -146,18 +146,105 @@ component {
 	}
 
 	function getReleaseDate(version,flush=false) {
-		if (arguments.flush || isNull(application.mavenDates[arguments.version])) {
-			var res="";
-			try {
-				http url="#UPDATE_PROVIDER#/getdate/"&arguments.version result="local.res" throwOnError=true;
-				var res= trim(deserializeJson(res.fileContent));
-				application.mavenDates[version]= lsDateFormat(parseDateTime(res));
-			}
-			catch(e) {
-				application.mavenDates[version]="";
+		if ( isNull( application.mavenDates ) ) {
+			application.mavenDates = {};
+		}
+		if ( !arguments.flush && _releaseDateCached( arguments.version ) ) {
+			return _releaseDateValue( arguments.version );
+		}
+
+		var formatted = "";
+		try {
+			var lastModified = _headJarLastModified( arguments.version );
+			if ( Len( lastModified ) ) {
+				formatted = LsDateFormat( ParseDateTime( lastModified ) );
 			}
 		}
-		return application.mavenDates[arguments.version]?:"";
+		catch ( e ) {
+			formatted = "";
+		}
+
+		_storeReleaseDate( arguments.version, formatted );
+		return formatted;
+	}
+
+	// Last-Modified of the jar in the Maven repository, not the update provider date endpoint.
+	private string function _headJarLastModified( required string version ) {
+		var fileUrl = _jarMavenUrl( arguments.version );
+		var timeout = 5;
+		var result  = "";
+
+		if ( !IsNull( variables.httpClient ) ) {
+			result = variables.httpClient.head( fileUrl, timeout );
+		}
+		else {
+			http url=fileUrl method="head" timeout=timeout redirect=true useragent="lucee-downloads-page" result="local.res" {}
+			var headers = local.res.responseHeader ?: {};
+			result = {
+				  status       = Val( local.res.statusCode ?: 0 )
+				, lastModified = headers[ "Last-Modified" ] ?: ( headers[ "last-modified" ] ?: "" )
+			};
+		}
+
+		var status = Val( result.status ?: 0 );
+		if ( status < 200 || status >= 400 ) {
+			return "";
+		}
+		return Trim( result.lastModified ?: "" );
+	}
+
+	private string function _jarMavenUrl( required string version ) {
+		var base = variables.jarMavenBase ?: "https://maven.lucee-services.com/";
+		if ( Right( base, 1 ) != "/" ) {
+			base &= "/";
+		}
+		return base & "org/lucee/lucee/" & arguments.version & "/lucee-" & arguments.version & ".jar";
+	}
+
+	private boolean function _isSnapshotVersion( required string version ) {
+		return FindNoCase( "-SNAPSHOT", arguments.version ) > 0;
+	}
+
+	private any function _now() {
+		if ( !IsNull( variables.nowFn ) ) {
+			return variables.nowFn();
+		}
+		return Now();
+	}
+
+	private boolean function _releaseDateCached( required string version ) {
+		if ( IsNull( application.mavenDates ) || !StructKeyExists( application.mavenDates, arguments.version ) ) {
+			return false;
+		}
+		var entry = application.mavenDates[ arguments.version ];
+		if ( !IsStruct( entry ) ) {
+			return true;
+		}
+		if ( Val( entry.ttl ?: 0 ) > 0 && DateDiff( "s", entry.time, _now() ) >= entry.ttl ) {
+			StructDelete( application.mavenDates, arguments.version );
+			return false;
+		}
+		return true;
+	}
+
+	private string function _releaseDateValue( required string version ) {
+		var entry = application.mavenDates[ arguments.version ];
+		if ( IsStruct( entry ) ) {
+			return entry.value ?: "";
+		}
+		return entry ?: "";
+	}
+
+	private void function _storeReleaseDate( required string version, required string value ) {
+		var ttl = 300; // failed or header-less HEAD, retry after 5 minutes
+		if ( Len( arguments.value ) ) {
+			ttl = _isSnapshotVersion( arguments.version ) ? 3600 : 0;
+		}
+		application.mavenDates[ arguments.version ] = {
+			  value = arguments.value
+			, time  = _now()
+			, ttl   = ttl
+		};
 	}
 
 	// not currently used
@@ -239,9 +326,12 @@ component {
 			}
 			application[ "changelogLastUpdated" ] = lastUpdated;
 			// application.mavenInfo = {};  // not currently used
-			// maven dates are static, only purge if unknown
-			loop collection="#application.mavenDates#" key="local.version" value="local.date" {
-				if ( len(date) eq 0 ) structDelete( application.mavenDates, version );
+			// dates from a jar HEAD: keep known dates, drop empty ones so they can be retried
+			if ( !IsNull( application.mavenDates ) ) {
+				loop collection="#application.mavenDates#" key="local.version" value="local.date" {
+					var stored = IsStruct( date ) ? ( date.value ?: "" ) : date;
+					if ( Len( stored ) eq 0 ) StructDelete( application.mavenDates, version );
+				}
 			}
 
 		}
