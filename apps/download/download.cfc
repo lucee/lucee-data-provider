@@ -205,6 +205,15 @@ component {
 		return FindNoCase( "-SNAPSHOT", arguments.version ) > 0;
 	}
 
+	// tests set these; assignment to download.httpClient does not set variables.httpClient
+	public void function setHttpClient( required any httpClient ) {
+		variables.httpClient = arguments.httpClient;
+	}
+
+	public void function setNowFn( required any nowFn ) {
+		variables.nowFn = arguments.nowFn;
+	}
+
 	private any function _now() {
 		if ( !IsNull( variables.nowFn ) ) {
 			return variables.nowFn();

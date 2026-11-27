@@ -112,9 +112,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 
 	private function _new( required any head, any nowFn ) {
 		var dl = new download.download();
-		dl.httpClient = { head=arguments.head };
+		dl.setHttpClient( { head=arguments.head } );
 		if ( !IsNull( arguments.nowFn ) ) {
-			dl.nowFn = arguments.nowFn;
+			dl.setNowFn( arguments.nowFn );
 		}
 		return dl;
 	}
