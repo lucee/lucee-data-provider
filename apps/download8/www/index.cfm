@@ -185,8 +185,9 @@ function loadGroupExtensions(groupId) {
 				groupId:       groupId,
 				artifactId:    artifactId,
 				displayName:   local.name,
-				// defensive: a metaMap entry cached before the CDN migration may still hold a
-				// rate-limited raw.githubusercontent.com URL — resolve it to the CDN at render
+				// defensive: a metaMap entry may still hold a rate-limited
+				// raw.githubusercontent.com URL or a leftover cdn.lucee.org/artifacts/ URL —
+				// resolve it to the artifacts host at render
 				image:         util.githubRawToCdn(groupId, artifactId, local.image),
 				latestVersion: local.latestVer,
 				latestModified: local.latestModified

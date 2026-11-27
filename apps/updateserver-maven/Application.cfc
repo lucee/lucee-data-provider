@@ -252,6 +252,17 @@ component {
 		};
 	}
 
+	private string function _artifactsBaseUrl() {
+		var base = Trim( server.system.environment.ARTIFACTS_URL ?: "" );
+		if ( !Len( base ) ) {
+			base = "https://artifacts.lucee.org/extension-logos/";
+		}
+		if ( Right( base, 1 ) != "/" ) {
+			base &= "/";
+		}
+		return base;
+	}
+
 	private boolean function _envBoolean( required string name, required boolean fallback ) {
 		var value = Trim( server.system.environment[ arguments.name ] ?: "" );
 
@@ -308,6 +319,7 @@ component {
 			, packagingBackfillMax = Val( server.system.environment.EXTENSIONS_PACKAGING_BACKFILL_MAX ?: 200 )
 			, metaTtl              = _metaTtl()
 			, listingLogoMaxSize   = Trim( server.system.environment.LISTING_LOGO_MAX_SIZE ?: "" )
+			, artifactLogoBaseUrl  = _artifactsBaseUrl()
 		);
 		_stepEnd( "extension metadata reader", t );
 

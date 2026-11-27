@@ -1,6 +1,11 @@
 component accessors="false" {
 
 	this.CDN = "https://cdn.lucee.org/";
+	// public extension logos (and later other small artifacts). Core jar/lco fallbacks stay on this.CDN.
+	// Override with ARTIFACTS_URL (trailing slash is added when missing). init() applies the env value.
+	this.ARTIFACTS_URL = "https://artifacts.lucee.org/extension-logos/";
+	// tests: a struct of url > boolean, skips the HTTP existence check when the URL is a key
+	this.artifactLogoProbe = {};
 	// base for GitHub Release assets (installers, express, war and, for 7.1+, the core files)
 	this.GITHUB_RELEASES = "https://github.com/lucee/Lucee/releases/download/";
 	// core file types served from GitHub Releases for 7.1+ (6.2 / 7.0 keep their current sources)
@@ -22,6 +27,11 @@ component accessors="false" {
 	// cache storage lives in the component instance (application scope via application.util)
 	variables.cache    = {};
 	variables.cacheDir = "";
+
+	function init() {
+		this.ARTIFACTS_URL = artifactsBaseUrl();
+		return this;
+	}
 
 	// ── Version helpers ───────────────────────────────────────────────────
 
@@ -223,28 +233,54 @@ component accessors="false" {
 
 	// ── Extension images ─────────────────────────────────────────────────
 
-	// Resolve a rate-limited raw.githubusercontent.com logo URL to Lucee's own artifact
-	// CDN. Keyed by maven coordinates (repo/branch-agnostic); anything else is returned
-	// unchanged. Called both when caching metadata and defensively at render time, so a
-	// stale github URL cached before the CDN migration never reaches the browser.
-	public string function githubRawToCdn(groupId, artifactId, image) {
-		if (findNoCase("raw.githubusercontent.com/", arguments.image ?: "")) {
-			var cdn = this.CDN & "artifacts/" & replace(arguments.groupId, ".", "-", "all") & "-" & replace(arguments.artifactId, ".", "-", "all") & ".png";
-			// Prefer the CDN mirror (GitHub raw is rate-limited), but only when it actually
-			// exists — not every extension has a mirror, and rewriting to a missing file turns
-			// a working GitHub logo into a broken 404 image. Existence is cached, so this is
-			// not an HTTP call on every render.
-			if (cdnArtifactExists(cdn)) return cdn;
-			return arguments.image; // no mirror yet → keep the working GitHub URL
-		}
-		return arguments.image ?: "";
+	// Public base URL for hosted extension logos. Default:
+	// https://artifacts.lucee.org/extension-logos/
+	public string function artifactsBaseUrl() {
+		var base = trim(server.system.environment.ARTIFACTS_URL ?: "");
+		if (!len(base)) base = "https://artifacts.lucee.org/extension-logos/";
+		if (right(base, 1) != "/") base &= "/";
+		return base;
 	}
 
-	// Does an artifact logo exist on the CDN? Cached: a definitive 2xx/3xx (exists) or
-	// 404/410 (missing) is remembered; a transient failure (timeout, 0, 5xx) is not cached
-	// and simply falls back to the GitHub URL for this render, to be retried later.
-	private boolean function cdnArtifactExists(url) {
-		var key = "cdnLogoExists_" & hash(arguments.url);
+	// {base}{group}-{artifact}.png with dots turned into dashes. No version in the path.
+	public string function artifactLogoUrl(groupId, artifactId) {
+		return this.ARTIFACTS_URL & replace(arguments.groupId, ".", "-", "all") & "-" & replace(arguments.artifactId, ".", "-", "all") & ".png";
+	}
+
+	// A logo still pointing at the retired cdn.lucee.org/artifacts/ prefix.
+	public boolean function isLegacyCdnArtifactUrl(image) {
+		return findNoCase("https://cdn.lucee.org/artifacts/", arguments.image ?: "") == 1;
+	}
+
+	// Resolve a rate-limited raw.githubusercontent.com logo URL, or a leftover
+	// cdn.lucee.org/artifacts/ URL, to artifacts.lucee.org. Keyed by maven
+	// coordinates (repo/branch-agnostic); anything else is returned unchanged.
+	// Called both when caching metadata and defensively at render time, so a
+	// stale GitHub or old-CDN URL never reaches the browser once the new host
+	// has the file. If the hosted file is missing, the original URL is kept.
+	public string function githubRawToCdn(groupId, artifactId, image) {
+		var src = arguments.image ?: "";
+		if (findNoCase("raw.githubusercontent.com/", src) || isLegacyCdnArtifactUrl(src)) {
+			var hosted = artifactLogoUrl(arguments.groupId, arguments.artifactId);
+			// Prefer the artifacts host (GitHub raw is rate-limited; the old CDN is being retired),
+			// but only when the file actually exists — not every extension has a copy, and
+			// rewriting to a missing file turns a working logo into a broken 404 image.
+			// Existence is cached, so this is not an HTTP call on every render.
+			if (artifactLogoExists(hosted)) return hosted;
+			return src;
+		}
+		return src;
+	}
+
+	// Does an artifact logo exist on the configured artifacts host? Cached: a
+	// definitive 2xx/3xx (exists) or 404/410 (missing) is remembered; a transient
+	// failure (timeout, 0, 5xx) is not cached and simply falls back to the original
+	// URL for this render, to be retried later.
+	private boolean function artifactLogoExists(url) {
+		if (isStruct(this.artifactLogoProbe ?: {}) && structKeyExists(this.artifactLogoProbe, arguments.url)) {
+			return this.artifactLogoProbe[arguments.url] ? true : false;
+		}
+		var key = "artifactLogoExists_" & hash(arguments.url);
 		var c   = dlCacheGet(key);
 		if (structKeyExists(c, "exists")) return c.exists;
 		var code = 0;
@@ -254,19 +290,19 @@ component accessors="false" {
 		} catch(e) {}
 		if (code >= 200 && code < 400) { dlCachePut(key, { exists: true,  cachedAt: now() }); return true;  }
 		if (code == 404 || code == 410) { dlCachePut(key, { exists: false, cachedAt: now() }); return false; }
-		return false; // transient — do not cache, fall back to GitHub this time
+		return false; // transient — do not cache, fall back to the original URL this time
 	}
 
 	// A pom <image> may be a relative "./<artifactId>-<version>-logo.png" pointing at a logo
 	// deployed as a maven artifact next to the .lex. Resolve it against the .lex's maven
 	// directory so it is host-agnostic (follows whatever mirror serves the extension). If
-	// there is no usable base URL, fall back to the artifact CDN. Non-relative values pass
+	// there is no usable base URL, fall back to the artifacts host. Non-relative values pass
 	// through unchanged.
 	public string function resolveRelativeImage(groupId, artifactId, image, base) {
 		if (left(arguments.image ?: "", 2) != "./") return arguments.image ?: "";
 		if (left(arguments.base ?: "", 4) == "http")
 			return mid(arguments.base, 1, len(arguments.base) - len(listLast(arguments.base, "/"))) & listLast(arguments.image, "/");
-		return this.CDN & "artifacts/" & replace(arguments.groupId, ".", "-", "all") & "-" & replace(arguments.artifactId, ".", "-", "all") & ".png";
+		return artifactLogoUrl(arguments.groupId, arguments.artifactId);
 	}
 
 	// Converts a raw image value to a web-accessible URL.

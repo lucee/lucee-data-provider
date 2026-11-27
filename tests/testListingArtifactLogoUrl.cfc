@@ -13,7 +13,8 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 
 		// 1x1 PNG, used only when the embedded logo should be read
 		variables.pngBytes = ToBinary( "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" );
-		variables.defaultLogoUrl = "https://cdn.lucee.org/artifacts/org-lucee-demo-extension.png";
+		variables.artifactsBase  = "https://artifacts.lucee.org/extension-logos/";
+		variables.defaultLogoUrl = variables.artifactsBase & "org-lucee-demo-extension.png";
 	}
 
 	function afterAll() {
@@ -26,9 +27,18 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 		return !StructKeyExists( GetFunctionList(), "ImageRead" ) || !StructKeyExists( GetFunctionList(), "ImageWrite" );
 	}
 
+	private string function _logo( required string file ) {
+		return variables.artifactsBase & arguments.file;
+	}
+
 	function run( testResults, testBox ) {
 
 		describe( "listing logos: the public artifact logo URL is used when that file is there", function() {
+
+			it( title="defaults artifactLogoBaseUrl to artifacts.lucee.org/extension-logos/", body=function() {
+				var reader = new services.ExtensionMetadataReader();
+				expect( reader.getArtifactLogoBaseUrl() ).toBe( variables.artifactsBase );
+			});
 
 			it( title="puts the artifact logo URL into the image column and does not read META-INF/logo.png", body=function() {
 				var probe = _probe({ "#variables.defaultLogoUrl#": true });
@@ -45,7 +55,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			});
 
 			it( title="builds the URL like Lucee 8: dots in the group and artifact become dashes, no version in the path", body=function() {
-				var logoSrc = "https://cdn.lucee.org/artifacts/com-example-foo-bar-baz-extension.png";
+				var logoSrc = _logo( "com-example-foo-bar-baz-extension.png" );
 				var reader = _reader([
 					_spec( "bar.baz-extension-2.0.0.1.lex", "22222222-2222-2222-2222-222222222222", "2.0.0.1", "com.example.foo", "bar.baz-extension", "", "" )
 				], { artifactLogoProbe={ "#logoSrc#": true } });
@@ -56,7 +66,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			it( title="falls back to the embedded logo when the artifact logo is not there", skip=noImageFunctions(), body=function() {
 				var reader = _reader([
 					_spec( "missing-extension-1.0.0.1.lex", "33333333-3333-3333-3333-333333333333", "1.0.0.1", "org.lucee", "missing-extension", "", variables.pngBytes )
-				], { artifactLogoProbe={ "https://cdn.lucee.org/artifacts/org-lucee-missing-extension.png": false } });
+				], { artifactLogoProbe={ "#_logo( 'org-lucee-missing-extension.png' )#": false } });
 				var listed = reader.list( type="all", withLogo=true );
 
 				expect( listed.recordCount ).toBe( 1 );
@@ -81,14 +91,14 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				var custom = "https://example.invalid/custom-logo.png";
 				var reader = _reader([
 					_spec( "custom-extension-1.0.0.1.lex", "55555555-5555-5555-5555-555555555555", "1.0.0.1", "org.lucee", "custom-extension", custom, "not a png" )
-				], { artifactLogoProbe={ "#variables.defaultLogoUrl#": true, "https://cdn.lucee.org/artifacts/org-lucee-custom-extension.png": true } });
+				], { artifactLogoProbe={ "#variables.defaultLogoUrl#": true, "#_logo( 'org-lucee-custom-extension.png' )#": true } });
 
 				expect( reader.list( type="all", withLogo=true ).image[ 1 ] ).toBe( custom );
 			});
 
 			it( title="replaces a GitHub raw manifest logo with the artifact logo URL when that file is there", body=function() {
 				var raw = "https://raw.githubusercontent.com/lucee/demo/master/source/images/logo.png";
-				var hosted = "https://cdn.lucee.org/artifacts/org-lucee-github-extension.png";
+				var hosted = _logo( "org-lucee-github-extension.png" );
 				var reader = _reader([
 					_spec( "github-extension-1.0.0.1.lex", "66666666-6666-6666-6666-666666666666", "1.0.0.1", "org.lucee", "github-extension", raw, "not a png" )
 				], { artifactLogoProbe={ "#hosted#": true } });
@@ -100,7 +110,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				var raw = "https://raw.githubusercontent.com/lucee/demo/master/source/images/logo.png";
 				var reader = _reader([
 					_spec( "githubmiss-extension-1.0.0.1.lex", "77777777-7777-7777-7777-777777777777", "1.0.0.1", "org.lucee", "githubmiss-extension", raw, "not a png" )
-				], { artifactLogoProbe={ "https://cdn.lucee.org/artifacts/org-lucee-githubmiss-extension.png": false } });
+				], { artifactLogoProbe={ "#_logo( 'org-lucee-githubmiss-extension.png' )#": false } });
 
 				expect( reader.list( type="all", withLogo=true ).image[ 1 ] ).toBe( raw );
 			});
@@ -108,7 +118,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			it( title="withLogo=false still strips an artifact logo URL", body=function() {
 				var reader = _reader([
 					_spec( "strip-extension-1.0.0.1.lex", "88888888-8888-8888-8888-888888888888", "1.0.0.1", "org.lucee", "strip-extension", "", "not a png" )
-				], { artifactLogoProbe={ "https://cdn.lucee.org/artifacts/org-lucee-strip-extension.png": true } });
+				], { artifactLogoProbe={ "#_logo( 'org-lucee-strip-extension.png' )#": true } });
 				var listed = reader.list( type="all", withLogo=false );
 				var detail = reader.getExtensionDetail( id="88888888-8888-8888-8888-888888888888", withLogo=false );
 
@@ -119,9 +129,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			it( title="LISTING_LOGO_MAX_SIZE leaves an artifact logo URL as it is", body=function() {
 				var reader = _reader([
 					_spec( "thumb-extension-1.0.0.1.lex", "99999999-9999-9999-9999-999999999999", "1.0.0.1", "org.lucee", "thumb-extension", "", "not a png" )
-				], { artifactLogoProbe={ "https://cdn.lucee.org/artifacts/org-lucee-thumb-extension.png": true }, listingLogoMaxSize="260x100" });
+				], { artifactLogoProbe={ "#_logo( 'org-lucee-thumb-extension.png' )#": true }, listingLogoMaxSize="260x100" });
 
-				expect( reader.list( type="all", withLogo=true ).image[ 1 ] ).toBe( "https://cdn.lucee.org/artifacts/org-lucee-thumb-extension.png" );
+				expect( reader.list( type="all", withLogo=true ).image[ 1 ] ).toBe( _logo( "org-lucee-thumb-extension.png" ) );
 			});
 
 			it( title="listing and detail requests do not check whether the logo URL is there", body=function() {
@@ -147,7 +157,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 
 				var first = new services.ExtensionMetadataReader(
 					  s3root            = root
-					, artifactLogoProbe = { "https://cdn.lucee.org/artifacts/org-lucee-rebuild-extension.png": false }
+					, artifactLogoProbe = { "#_logo( 'org-lucee-rebuild-extension.png' )#": false }
 				);
 				first.loadMeta();
 				var firstImage = first.list( type="all", withLogo=true ).image[ 1 ];
@@ -160,11 +170,11 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				var second = new services.ExtensionMetadataReader(
 					  s3root            = root
 					, mavenSource       = new logourlstub.ListingArtifactLogoMavenStub( spec.fileName, spec.artifactId, spec.version, spec.groupId )
-					, artifactLogoProbe = { "https://cdn.lucee.org/artifacts/org-lucee-rebuild-extension.png": true }
+					, artifactLogoProbe = { "#_logo( 'org-lucee-rebuild-extension.png' )#": true }
 				);
 				second.loadMeta();
 
-				expect( second.list( type="all", withLogo=true ).image[ 1 ] ).toBe( "https://cdn.lucee.org/artifacts/org-lucee-rebuild-extension.png" );
+				expect( second.list( type="all", withLogo=true ).image[ 1 ] ).toBe( _logo( "org-lucee-rebuild-extension.png" ) );
 			});
 
 		});

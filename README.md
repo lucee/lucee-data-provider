@@ -8,3 +8,4 @@ This repo contains the application code for the following services used by Lucee
 https://luceeserver.atlassian.net/issues/?jql=labels%20%3D%20%22updates%22
 
 * [`apps/updateserver-maven`](apps/updateserver-maven) — Maven-only Cloud Run image for the same REST endpoints, no S3. Pixl8 keeps using `apps/updateserver`.
+* https://artifacts.lucee.org — public R2/Cloudflare host for extension logos (and later other small artifacts). See [`docs/artifacts-lucee-org.md`](docs/artifacts-lucee-org.md).
