@@ -376,6 +376,10 @@ component {
 		}
 		_stepEnd( "jira cache (no remote fetch)", t );
 
+		var repos = _mavenSourceArguments().mixedRepos;
+		var mixedRepo = ArrayLen( repos ) ? repos[ 1 ] : "https://maven.lucee-services.com/";
+		var coreReleaseDate = new services.CoreReleaseDate( catalog=catalog, mixedRepo=mixedRepo );
+
 		application.coreS3Root            = "";
 		application.coreCdnUrl            = "";
 		application.coreVersions          = coreVersions;
@@ -385,6 +389,7 @@ component {
 		application.bundleDownloadService = bundleDownloadService;
 		application.jiraChangelogService  = jiraChangelogService;
 		application.catalog               = catalog;
+		application.coreReleaseDate       = coreReleaseDate;
 		application.storageMode           = "maven";
 	}
 
