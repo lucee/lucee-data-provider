@@ -150,6 +150,13 @@
 			ArrayAppend( uris, "/" & Replace( mvnId.group, '.', '/', 'all' ) & "/" & mvnId.artifact
 				& "/" & arguments.bundleVersion
 				& "/" & mvnId.artifact & "-" & arguments.bundleVersion & ".jar" );
+			// older versions of a bundle can be published under other coordinates (com.mysql.cj 8.0.19 is mysql:mysql-connector-java,
+			// com.mysql:mysql-connector-j starts at 8.0.31)
+			for ( var alt in ( mvnId.alt ?: [] ) ) {
+				ArrayAppend( uris, "/" & Replace( alt.group, '.', '/', 'all' ) & "/" & alt.artifact
+					& "/" & arguments.bundleVersion
+					& "/" & alt.artifact & "-" & arguments.bundleVersion & ".jar" );
+			}
 			// a Lucee build of a mapped bundle (e.g. xmpcore 5.1.2.0002L) is not in the mapped group, it is published as org.lucee:<Bundle-SymbolicName>
 			if ( Left( arguments.bundleName, 10 ) != "org.lucee." && mvnId.group != "org.lucee" ) {
 				ArrayAppend( uris, _luceeBundlePath( arguments.bundleName, arguments.bundleVersion ) );
@@ -172,6 +179,13 @@
 		// (the "Upload Maven jar" workflow of lucee/Lucee), e.g. org.lucee:apache.lucene.analyzers:2.4.1
 		if ( Left( arguments.bundleName, 10 ) != "org.lucee." ) {
 			ArrayAppend( uris, _luceeBundlePath( arguments.bundleName, arguments.bundleVersion ) );
+		}
+
+		// the bundle of an extension (e.g. redis.extension 2.9.0.3-BETA) is in the lex of org.lucee:<dashed-name>, the
+		// listing only has the latest version of an extension, the older ones are found through the Maven layout
+		if ( Left( arguments.bundleName, 10 ) != "org.lucee." ) {
+			var lexArt = Replace( arguments.bundleName, ".", "-", "all" );
+			ArrayAppend( uris, "/org/lucee/" & lexArt & "/" & arguments.bundleVersion & "/" & lexArt & "-" & arguments.bundleVersion & ".lex" );
 		}
 
 		// org.lucee.* OSGi names are often published as org.lucee:<dashed-name>

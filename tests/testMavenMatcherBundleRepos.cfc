@@ -40,6 +40,17 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				] );
 			});
 
+			it( title="com.mysql.cj 8.0.19 is also looked up as mysql:mysql-connector-java (com.mysql:mysql-connector-j starts at 8.0.31)", body=function() {
+				var paths = new services.legacy.MavenMatcher().rawSearchPaths( "com.mysql.cj", "8.0.19" );
+				expect( paths[ 1 ] ).toBe( "/com/mysql/mysql-connector-j/8.0.19/mysql-connector-j-8.0.19.jar" );
+				expect( paths ).toInclude( "/mysql/mysql-connector-java/8.0.19/mysql-connector-java-8.0.19.jar" );
+			});
+
+			it( title="the bundle of an older extension version (redis.extension 2.9.0.3-BETA) is looked up in the lex of org.lucee:redis-extension", body=function() {
+				var paths = new services.legacy.MavenMatcher().rawSearchPaths( "redis.extension", "2.9.0.3-BETA" );
+				expect( paths ).toInclude( "/org/lucee/redis-extension/2.9.0.3-BETA/redis-extension-2.9.0.3-BETA.lex" );
+			});
+
 			it( title="the raw search asks Maven Central first and the Lucee repository after it", body=function() {
 				var repos = new services.legacy.MavenMatcher().rawSearchRepositories();
 				expect( repos[ 1 ] ).toBe( "https://repo1.maven.org/maven2" );

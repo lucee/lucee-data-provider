@@ -30,7 +30,7 @@
     "com.github.f4b6a3.ulid": { "artifact": "ulid-creator", "group": "com.github.f4b6a3" },
     "com.github.mwiede.jsch": { "artifact": "jsch", "group": "com.github.mwiede" },
     "com.microsoft.sqlserver.mssql-jdbc": { "artifact": "mssql-jdbc", "group": "com.microsoft.sqlserver" },
-    "com.mysql.cj": { "artifact": "mysql-connector-j", "group": "com.mysql" },
+    "com.mysql.cj": { "artifact": "mysql-connector-j", "group": "com.mysql", "alt": [ { "artifact": "mysql-connector-java", "group": "mysql" } ] },
     "com.mysql.jdbc": { "artifact": "mysql-connector-java", "group": "mysql" },
     "com.sun.jna": { "artifact": "jna", "group": "net.java.dev.jna" },
     "concurrent": { "artifact": "concurrent", "group": "concurrent" },

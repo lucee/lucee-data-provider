@@ -36,6 +36,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 					  "/unmapped-bundle/1.2.3/unmapped-bundle-1.2.3.jar"
 					, "/unmapped-bundle/unmapped-bundle/1.2.3/unmapped-bundle-1.2.3.jar"
 					, "/org/lucee/unmapped-bundle/1.2.3/unmapped-bundle-1.2.3.jar"
+					, "/org/lucee/unmapped-bundle/1.2.3/unmapped-bundle-1.2.3.lex"
 				] );
 			});
 
