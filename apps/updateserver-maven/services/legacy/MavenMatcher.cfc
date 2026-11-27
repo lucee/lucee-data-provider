@@ -1,6 +1,31 @@
 ﻿component {
 
 	variables.mavenMappings = deserializeJSON( fileRead( "mavenMappings.json" ) );
+	variables.mixedRepo     = "https://maven.lucee-services.com";
+
+	/**
+	 * @mixedRepo the Lucee repository (maven.lucee-services.com) that holds the org.lucee bundles which are not
+	 *            on Maven Central, for example the ones published with the "Upload Maven jar" workflow of lucee/Lucee
+	 */
+	public function init( string mixedRepo="https://maven.lucee-services.com/" ) {
+		variables.mixedRepo = ReReplace( Trim( arguments.mixedRepo ), "/+$", "" );
+		return this;
+	}
+
+	/**
+	 * Repositories of the raw search, in that order: Maven Central first, the Lucee repository after it
+	 */
+	public array function rawSearchRepositories() {
+		var repositories = [
+			  "https://repo1.maven.org/maven2"
+			, "https://raw.githubusercontent.com/lucee/mvn/master/releases"
+		];
+		if ( Len( variables.mixedRepo ) ) {
+			ArrayAppend( repositories, variables.mixedRepo );
+		}
+		ArrayAppend( repositories, "https://oss.sonatype.org/content/repositories/snapshots" );
+		return repositories;
+	}
 
 	public function getMavenMappings(){
 		return variables.mavenMappings;
@@ -78,11 +103,7 @@
 			return match.url ?: "";
 		}
 
-		var repositories = [
-			  "https://repo1.maven.org/maven2"
-			, "https://raw.githubusercontent.com/lucee/mvn/master/releases"
-			, "https://oss.sonatype.org/content/repositories/snapshots"
-		];
+		var repositories = rawSearchRepositories();
 		var uris = rawSearchPaths( arguments.bundleName, arguments.bundleVersion );
 
 		for( var rep in repositories ) {
@@ -129,6 +150,17 @@
 			ArrayAppend( uris, "/" & Replace( mvnId.group, '.', '/', 'all' ) & "/" & mvnId.artifact
 				& "/" & arguments.bundleVersion
 				& "/" & mvnId.artifact & "-" & arguments.bundleVersion & ".jar" );
+			// older versions of a bundle can be published under other coordinates (com.mysql.cj 8.0.19 is mysql:mysql-connector-java,
+			// com.mysql:mysql-connector-j starts at 8.0.31)
+			for ( var alt in ( mvnId.alt ?: [] ) ) {
+				ArrayAppend( uris, "/" & Replace( alt.group, '.', '/', 'all' ) & "/" & alt.artifact
+					& "/" & arguments.bundleVersion
+					& "/" & alt.artifact & "-" & arguments.bundleVersion & ".jar" );
+			}
+			// a Lucee build of a mapped bundle (e.g. xmpcore 5.1.2.0002L) is not in the mapped group, it is published as org.lucee:<Bundle-SymbolicName>
+			if ( Left( arguments.bundleName, 10 ) != "org.lucee." && mvnId.group != "org.lucee" ) {
+				ArrayAppend( uris, _luceeBundlePath( arguments.bundleName, arguments.bundleVersion ) );
+			}
 			return uris;
 		}
 
@@ -141,6 +173,19 @@
 			ArrayAppend( uris, "/" & arguments.bundleName & "/" & arguments.bundleName
 				& "/" & arguments.bundleVersion
 				& "/" & arguments.bundleName & "-" & arguments.bundleVersion & ".jar" );
+		}
+
+		// a bundle that is on no public Maven repository is published as org.lucee:<Bundle-SymbolicName>:<Bundle-Version>
+		// (the "Upload Maven jar" workflow of lucee/Lucee), e.g. org.lucee:apache.lucene.analyzers:2.4.1
+		if ( Left( arguments.bundleName, 10 ) != "org.lucee." ) {
+			ArrayAppend( uris, _luceeBundlePath( arguments.bundleName, arguments.bundleVersion ) );
+		}
+
+		// the bundle of an extension (e.g. redis.extension 2.9.0.3-BETA) is in the lex of org.lucee:<dashed-name>, the
+		// listing only has the latest version of an extension, the older ones are found through the Maven layout
+		if ( Left( arguments.bundleName, 10 ) != "org.lucee." ) {
+			var lexArt = Replace( arguments.bundleName, ".", "-", "all" );
+			ArrayAppend( uris, "/org/lucee/" & lexArt & "/" & arguments.bundleVersion & "/" & lexArt & "-" & arguments.bundleVersion & ".lex" );
 		}
 
 		// org.lucee.* OSGi names are often published as org.lucee:<dashed-name>
@@ -159,6 +204,12 @@
 		}
 
 		return uris;
+	}
+
+	// org.lucee:<Bundle-SymbolicName>:<Bundle-Version>, the layout of the "Upload Maven jar" workflow of lucee/Lucee
+	private string function _luceeBundlePath( required string bundleName, required string bundleVersion ) {
+		return "/org/lucee/" & arguments.bundleName & "/" & arguments.bundleVersion
+			& "/" & arguments.bundleName & "-" & arguments.bundleVersion & ".jar";
 	}
 
 	private struct function fetchMavenMetaData( required string metaFile, required string baseUrl ){

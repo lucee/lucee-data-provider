@@ -249,6 +249,12 @@ component {
 		return new services.LuceeCoreSource( catalog=arguments.catalog, mixedRepo=mixed );
 	}
 
+	// the Lucee repository for the raw bundle search (bundles that are not on Maven Central)
+	private string function _bundleMixedRepo() {
+		var mixed = _mavenSourceArguments().mixedRepos;
+		return ArrayLen( mixed ) ? mixed[ 1 ] : "";
+	}
+
 	private struct function _mavenSourceArguments() {
 		var env = server.system.environment;
 
@@ -347,7 +353,7 @@ component {
 			, bundleS3Root        = ""
 			, bundleCdnUrl        = ""
 			, extensionMetaReader = extMetaReader
-			, mavenMatcher        = new services.legacy.MavenMatcher()
+			, mavenMatcher        = new services.legacy.MavenMatcher( mixedRepo=_bundleMixedRepo() )
 		);
 		extMetaReader.setBundleDownloadservice( bundleDownloadService );
 		_stepEnd( "bundle download service", t );
