@@ -19,12 +19,12 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 		describe( "download.getReleaseDate: Last-Modified from a jar HEAD, not getdate", function() {
 
 			it( title="HEADs the Maven jar and returns LsDateFormat of Last-Modified, with a 5 second timeout", body=function() {
-				var calls = { n=0, url="", timeout=0 };
+				var calls = { n=0, fileUrl="", timeout=0 };
 				var lastMod = "Fri, 31 Oct 2025 09:08:04 GMT";
-				var dl = _new( function( url, timeout ) {
+				var dl = _new( function( required string fileUrl, required numeric timeout ) {
 					calls.n++;
-					calls.url = url;
-					calls.timeout = timeout;
+					calls.fileUrl = arguments.fileUrl;
+					calls.timeout = arguments.timeout;
 					return { status=200, lastModified=lastMod };
 				} );
 
@@ -32,29 +32,29 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( result ).toBe( LsDateFormat( ParseDateTime( lastMod ) ) );
 				expect( calls.n ).toBe( 1 );
 				expect( calls.timeout ).toBe( 5 );
-				expect( calls.url ).toBe( "https://maven.lucee-services.com/org/lucee/lucee/8.0.0.310/lucee-8.0.0.310.jar" );
+				expect( calls.fileUrl ).toBe( "https://maven.lucee-services.com/org/lucee/lucee/8.0.0.310/lucee-8.0.0.310.jar" );
 			});
 
 			it( title="does not call the update provider getdate endpoint", body=function() {
-				var urls = [];
-				var dl = _new( function( url, timeout ) {
-					ArrayAppend( urls, url );
+				var fileUrls = [];
+				var dl = _new( function( required string fileUrl, required numeric timeout ) {
+					ArrayAppend( fileUrls, arguments.fileUrl );
 					return { status=200, lastModified="Fri, 31 Oct 2025 09:08:04 GMT" };
 				} );
 
 				dl.getReleaseDate( "6.2.3.35" );
-				expect( ArrayLen( urls ) ).toBe( 1 );
-				expect( urls[ 1 ] ).notToInclude( "getdate" );
-				expect( urls[ 1 ] ).notToInclude( "update.lucee.org" );
+				expect( ArrayLen( fileUrls ) ).toBe( 1 );
+				expect( fileUrls[ 1 ] ).notToInclude( "getdate" );
+				expect( fileUrls[ 1 ] ).notToInclude( "update.lucee.org" );
 			});
 
 			it( title="fails soft to an empty date when the HEAD fails or has no Last-Modified", body=function() {
-				var dl = _new( function( url, timeout ) {
+				var dl = _new( function( required string fileUrl, required numeric timeout ) {
 					return { status=404, lastModified="" };
 				} );
 				expect( dl.getReleaseDate( "9.9.9.9" ) ).toBe( "" );
 
-				dl = _new( function( url, timeout ) {
+				dl = _new( function( required string fileUrl, required numeric timeout ) {
 					throw( message="connection timed out" );
 				} );
 				expect( dl.getReleaseDate( "8.0.0.310" ) ).toBe( "" );
@@ -65,12 +65,12 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				var heads = { "8.0.0.310"=0, "8.0.1.107-SNAPSHOT"=0, "7.0.0.395"=0 };
 				var lastMod = "Fri, 31 Oct 2025 09:08:04 GMT";
 				var dl = _new(
-					head = function( url, timeout ) {
-						if ( Find( "8.0.0.310", url ) ) {
+					head = function( required string fileUrl, required numeric timeout ) {
+						if ( Find( "8.0.0.310", arguments.fileUrl ) ) {
 							heads[ "8.0.0.310" ]++;
 							return { status=200, lastModified=lastMod };
 						}
-						if ( Find( "8.0.1.107-SNAPSHOT", url ) ) {
+						if ( Find( "8.0.1.107-SNAPSHOT", arguments.fileUrl ) ) {
 							heads[ "8.0.1.107-SNAPSHOT" ]++;
 							return { status=200, lastModified=lastMod };
 						}
