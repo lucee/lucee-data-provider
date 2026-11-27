@@ -255,7 +255,10 @@ first is required: a deploy of the queue consumer fails if the queue does not ex
 
    The script copies `org/lucee/**` from the `lucee-downloads` bucket, skips objects that already
    exist in R2 with the same size, and does not copy `maven-metadata.xml*` or `index.html`.
-   SNAPSHOT keys are written under `snapshots/`.
+   SNAPSHOT keys are written under `snapshots/`. Planning HEADs and copies run concurrently
+   (`COPY_CONCURRENCY`, default 32) and log progress every 500 objects. Each HEAD, GET and PUT
+   uses `COPY_TIMEOUT_MS` (default 30000) with up to 3 retries and backoff on network errors,
+   5xx responses and timeouts.
 5. **Switch to R2 only.** After the copy and a check that a known old version still appears in
    `maven-metadata.xml`, set `METADATA_SOURCE = "r2"` in `wrangler.toml` (or as a Worker variable)
    and redeploy.
