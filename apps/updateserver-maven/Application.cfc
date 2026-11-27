@@ -385,6 +385,7 @@ component {
 		application.bundleDownloadService = bundleDownloadService;
 		application.jiraChangelogService  = jiraChangelogService;
 		application.catalog               = catalog;
+		application.coreReleaseDate       = new services.CoreReleaseDate( coreVersions=coreVersions, catalog=catalog );
 		application.storageMode           = "maven";
 	}
 
