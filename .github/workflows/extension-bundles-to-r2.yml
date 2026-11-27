@@ -1,0 +1,65 @@
+name: Extension bundles to R2
+
+# Makes the OSGi bundles of one extension resolvable by the update provider
+# (update.lucee.org/rest/update/provider/download/<bundle>/<version>): unpacks the .lex, asks the
+# provider for every bundle the extension ships or requires, and uploads only the jars the provider
+# cannot resolve to R2 as org.lucee:<Bundle-SymbolicName>:<Bundle-Version> (served by
+# maven.lucee-services.com, where the provider looks). Never overwrites. See
+# scripts/extension-bundles-to-r2.mjs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      extension:
+        description: 'Extension: Maven coordinates (e.g. org.lucee:axis-extension:1.4.0.27-SNAPSHOT) or https URL of a .lex'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run: only report what would be uploaded'
+        required: false
+        type: boolean
+        default: true
+  pull_request:
+    paths:
+      - 'scripts/extension-bundles-to-r2*'
+      - '.github/workflows/extension-bundles-to-r2.yml'
+
+# two runs could race for the same keys (harmless with If-None-Match, but the summaries would be confusing)
+concurrency:
+  group: extension-bundles-to-r2
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit tests
+        run: node --test scripts/extension-bundles-to-r2.test.mjs
+
+  publish:
+    if: github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check and upload bundles
+        run: node scripts/extension-bundles-to-r2.mjs
+        env:
+          EXTENSION: ${{ inputs.extension }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
+          R2_PREFIX: ${{ vars.R2_PREFIX }}
+          # only read when dry_run is false
+          R2_ACCESS_KEY_ID: ${{ inputs.dry_run == false && secrets.R2_ACCESS_KEY_ID || '' }}
+          R2_SECRET_ACCESS_KEY: ${{ inputs.dry_run == false && secrets.R2_SECRET_ACCESS_KEY || '' }}
