@@ -1,6 +1,31 @@
 ﻿component {
 
 	variables.mavenMappings = deserializeJSON( fileRead( "mavenMappings.json" ) );
+	variables.mixedRepo     = "https://maven.lucee-services.com";
+
+	/**
+	 * @mixedRepo the Lucee repository (maven.lucee-services.com) that holds the org.lucee bundles which are not
+	 *            on Maven Central, for example the ones published with the "Upload Maven jar" workflow of lucee/Lucee
+	 */
+	public function init( string mixedRepo="https://maven.lucee-services.com/" ) {
+		variables.mixedRepo = ReReplace( Trim( arguments.mixedRepo ), "/+$", "" );
+		return this;
+	}
+
+	/**
+	 * Repositories of the raw search, in that order: Maven Central first, the Lucee repository after it
+	 */
+	public array function rawSearchRepositories() {
+		var repositories = [
+			  "https://repo1.maven.org/maven2"
+			, "https://raw.githubusercontent.com/lucee/mvn/master/releases"
+		];
+		if ( Len( variables.mixedRepo ) ) {
+			ArrayAppend( repositories, variables.mixedRepo );
+		}
+		ArrayAppend( repositories, "https://oss.sonatype.org/content/repositories/snapshots" );
+		return repositories;
+	}
 
 	public function getMavenMappings(){
 		return variables.mavenMappings;
@@ -78,11 +103,7 @@
 			return match.url ?: "";
 		}
 
-		var repositories = [
-			  "https://repo1.maven.org/maven2"
-			, "https://raw.githubusercontent.com/lucee/mvn/master/releases"
-			, "https://oss.sonatype.org/content/repositories/snapshots"
-		];
+		var repositories = rawSearchRepositories();
 		var uris = rawSearchPaths( arguments.bundleName, arguments.bundleVersion );
 
 		for( var rep in repositories ) {
@@ -140,6 +161,13 @@
 		if ( ListLen( arguments.bundleName, "." ) == 1 ) {
 			ArrayAppend( uris, "/" & arguments.bundleName & "/" & arguments.bundleName
 				& "/" & arguments.bundleVersion
+				& "/" & arguments.bundleName & "-" & arguments.bundleVersion & ".jar" );
+		}
+
+		// a bundle that is on no public Maven repository is published as org.lucee:<Bundle-SymbolicName>:<Bundle-Version>
+		// (the "Upload Maven jar" workflow of lucee/Lucee), e.g. org.lucee:apache.lucene.analyzers:2.4.1
+		if ( Left( arguments.bundleName, 10 ) != "org.lucee." ) {
+			ArrayAppend( uris, "/org/lucee/" & arguments.bundleName & "/" & arguments.bundleVersion
 				& "/" & arguments.bundleName & "-" & arguments.bundleVersion & ".jar" );
 		}
 
