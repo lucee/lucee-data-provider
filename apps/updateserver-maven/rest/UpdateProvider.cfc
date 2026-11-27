@@ -853,20 +853,15 @@ component {
 	remote function getDate(required string version restargsource="Path")
 		httpmethod="GET" restpath="getdate/{version}" {
 		_bind();
-		var mr=new services.legacy.MavenRepo();
-		try{
-			var info=mr.get(version,true);
-			if(!isNull(info.sources.pom.date))
-				return parseDateTime(info.sources.pom.date);
-			else if(!isNull(info.sources.jar.date))
-				return parseDateTime(info.sources.jar.date);
-		} catch(e) {
-			//systemOutput(e.stackTrace, true);
-			var mess=  "maven.getDate() threw " & left(cfcatch.message,100);
-			logger(text=mess, type="error");
-			systemOutput(mess, true, true );
+		// the release date of the version (the dates on download.lucee.org): from the version list and LuceeVersionsDetail(),
+		// at most one HEAD request, kept in memory (services.CoreReleaseDate); a version that is not offered is a 404
+		if ( IsNull( application.coreReleaseDate ) ) {
+			application.coreReleaseDate = new services.CoreReleaseDate( coreVersions=application.coreVersions, catalog=application.catalog );
 		}
+		var date = application.coreReleaseDate.get( arguments.version );
+		if ( IsDate( date ) ) return date;
 
+		header statuscode="404";
 		return "";
 	}
 
