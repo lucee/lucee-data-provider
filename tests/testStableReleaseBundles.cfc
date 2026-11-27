@@ -2,8 +2,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 
 	function beforeAll (){
 		variables.dir = getDirectoryFromPath(getCurrentTemplatePath());
+		// the bundle lookup of the Maven only app (the code of this repository), not the live update.lucee.org
 		application action="update" mappings={
-			"/update" : expandPath( dir & "../apps/updateserver/" )
+			"/services" : expandPath( dir & "../apps/updateserver-maven/services" )
 		};
 		variables.artifacts = dir & "/artifacts";
 		if ( !DirectoryExists( variables.artifacts ))
@@ -94,27 +95,41 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 		fileDelete( core );
 	}
 
+	/**
+	 * Resolves the bundle with the lookup the update provider (apps/updateserver-maven) runs for
+	 * /rest/update/provider/download/{bundle}/{version}: BundleDownloadService.findBundle with the
+	 * MavenMatcher, so Maven Central, org.lucee on maven.lucee-services.com, the dashed/dotted name variants.
+	 * The extension lex lookup is not part of this test (no extension metadata here).
+	 * Returns "" when the bundle is found, otherwise "name/version".
+	 */
 	private function fetchBundle( string bundle ) cachedWithin="request" {
-		var meta = {};
-		var mavenMatcher = new update.services.legacy.MavenMatcher();
-		var bundleSpec = "";
-		
+		var bundleName    = listFirst( bundle, ";" );
+		var bundleVersion = listLast( listLast( bundle, ";" ), "=" );
+		var bundleSpec    = bundleName & "/" & bundleVersion;
+
 		try {
-			meta = mavenMatcher.getMatch( listFirst( bundle,";" ), listLast( listLast( bundle, ";" ), "=" ) );
-			//meta = bundleDownloadService.findBundle(  listFirst( bundle,";" ), listLast( listLast( bundle, ";" ), "=" ) );
-		} catch ( e ){
-			//var st = new test._testRunner().trimJavaStackTrace( e.stacktrace );
-			//systemOutput( st, true );
-			// see if the update provider can serve this bundle
-			try {
-				bundleSpec = listFirst( bundle,";" ) & "/" & listLast( listLast( bundle, ";" ), "=" );
-				http url="https://update.lucee.org/rest/update/provider/download/#bundleSpec#/" result="local.res" throwOnError=true;
-			} catch ( e ) {
-				systemOutput( "https://update.lucee.org/rest/update/provider/download/#bundleSpec#/ threw [" & e.message & "]", true );
-				return bundleSpec;
+			var found = getBundleService().findBundle( bundleName, bundleVersion );
+			if ( structCount( found ) && ( len( found.url ?: "" ) || len( found.file ?: "" ) ) ) {
+				return "";
 			}
+			systemOutput( "the update provider code finds no bundle for [#bundleSpec#]", true );
+		} catch ( any e ) {
+			systemOutput( "the update provider code threw [" & e.message & "] for [#bundleSpec#]", true );
 		}
-		return "";
+		return bundleSpec;
+	}
+
+	private function getBundleService() {
+		if ( !structKeyExists( variables, "bundleService" ) ) {
+			variables.bundleService = new services.BundleDownloadService(
+				  extensionsCdnUrl    = ""
+				, bundleS3Root        = ""
+				, bundleCdnUrl        = ""
+				, extensionMetaReader = new LDEV6953MetaStub()
+				, mavenMatcher        = new services.legacy.MavenMatcher()
+			);
+		}
+		return variables.bundleService;
 	}
 
 	private function fetchLuceeCore( string version ){
