@@ -10,6 +10,8 @@ jobs:
       #luceeVersionQuery: 6.0.3/all/jar
     steps:
     - uses: actions/checkout@v4
+    - name: Script unit tests
+      run: node --test scripts/*.test.mjs
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:

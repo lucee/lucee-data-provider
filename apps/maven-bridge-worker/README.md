@@ -256,7 +256,21 @@ first is required: a deploy of the queue consumer fails if the queue does not ex
    The script copies `org/lucee/**` from the `lucee-downloads` bucket, skips objects that already
    exist in R2 with the same size, and does not copy `maven-metadata.xml*` or `index.html`.
    SNAPSHOT keys are written under `snapshots/`.
-5. **Switch to R2 only.** After the copy and a check that a known old version still appears in
+5. **Publish the bundle jars that only exist inside a .lex** (once, after the copy). The update
+   provider answers `/rest/update/provider/download/<bundle>/<version>` with a 302 to a jar or a
+   404; it does not extract a jar from a .lex. The script reads `jars/*.jar` of every .lex in R2 and
+   writes each OSGi bundle as `org/lucee/<Bundle-SymbolicName>/<Bundle-Version>/<Bundle-SymbolicName>-<Bundle-Version>.jar`
+   (plus a pom) when that key is missing, SNAPSHOT versions too (outside `snapshots/`, so the
+   lifecycle rule does not expire them):
+
+   ```sh
+   node scripts/publish-lex-bundles-to-r2.mjs --dry-run
+   node scripts/publish-lex-bundles-to-r2.mjs
+   ```
+
+   `--lex <regex>` and `--bundle <regex>` limit a run; `SOURCE=s3` with `S3_BUCKET`, `S3_REGION`
+   and `S3_PREFIX` reads the .lex files from an S3 bucket instead.
+6. **Switch to R2 only.** After the copy and a check that a known old version still appears in
    `maven-metadata.xml`, set `METADATA_SOURCE = "r2"` in `wrangler.toml` (or as a Worker variable)
    and redeploy.
 
