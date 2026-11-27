@@ -37,7 +37,7 @@ var allowedParams = variables.cacheParams[arguments.template] ?: [];
 		var filename=application.util.getCacheFile(arguments.template, cacheQS);
 		// ?flush=true flushes ONLY the current page's cached HTML — not the whole site,
 		// and not the shared data caches. The page then re-renders from the existing
-		// metadata caches (github logos are resolved to the CDN at render time).
+		// metadata caches (GitHub or old-CDN logos are resolved to the artifacts host at render time).
 		var flush=url.flush ?: false;
 		if (flush && fileExists(filename)) {
 			fileDelete(filename);

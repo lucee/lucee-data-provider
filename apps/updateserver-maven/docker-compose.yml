@@ -16,6 +16,7 @@ services:
       LUCEE_LOGGING_FORCE_APPENDER: console
       LISTING_CACHE_SECONDS: "300"
       ALLOW_RELOAD: "false"
+      # ARTIFACTS_URL: "https://artifacts.lucee.org/"
     volumes:
       - maven-cache:/download
 volumes:
