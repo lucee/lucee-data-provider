@@ -8,6 +8,10 @@ component accessors=true {
 
 	variables._simpleCache = {};
 	variables.cacheFile = "/issues.json";
+	// see getIssuesGeneration()
+	variables._instanceId       = Replace( CreateUUID(), "-", "", "all" );
+	variables._issuesGeneration = 0;
+	variables._issuesHash       = "";
 
 	/**
 	 * Load issues from the on-disk cache only. A live Jira fetch is never done
@@ -25,6 +29,8 @@ component accessors=true {
 				_writeIssuesToS3( issues );
 				setIssues( issues );
 			}
+			variables._simpleCache = {};
+			_issuesLoaded( getIssues() );
 		}
 	}
 
@@ -36,6 +42,7 @@ component accessors=true {
 				_writeIssuesToS3( issues );
 				setIssues( issues );
 				variables._simpleCache = {};
+				_issuesLoaded( issues );
 				setLastUpdated( now() );
 			}
 		}
@@ -43,6 +50,22 @@ component accessors=true {
 
 	public function getChangeLogUpdated(){
 		return getLastUpdated();
+	}
+
+	/**
+	 * Identifies the issues the changelogs are built from: a new value only when a load or a refresh gave other
+	 * issues. Caches of anything built from a changelog (the /info answers) compare it to know when they are out of date.
+	 */
+	public string function getIssuesGeneration() {
+		return variables._instanceId & "-" & variables._issuesGeneration;
+	}
+
+	/**
+	 * Starts the background refresh of the issues when they are older than refreshIntervalMins, as getChangelog()
+	 * does, for a caller that serves a cached changelog.
+	 */
+	public void function refreshIfStale() {
+		_checkForUpdates();
 	}
 
 	public function getChangelog( string versionFrom, string versionTo, detailed=false ) {
@@ -64,6 +87,15 @@ component accessors=true {
 	}
 
 // PRIVATE HELPERS
+
+	// after the issues are set and the changelogs of the old ones are dropped: a new generation when they changed
+	private void function _issuesLoaded( required query issues ) {
+		var issuesHash = Hash( SerializeJSON( arguments.issues ), "MD5" );
+		if ( issuesHash != variables._issuesHash ) {
+			variables._issuesHash = issuesHash;
+			variables._issuesGeneration++;
+		}
+	}
 
 	private function _checkForUpdates() {
 		if ( !isNull( getLastUpdated() ) ){

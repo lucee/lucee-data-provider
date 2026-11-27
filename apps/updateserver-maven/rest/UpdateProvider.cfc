@@ -63,17 +63,105 @@ component {
 		_ensureServices();
 	}
 
-	private any function _cachedListing( required string key, required any producer, boolean flush=false ) {
-		// Wait for services, then serve or rebuild this revision's listing.
-		// Do not peek() a previous revision's JSON while startup is still running.
-		// /healthcheck/ is a separate application and does not go through this method.
-		return services.ListingCache::getWhenReady(
-			  cache       = application.listingCache
-			, key         = arguments.key
-			, producer    = arguments.producer
-			, ensureReady = function() { _ensureServices(); }
-			, flush       = arguments.flush
+	/**
+	 * The serialised JSON of a listing (/info/{version}, /list), from memory (services.InfoListingCache), as the
+	 * extension provider serves its /info: valid as long as the data it was built from is the same (the generation),
+	 * once that changed the old one is still served and rebuilt in the background. An error answer is not cached,
+	 * it is returned as "error" (the struct) so the next request tries again.
+	 */
+	private struct function _listingEntry( required string key, required string generation, required any producer ) {
+		var make   = arguments.producer;
+		var failed = {};
+		try {
+			return application.coreListingCache.get(
+				  key        = arguments.key
+				, generation = arguments.generation
+				, producer   = function() {
+					var data = make();
+					if ( IsStruct( data ) && ( data.type ?: "" ) == "error" ) {
+						failed.data = data;
+						throw( type="UpdateProvider.NotCached", message=data.message ?: "error" );
+					}
+					return SerializeJSON( data );
+				}
+			);
+		} catch ( UpdateProvider.NotCached e ) {
+			if ( StructKeyExists( failed, "data" ) ) {
+				return { error=failed.data };
+			}
+			rethrow;
+		}
+	}
+
+	/**
+	 * Answers a listing entry: the cached JSON as it is with ETag, Last-Modified and Cache-Control (or a 304), the
+	 * data for the REST layer to serialise when the client wants another format than JSON, an error as before.
+	 */
+	private any function _answerListing( required struct entry ) {
+		if ( StructKeyExists( arguments.entry, "error" ) ) {
+			return arguments.entry.error;
+		}
+		if ( !services.HttpCaching::wantsJson() ) {
+			return DeserializeJSON( arguments.entry.json );
+		}
+		services.HttpCaching::respondJson(
+			  body         = arguments.entry.json
+			, etag         = services.HttpCaching::weakEtag( arguments.entry.etag )
+			, lastModified = arguments.entry.builtAt
 		);
+	}
+
+	// the versions served (Maven metadata), a stale one is read again in the background
+	private string function _versionsGeneration() {
+		try {
+			variables.coreVersions.refreshIfStale();
+		} catch ( any e ) {
+			logger( text="Core versions refresh could not be started: #e.message#", exception=e, type="error" );
+		}
+
+		return variables.coreVersions.getGeneration();
+	}
+
+	// /info also has the changelog (Jira issues), stale issues are fetched again in the background
+	private string function _infoGeneration() {
+		var jira = variables.jiraChangelogService;
+		var gen  = _versionsGeneration();
+
+		try {
+			jira.refreshIfStale();
+		} catch ( any e ) {
+			logger( text="Jira changelog refresh could not be started: #e.message#", exception=e, type="error" );
+		}
+
+		return gen & "|" & jira.getIssuesGeneration();
+	}
+
+	/**
+	 * The cached /info/{version} answer: { json, etag, generation, builtAt }, or { error } for an error answer.
+	 */
+	public struct function infoEntry( required string version, string language="en" ) {
+		_ensureServices();
+
+		var v    = arguments.version;
+		var lang = arguments.language;
+
+		return _listingEntry( "update-info-" & v & "-" & lang, _infoGeneration(), function() {
+			return _getInfoUncached( v, "", lang );
+		} );
+	}
+
+	/**
+	 * The cached /list answer: { json, etag, generation, builtAt }, or { error } for an error answer.
+	 */
+	public struct function listEntry( string type="all", boolean extended=false ) {
+		_ensureServices();
+
+		var t   = arguments.type;
+		var ext = arguments.extended;
+
+		return _listingEntry( "update-list-" & t & "-" & ( ext ? "extended" : "short" ), _versionsGeneration(), function() {
+			return _readListUncached( false, t, ext, false );
+		} );
 	}
 
 	private void function _artifactNotFound( required string type, string version="", string qualifier="", string id="" ) {
@@ -102,18 +190,15 @@ component {
 	* @ioid ioid of the requesting user
 	* @langauage language f the requesting user
 	*/
-	remote struct function getInfo(
+	remote function getInfo(
 		required string version restargsource="Path",
 		string ioid="" restargsource="url",
 		string language="en" restargsource="url")
 		httpmethod="GET" restpath="info/{version}" {
 
-		var flush = StructKeyExists( url, "flush" ) && ( IsBoolean( url.flush ) && url.flush );
-		var key   = "update-info-" & arguments.version & "-" & arguments.language;
-
-		return _cachedListing( key, function() {
-			return _getInfoUncached( version, ioid, language );
-		}, flush );
+		// ioid is not part of the answer; flush is accepted and ignored, the answer is rebuilt in the background once
+		// the versions or the changelog changed
+		return _answerListing( infoEntry( arguments.version, arguments.language ) );
 	}
 
 	private struct function _getInfoUncached( required string version, string ioid="", string language="en" ) {
@@ -504,7 +589,8 @@ component {
 	remote string function getInfoSimple(required string version restargsource="Path",string ioid="" restargsource="url")
 		httpmethod="GET" restpath="update-for/{version}" produces="application/lazy" {
 
-		local.info=getInfo(version,ioid,"en");
+		var entry = infoEntry( arguments.version, "en" );
+		local.info = StructKeyExists( entry, "error" ) ? entry.error : DeserializeJSON( entry.json );
 		systemOutput(version&"->	"&structkeyExists(info,"available"),true,true);
 
 
@@ -819,11 +905,14 @@ component {
 		)
 		httpmethod="GET" restpath="list" {
 
-		var cacheKey = "update-list-" & arguments.type & "-" & ( arguments.extended ? "extended" : "short" );
+		// the debug answer (?abc) is not cached
+		if ( StructKeyExists( url, "abc" ) ) {
+			_ensureServices();
+			return _readListUncached( false, arguments.type, arguments.extended, false );
+		}
 
-		return _cachedListing( cacheKey, function() {
-			return _readListUncached( force, type, extended, flush );
-		}, arguments.flush );
+		// force and flush are accepted and ignored, the list is rebuilt in the background once the versions changed
+		return _answerListing( listEntry( arguments.type, arguments.extended ) );
 	}
 
 	private function _readListUncached( boolean force=false, string type="all", boolean extended=false, boolean flush=false ) {

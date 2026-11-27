@@ -107,23 +107,12 @@ component {
 	}
 
 	private string function _requestHeader( required string name ) {
-		var headers = GetHttpRequestData( false ).headers;
-
-		return StructKeyExists( headers, arguments.name ) ? Trim( headers[ arguments.name ] ) : "";
+		return services.HttpCaching::requestHeader( arguments.name );
 	}
 
 	// ETag, Cache-Control and (when known) Last-Modified of a JSON response; it depends on the Accept header too
 	private struct function _cacheHeaders( required string etag, any lastModified="" ) {
-		var headers = {
-			  "ETag"          = arguments.etag
-			, "Cache-Control" = services.HttpCaching::cacheControl()
-			, "Vary"          = "Accept, Accept-Encoding"
-		};
-		if ( IsDate( arguments.lastModified ) ) {
-			headers[ "Last-Modified" ] = services.HttpCaching::httpDate( arguments.lastModified );
-		}
-
-		return headers;
+		return services.HttpCaching::responseHeaders( arguments.etag, arguments.lastModified );
 	}
 
 	// the response as a struct, for the REST layer to serialise in the format the client asked for
@@ -150,23 +139,9 @@ component {
 		};
 	}
 
-	// Does the client get JSON from the REST layer? Yes without an Accept header, with one that names JSON, or the
-	// any type wildcard without a type the REST layer would prefer. Not with a format extension in the url (info.xml).
+	// see services.HttpCaching::wantsJson()
 	private boolean function _wantsJson() {
-		var last = ListLast( cgi.path_info ?: "", "/" );
-		if ( Find( ".", last ) ) {
-			return false;
-		}
-
-		var accept = LCase( Trim( cgi.http_accept ?: "" ) );
-		if ( !Len( accept ) || Find( "json", accept ) ) {
-			return true;
-		}
-		if ( ReFind( "cfml|wddx|xml|text/plain", accept ) ) {
-			return false;
-		}
-
-		return Find( "*/*", accept ) > 0;
+		return services.HttpCaching::wantsJson();
 	}
 
 	variables.listingPlaceholder = "__LUCEE_PROVIDER_EXTENSIONS_" & Replace( CreateUUID(), "-", "", "all" ) & "__";

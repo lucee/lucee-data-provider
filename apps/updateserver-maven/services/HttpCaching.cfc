@@ -74,6 +74,74 @@ component {
 		return "public, max-age=" & maxAge();
 	}
 
+	/**
+	 * Does the client get JSON from the REST layer? Yes without an Accept header, with one that names JSON, or the
+	 * any type wildcard without a type the REST layer would prefer. Not with a format extension of the REST layer in
+	 * the url (info.xml, .wddx, .cfml, .serialize, .java), yes with .json. Any other dot is part of the path, as the
+	 * version in info/6.2.0.321.
+	 */
+	public static boolean function wantsJson() {
+		var path = LCase( Trim( cgi.path_info ?: "" ) );
+		if ( ReFind( "\.json$", path ) ) {
+			return true;
+		}
+		if ( ReFind( "\.(wddx|cfml|serialize|xml|java)$", path ) ) {
+			return false;
+		}
+
+		var accept = LCase( Trim( cgi.http_accept ?: "" ) );
+		if ( !Len( accept ) || Find( "json", accept ) ) {
+			return true;
+		}
+		if ( ReFind( "cfml|wddx|xml|text/plain", accept ) ) {
+			return false;
+		}
+
+		return Find( "*/*", accept ) > 0;
+	}
+
+	public static string function requestHeader( required string name ) {
+		var headers = GetHttpRequestData( false ).headers;
+
+		return StructKeyExists( headers, arguments.name ) ? Trim( headers[ arguments.name ] ) : "";
+	}
+
+	/**
+	 * ETag, Cache-Control and (when known) Last-Modified of a JSON response; it depends on the Accept header too.
+	 */
+	public static struct function responseHeaders( required string etag, any lastModified="" ) {
+		var headers = {
+			  "ETag"          = arguments.etag
+			, "Cache-Control" = cacheControl()
+			, "Vary"          = "Accept, Accept-Encoding"
+		};
+		if ( IsDate( arguments.lastModified ) ) {
+			headers[ "Last-Modified" ] = httpDate( arguments.lastModified );
+		}
+
+		return headers;
+	}
+
+	/**
+	 * Writes a JSON body that is already serialised as the REST response, with the cache headers, or a 304 when the
+	 * client has it already (If-None-Match, or If-Modified-Since without it).
+	 */
+	public static void function respondJson( required string body, required string etag, any lastModified="" ) {
+		var headers = responseHeaders( arguments.etag, arguments.lastModified );
+		if ( isNotModified(
+			  ifNoneMatch     = requestHeader( "If-None-Match" )
+			, ifModifiedSince = requestHeader( "If-Modified-Since" )
+			, etag            = arguments.etag
+			, lastModified    = arguments.lastModified
+		) ) {
+			RestSetResponse( { status=304, headers=headers } );
+			return;
+		}
+
+		headers[ "Content-Type" ] = "application/json;charset=UTF-8";
+		RestSetResponse( { status=200, content=arguments.body, headers=headers } );
+	}
+
 	private static string function _opaque( required string tag ) {
 		var value = Trim( arguments.tag );
 		if ( Left( value, 2 ) == "W/" ) {

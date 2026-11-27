@@ -36,9 +36,10 @@ component {
 		application.servicesError         = "";
 		application.servicesFailedAt      = 0;
 		application.servicesLoading       = false;
-		application.listingCache          = _createListingCache();
-		// the serialised /info listings, in memory (see services.InfoListingCache)
+		// the serialised listings, in memory (see services.InfoListingCache): the extension /info, and the core
+		// update /info/{version} and /list (one entry per version asked for, so more of them)
 		application.infoListingCache      = new services.InfoListingCache();
+		application.coreListingCache      = new services.InfoListingCache( maxEntries=_coreListingEntries() );
 
 		_startServicesLoad();
 	}
@@ -184,30 +185,10 @@ component {
 		return seconds > 0 ? Int( seconds ) : 240;
 	}
 
-	private function _createListingCache() {
-		var seconds = Val( server.system.environment.LISTING_CACHE_SECONDS ?: 300 );
-		if ( seconds <= 0 ) {
-			seconds = 300;
-		}
+	private numeric function _coreListingEntries() {
+		var entries = Val( server.system.environment.CORE_LISTING_CACHE_ENTRIES ?: 2000 );
 
-		// Cloud Run: isolate by K_REVISION so a new revision never serves the previous
-		// revision's listings/*.json. Elsewhere: a per-process boot id, reused for
-		// the life of this application scope.
-		var generation = services.ListingCache::processGeneration(
-			  revision = server.system.environment.K_REVISION ?: ""
-			, existing = application.listingCacheGeneration ?: ""
-		);
-		application.listingCacheGeneration = generation;
-
-		var cache = new services.ListingCache(
-			  cacheDir    = services.CacheDir::path( "listings", GetTempDirectory() & "lucee-update-cache/listings/" )
-			, ttlSeconds  = seconds
-			, generation  = generation
-		);
-		// drop leftover extension-info-*.json from the pre-generation layout
-		cache.clearLegacyRoot();
-
-		return cache;
+		return entries > 0 ? Int( entries ) : 2000;
 	}
 
 	// seconds the extension meta (Maven listing) is used before it is rebuilt in the background, see ExtensionMetadataReader

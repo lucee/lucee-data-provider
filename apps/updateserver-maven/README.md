@@ -82,27 +82,36 @@ collide with download8's `{key}.json` files in the shared folder.
 
 ## Listing cache
 
-List and info responses are stored as JSON files under
-`CACHE_DIR/listings/{generation}/` (on Cloud Run,
-`/download/provider/listings/<K_REVISION>/`):
+These responses are kept in memory as the serialised JSON and served as
+they are (`services.InfoListingCache`):
 
-- `/rest/update/provider/list` (short and extended)
-- `/rest/update/provider/info/{version}`
+- `/rest/update/provider/info/{version}` (one entry per version and language)
+- `/rest/update/provider/list` (short and extended, per `type`)
 - `/rest/extension/provider/info`
 
-The generation is Cloud Run's `K_REVISION` when that env var is set, or a
-per-process boot id otherwise. A new revision therefore never serves
-another revision's listing JSON. On boot, leftover `listings/*.json`
-files from the earlier (flat) layout are removed; other generation
-subdirectories are left alone so a rolling deploy does not wipe a
-revision that is still serving traffic.
+An entry is valid as long as the data it was built from has not changed
+(its generation), not for a fixed time:
 
-`LISTING_CACHE_SECONDS` (default **300**, five minutes) is the TTL.
-While an entry is fresh it is served as-is. When it is stale, the stale
-copy is still served and a background thread refreshes it. A miss (or
-`?flush=true`) is refreshed on the request. Writes are atomic (temp
-file + rename) so a shared Cloud Storage FUSE mount is not left with a
-half-written file.
+- core `info` and `list`: the core versions (`CoreVersions.getGeneration()`,
+  changes when a read of the Maven metadata gives other versions). The
+  versions are read again in the background once they are older than
+  `UPDATES_MAVEN_CACHE_SECONDS`. `info` also depends on the Jira issues of
+  the changelog (`JiraChangelogService.getIssuesGeneration()`, refreshed in
+  the background every 15 minutes).
+- extension `info`: the extension meta (`ExtensionMetadataReader.getMetaGeneration()`).
+
+Once the generation changed, the old entry is still served and rebuilt in
+a background thread (one per entry). A miss is built on the request;
+concurrent requests for the same entry wait for that one build. An error
+answer is not cached. `?flush=true` is accepted and ignored.
+
+JSON responses send a weak `ETag`, `Last-Modified` (when the entry was
+built), `Cache-Control: public, max-age=INFO_CACHE_SECONDS` and
+`Vary: Accept, Accept-Encoding`, and answer `If-None-Match` /
+`If-Modified-Since` with `304`. A client that asks for another format
+(`Accept`, or a format extension in the url) gets the REST layer's
+serialisation as before. The core entries are bounded by
+`CORE_LISTING_CACHE_ENTRIES` (default 2000).
 
 List and info requests are answered with `503` until the Maven services
 are ready (see Readiness) and then rebuild a missing listing. They do not
@@ -320,9 +329,10 @@ Run defaults):
 | `CACHE_DIRECTORY` | `/download` in the image. Shared with download8 (same keys, same JSON files). Both services must set this to the same folder (the `lucee_downloads` bucket mounted at `/download`). Falls back to `CACHE_DIR`, then `/download`. |
 | `CACHE_DIR` | `/download/provider` in the image. App-specific caches (listing JSON, Maven indexes, extension meta, Jira issues) go under this folder so they cannot collide with download8's shared `{key}.json` files. If unset, defaults to `CACHE_DIRECTORY/provider`. |
 | `LOCAL_CACHE_DIR` | fallback alias for `CACHE_DIR` when `CACHE_DIR` is not set |
-| `LISTING_CACHE_SECONDS` | `300` (five minutes). TTL for list/info JSON under `CACHE_DIR/listings/`. |
+| `LISTING_CACHE_SECONDS` | `300` (five minutes). Default of `EXTENSIONS_META_CACHE_SECONDS`. |
+| `CORE_LISTING_CACHE_ENTRIES` | `2000`. Most core `/info/{version}` and `/list` answers kept in memory, see Listing cache. |
 | `LISTING_LOGO_MAX_SIZE` | empty (off). Opt-in, for example `260x100`: logos in the `/info` listing (`withLogo=true`) that are larger are scaled to fit and served as PNG when that is smaller. The Lucee Administrator scales them to 130x50 itself. `/info/{id}` keeps the original logo. |
-| `INFO_CACHE_SECONDS` | `300`. `Cache-Control: public, max-age=` of `/rest/extension/provider/info` and `/info/{id}`. Both send a weak `ETag` and answer `If-None-Match` with 304; `/info` also sends `Last-Modified`. JSON responses are gzip-compressed by Tomcat (set up in `docker-entrypoint.sh`). |
+| `INFO_CACHE_SECONDS` | `300`. `Cache-Control: public, max-age=` of `/rest/extension/provider/info` and `/info/{id}`, and of `/rest/update/provider/info/{version}` and `/list`. They send a weak `ETag` and answer `If-None-Match` with 304; all but `/info/{id}` also send `Last-Modified`. JSON responses are gzip-compressed by Tomcat (set up in `docker-entrypoint.sh`). |
 | `DOWNLOAD_CACHE_SECONDS` / `LATEST_CACHE_SECONDS` / `NOT_FOUND_CACHE_SECONDS` | `86400` / `300` / `300`. `Cache-Control: public, max-age=` of the `/full/{id}` and `/trial/{id}` answers: a redirect to an explicitly given version, a redirect to the latest version (no `version`), and a 404. |
 | `LUCEE_LOGGING_FORCE_APPENDER` | `console` in the image (needed so `ARTIFACT_NOT_FOUND` lines show up in Cloud Logging) |
 | `LUCEE_JAVA_OPTS` | `-Xms256m -Xmx1200m` in the image (a 2GiB Cloud Run container; the base image default is `-Xms64m -Xmx512m`) |
