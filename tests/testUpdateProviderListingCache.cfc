@@ -201,6 +201,51 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( application.coreListingCache.size() ).toBe( 2 );
 			});
 
+			it( title="serves changelog and changelogDetailed from the cache, rebuilt once the Jira issues changed", body=function() {
+				var calls = [];
+				var state = variables.state;
+				application.jiraChangelogService = {
+					  getChangeLog        = function( versionFrom, versionTo, detailed=false ) {
+						ArrayAppend( calls, arguments.versionFrom & "|" & arguments.versionTo & "|" & arguments.detailed );
+						var r = StructNew( "linked" );
+						r[ arguments.versionTo ] = { "LDEV-1"=( arguments.detailed ? { "key"="LDEV-1", "summary"="s" } : "s" ), "gen"=state.jiraGen };
+						return r;
+					}
+					, getIssuesGeneration = function() { return state.jiraGen; }
+					, refreshIfStale      = function() {}
+				};
+				var provider = new lcmavenrest.UpdateProvider();
+
+				var short    = provider.changelogEntry( "6.2.3.30", "6.2.3.34" );
+				var detailed = provider.changelogEntry( "6.2.3.30", "6.2.3.34", true );
+				expect( DeserializeJSON( short.json )[ "6.2.3.34" ][ "LDEV-1" ] ).toBe( "s" );
+				expect( DeserializeJSON( detailed.json )[ "6.2.3.34" ][ "LDEV-1" ].key ).toBe( "LDEV-1" );
+				expect( provider.changelogEntry( "6.2.3.30", "6.2.3.34" ).etag ).toBe( short.etag );
+				expect( calls ).toBe( [ "6.2.3.30|6.2.3.34|false", "6.2.3.30|6.2.3.34|true" ] );
+
+				// the core versions do not matter for a changelog
+				state.versions = _versions( [ "6.1.0.1", "6.2.0.500" ] );
+				application.coreVersions.reset();
+				expect( provider.changelogEntry( "6.2.3.30", "6.2.3.34" ).generation ).toBe( short.generation );
+
+				state.jiraGen = "j2";
+				var deadline = GetTickCount() + 10000;
+				while ( !Find( "j2", provider.changelogEntry( "6.2.3.30", "6.2.3.34" ).json ) && GetTickCount() < deadline ) {
+					sleep( 20 );
+				}
+				expect( provider.changelogEntry( "6.2.3.30", "6.2.3.34" ).json ).toInclude( '"gen":"j2"' );
+			});
+
+			it( title="answers the changelog endpoints from the cache, other formats as before", body=function() {
+				for ( var route in [ 'restpath="changelog/{versionFrom}/{versionTo}"', 'restpath="changelogDetailed/{versionFrom}/{versionTo}"' ] ) {
+					var fn = Mid( variables.src, Find( route, variables.src ), 700 );
+					expect( fn ).toInclude( "services.HttpCaching::wantsJson()" );
+					expect( fn ).toInclude( "_answerListing( changelogEntry( arguments.versionFrom, arguments.versionTo" );
+				}
+				// info builds its changelog from the service, not from the cached REST answer
+				expect( variables.src ).toInclude( "variables.jiraChangelogService.getChangeLog( versionFrom=version.display, versionTo=latestVersion.display )" );
+			});
+
 			it( title="answers JSON with ETag, Last-Modified, Cache-Control and a 304, flush is ignored", body=function() {
 				var fn = Mid( variables.src, Find( 'restpath="info/{version}"', variables.src ), 500 );
 				expect( fn ).toInclude( "_answerListing( infoEntry( arguments.version, arguments.language ) )" );

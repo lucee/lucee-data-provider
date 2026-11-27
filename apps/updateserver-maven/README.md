@@ -87,6 +87,7 @@ they are (`services.InfoListingCache`):
 
 - `/rest/update/provider/info/{version}` (one entry per version and language)
 - `/rest/update/provider/list` (short and extended, per `type`)
+- `/rest/update/provider/changelog/{from}/{to}` and `changelogDetailed/{from}/{to}`
 - `/rest/extension/provider/info`
 
 An entry is valid as long as the data it was built from has not changed
@@ -98,6 +99,8 @@ An entry is valid as long as the data it was built from has not changed
   `UPDATES_MAVEN_CACHE_SECONDS`. `info` also depends on the Jira issues of
   the changelog (`JiraChangelogService.getIssuesGeneration()`, refreshed in
   the background every 15 minutes).
+- core `changelog` and `changelogDetailed`: only the Jira issues
+  (`JiraChangelogService.getIssuesGeneration()`).
 - extension `info`: the extension meta (`ExtensionMetadataReader.getMetaGeneration()`).
 
 Once the generation changed, the old entry is still served and rebuilt in
