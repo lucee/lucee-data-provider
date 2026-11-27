@@ -109,7 +109,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider-inte
 
 		try {
 			var found = getBundleService().findBundle( bundleName, bundleVersion );
-			if ( structCount( found ) && ( len( found.url ?: "" ) || len( found.file ?: "" ) ) ) {
+			if ( structCount( found ) && len( found.url ?: "" ) ) {
 				return "";
 			}
 			systemOutput( "the update provider code finds no bundle for [#bundleSpec#]", true );
