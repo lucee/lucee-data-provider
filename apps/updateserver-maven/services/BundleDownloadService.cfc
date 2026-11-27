@@ -9,8 +9,16 @@ component accessors=true {
 	property name="bundleCdnUrl"        type="string" default="";
 	property name="extensionMetaReader" type="any";
 	property name="mavenMatcher"        type="any";
+	// GcsBundleCache: the jars extracted from extension .lex files, <prefix><Bundle-SymbolicName>-<Bundle-Version>.jar
+	property name="bundleCache"         type="any";
+	// look for a bundle that is on no Maven repository inside the extension .lex files (needs the bundleCache)
+	property name="lexFallback"         type="boolean" default=true;
+	property name="lexMaxBytes"         type="numeric" default=104857600;
+	property name="lexTimeout"          type="numeric" default=60;
 
 	variables._lookupCache = {};
+	// the .lex files this instance has unpacked into the bundle cache: url > true
+	variables._lexDone     = {};
 
 	/**
 	 * Attempt to locate an osgi bundle file
@@ -39,9 +47,9 @@ component accessors=true {
 			return _saveToCache( argumentCollection=arguments, bundleUrl=bundleUrl, cacheExpires=cacheExpiry );
 		}
 
-		// Fuller maven search (jars only). A bundle is never extracted from an extension .lex: a jar that is only
-		// inside a lex is published as org.lucee:<Bundle-SymbolicName>:<Bundle-Version> (the "Upload Maven jar"
-		// workflow of lucee/Lucee), which this search finds on maven.lucee-services.com.
+		// Fuller maven search (jars only). A jar that is published as org.lucee:<Bundle-SymbolicName>:<Bundle-Version>
+		// (the "Upload Maven jar" workflow of lucee/Lucee) is found on maven.lucee-services.com. A jar that is only
+		// inside an extension .lex is found by the .lex fallback below (bundle cache).
 		bundleUrl = getMavenMatcher().findBundleUrl( argumentCollection=arguments, bundleName=arguments.searchName, rawSearch=true );
 		if ( Len( Trim( bundleUrl ) ) && !_isLex( bundleUrl ) ) {
 			return _saveToCache( argumentCollection=arguments, bundleUrl=bundleUrl, cacheExpires=( arguments.bundleVersion == "latest" ? DateAdd( 'h', 1, Now() ) : "never" ) );
@@ -59,7 +67,23 @@ component accessors=true {
 			}
 
 			if ( Len( newSearchName ) ) {
-				return findBundle( argumentCollection=arguments, searchName=newSearchName );
+				var renamed = findBundle( argumentCollection=arguments, searchName=newSearchName );
+				if ( Len( renamed.url ?: "" ) || Len( renamed.cacheObject ?: "" ) ) {
+					return renamed;
+				}
+			}
+		}
+
+		// Not on a Maven repository (the outer call only, after the renamed search): the jar extracted from an
+		// extension .lex earlier, kept in the bundle cache (Cloud Storage), or else unpack the .lex now
+		if ( arguments.searchName == arguments.bundleName ) {
+			var fromCache = _fromBundleCache( arguments.bundleName, arguments.bundleVersion );
+			if ( StructCount( fromCache ) ) {
+				return fromCache;
+			}
+			var fromLex = _fromLex( arguments.bundleName, arguments.bundleVersion );
+			if ( StructCount( fromLex ) ) {
+				return fromLex;
 			}
 		}
 
@@ -67,6 +91,20 @@ component accessors=true {
 		// repeated 404 lookups which have to go through all the hoops to get
 		// here
 		return _saveToCache( argumentCollection=arguments, bundleUrl="", cacheExpires=DateAdd( 'n', 10, Now() ) );
+	}
+
+	/**
+	 * The bytes of a bundle jar in the bundle cache (findBundle answered a cacheObject and no url: the bucket is
+	 * not public and the jar is streamed by this instance).
+	 */
+	public binary function readCachedBundle( required string bundleName, required string bundleVersion ) {
+		try {
+			return getBundleCache().read( arguments.bundleName, arguments.bundleVersion );
+		} catch ( any e ) {
+			// gone from the bucket: look it up again next time
+			StructDelete( variables._lookupCache, _getCacheKey( arguments.bundleName, arguments.bundleVersion ) );
+			rethrow;
+		}
 	}
 
 	public function registerBundleFromExtensionJar(
@@ -134,7 +172,7 @@ component accessors=true {
 		_lookupCache[ arguments.key ] = arguments.info;
 	}
 
-	private function _saveToCache( bundleName, bundleVersion, bundleUrl, cacheExpires ) {
+	private function _saveToCache( bundleName, bundleVersion, bundleUrl, cacheExpires, cacheObject="" ) {
 		var bundleInfo = _createBundleInfo( argumentCollection=arguments );
 
 		_put( _getCacheKey( argumentCollection=arguments ), bundleInfo );
@@ -253,12 +291,14 @@ component accessors=true {
 	}
 
 
-	private function _createBundleInfo( bundleName, bundleVersion, bundleUrl, cacheExpires="" ) {
+	private function _createBundleInfo( bundleName, bundleVersion, bundleUrl, cacheExpires="", cacheObject="" ) {
 		return {
 			  name         = arguments.bundleName
 			, version      = arguments.bundleVersion
 			, url          = arguments.bundleUrl
 			, cacheExpires = arguments.cacheExpires
+			// the object of the jar in the bundle cache, set when it is served from there
+			, cacheObject  = arguments.cacheObject
 		};
 	}
 
@@ -274,6 +314,271 @@ component accessors=true {
 
 	private boolean function _isLex( required string pathOrUrl ) {
 		return ListLast( ListFirst( arguments.pathOrUrl, "?" ), "." ) == "lex";
+	}
+
+// BUNDLE CACHE (Cloud Storage) AND .LEX FALLBACK
+
+	private boolean function _hasBundleCache() {
+		if ( !StructKeyExists( variables, "bundleCache" ) || IsNull( variables.bundleCache ) || IsSimpleValue( variables.bundleCache ) ) {
+			return false;
+		}
+		return variables.bundleCache.isEnabled();
+	}
+
+	/**
+	 * The jar in the bundle cache: a public URL (a 302 to the bucket) when the bucket has one, otherwise the object
+	 * name (streamed by this instance). A jar of a bundle version does not change, it is remembered for good.
+	 */
+	private struct function _fromBundleCache( required string bundleName, required string bundleVersion ) {
+		if ( arguments.bundleVersion == "latest" || !_hasBundleCache() ) {
+			return {};
+		}
+		var cache = getBundleCache();
+		var found = false;
+		try {
+			found = cache.exists( arguments.bundleName, arguments.bundleVersion );
+		} catch ( any e ) {
+			SystemOutput( "Bundle cache lookup of [#arguments.bundleName#] [#arguments.bundleVersion#] failed: #e.message#", true );
+		}
+		if ( !found ) {
+			return {};
+		}
+		return _saveToCache(
+			  bundleName    = arguments.bundleName
+			, bundleVersion = arguments.bundleVersion
+			, bundleUrl     = cache.publicUrl( arguments.bundleName, arguments.bundleVersion )
+			, cacheExpires  = "never"
+			, cacheObject   = cache.objectName( arguments.bundleName, arguments.bundleVersion )
+		);
+	}
+
+	/**
+	 * Find the extension .lex files that can contain the bundle (MavenMatcher.findLexUrls(), and the extension
+	 * listing by file name), unpack each one at most once per instance, put every OSGi jar of it into the bundle
+	 * cache under its Bundle-SymbolicName and Bundle-Version (never overwriting), and answer the requested one.
+	 * Requests for the jars of one .lex wait for one unpack (a named lock), the ones waiting find the jars in the
+	 * cache. "latest" is not looked up in .lex files.
+	 */
+	private struct function _fromLex( required string bundleName, required string bundleVersion ) {
+		if ( !getLexFallback() || arguments.bundleVersion == "latest" || !_hasBundleCache() ) {
+			return {};
+		}
+		if ( !Len( getBundleCache().objectName( arguments.bundleName, arguments.bundleVersion ) ) ) {
+			return {};
+		}
+
+		for ( var lexUrl in _lexCandidates( arguments.bundleName, arguments.bundleVersion ) ) {
+			if ( !StructKeyExists( variables._lexDone, lexUrl ) ) {
+				lock name="lucee-bundle-lex-#Hash( lexUrl, "MD5" )#" type="exclusive" timeout=( getLexTimeout() * 2 ) throwOnTimeout=false {
+					// another request may have unpacked it while this one waited
+					if ( !StructKeyExists( variables._lexDone, lexUrl ) && _unpackLexToCache( lexUrl, arguments.bundleName, arguments.bundleVersion ) ) {
+						if ( StructCount( variables._lexDone ) >= 1000 ) {
+							variables._lexDone = {};
+						}
+						variables._lexDone[ lexUrl ] = true;
+					}
+				}
+			}
+			var found = _fromBundleCache( arguments.bundleName, arguments.bundleVersion );
+			if ( StructCount( found ) ) {
+				return found;
+			}
+		}
+		return {};
+	}
+
+	private array function _lexCandidates( required string bundleName, required string bundleVersion ) {
+		var found = { urls=[], seen={} };
+
+		// the extension listing (the newest version of each extension), by file name
+		try {
+			if ( StructKeyExists( variables, "extensionMetaReader" ) && !IsNull( variables.extensionMetaReader ) && !IsSimpleValue( variables.extensionMetaReader ) ) {
+				var reader  = variables.extensionMetaReader;
+				var lexFile = reader.getExtensionFileMatchingBundle( bundleName=arguments.bundleName, bundleVersion=arguments.bundleVersion );
+				if ( Len( Trim( lexFile ) ) ) {
+					_addLexCandidate( found, reader.getDownloadUrl( lexFile, getExtensionsCdnUrl() ) );
+				}
+			}
+		} catch ( any e ) {
+			SystemOutput( "Extension listing lookup for bundle [#arguments.bundleName#] [#arguments.bundleVersion#] failed: #e.message#", true );
+		}
+
+		// the Maven layout: org.lucee:<artifact>:<version>.lex, also the older versions of an extension
+		try {
+			for ( var u in getMavenMatcher().findLexUrls( arguments.bundleName, arguments.bundleVersion ) ) {
+				_addLexCandidate( found, u );
+			}
+		} catch ( any e ) {
+			SystemOutput( "Maven .lex lookup for bundle [#arguments.bundleName#] [#arguments.bundleVersion#] failed: #e.message#", true );
+		}
+
+		return found.urls;
+	}
+
+	private void function _addLexCandidate( required struct found, required string lexUrl ) {
+		if ( Len( arguments.lexUrl ) && _isLex( arguments.lexUrl ) && !StructKeyExists( arguments.found.seen, arguments.lexUrl ) ) {
+			arguments.found.seen[ arguments.lexUrl ] = true;
+			ArrayAppend( arguments.found.urls, arguments.lexUrl );
+		}
+	}
+
+	/**
+	 * Download (or open, for a local path) a .lex, read the manifest of every jar in it and put the OSGi bundles into
+	 * the bundle cache, the requested one first. Nothing is kept on the disk of the instance. Returns whether the
+	 * .lex could be read.
+	 */
+	private boolean function _unpackLexToCache( required string lexUrl, required string bundleName, required string bundleVersion ) {
+		var lexFile    = arguments.lexUrl;
+		var downloaded = false;
+
+		if ( ReFindNoCase( "^https?://", arguments.lexUrl ) ) {
+			lexFile    = _downloadLex( arguments.lexUrl );
+			downloaded = Len( lexFile ) > 0;
+		}
+		if ( !Len( lexFile ) || !FileExists( lexFile ) ) {
+			return false;
+		}
+
+		var ok   = false;
+		var jars = [];
+		try {
+			jars = _readLexJars( lexFile, arguments.lexUrl, arguments.bundleName, arguments.bundleVersion );
+			ok   = true;
+		} catch ( any e ) {
+			SystemOutput( "Could not read the extension [#arguments.lexUrl#]: #e.message#", true );
+		}
+		if ( downloaded ) {
+			_deleteQuietly( lexFile );
+		}
+
+		for ( var jar in jars ) {
+			try {
+				getBundleCache().put( jar.bundleName, jar.bundleVersion, jar.file );
+			} catch ( any e ) {
+				SystemOutput( "Could not put [#jar.bundleName#] [#jar.bundleVersion#] of [#arguments.lexUrl#] into the bundle cache: #e.message#", true );
+			}
+			_deleteQuietly( jar.file );
+		}
+		if ( ok ) {
+			SystemOutput( "Bundle cache: #ArrayLen( jars )# bundle jar(s) of [#arguments.lexUrl#]", true );
+		}
+		return ok;
+	}
+
+	// the OSGi jars of a .lex as temp files: [ { bundleName, bundleVersion, file } ], the requested bundle first
+	private array function _readLexJars( required string lexFile, required string lexUrl, required string bundleName, required string bundleVersion ) {
+		var jars    = [];
+		var zipFile = CreateObject( "java", "java.util.zip.ZipFile" ).init( arguments.lexFile );
+		try {
+			var entries = zipFile.entries();
+			while ( entries.hasMoreElements() ) {
+				var info = _readLexEntry( zipFile, entries.nextElement(), arguments.lexUrl );
+				if ( !StructCount( info ) ) {
+					// not a jar or not an OSGi bundle
+				} else if ( info.bundleName == arguments.bundleName && info.bundleVersion == arguments.bundleVersion ) {
+					// the requested bundle first, so it is in the cache even when a later upload fails
+					ArrayPrepend( jars, info );
+				} else {
+					ArrayAppend( jars, info );
+				}
+			}
+		} catch ( any e ) {
+			for ( var jar in jars ) {
+				_deleteQuietly( jar.file );
+			}
+			zipFile.close();
+			rethrow;
+		}
+		zipFile.close();
+		return jars;
+	}
+
+	// one entry of a .lex: { bundleName, bundleVersion, file } for an OSGi jar (copied to a temp file), else {}
+	private struct function _readLexEntry( required any zipFile, required any entry, required string lexUrl ) {
+		var name = arguments.entry.getName();
+		if ( arguments.entry.isDirectory() || LCase( Right( name, 4 ) ) != ".jar" ) {
+			return {};
+		}
+		var tmp  = GetTempFile( GetTempDirectory(), "lexjar" );
+		var info = {};
+		try {
+			_copyZipEntry( arguments.zipFile, arguments.entry, tmp );
+			info = _readBundleManifest( tmp );
+		} catch ( any e ) {
+			SystemOutput( "Could not read [#name#] of [#arguments.lexUrl#]: #e.message#", true );
+			info = {};
+		}
+		if ( !StructCount( info ) ) {
+			_deleteQuietly( tmp );
+			return {};
+		}
+		info.file = tmp;
+		return info;
+	}
+
+	private string function _downloadLex( required string lexUrl ) {
+		var tmp    = GetTempFile( GetTempDirectory(), "bundlelex" );
+		var status = 0;
+		var size   = 0;
+		try {
+			http url=arguments.lexUrl method="GET" file=GetFileFromPath( tmp ) path=GetDirectoryFromPath( tmp ) getasbinary="yes" timeout=getLexTimeout() throwonerror=false result="local.res";
+			status = Val( res.status_code ?: 0 );
+			size   = FileExists( tmp ) ? Val( GetFileInfo( tmp ).size ) : 0;
+		} catch ( any e ) {
+			SystemOutput( "Could not download the extension [#arguments.lexUrl#]: #e.message#", true );
+		}
+		if ( status == 200 && size > 0 && size <= getLexMaxBytes() ) {
+			return tmp;
+		}
+		SystemOutput( "Could not download the extension [#arguments.lexUrl#]: status #status#, #size# bytes", true );
+		_deleteQuietly( tmp );
+		return "";
+	}
+
+	private void function _copyZipEntry( required any zipFile, required any entry, required string dest ) {
+		var stream = arguments.zipFile.getInputStream( arguments.entry );
+		var bytes  = "";
+		try {
+			bytes = stream.readAllBytes();
+		} catch ( any e ) {
+			stream.close();
+			rethrow;
+		}
+		stream.close();
+		FileWrite( arguments.dest, bytes );
+	}
+
+	// Bundle-SymbolicName (without its directives) and Bundle-Version of a jar, {} when it is not an OSGi bundle
+	private struct function _readBundleManifest( required string jarFile ) {
+		var jar      = CreateObject( "java", "java.util.jar.JarFile" ).init( arguments.jarFile );
+		var symbolic = "";
+		var version  = "";
+		try {
+			var mf = jar.getManifest();
+			if ( !IsNull( mf ) ) {
+				var attrs = mf.getMainAttributes();
+				symbolic  = attrs.getValue( "Bundle-SymbolicName" ) ?: "";
+				version   = attrs.getValue( "Bundle-Version" ) ?: "";
+			}
+		} catch ( any e ) {
+			jar.close();
+			rethrow;
+		}
+		jar.close();
+		symbolic = Trim( ListFirst( symbolic, ";" ) );
+		version  = Trim( version );
+		if ( !Len( symbolic ) || !Len( version ) ) {
+			return {};
+		}
+		return { bundleName=symbolic, bundleVersion=version };
+	}
+
+	private void function _deleteQuietly( required string file ) {
+		try {
+			if ( Len( arguments.file ) && FileExists( arguments.file ) ) {
+				FileDelete( arguments.file );
+			}
+		} catch ( any ignore ) {}
 	}
 
 

@@ -19,4 +19,7 @@ images:
 # CACHE_DIRECTORY=/download (required: same folder as download8; both mount
 # bucket lucee_downloads at /download), CACHE_DIR=/download/provider,
 # LUCEE_LOGGING_FORCE_APPENDER=console, LISTING_CACHE_SECONDS=300. No secrets.
+# Bundle cache (optional, defaults shown): BUNDLE_CACHE_BUCKET=lucee_downloads,
+# BUNDLE_CACHE_PREFIX=provider/bundles/, BUNDLE_CACHE_PUBLIC_URL= (empty: the
+# jar is sent by the instance). See "Bundle downloads and the bundle cache".
 # See README.md.

@@ -183,6 +183,46 @@ Cloud Logging filter:
 ARTIFACT_NOT_FOUND
 ```
 
+## Bundle downloads and the bundle cache
+
+`/rest/update/provider/download/{bundleName}/{bundleVersion}`:
+
+1. Maven lookup (Maven Central, the Lucee repository): a `302` to the jar.
+2. The bundle cache: the object `{BUNDLE_CACHE_PREFIX}{Bundle-SymbolicName}-{Bundle-Version}.jar`
+   in the Cloud Storage bucket `BUNDLE_CACHE_BUCKET` (default
+   `lucee_downloads`, prefix `provider/bundles/`, for example
+   `provider/bundles/org.lucee.axis.extension-1.4.0.27-SNAPSHOT.jar`).
+   With `BUNDLE_CACHE_PUBLIC_URL` set (a bucket with public read access) the
+   answer is a `302` to the object, otherwise the jar is read from the bucket
+   and sent by the instance (`Cache-Control: public, max-age=2592000`).
+3. The `.lex` fallback: the extension `.lex` files that can contain the
+   bundle (`org.lucee:<dashed-name>:<version>.lex`, for `org.lucee.*` names
+   without the `org.lucee.` prefix, the extension listing by file name, and
+   `services/legacy/lexBundles.json` for a bundle that ships in an extension
+   of another name, e.g. `mssqljdbc4` in `mssql-jdbc-extension`). The `.lex`
+   is downloaded, every `jars/*.jar` with a `Bundle-SymbolicName` and
+   `Bundle-Version` is uploaded to the bundle cache under that name (the
+   requested one first, `ifGenerationMatch=0`: an object that is there is never
+   overwritten), and the download is answered from the cache (step 2).
+4. Otherwise `404` (remembered for 10 minutes per instance).
+
+Costs and load:
+
+- found objects are remembered per instance for good (a jar of a bundle
+  version does not change), misses for `BUNDLE_CACHE_NEGATIVE_SECONDS`;
+- a `.lex` is unpacked at most once per instance; requests for the jars of one
+  `.lex` wait for that one unpack (named lock), and the other jars of it are in
+  the bucket for every instance afterwards;
+- nothing is kept on the disk of the instance; the `.lex` download has a
+  timeout (`BUNDLE_LEX_TIMEOUT`) and a size limit (`BUNDLE_LEX_MAX_MB`);
+- `latest` is not looked up in the bundle cache or in `.lex` files.
+
+The service talks to the Cloud Storage JSON API with the token of its own
+service account (metadata server, no key file). That account already writes to
+`lucee_downloads` for the `/download` mount, so the default needs no new
+permission. Without a metadata server (a local run) the cache and the fallback
+are skipped (a `404` as before).
+
 ## Local
 
 From this directory:
@@ -362,6 +402,14 @@ Run defaults):
 | `EXTENSIONS_PACKAGING_BACKFILL_MAX` | `200` |
 | `UPDATES_VERSION_FILTER` | `major` |
 | `UPDATES_MAVEN_CACHE_SECONDS` | `300` |
+| `BUNDLE_CACHE_BUCKET` | `lucee_downloads`. Cloud Storage bucket of the bundle cache (jars extracted from extension `.lex` files). `none` switches the cache and the `.lex` fallback off. See Bundle downloads. |
+| `BUNDLE_CACHE_PREFIX` | `provider/bundles/`. Objects are `{prefix}{Bundle-SymbolicName}-{Bundle-Version}.jar` |
+| `BUNDLE_CACHE_PUBLIC_URL` | empty. Public base URL of the bucket (e.g. `https://storage.googleapis.com/<bucket>/`): a `302` to the object instead of sending the jar. Only for a bucket with public read access. |
+| `BUNDLE_CACHE_TIMEOUT` | `20`. Seconds per Cloud Storage request |
+| `BUNDLE_CACHE_NEGATIVE_SECONDS` | `600`. How long a missing object is remembered per instance |
+| `BUNDLE_LEX_FALLBACK` | `true`. Look for a bundle that is on no Maven repository inside the extension `.lex` files |
+| `BUNDLE_LEX_MAX_MB` | `100`. Largest `.lex` that is downloaded for it |
+| `BUNDLE_LEX_TIMEOUT` | `60`. Download timeout of a `.lex` in seconds |
 
 Jira changelogs are read from the public Jira Cloud API and cached under
 `CACHE_DIR/jira/` (default `/download/provider/jira/`); no Jira token is required. The live Jira fetch runs in the background after the provider is ready and never blocks startup.
