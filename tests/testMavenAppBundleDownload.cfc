@@ -21,11 +21,11 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( mappings.antlr.artifact ).toBe( "antlr" );
 			});
 
-			it( title="rawSearchPaths for antlr 2.7.6 is the Central group/artifact layout", body=function() {
+			it( title="rawSearchPaths for antlr 2.7.6 is the Central group/artifact layout first, then org.lucee:antlr", body=function() {
 				var matcher = new services.legacy.MavenMatcher();
 				var paths = matcher.rawSearchPaths( "antlr", "2.7.6" );
 
-				expect( paths ).toBe( [ "/antlr/antlr/2.7.6/antlr-2.7.6.jar" ] );
+				expect( paths ).toBe( [ "/antlr/antlr/2.7.6/antlr-2.7.6.jar", "/org/lucee/antlr/2.7.6/antlr-2.7.6.jar" ] );
 			});
 
 			it( title="rawSearchPaths for an unmapped single-segment name also tries group=artifact", body=function() {
