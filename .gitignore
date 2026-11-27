@@ -32,4 +32,4 @@ update/missing-bundles.txt
 /apps/skill/downloads/*
 !/apps/skill/downloads/.gitkeep
 /apps/updateserver-maven/services/legacy/meta/
-/apps/updateserver/services/legacy/build/
+/apps/updateserver/services/legacy/build/servers/
