@@ -1,9 +1,10 @@
 /**
- * In-memory cache of the serialised extension listing (/rest/extension/provider/info).
+ * In-memory cache of serialised listings: the extension listing (/rest/extension/provider/info, application.infoListingCache)
+ * and the core update listings (/rest/update/provider/info/{version} and /list, application.coreListingCache).
  *
  * An entry is the JSON of one listing, built once and then served as it is: no file read, no parse and no new
- * serialisation per request. An entry is valid as long as the generation of the extension meta it was built from
- * is the current one. When the meta changed, the old entry is still served and rebuilt in a background thread
+ * serialisation per request. An entry is valid as long as the generation of the data it was built from (the
+ * extension meta, the core versions and Jira issues) is the current one. When the meta changed, the old entry is still served and rebuilt in a background thread
  * (one per key at a time). A miss is built on the request, concurrent requests for the same key wait for that
  * one build.
  */
@@ -22,7 +23,8 @@ component {
 	/**
 	 * The entry for a key: { json, etag, generation, builtAt }.
 	 *
-	 * @generation the generation of the meta the listing is built from now, see ExtensionMetadataReader.getMetaGeneration()
+	 * @generation the generation of the data the listing is built from now, see ExtensionMetadataReader.getMetaGeneration()
+	 *             and CoreVersions.getGeneration()
 	 * @producer   a function without arguments that returns the JSON string of the listing
 	 * @force      build it on this request, whatever is cached
 	 */
@@ -114,7 +116,7 @@ component {
 				_build( attributes.key, attributes.generation, attributes.producer );
 			} catch ( any e ) {
 				// the old entry is kept and served
-				SystemOutput( "Extension listing rebuild failed for [#attributes.key#]: #e.message#", true );
+				SystemOutput( "Listing rebuild failed for [#attributes.key#]: #e.message#", true );
 			} finally {
 				variables.building[ attributes.key ] = 0;
 			}

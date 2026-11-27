@@ -43,6 +43,11 @@ component accessors=true {
 		variables.flatFallbackHits = {}; // file name > how often it was served from the flat files
 		variables.cache          = "";
 		variables.sources        = {};
+		// see getGeneration()
+		variables.instanceId     = Replace( CreateUUID(), "-", "", "all" );
+		variables.generation     = 0;
+		variables.versionsHash   = "";
+		variables.refreshStarted = 0; // GetTickCount() of the running background refresh, 0 when none runs
 		_parseVersionFilter( arguments.versionFilter );
 
 		return this;
@@ -92,6 +97,52 @@ component accessors=true {
 
 	public void function reset() {
 		variables.cache = "";
+	}
+
+	/**
+	 * Identifies the versions served: a new value only when a load gives other versions than the one before. Caches of
+	 * anything built from the versions (the /info and /list answers) compare it to know when they are out of date.
+	 */
+	public string function getGeneration() {
+		return variables.instanceId & "-" & variables.generation;
+	}
+
+	/**
+	 * Without a remote call on the request: versions that are older than cacheSeconds are read again in a background
+	 * thread (one at a time), getGeneration() changes once that gave other versions. Only when nothing was ever read
+	 * they are read on the request.
+	 */
+	public void function refreshIfStale() {
+		if ( _isFresh() ) {
+			return;
+		}
+		if ( !IsStruct( variables.cache ) ) {
+			getVersions();
+			return;
+		}
+
+		var start = false;
+		lock name="core-versions-refresh-start-#variables.instanceId#" type="exclusive" timeout=1 throwOnTimeout=false {
+			// a refresh that runs for longer than 10 minutes is taken as dead
+			if ( variables.refreshStarted == 0 || ( GetTickCount() - variables.refreshStarted ) > 600000 ) {
+				variables.refreshStarted = GetTickCount();
+				start = true;
+			}
+		}
+		if ( !start ) {
+			return;
+		}
+
+		thread name="core-versions-refresh-#CreateUUID()#" action="run" {
+			try {
+				setting requesttimeout=600;
+				getVersions();
+			} catch ( any e ) {
+				SystemOutput( "Core versions could not be refreshed in the background: #e.message#", true );
+			} finally {
+				variables.refreshStarted = 0;
+			}
+		}
 	}
 
 	/**
@@ -333,6 +384,13 @@ component accessors=true {
 			// a Maven layout that is not (completely) readable is asked again soon
 			, ttl           = ( ( maven.complete && StructCount( mavenVersions ) > 0 ) || !_hasMaven() ) && !flatFailed ? variables.cacheSeconds : Min( variables.cacheSeconds, 60 )
 		};
+
+		// after the versions are in place, so a listing rebuilt for the new generation has them
+		var versionsHash = Hash( SerializeJSON( sorted ), "MD5" );
+		if ( versionsHash != variables.versionsHash ) {
+			variables.versionsHash = versionsHash;
+			variables.generation++;
+		}
 	}
 
 	private struct function _flatTypes( required struct entry ) {
