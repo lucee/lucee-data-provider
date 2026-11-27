@@ -183,8 +183,8 @@ component {
 		var userAgent = "lucee-data-provider getdate";
 
 		return {
-			head = function( required string url, required numeric timeout ) {
-				http url=arguments.url method="head" timeout=arguments.timeout redirect=true useragent=userAgent result="local.res" {}
+			head = function( required string fileUrl, required numeric timeout ) {
+				http url=arguments.fileUrl method="head" timeout=arguments.timeout redirect=true useragent=userAgent result="local.res" {}
 				var headers = local.res.responseHeader ?: {};
 				return {
 					  status        = Val( local.res.statusCode ?: 0 )

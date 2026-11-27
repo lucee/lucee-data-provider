@@ -17,7 +17,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				var svc = _new(
 					  list   = [ "6.2.3.35", "6.2.3.34-SNAPSHOT", "8.0.0.310" ]
 					, detail = function( version ) { calls.detail++; return { lastModified=Now() }; }
-					, head   = function( url, timeout ) { calls.head++; return { status=200, lastModified=Now() }; }
+					, head   = function( required string fileUrl, required numeric timeout ) { calls.head++; return { status=200, lastModified=Now() }; }
 				);
 
 				expect( function() { svc.get( "6.2.3.34" ); } )
@@ -32,7 +32,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				var svc = _new(
 					  list   = [ "8.0.0.310" ]
 					, detail = function( version ) { return { lastModified=date, jar="https://example.test/lucee-8.0.0.310.jar" }; }
-					, head   = function( url, timeout ) { calls.head++; return { status=200, lastModified=Now() }; }
+					, head   = function( required string fileUrl, required numeric timeout ) { calls.head++; return { status=200, lastModified=Now() }; }
 				);
 
 				var result = svc.get( "8.0.0.310" );
@@ -47,15 +47,15 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			});
 
 			it( title="falls back to one HEAD request with the configured timeout when the catalog has no lastModified", body=function() {
-				var calls = { head=0, timeout=0, url="" };
+				var calls = { head=0, timeout=0, fileUrl="" };
 				var date = CreateDateTime( 2025, 10, 31, 9, 8, 4 );
 				var svc = _new(
 					  list    = [ "6.2.3.35" ]
 					, detail  = function( version ) { return { jar="https://example.test/org/lucee/lucee/6.2.3.35/lucee-6.2.3.35.jar" }; }
-					, head    = function( url, timeout ) {
+					, head    = function( required string fileUrl, required numeric timeout ) {
 						calls.head++;
-						calls.timeout = timeout;
-						calls.url = url;
+						calls.timeout = arguments.timeout;
+						calls.fileUrl = arguments.fileUrl;
 						return { status=200, lastModified=date };
 					}
 					, timeout = 5
@@ -65,21 +65,21 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect( DateCompare( result, date ) ).toBe( 0 );
 				expect( calls.head ).toBe( 1 );
 				expect( calls.timeout ).toBe( 5 );
-				expect( calls.url ).toBe( "https://example.test/org/lucee/lucee/6.2.3.35/lucee-6.2.3.35.jar" );
+				expect( calls.fileUrl ).toBe( "https://example.test/org/lucee/lucee/6.2.3.35/lucee-6.2.3.35.jar" );
 			});
 
 			it( title="HEADs the Maven layout pom when the catalog detail has no file URL", body=function() {
-				var calls = { url="" };
+				var calls = { fileUrl="" };
 				var date = CreateDateTime( 2024, 1, 2, 3, 4, 5 );
 				var svc = _new(
 					  list      = [ "7.1.2.195" ]
 					, detail    = function( version ) { return {}; }
-					, head      = function( url, timeout ) { calls.url = url; return { status=200, lastModified=date }; }
+					, head      = function( required string fileUrl, required numeric timeout ) { calls.fileUrl = arguments.fileUrl; return { status=200, lastModified=date }; }
 					, mixedRepo = "https://maven.lucee-services.com/"
 				);
 
 				expect( DateCompare( svc.get( "7.1.2.195" ), date ) ).toBe( 0 );
-				expect( calls.url ).toBe( "https://maven.lucee-services.com/org/lucee/lucee/7.1.2.195/lucee-7.1.2.195.pom" );
+				expect( calls.fileUrl ).toBe( "https://maven.lucee-services.com/org/lucee/lucee/7.1.2.195/lucee-7.1.2.195.pom" );
 			});
 
 			it( title="caches a release date indefinitely, a SNAPSHOT for an hour, and a listed miss for 5 minutes", body=function() {
@@ -88,12 +88,12 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				var svc = _new(
 					  list  = [ "8.0.0.310", "8.0.1.107-SNAPSHOT", "7.0.0.395" ]
 					, detail = function( version ) { return {}; }
-					, head   = function( url, timeout ) {
-						if ( Find( "8.0.0.310", url ) ) {
+					, head   = function( required string fileUrl, required numeric timeout ) {
+						if ( Find( "8.0.0.310", arguments.fileUrl ) ) {
 							heads[ "8.0.0.310" ]++;
 							return { status=200, lastModified=CreateDateTime( 2026, 1, 1, 0, 0, 0 ) };
 						}
-						if ( Find( "8.0.1.107-SNAPSHOT", url ) ) {
+						if ( Find( "8.0.1.107-SNAPSHOT", arguments.fileUrl ) ) {
 							heads[ "8.0.1.107-SNAPSHOT" ]++;
 							return { status=200, lastModified=CreateDateTime( 2026, 2, 2, 0, 0, 0 ) };
 						}
@@ -139,7 +139,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				var svc = _new(
 					  list   = [ "8.0.0.310" ]
 					, detail = function( version ) { return {}; }
-					, head   = function( url, timeout ) {
+					, head   = function( required string fileUrl, required numeric timeout ) {
 						heads.n++;
 						return { status=0, lastModified="" };
 					}
