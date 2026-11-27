@@ -7,7 +7,36 @@ import type { Env } from "./env";
 import { BridgeError, UPSTREAM_NOT_FOUND } from "./errors";
 import { buildIndex, deserializeIndex, serializeIndex, type RestIndex, type StoredIndex } from "./rest-index";
 import { applyRestVersionOverlays } from "./rest-overlays";
+import { checksumOfText, type ChecksumType } from "./checksum";
+import {
+	buildArtifactMetadataXml,
+	buildGroupMetadataXml,
+	generateDirectoryListingHtml,
+	groupFingerprint,
+	isExtensionArtifactId,
+	listingFingerprint,
+	parseArtifactMetadataXml,
+	parseDirectoryListingHtml,
+	parseGroupMetadataXml,
+	splitMetadataChecksum,
+	summarizeVersions,
+	versionsFingerprint,
+	type DirectoryEntry,
+	type GroupArtifact
+} from "./metadata-generate";
+import { mavenTimestamp } from "./cfml";
+import {
+	artifactFromR2Key,
+	eventObjectKeys,
+	listArtifactIds,
+	listArtifactVersions,
+	listDirectoryEntries,
+	listRootsFromConfig
+} from "./r2-metadata";
 import { contentTypeForPath, type BridgeSupport, type SupportIo, type UpstreamContent } from "./support";
+
+/** Cache API origin for generated metadata: a fixed key, not the request host. */
+const GENERATED_CACHE_ORIGIN = "https://lucee-maven-bridge.internal";
 
 const GENERATION_KEY = "cache-generation";
 /** bumped by ?flush=metadata; part of the Cache API key of every listing and metadata file */
@@ -60,6 +89,11 @@ export class RuntimeIo implements SupportIo {
 
 	get r2(): R2Bucket | undefined {
 		return this.config.r2Mode === "serve" ? this.env.ARTIFACTS : undefined;
+	}
+
+	/** R2 bucket used to list artifacts for generated metadata (cron and queue have no hostname, so r2Mode may be off). */
+	private get artifacts(): R2Bucket | undefined {
+		return this.env.ARTIFACTS;
 	}
 
 	private signal(support: BridgeSupport): AbortSignal {
@@ -195,6 +229,10 @@ export class RuntimeIo implements SupportIo {
 	 * when it changed, and by the cron) as the answer when the upstream cannot be reached.
 	 */
 	private async getMetadataContent(support: BridgeSupport, rel: string): Promise<UpstreamContent> {
+		if (this.shouldGenerateMetadata(support, rel)) {
+			return this.getGeneratedMetadata(support, rel);
+		}
+
 		const ttlSeconds = this.config.metadataCacheTtlSeconds;
 		const cacheKey =
 			ttlSeconds > 0
@@ -335,7 +373,11 @@ export class RuntimeIo implements SupportIo {
 		for (const support of supports) {
 			try {
 				if (support.hasUpstream()) {
-					for (const rel of groupLevelFiles(support)) await this.refreshUpstreamFile(support, rel);
+					if (this.config.metadataSource === "upstream") {
+						for (const rel of groupLevelFiles(support)) await this.refreshUpstreamFile(support, rel);
+					} else {
+						await this.rebuildAllGenerated(support);
+					}
 				} else {
 					await this.refreshIndex(support);
 				}
@@ -357,5 +399,284 @@ export class RuntimeIo implements SupportIo {
 		await Promise.all(deletes);
 		await this.bumpGeneration();
 		await this.syncAll(supports);
+	}
+
+	// --- generated org.lucee metadata (R2 listings, optional union with the upstream file) ---
+
+	private shouldGenerateMetadata(support: BridgeSupport, rel: string): boolean {
+		if (this.config.metadataSource === "upstream") return false;
+		if (!support.hasUpstream()) return false;
+		return this.generatedMetadataKind(support, rel) !== undefined;
+	}
+
+	/**
+	 * group-index, group-metadata (+ checksums) and artifact-metadata (+ checksums) are generated.
+	 * Artifact directory listings and version-level maven-metadata.xml still come from the upstream / R2 object.
+	 */
+	private generatedMetadataKind(
+		support: BridgeSupport,
+		rel: string
+	): "group-index" | "group-metadata" | "artifact-metadata" | undefined {
+		const path = cleanRel(rel);
+		const group = support.groupPath;
+		if (path === `${group}/index.html`) return "group-index";
+		const prefix = group + "/";
+		if (!path.startsWith(prefix)) return undefined;
+		const rest = path.slice(prefix.length);
+		const segs = rest.split("/");
+		const meta = splitMetadataChecksum(segs[segs.length - 1] ?? "");
+		if (segs.length === 1 && meta) return "group-metadata";
+		if (segs.length === 2 && meta) return "artifact-metadata";
+		return undefined;
+	}
+
+	private async generatedKvKey(rel: string): Promise<string> {
+		const [cacheGen, metaGen] = await Promise.all([this.getGeneration(), this.getMetadataGeneration()]);
+		return `generated-metadata:${cacheGen}:${metaGen}:${cleanRel(rel)}`;
+	}
+
+	/** Cache API key that does not include the request origin, so every hostname shares the same entry. */
+	private async generatedCacheRequest(rel: string): Promise<Request> {
+		const [cacheGen, metaGen] = await Promise.all([this.getGeneration(), this.getMetadataGeneration()]);
+		return new Request(`${GENERATED_CACHE_ORIGIN}/__generated/${cacheGen}/${metaGen}/${encodeURIComponent(cleanRel(rel))}`);
+	}
+
+	private async getGeneratedMetadata(support: BridgeSupport, rel: string): Promise<UpstreamContent> {
+		const path = cleanRel(rel);
+		const fileName = path.split("/").pop() ?? "";
+		const meta = splitMetadataChecksum(fileName);
+		const xmlRel = meta?.checksumType ? path.slice(0, -(meta.checksumType.length + 1)) : path;
+
+		const ttlSeconds = this.config.metadataGenerateTtlSeconds;
+		const cacheReq = ttlSeconds > 0 ? await this.generatedCacheRequest(path) : undefined;
+		const hit = await this.cacheGet(cacheReq);
+		if (hit) return { body: await hit.text(), contentType: contentTypeForPath(path) };
+
+		const content = meta?.checksumType
+			? await this.checksumOfGenerated(support, xmlRel, meta.checksumType)
+			: await this.loadOrRebuildGenerated(support, xmlRel);
+		this.cachePut(cacheReq, content.body, ttlSeconds || this.config.metadataCacheTtlSeconds, content.contentType);
+		return { body: content.body, contentType: contentTypeForPath(path) };
+	}
+
+	private async checksumOfGenerated(support: BridgeSupport, xmlRel: string, type: ChecksumType): Promise<UpstreamContent> {
+		const xml = await this.loadOrRebuildGenerated(support, xmlRel);
+		return { body: await checksumOfText(xml.body, type), contentType: "text/plain; charset=utf-8" };
+	}
+
+	private async loadOrRebuildGenerated(support: BridgeSupport, rel: string): Promise<UpstreamContent> {
+		const key = await this.generatedKvKey(rel);
+		const ttl = this.config.metadataGenerateTtlSeconds;
+		const stored = await this.env.BRIDGE_CACHE.get<{ body: string; contentType: string; generatedAt: string; fingerprint: string }>(
+			key,
+			"json"
+		);
+		if (stored && (ttl <= 0 || Date.now() - Date.parse(stored.generatedAt) < ttl * 1000)) {
+			return { body: stored.body, contentType: stored.contentType };
+		}
+		return this.rebuildGenerated(support, rel, stored ?? undefined);
+	}
+
+	private async storeGenerated(
+		rel: string,
+		body: string,
+		contentType: string,
+		fingerprint: string,
+		previous?: { body: string; fingerprint: string; generatedAt: string; contentType: string }
+	): Promise<UpstreamContent> {
+		const stable = previous && previous.fingerprint === fingerprint ? previous : undefined;
+		const stored = {
+			body: stable?.body ?? body,
+			contentType: stable?.contentType ?? contentType,
+			generatedAt: new Date().toISOString(),
+			fingerprint
+		};
+		const ttl = Math.max(this.config.metadataGenerateTtlSeconds * 2, 24 * 60 * 60);
+		await this.env.BRIDGE_CACHE.put(await this.generatedKvKey(rel), JSON.stringify(stored), {
+			expirationTtl: Math.max(60, ttl)
+		});
+		return { body: stored.body, contentType: stored.contentType };
+	}
+
+	private async rebuildGenerated(
+		support: BridgeSupport,
+		rel: string,
+		previous?: { body: string; contentType: string; generatedAt: string; fingerprint: string }
+	): Promise<UpstreamContent> {
+		const path = cleanRel(rel);
+		const kind = this.generatedMetadataKind(support, path);
+		if (kind === "group-index") return this.rebuildGroupIndex(support, previous);
+		if (kind === "group-metadata") return this.rebuildGroupMetadata(support, previous);
+		if (kind === "artifact-metadata") {
+			const artifactId = path.slice(support.groupPath.length + 1).split("/")[0];
+			return this.rebuildArtifactMetadata(support, artifactId, previous);
+		}
+		throw new BridgeError(`Cannot generate metadata for [${path}]`, UPSTREAM_NOT_FOUND);
+	}
+
+	private async r2Versions(support: BridgeSupport, artifactId: string): Promise<string[]> {
+		const bucket = this.artifacts;
+		if (!bucket) return [];
+		return listArtifactVersions(bucket, support.groupPath, artifactId, listRootsFromConfig(this.config));
+	}
+
+	private async r2ArtifactIds(support: BridgeSupport): Promise<string[]> {
+		const bucket = this.artifacts;
+		if (!bucket) return [];
+		return listArtifactIds(bucket, support.groupPath, listRootsFromConfig(this.config));
+	}
+
+	private async r2DirectoryEntries(support: BridgeSupport): Promise<DirectoryEntry[]> {
+		const bucket = this.artifacts;
+		if (!bucket) return [];
+		return listDirectoryEntries(bucket, support.groupPath, listRootsFromConfig(this.config));
+	}
+
+	private async upstreamText(support: BridgeSupport, rel: string): Promise<string | undefined> {
+		if (this.config.metadataSource !== "merge") return undefined;
+		try {
+			return (await this.fetchUpstreamUrl(support, rel)).body;
+		} catch (e) {
+			if (e instanceof BridgeError && e.type === UPSTREAM_NOT_FOUND) return undefined;
+			console.warn(`maven-bridge merge: upstream [${rel}] failed, continuing with R2 only`, e);
+			return undefined;
+		}
+	}
+
+	private async unionArtifactVersions(support: BridgeSupport, artifactId: string): Promise<string[]> {
+		const fromR2 = await this.r2Versions(support, artifactId);
+		const xml = await this.upstreamText(support, `${support.groupPath}/${artifactId}/maven-metadata.xml`);
+		const fromUpstream = xml ? parseArtifactMetadataXml(xml).versions : [];
+		return [...new Set([...fromR2, ...fromUpstream])];
+	}
+
+	private async rebuildArtifactMetadata(
+		support: BridgeSupport,
+		artifactId: string,
+		previous?: { body: string; contentType: string; generatedAt: string; fingerprint: string }
+	): Promise<UpstreamContent> {
+		const versions = await this.unionArtifactVersions(support, artifactId);
+		if (!versions.length) throw new BridgeError(`Upstream not found [${artifactId}]`, UPSTREAM_NOT_FOUND);
+		const fingerprint = versionsFingerprint(versions);
+		const lastUpdated = mavenTimestamp(new Date());
+		const body = buildArtifactMetadataXml(support.groupId, artifactId, versions, lastUpdated);
+		return this.storeGenerated(
+			`${support.groupPath}/${artifactId}/maven-metadata.xml`,
+			body,
+			"application/xml; charset=utf-8",
+			fingerprint,
+			previous
+		);
+	}
+
+	private async unionGroupArtifacts(support: BridgeSupport): Promise<GroupArtifact[]> {
+		const ids = new Set<string>();
+		for (const id of await this.r2ArtifactIds(support)) {
+			if (isExtensionArtifactId(id)) ids.add(id);
+		}
+		const xml = await this.upstreamText(support, `${support.groupPath}/maven-metadata.xml`);
+		const fromUpstream = xml ? parseGroupMetadataXml(xml) : [];
+		for (const a of fromUpstream) ids.add(a.artifactId);
+		const artifacts: GroupArtifact[] = [];
+		for (const artifactId of ids) {
+			const versions = await this.unionArtifactVersions(support, artifactId);
+			if (!versions.length) {
+				const fallback = fromUpstream.find((a) => a.artifactId === artifactId);
+				if (fallback) artifacts.push(fallback);
+				continue;
+			}
+			const summarized = summarizeVersions(versions);
+			artifacts.push({ artifactId, latest: summarized.latest, release: summarized.release });
+		}
+		return artifacts.sort((a, b) => a.artifactId.localeCompare(b.artifactId));
+	}
+
+	private async rebuildGroupMetadata(
+		support: BridgeSupport,
+		previous?: { body: string; contentType: string; generatedAt: string; fingerprint: string }
+	): Promise<UpstreamContent> {
+		const artifacts = await this.unionGroupArtifacts(support);
+		const body = buildGroupMetadataXml(support.groupId, artifacts, mavenTimestamp(new Date()));
+		return this.storeGenerated(
+			`${support.groupPath}/maven-metadata.xml`,
+			body,
+			"application/xml; charset=utf-8",
+			groupFingerprint(artifacts),
+			previous
+		);
+	}
+
+	private async unionDirectoryEntries(support: BridgeSupport): Promise<DirectoryEntry[]> {
+		const byName = new Map<string, DirectoryEntry>();
+		for (const entry of await this.r2DirectoryEntries(support)) byName.set(entry.name, entry);
+		const html = await this.upstreamText(support, `${support.groupPath}/index.html`);
+		if (html) {
+			for (const entry of parseDirectoryListingHtml(html)) {
+				if (!byName.has(entry.name)) byName.set(entry.name, entry);
+			}
+		}
+		return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+	}
+
+	private async rebuildGroupIndex(
+		support: BridgeSupport,
+		previous?: { body: string; contentType: string; generatedAt: string; fingerprint: string }
+	): Promise<UpstreamContent> {
+		const entries = await this.unionDirectoryEntries(support);
+		const body = generateDirectoryListingHtml(entries);
+		return this.storeGenerated(
+			`${support.groupPath}/index.html`,
+			body,
+			"text/html; charset=utf-8",
+			listingFingerprint(entries),
+			previous
+		);
+	}
+
+	/** Rebuild one artifact's metadata and the group files (used by the R2 queue consumer). */
+	async rebuildAffectedMetadata(support: BridgeSupport, artifactIds: Iterable<string>): Promise<void> {
+		const unique = [...new Set([...artifactIds].filter((id) => id.length))];
+		for (const artifactId of unique) {
+			try {
+				await this.rebuildArtifactMetadata(support, artifactId);
+			} catch (e) {
+				if (e instanceof BridgeError && e.type === UPSTREAM_NOT_FOUND) continue;
+				throw e;
+			}
+		}
+		await this.rebuildGroupMetadata(support);
+		await this.rebuildGroupIndex(support);
+	}
+
+	/** Hourly safety net: rebuild every generated file from the current R2 listing (and upstream, in merge mode). */
+	async rebuildAllGenerated(support: BridgeSupport): Promise<void> {
+		const ids = new Set(await this.r2ArtifactIds(support));
+		if (this.config.metadataSource === "merge") {
+			const xml = await this.upstreamText(support, `${support.groupPath}/maven-metadata.xml`);
+			if (xml) for (const a of parseGroupMetadataXml(xml)) ids.add(a.artifactId);
+			const html = await this.upstreamText(support, `${support.groupPath}/index.html`);
+			if (html) for (const e of parseDirectoryListingHtml(html)) ids.add(e.name);
+		}
+		await this.rebuildAffectedMetadata(support, ids);
+	}
+
+	/**
+	 * Queue consumer: object-created notifications from the R2 bucket. Rebuilds the
+	 * affected artifact metadata and the group files. Metadata object keys are ignored.
+	 */
+	async handleObjectCreated(supports: BridgeSupport[], batch: { messages: readonly { body: unknown; ack: () => void }[] }): Promise<void> {
+		const keys = batch.messages.flatMap((m) => eventObjectKeys(m.body));
+		for (const support of supports) {
+			if (!support.hasUpstream()) continue;
+			if (this.config.metadataSource === "upstream") continue;
+			const roots = listRootsFromConfig(this.config);
+			const ids = new Set<string>();
+			for (const key of keys) {
+				const hit = artifactFromR2Key(key, support.groupPath, roots);
+				if (hit) ids.add(hit.artifactId);
+			}
+			if (ids.size) await this.rebuildAffectedMetadata(support, ids);
+		}
+		for (const message of batch.messages) message.ack();
 	}
 }

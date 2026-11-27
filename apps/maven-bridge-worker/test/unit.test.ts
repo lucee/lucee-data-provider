@@ -43,10 +43,13 @@ describe("parseMavenPath", () => {
 		["/org/lucee", { type: "group-index" }],
 		["/org/lucee/", { type: "group-index" }],
 		["/org/lucee/maven-metadata.xml", { type: "group-metadata" }],
+		["/org/lucee/maven-metadata.xml.sha1", { type: "group-metadata", checksumType: "sha1" }],
 		["/org/lucee/redis-extension", { type: "artifact-index", artifactId: "redis-extension" }],
 		["/org/lucee/redis-extension/maven-metadata.xml", { type: "artifact-metadata", artifactId: "redis-extension" }],
+		["/org/lucee/redis-extension/maven-metadata.xml.md5", { type: "artifact-metadata", artifactId: "redis-extension", checksumType: "md5" }],
 		["/org/lucee/redis-extension/3.0.0.1", { type: "version-index", version: "3.0.0.1" }],
 		["/org/lucee/redis-extension/3.0.0.1-SNAPSHOT/maven-metadata.xml", { type: "version-metadata", version: "3.0.0.1-SNAPSHOT" }],
+		["/org/lucee/redis-extension/3.0.0.1-SNAPSHOT/maven-metadata.xml.sha1", { type: "version-metadata", version: "3.0.0.1-SNAPSHOT", checksumType: "sha1" }],
 		[
 			"/org/lucee/redis-extension/3.0.0.1/redis-extension-3.0.0.1.lex",
 			{ type: "artifact-file", artifactId: "redis-extension", version: "3.0.0.1", classifier: "", extension: "lex" }

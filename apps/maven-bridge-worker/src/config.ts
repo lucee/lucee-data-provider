@@ -13,6 +13,10 @@ export interface BridgeConfig {
 	cacheTtlMinutes: number;
 	/** seconds directory listings and maven-metadata.xml files are cached per location; 0 = not cached */
 	metadataCacheTtlSeconds: number;
+	/** origin of generated org.lucee metadata: upstream | r2 | merge */
+	metadataSource: MetadataSource;
+	/** seconds a generated metadata file is reused from KV; 0 = always rebuild */
+	metadataGenerateTtlSeconds: number;
 	/** seconds a 404 of the upstream is remembered per location; 0 = never */
 	negativeCacheTtlSeconds: number;
 	/** seconds */
@@ -38,6 +42,16 @@ export const DEFAULT_GITHUB_RELEASES_URL = "https://github.com/lucee/Lucee/relea
 export const DEFAULT_R2_FILL_STREAM_MAX_MB = 32;
 export const DEFAULT_NEGATIVE_CACHE_TTL_MINUTES = 5;
 export const DEFAULT_METADATA_CACHE_TTL_MINUTES = 5;
+export const DEFAULT_METADATA_GENERATE_TTL_MINUTES = 60;
+export type MetadataSource = "upstream" | "r2" | "merge";
+export const DEFAULT_METADATA_SOURCE: MetadataSource = "merge";
+
+export function parseMetadataSource(value: unknown): MetadataSource {
+	const raw = String(value ?? "").trim().toLowerCase();
+	if (!raw) return DEFAULT_METADATA_SOURCE;
+	if (raw === "upstream" || raw === "r2" || raw === "merge") return raw;
+	throw new Error(`Invalid METADATA_SOURCE [${value}], expected "upstream", "r2" or "merge"`);
+}
 
 export function defaultProviders(): ProviderEntry[] {
 	return [
@@ -164,6 +178,12 @@ export function readConfig(env: Env, hostname?: string): BridgeConfig {
 		: val(env.METADATA_CACHE_TTL_MINUTES);
 	if (metadataTtlMinutes < 0) throw new Error(`Invalid METADATA_CACHE_TTL_MINUTES [${env.METADATA_CACHE_TTL_MINUTES}]`);
 
+	const metadataSource = parseMetadataSource(env.METADATA_SOURCE);
+	const generateTtlMinutes = env.METADATA_GENERATE_TTL_MINUTES === undefined || String(env.METADATA_GENERATE_TTL_MINUTES).trim() === ""
+		? DEFAULT_METADATA_GENERATE_TTL_MINUTES
+		: val(env.METADATA_GENERATE_TTL_MINUTES);
+	if (generateTtlMinutes < 0) throw new Error(`Invalid METADATA_GENERATE_TTL_MINUTES [${env.METADATA_GENERATE_TTL_MINUTES}]`);
+
 	const r2Hosts = String(env.R2_HOSTS ?? "")
 		.split(",")
 		.map((h) => h.trim().toLowerCase())
@@ -174,6 +194,8 @@ export function readConfig(env: Env, hostname?: string): BridgeConfig {
 		providers,
 		cacheTtlMinutes,
 		metadataCacheTtlSeconds: Math.floor(metadataTtlMinutes * 60),
+		metadataSource,
+		metadataGenerateTtlSeconds: Math.floor(generateTtlMinutes * 60),
 		negativeCacheTtlSeconds: Math.floor(negativeTtlMinutes * 60),
 		timeout,
 		githubReleasesUrl,

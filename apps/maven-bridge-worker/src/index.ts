@@ -128,5 +128,10 @@ export default {
 		if (failed.length) {
 			throw new Error(`maven-bridge sync failed for ${failed.map((f) => `[${f.groupId}: ${f.error}]`).join(", ")}`);
 		}
+	},
+
+	async queue(batch, env, ctx): Promise<void> {
+		const { io, registry } = createBridge(env, (p) => ctx.waitUntil(p));
+		await io.handleObjectCreated(registry.getSupports(), batch);
 	}
 } satisfies ExportedHandler<Env>;

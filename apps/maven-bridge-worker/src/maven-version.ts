@@ -124,3 +124,19 @@ export function sortVersions(versions: Iterable<string>): string[] {
 	};
 	return [...versions].sort((a, b) => compareItems(key(a), key(b)) || cmp(a, b));
 }
+
+/** true when the version string contains -SNAPSHOT (Maven metadata <release> excludes these). */
+export function isSnapshotVersion(version: string): boolean {
+	return version.toUpperCase().includes("-SNAPSHOT");
+}
+
+/**
+ * Highest non-SNAPSHOT version in a list already sorted oldest-first.
+ * RC, BETA and ALPHA count as a release, matching the files written for cdn.lucee.org.
+ */
+export function findLatestRelease(sortedVersions: readonly string[]): string {
+	for (let i = sortedVersions.length - 1; i >= 0; i--) {
+		if (!isSnapshotVersion(sortedVersions[i])) return sortedVersions[i];
+	}
+	return "";
+}

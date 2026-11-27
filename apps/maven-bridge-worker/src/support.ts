@@ -1,6 +1,7 @@
 // Port of BridgeSupport.cfc: one configured provider / groupId.
 import { compareNoCase, containsNoCase, encodeForHtml, equalsNoCase, isNumeric, mavenTimestamp, startsWithNoCase, xmlFormat } from "./cfml";
-import { splitChecksum } from "./checksum";
+import { splitChecksum, type ChecksumType } from "./checksum";
+import { splitMetadataChecksum } from "./metadata-generate";
 import { DEFAULT_GITHUB_RELEASES_URL, normalizeUpstreamUrl, val } from "./config";
 import { BridgeError, isUpstreamNotFound } from "./errors";
 import type { RestIndex } from "./rest-index";
@@ -35,6 +36,8 @@ export interface ParsedPath {
 	version?: string;
 	classifier?: string;
 	extension?: string;
+	/** set when the path is maven-metadata.xml.<md5|sha1|sha256|sha512> */
+	checksumType?: ChecksumType;
 }
 
 export interface UpstreamContent {
@@ -109,19 +112,22 @@ export class BridgeSupport {
 
 		const parts = path.slice(prefix.length + 1).split("/").filter((p) => p.length);
 		const groupId = this.groupId;
-		const isMeta = (p: string) => equalsNoCase(p, "maven-metadata.xml");
+		const meta = (p: string) => splitMetadataChecksum(p);
 
 		if (parts.length === 1) {
-			if (isMeta(parts[0])) return { type: "group-metadata", groupId };
+			const m = meta(parts[0]);
+			if (m) return { type: "group-metadata", groupId, checksumType: m.checksumType };
 			return { type: "artifact-index", groupId, artifactId: parts[0] };
 		}
 		if (parts.length === 2) {
-			if (isMeta(parts[1])) return { type: "artifact-metadata", groupId, artifactId: parts[0] };
+			const m = meta(parts[1]);
+			if (m) return { type: "artifact-metadata", groupId, artifactId: parts[0], checksumType: m.checksumType };
 			return { type: "version-index", groupId, artifactId: parts[0], version: parts[1] };
 		}
 		if (parts.length === 3) {
 			const [artifactId, version, fileName] = parts;
-			if (isMeta(fileName)) return { type: "version-metadata", groupId, artifactId, version };
+			const m = meta(fileName);
+			if (m) return { type: "version-metadata", groupId, artifactId, version, checksumType: m.checksumType };
 			// after "<artifactId>-<version>" comes ".<extension>" or "-<classifier>.<extension>"
 			const base = artifactId + "-" + version;
 			if (startsWithNoCase(fileName, base) && fileName.length > base.length) {
@@ -144,13 +150,14 @@ export class BridgeSupport {
 		const g = this.groupPath;
 		const a = parsed.artifactId;
 		const v = parsed.version;
+		const metaFile = parsed.checksumType ? `maven-metadata.xml.${parsed.checksumType}` : "maven-metadata.xml";
 		switch (parsed.type) {
 			case "group-index": return `${g}/index.html`;
-			case "group-metadata": return `${g}/maven-metadata.xml`;
+			case "group-metadata": return `${g}/${metaFile}`;
 			case "artifact-index": return `${g}/${a}/index.html`;
-			case "artifact-metadata": return `${g}/${a}/maven-metadata.xml`;
+			case "artifact-metadata": return `${g}/${a}/${metaFile}`;
 			case "version-index": return `${g}/${a}/${v}/index.html`;
-			case "version-metadata": return `${g}/${a}/${v}/maven-metadata.xml`;
+			case "version-metadata": return `${g}/${a}/${v}/${metaFile}`;
 			case "artifact-file": {
 				let fileName = `${a}-${v}`;
 				if (parsed.classifier) fileName += "-" + parsed.classifier;
@@ -446,5 +453,8 @@ export function contentTypeForPath(relativePath: string): string {
 	const path = relativePath.toLowerCase();
 	if (path.endsWith(".xml")) return "application/xml; charset=utf-8";
 	if (path.endsWith(".html")) return "text/html; charset=utf-8";
+	if (path.endsWith(".md5") || path.endsWith(".sha1") || path.endsWith(".sha256") || path.endsWith(".sha512")) {
+		return "text/plain; charset=utf-8";
+	}
 	return "application/octet-stream";
 }
