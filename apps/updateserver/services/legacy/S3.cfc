@@ -395,14 +395,20 @@ component {
 	}
 
 	/**
-	 * ForgeBox zips (fb / fbl) are built for final releases and for versions whose
-	 * jar is no older than 24 hours. A non-release without a usable date-jar is skipped.
+	 * Artifacts (lco, war, light, express, fb, fbl) are built for final releases
+	 * and for versions whose jar is no older than 24 hours. A non-release without
+	 * a usable date-jar is skipped.
 	 */
-	public boolean function shouldBuildForgeBox(required struct s3) {
+	public boolean function shouldBuildArtifacts(required struct s3) {
 		// a release has no qualifier (SNAPSHOT, RC, BETA, ALPHA)
 		if ( find("-", s3.version ?: "") == 0 ) return true;
 		if ( !structKeyExists(s3, "date-jar") || !isDate(s3["date-jar"]) ) return false;
 		return dateDiff("n", s3["date-jar"], now()) <= 24 * 60;
+	}
+
+	// kept for existing callers and tests
+	public boolean function shouldBuildForgeBox(required struct s3) {
+		return shouldBuildArtifacts(s3);
 	}
 
 	/*
@@ -414,6 +420,12 @@ component {
 			systemOutput("createArtifacts: skipped #s3.version#, nothing is copied to S3 anymore (since 2027-03-01 UTC, LDEV-6537)",1,1);
 			return;
 		}
+		// finals always; non-finals only when the jar is no older than 24 hours.
+		// apply once up front so out-of-window versions skip the lock, jar download and all artifact work
+		if ( !shouldBuildArtifacts(s3) ) {
+			systemOutput("createArtifacts: skipped #s3.version#, not a final release and jar older than 24 hours (or no usable date-jar)",1,1);
+			return;
+		}
 
 		var jarRem=variables.s3Root&"lucee-"&s3.version&".jar";
 
@@ -422,8 +434,7 @@ component {
 				try {
 					// check and if necessary create other artifacts
 					var list="lco,war,light,express";
-					// ForgeBox zips only for releases, or for jars not older than 24 hours
-					if(includingForgeBox && shouldBuildForgeBox(s3))list&=",fb,fbl";
+					if(includingForgeBox) list&=",fb,fbl";
 
 					systemOutput("createArtifacts() Starting ( #s3.version# )",1,1);
 					var c= 0;
