@@ -1,6 +1,6 @@
 # artifacts.lucee.org
 
-Public host for extension logos, and later other small artifacts. It is the Cloudflare R2 bucket `lucee-artifacts-public`, served at the custom domain `artifacts.lucee.org`. Core Lucee jar / light / `.lco` fallbacks stay on `cdn.lucee.org`.
+Public host for extension logos, and later other small artifacts. It is the Cloudflare R2 bucket `lucee-artifacts-public`, served at the custom domain `artifacts.lucee.org`. The download page no longer falls back to `cdn.lucee.org` for core jar / light / `.lco` files; those come from Maven or GitHub Releases, and are omitted when neither has a copy.
 
 ## URL layout
 
@@ -29,7 +29,7 @@ R2 object keys are the file names at the bucket root, for example `org-lucee-aja
 
 To use a different host or path later, set `ARTIFACTS_URL` (a trailing slash is added when missing). The download page and the Maven update/extension provider both read this variable.
 
-If a GitHub raw logo or a leftover `https://cdn.lucee.org/artifacts/…` URL is still in cached metadata, it is rewritten to the artifacts host at render time **only when that file exists** there. Otherwise the original URL is kept.
+If a GitHub raw logo or a leftover `https://cdn.lucee.org/artifacts/…` URL is still in cached metadata, it is rewritten to the artifacts host at render time **only when that file exists** there. A leftover CDN URL is never returned to the browser: if the hosted file is missing, the image is dropped. A GitHub raw URL is kept when the hosted file is missing.
 
 ## Environment variable
 
@@ -66,9 +66,9 @@ From a local folder of PNGs (for example `~/Downloads/artifacts`):
 
 The script uses `npx wrangler r2 object put … --remote` with `Content-Type: image/png` and `Cache-Control: public, max-age=86400`, and writes each file to the bucket root under its existing name. It can also print an equivalent `rclone` command.
 
-## Files currently on cdn.lucee.org/artifacts
+## Logos previously on cdn.lucee.org/artifacts
 
-The CDN prefix does not list its objects (the `/artifacts/` URL returns an empty S3 directory). The live download page at https://download.lucee.org/ currently uses these **34** files from `https://cdn.lucee.org/artifacts/`. Upload them to the matching root keys on `artifacts.lucee.org`:
+These **34** files were copied from `https://cdn.lucee.org/artifacts/` to the matching root keys on `artifacts.lucee.org`. The download page now serves them from the artifacts host and no longer loads `/artifacts/` from the old CDN:
 
 ```
 org-lucee-administrator-extension.png

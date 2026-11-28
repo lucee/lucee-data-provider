@@ -82,7 +82,8 @@ if (!arrayIsEmpty(allVersions)) {
 }
 
 // defensive: a cached extImage may still be a rate-limited raw.githubusercontent.com URL
-// or a leftover cdn.lucee.org/artifacts/ URL — resolve it to the artifacts host at render time
+// or a leftover cdn.lucee.org/artifacts/ URL — resolve it to the artifacts host at render
+// time (legacy CDN URLs are never kept)
 extImage = util.githubRawToCdn(groupId, artifactId, extImage);
 
 // Pick the best version for install snippets: latest release, else latest overall

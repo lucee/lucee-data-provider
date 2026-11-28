@@ -71,7 +71,8 @@ function buildTrack(minor, useLatest="release") {
 	if (!len(local.ver)) return {};
 	local.isRelease = (util.getType(local.ver) == "release");
 	local.detail = util.getLuceeVersionsDetail(local.ver);
-	// Start from util.CDN defaults for releases, then let the API override any key it provides
+	// Start from GitHub installer/WAR defaults for releases, then let Maven / GitHub
+	// core links override or fill in jar, light, lco and anything else they provide
 	local.links = local.isRelease ? util.cdnLinks(local.ver) : {};
 	for (local.k in local.detail) {
 		if (local.k != "lastModified" && local.k != "pom" && len(local.detail[local.k])) {
@@ -82,11 +83,13 @@ function buildTrack(minor, useLatest="release") {
 	if (util.getType(local.ver) != "snapshot") local.links.express = util.expressUrl(local.ver);
 	if (util.isGithubCoreVersion(local.ver)) {
 		// 7.1+: core files, war and installers from the GitHub Release; anything not found
-		// there keeps the link built above, light is resolved by probing (see Util.lightUrl)
+		// there keeps the Maven link built above, light is resolved by probing (see Util.lightUrl)
 		local.gh = util.githubCoreLinks(local.ver);
 		structAppend(local.links, local.gh, true);
-		if (!structKeyExists(local.gh, "light") && len(local.links.jar ?: ""))
-			local.links.light = util.lightUrl(local.ver, local.links.jar);
+		if (!structKeyExists(local.gh, "light") && len(local.links.jar ?: "")) {
+			local.light = util.lightUrl(local.ver, local.links.jar);
+			if (len(local.light)) local.links.light = local.light;
+		}
 	} else {
 		// light comes from Maven next to the jar for the versions shown on the overview (6.2 / 7.0)
 		if (len(local.links.jar ?: "")) local.links.light = reReplace(local.links.jar, "\.jar$", "-light.jar");
@@ -102,7 +105,7 @@ arraySort(edgeMinors, function(a,b) { return util.versionCompare(a,b); });
 // only while the signature matches; otherwise they are rebuilt synchronously. This lets a new
 // release OR a changed download source appear on the homepage on the next render, without a
 // manual cache flush and without the full-page HTML cache ever pinning a stale classification.
-TRACK_LINKS_VERSION = 4;
+TRACK_LINKS_VERSION = 5;
 tracksSig = "v" & TRACK_LINKS_VERSION
 	& "|lts="    & LTS_MINOR   & ":" & (structKeyExists(minorMap, LTS_MINOR)   ? (minorMap[LTS_MINOR].latestRelease   ?: "") : "")
 	& "|stable=" & stableMinor & ":" & (len(stableMinor) && structKeyExists(minorMap, stableMinor) ? (minorMap[stableMinor].latestRelease ?: "") : "");
@@ -187,7 +190,7 @@ function loadGroupExtensions(groupId) {
 				displayName:   local.name,
 				// defensive: a metaMap entry may still hold a rate-limited
 				// raw.githubusercontent.com URL or a leftover cdn.lucee.org/artifacts/ URL —
-				// resolve it to the artifacts host at render
+				// resolve it to the artifacts host at render (legacy CDN URLs are never kept)
 				image:         util.githubRawToCdn(groupId, artifactId, local.image),
 				latestVersion: local.latestVer,
 				latestModified: local.latestModified
@@ -239,21 +242,37 @@ function loadGroupExtensions(groupId) {
 				<div class="dl-group-label">Popular downloads</div>
 				<ul class="dl-list">
 					<li><a href="https://hub.docker.com/r/lucee/lucee/tags?name=#encodeForHTMLAttribute(t.version)#" target="_blank">Docker Images</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['docker'])#">i</i></li>
+					<cfif structKeyExists(lnk,"linux-x64")>
 					<li><a href="#lnk['linux-x64']#">Linux x64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['linux-x64'])#">i</i></li>
+					</cfif>
+					<cfif structKeyExists(lnk,"linux-aarch64")>
 					<li><a href="#lnk['linux-aarch64']#">Linux aarch64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['linux-aarch64'])#">i</i></li>
+					</cfif>
+					<cfif structKeyExists(lnk,"jar")>
 					<li><a href="#lnk.jar#">lucee.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['jar'])#">i</i></li>
+					</cfif>
+					<cfif structKeyExists(lnk,"lco")>
 					<li><a href="#lnk.lco#">Core (.lco)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['lco'])#">i</i></li>
+					</cfif>
 				</ul>
 				<details class="dl-other-formats">
 					<summary class="dl-group-label">Other downloads</summary>
 					<ul class="dl-list">
+						<cfif structKeyExists(lnk,"win64")>
 						<li><a href="#lnk.win64#">Windows x64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['win64'])#">i</i></li>
+						</cfif>
+						<cfif structKeyExists(lnk,"express")>
 						<li><a href="#lnk.express#">Express (ZIP)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['express'])#">i</i></li>
+						</cfif>
+						<cfif structKeyExists(lnk,"light")>
 						<li><a href="#lnk.light#">lucee-light.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['light'])#">i</i></li>
+						</cfif>
 						<cfif structKeyExists(lnk,"zero")>
 						<li><a href="#lnk.zero#">lucee-zero.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['zero'])#">i</i></li>
 						</cfif>
+						<cfif structKeyExists(lnk,"war")>
 						<li><a href="#lnk.war#">WAR</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['war'])#">i</i></li>
+						</cfif>
 					</ul>
 				</details>
 			</div>
@@ -283,21 +302,37 @@ function loadGroupExtensions(groupId) {
 				<div class="dl-group-label">Popular downloads</div>
 				<ul class="dl-list">
 					<li><a href="https://hub.docker.com/r/lucee/lucee/tags?name=#encodeForHTMLAttribute(t.version)#" target="_blank">Docker Images</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['docker'])#">i</i></li>
+					<cfif structKeyExists(lnk,"linux-x64")>
 					<li><a href="#lnk['linux-x64']#">Linux x64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['linux-x64'])#">i</i></li>
+					</cfif>
+					<cfif structKeyExists(lnk,"linux-aarch64")>
 					<li><a href="#lnk['linux-aarch64']#">Linux aarch64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['linux-aarch64'])#">i</i></li>
+					</cfif>
+					<cfif structKeyExists(lnk,"jar")>
 					<li><a href="#lnk.jar#">lucee.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['jar'])#">i</i></li>
+					</cfif>
+					<cfif structKeyExists(lnk,"lco")>
 					<li><a href="#lnk.lco#">Core (.lco)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['lco'])#">i</i></li>
+					</cfif>
 				</ul>
 				<details class="dl-other-formats">
 					<summary class="dl-group-label">Other downloads</summary>
 					<ul class="dl-list">
+						<cfif structKeyExists(lnk,"win64")>
 						<li><a href="#lnk.win64#">Windows x64</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['win64'])#">i</i></li>
+						</cfif>
+						<cfif structKeyExists(lnk,"express")>
 						<li><a href="#lnk.express#">Express (ZIP)</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['express'])#">i</i></li>
+						</cfif>
+						<cfif structKeyExists(lnk,"light")>
 						<li><a href="#lnk.light#">lucee-light.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['light'])#">i</i></li>
+						</cfif>
 						<cfif structKeyExists(lnk,"zero")>
 						<li><a href="#lnk.zero#">lucee-zero.jar</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['zero'])#">i</i></li>
 						</cfif>
+						<cfif structKeyExists(lnk,"war")>
 						<li><a href="#lnk.war#">WAR</a> <i class="info-icon" data-tooltip="#encodeForHTMLAttribute(util.DL_INFO['war'])#">i</i></li>
+						</cfif>
 					</ul>
 				</details>
 			</div>
