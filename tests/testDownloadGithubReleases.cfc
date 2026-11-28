@@ -64,7 +64,7 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 			it(title="existing GitHub links keep their URLs", body=function() {
 				expect(util.expressUrl("7.0.6.10")).toBe(gh & "7.0.6.10/lucee-express-7.0.6.10.zip");
 				expect(util.cdnLinks("7.0.6.10").war).toBe(gh & "7.0.6.10/lucee-7.0.6.10.war");
-				expect(util.cdnLinks("7.0.6.10").jar).toBe("https://cdn.lucee.org/lucee-7.0.6.10.jar");
+				expect(structKeyExists(util.cdnLinks("7.0.6.10"), "jar")).toBeFalse();
 			});
 		});
 	}

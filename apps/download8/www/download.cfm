@@ -12,7 +12,7 @@ if (len(version) && len(dlType) && !len(artifactId)) {
 
 	detail = util.getLuceeVersionsDetail(version);
 
-	// get URL from detail, fall back to util.CDN pattern for releases
+	// get URL from detail, then GitHub installer/WAR patterns for releases (no CDN fallback)
 	if (structKeyExists(detail, dlType) && len(detail[dlType])) {
 		dlUrl = detail[dlType];
 	} else if (util.getType(version) == "release") {
@@ -23,7 +23,7 @@ if (len(version) && len(dlType) && !len(artifactId)) {
 	// express is a GitHub release asset for every non-snapshot version
 	if (dlType == "express" && util.getType(version) != "snapshot") dlUrl = util.expressUrl(version);
 
-	// light: prefer Maven (same mirror as the jar), then GitHub, then CDN — see Util.lightUrl
+	// light: prefer Maven (same mirror as the jar), then GitHub — see Util.lightUrl
 	if (dlType == "light") dlUrl = util.lightUrl(version, detail.jar ?: "");
 
 	// 7.1+ (non-snapshot): core files, war and installers come from the GitHub Release;

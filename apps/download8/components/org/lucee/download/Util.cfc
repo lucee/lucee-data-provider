@@ -1,7 +1,6 @@
 component accessors="false" {
 
-	this.CDN = "https://cdn.lucee.org/";
-	// public extension logos (and later other small artifacts). Core jar/lco fallbacks stay on this.CDN.
+	// public extension logos (and later other small artifacts).
 	// Override with ARTIFACTS_URL (trailing slash is added when missing). init() applies the env value.
 	this.ARTIFACTS_URL = "https://artifacts.lucee.org/";
 	// tests: a struct of url > boolean, skips the HTTP existence check when the URL is a key
@@ -106,26 +105,25 @@ component accessors="false" {
 		return this.GITHUB_RELEASES & ver & "/lucee-express-" & ver & ".zip";
 	}
 
+	// Installer and WAR links for a release. These are GitHub release assets (the S3/CDN
+	// path is retired). jar / light / lco are intentionally omitted — callers take those
+	// from LuceeVersionsDetail() (Maven) or githubCoreLinks() (7.1+). When neither has a
+	// URL, the download is simply not offered.
 	function cdnLinks(ver) {
 		local.gh = this.GITHUB_RELEASES & ver & "/";
 		return {
-			// installers are published as GitHub release assets (built by the main workflow); S3/CDN is retired
 			win64:           local.gh & "lucee-" & ver & "-windows-x64-installer.exe",
 			"linux-x64":     local.gh & "lucee-" & ver & "-linux-x64-installer.run",
 			"linux-aarch64": local.gh & "lucee-" & ver & "-linux-aarch64-installer.run",
-			jar:             this.CDN & "lucee-" & ver & ".jar",
-			light:           this.CDN & "lucee-light-" & ver & ".jar",
-			lco:             this.CDN & ver & ".lco",
 			war:             local.gh & "lucee-" & ver & ".war"
 		};
 	}
 
 	// Resolve the lucee-light download URL. light lives on Maven (the "-light" classifier
-	// next to the jar), on GitHub releases, and on the legacy CDN — but only the CDN has it
-	// for the oldest releases (pre-6.1). Prefer Maven (same mirror as the jar), then GitHub
-	// (non-snapshot), then CDN, taking the first that exists; cache the result per version so
-	// the probe runs once. When the CDN is retired, old versions with no Maven/GitHub copy
-	// will simply 404 there, which is acceptable.
+	// next to the jar) and on GitHub releases. Prefer Maven (same mirror as the jar), then
+	// GitHub (non-snapshot), taking the first that exists; cache the result per version so
+	// the probe runs once. If neither has a copy, return "" — there is no CDN fallback —
+	// and the caller hides the link or returns 404.
 	function lightUrl(ver, jarUrl="") {
 		local.key    = "luceeLightUrl_" & arguments.ver;
 		local.cached = dlCacheGet(local.key);
@@ -137,9 +135,8 @@ component accessors="false" {
 		if (len(arguments.jarUrl)) arrayAppend(local.candidates, reReplace(arguments.jarUrl, "\.jar$", "-light.jar"));
 		if (getType(arguments.ver) != "snapshot")
 			arrayAppend(local.candidates, this.GITHUB_RELEASES & arguments.ver & "/lucee-light-" & arguments.ver & ".jar");
-		arrayAppend(local.candidates, this.CDN & "lucee-light-" & arguments.ver & ".jar");
 
-		local.chosen = local.candidates[arrayLen(local.candidates)]; // CDN as last-resort default
+		local.chosen = "";
 		for (local.c in local.candidates) {
 			try {
 				cfhttp(method="head", url=local.c, timeout=8, redirect=true, result="local.r");
@@ -148,8 +145,13 @@ component accessors="false" {
 		}
 
 		local.entry = { url: local.chosen };
-		local.exp   = snapshotUrlExpiry({ jar: local.chosen });
-		if (!isNull(local.exp)) local.entry.expiresAt = local.exp;
+		if (!len(local.chosen)) {
+			// miss: re-check after an hour, in case the file is published later
+			local.entry.expiresAt = dateAdd("h", 1, now()).getTime();
+		} else {
+			local.exp = snapshotUrlExpiry({ jar: local.chosen });
+			if (!isNull(local.exp)) local.entry.expiresAt = local.exp;
+		}
 		dlCachePut(local.key, local.entry);
 		return local.chosen;
 	}
@@ -157,7 +159,7 @@ component accessors="false" {
 	// ── GitHub Release core files (7.1+) ─────────────────────────────────
 
 	// true for non-snapshot versions from 7.1 on, whose jar / light / zero / lco / express are
-	// taken from the GitHub Release; 6.2 and 7.0 keep their current (Maven / CDN) sources
+	// taken from the GitHub Release; 6.2 and 7.0 keep their current Maven sources
 	function isGithubCoreVersion(ver) {
 		if (getType(arguments.ver) == "snapshot") return false;
 		local.parts = listToArray(listFirst(arguments.ver, "-"), ".");
@@ -255,18 +257,20 @@ component accessors="false" {
 	// Resolve a rate-limited raw.githubusercontent.com logo URL, or a leftover
 	// cdn.lucee.org/artifacts/ URL, to artifacts.lucee.org. Keyed by maven
 	// coordinates (repo/branch-agnostic); anything else is returned unchanged.
-	// Called both when caching metadata and defensively at render time, so a
-	// stale GitHub or old-CDN URL never reaches the browser once the new host
-	// has the file. If the hosted file is missing, the original URL is kept.
+	// Called both when caching metadata and defensively at render time.
+	// A leftover CDN URL is never returned: if the hosted file exists, use it;
+	// otherwise drop the image (return "") so the page does not render a retired
+	// or broken CDN link. A GitHub raw URL is kept when the hosted file is missing.
 	public string function githubRawToCdn(groupId, artifactId, image) {
 		var src = arguments.image ?: "";
 		if (findNoCase("raw.githubusercontent.com/", src) || isLegacyCdnArtifactUrl(src)) {
 			var hosted = artifactLogoUrl(arguments.groupId, arguments.artifactId);
-			// Prefer the artifacts host (GitHub raw is rate-limited; the old CDN is being retired),
+			// Prefer the artifacts host (GitHub raw is rate-limited; the old CDN is retired),
 			// but only when the file actually exists — not every extension has a copy, and
 			// rewriting to a missing file turns a working logo into a broken 404 image.
 			// Existence is cached, so this is not an HTTP call on every render.
 			if (artifactLogoExists(hosted)) return hosted;
+			if (isLegacyCdnArtifactUrl(src)) return "";
 			return src;
 		}
 		return src;

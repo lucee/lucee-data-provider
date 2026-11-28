@@ -44,9 +44,9 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				expect(util.githubRawToCdn("org.lucee", "ajax-extension", legacy)).toBe(hosted);
 			});
 
-			it(title="keeps a leftover cdn.lucee.org/artifacts/ URL when the new host does not have the file", body=function() {
+			it(title="drops a leftover cdn.lucee.org/artifacts/ URL when the new host does not have the file", body=function() {
 				util.artifactLogoProbe = { "#hosted#": false };
-				expect(util.githubRawToCdn("org.lucee", "ajax-extension", legacy)).toBe(legacy);
+				expect(util.githubRawToCdn("org.lucee", "ajax-extension", legacy)).toBe("");
 			});
 
 			it(title="resolveRelativeImage falls back to the artifacts host when there is no http base", body=function() {
@@ -60,10 +60,13 @@ component extends="org.lucee.cfml.test.LuceeTestCase" labels="data-provider" {
 				);
 			});
 
-			it(title="core jar and lco fallbacks still use cdn.lucee.org, not the artifacts host", body=function() {
-				expect(util.cdnLinks("6.2.4.24").jar).toBe("https://cdn.lucee.org/lucee-6.2.4.24.jar");
-				expect(util.cdnLinks("6.2.4.24").lco).toBe("https://cdn.lucee.org/6.2.4.24.lco");
-				expect(util.CDN).toBe("https://cdn.lucee.org/");
+			it(title="cdnLinks no longer falls back to cdn.lucee.org for jar, light or lco", body=function() {
+				var links = util.cdnLinks("6.2.4.24");
+				expect(structKeyExists(links, "jar")).toBeFalse();
+				expect(structKeyExists(links, "light")).toBeFalse();
+				expect(structKeyExists(links, "lco")).toBeFalse();
+				expect(structKeyExists(util, "CDN")).toBeFalse();
+				expect(links.war).toBe("https://github.com/lucee/Lucee/releases/download/6.2.4.24/lucee-6.2.4.24.war");
 			});
 		});
 	}
